@@ -1,0 +1,287 @@
+/* Recker Custom Theme - High Contrast Orange/Yellow */
+
+:root {
+  /* Primary Colors - Orange & Yellow */
+  --primary: #FF8C00;
+  --primary-light: #FFA500;
+  --primary-dark: #E67700;
+  --secondary: #FFD700;
+  --secondary-light: #FFE55C;
+
+  /* Neutrals - High Contrast */
+  --bg: #FFFFFF;
+  --bg-alt: #FFF8F0;
+  --text: #1a1a1a;          /* Near-black for contrast */
+  --text-light: #4a4a4a;    /* Dark gray for secondary text */
+  --border: #FFE4B5;
+
+  /* Accents */
+  --success: #059669;       /* Darker green */
+  --warning: #D97706;       /* Darker warning orange */
+  --error: #DC2626;         /* Darker red */
+  --info: #2563EB;          /* Darker blue */
+}
+
+/* Base Styles */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color: var(--text);
+}
+
+/* Sidebar */
+.sidebar {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  border-right: none;
+}
+
+.sidebar-nav > ul > li > a {
+  color: rgba(255,255,255,0.8);
+  font-weight: 500;
+}
+
+.sidebar-nav > ul > li > a:hover {
+  color: white;
+  background: rgba(255,255,255,0.1);
+  border-radius: 6px;
+}
+
+.sidebar-nav li.active > a {
+  color: white;
+  background: rgba(255,255,255,0.2);
+  border-left: 3px solid var(--secondary);
+  border-radius: 6px;
+}
+
+.app-name {
+  font-size: 1.8rem !important;
+  font-weight: 700 !important;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Content */
+.markdown-section {
+  max-width: 900px;
+  padding: 30px 40px 40px 40px;
+}
+
+.markdown-section h1 {
+  color: #000000;           /* Pure black for maximum contrast */
+  font-weight: 700;
+  font-size: 2.5rem;
+  border-bottom: 3px solid var(--primary);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.markdown-section h2 {
+  color: #1a1a1a;           /* Near-black for h2 */
+  font-weight: 600;
+  font-size: 2rem;
+  margin-top: 2.5rem;
+  padding-left: 0.5rem;
+  border-left: 4px solid var(--primary);
+}
+
+.markdown-section h3 {
+  color: #2a2a2a;           /* Very dark gray for h3 */
+  font-weight: 600;
+  font-size: 1.5rem;
+}
+
+/* Links - High Contrast */
+.markdown-section a {
+  color: #D97706;           /* Darker orange for links */
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.markdown-section a:hover {
+  color: #B45309;           /* Darker on hover */
+  border-bottom-color: var(--primary);
+  background: rgba(255, 140, 0, 0.08);
+  padding: 0 4px;
+  border-radius: 2px;
+}
+
+/* Code Blocks - High Contrast */
+.markdown-section code {
+  background: #FFF3E0;      /* Light orange background */
+  color: #C75000;           /* Dark orange for inline code */
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-weight: 500;
+  border: 1px solid #FFE0B2;
+}
+
+.markdown-section pre {
+  background: #1a1a1a !important;  /* Fundo mais escuro */
+  border-radius: 8px;
+  border-left: 4px solid var(--primary);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.markdown-section pre > code {
+  background: transparent;
+  color: #F5F5F5;          /* Texto quase branco */
+  padding: 1rem;
+  font-weight: 400;
+}
+
+/* Blockquotes - High Contrast */
+.markdown-section blockquote {
+  background: #FFF8F0;
+  border-left: 5px solid var(--primary);
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+  border-radius: 0 8px 8px 0;
+  color: #2a2a2a;
+  font-weight: 500;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+/* Tables - High Contrast */
+.markdown-section table {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  border: 1px solid #e0e0e0;
+}
+
+.markdown-section table thead {
+  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+  color: white;
+  font-weight: 600;
+}
+
+.markdown-section table tbody tr {
+  color: #1a1a1a;
+}
+
+.markdown-section table tbody tr:hover {
+  background: #FFF8F0;
+}
+
+.markdown-section table td,
+.markdown-section table th {
+  border-color: #e0e0e0;
+}
+
+/* Search */
+.search input {
+  border: 2px solid var(--border);
+  border-radius: 25px;
+  padding: 10px 20px;
+  transition: all 0.3s;
+}
+
+.search input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(255,140,0,0.1);
+}
+
+/* Cover Page */
+.cover {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+}
+
+.cover h1 {
+  color: white;
+  font-size: 4rem;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+
+.cover p {
+  color: rgba(255,255,255,0.9);
+}
+
+.cover .button {
+  background: var(--secondary);
+  color: var(--text);
+  border-radius: 25px;
+  padding: 12px 30px;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.cover .button:hover {
+  background: var(--secondary-light);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255,215,0,0.3);
+}
+
+/* Custom Badges */
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85em;
+  font-weight: 600;
+  margin: 0 4px;
+}
+
+.badge-new {
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: white;
+}
+
+.badge-beta {
+  background: var(--info);
+  color: white;
+}
+
+.badge-success {
+  background: var(--success);
+  color: white;
+}
+
+/* Feature Cards */
+.feature-card {
+  background: var(--bg-alt);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  transition: all 0.3s;
+}
+
+.feature-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(255,140,0,0.15);
+  transform: translateY(-2px);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-alt);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-dark);
+}
+
+/* Mobile Responsiveness */
+@media screen and (max-width: 768px) {
+  .markdown-section h1 {
+    font-size: 2rem;
+  }
+  
+  .markdown-section h2 {
+    font-size: 1.5rem;
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "name": "recker",
+  "version": "1.0.0",
+  "description": "AI & DevX focused HTTP client for Node.js 18+",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": [
+    "http",
+    "client",
+    "fetch",
+    "axios",
+    "ky",
+    "got",
+    "undici",
+    "typescript",
+    "promise",
+    "retry",
+    "cache",
+    "hooks",
+    "http2",
+    "http3",
+    "sse",
+    "websocket",
+    "whois",
+    "dns",
+    "proxy",
+    "ai"
+  ],
+  "author": "Forattini Dev",
+  "license": "MIT",
+  "homepage": "https://forattini-dev.github.io/recker",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/forattini-dev/recker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/forattini-dev/recker/issues"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/core/client.d.ts",
+      "import": "./dist/core/client.js"
+    },
+    "./plugins/*": {
+      "types": "./dist/plugins/*.d.ts",
+      "import": "./dist/plugins/*.js"
+    },
+    "./utils/*": {
+      "types": "./dist/utils/*.d.ts",
+      "import": "./dist/utils/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "husky",
+    "prepublishOnly": "pnpm build && pnpm test && pnpm test:coverage",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "bench": "tsx benchmark/index.ts",
+    "bench:all": "tsx benchmark/run-all.ts",
+    "docs:dev": "npx -y docsify-cli serve docs --port 3000",
+    "docs:preview": "npx -y docsify-cli serve docs --port 3000 --open"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "undici": "^7.16.0",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@vitest/coverage-v8": "^3.2.4",
+    "axios": "^1.13.2",
+    "got": "^14.6.5",
+    "husky": "^9.1.7",
+    "ky": "^1.14.0",
+    "mitata": "^1.0.34",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
