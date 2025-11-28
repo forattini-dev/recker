@@ -1,38 +1,70 @@
-- **Overview**
+- **Getting Started**
   - [Home](/README.md)
-  - [Features](/features.md)
-  - [Quick Start](/getting-started/quickstart.md)
   - [Installation](/getting-started/installation.md)
+  - [Quick Start](/getting-started/quickstart.md)
 
-- **Core Guides**
-  - [Guides Index](/guides/README.md)
-  - [Client Configuration](/guides/client-config.md)
-  - [Requests & Responses](/guides/request-response.md)
-  - [Batch Requests & Concurrency](/guides/batch-requests.md)
-  - [Unified Concurrency Control](/guides/concurrency.md)
-  - [Connection Pooling](/guides/connection-pooling.md)
-  - [Header Parsing](/guides/header-parsing.md)
-  - [Plugins](/guides/plugins.md)
-  - [Error Handling](/guides/error-handling.md)
-  - [Observability](/guides/observability.md)
-  - [Debug Mode](/guides/debug.md)
+- **Overview**
+  - [Feature Panorama](/overview/panorama.md)
+  - [At a Glance](/overview/at-a-glance.md)
+  - [Core Concepts](/overview/concepts.md)
+  - [Features](/features.md)
 
-- **Resilience**
-  - [Retry & Backoff](/guides/retry.md)
-  - [Circuit Breaker](/guides/circuit-breaker.md)
+- **Configuration**
+  - [Quick Reference](/configuration/quick-reference.md)
+  - [Client Options](/configuration/client-options.md)
+  - [Request Options](/configuration/request-options.md)
+  - [Advanced](/configuration/advanced.md)
+  - [TypeScript](/configuration/typescript.md)
 
-- **Advanced Features**
-  - [WebSocket](/guides/websocket.md)
-  - [WHOIS Lookup](/guides/whois.md)
-  - [Custom DNS](/guides/dns.md)
-  - [Streaming & SSE](/guides/streaming.md)
-  - [Contract-First Client](/guides/contract.md)
+- **Guides**
+  - **Basics**
+    - [Error Handling](/guides/basics/error-handling.md)
+    - [Request & Response](/guides/basics/request-response.md)
+    - [Cookies](/guides/basics/cookies.md)
+    - [Debug Mode](/guides/basics/debug.md)
+  - **Advanced**
+    - [Retry & Backoff](/guides/advanced/retry.md)
+    - [Circuit Breaker](/guides/advanced/circuit-breaker.md)
+    - [MCP Protocol](/guides/advanced/mcp.md)
+    - [Streaming & SSE](/guides/advanced/streaming.md)
+    - [WebSocket](/guides/advanced/websocket.md)
+    - [WHOIS Lookup](/guides/advanced/whois.md)
+    - [Custom DNS](/guides/advanced/dns.md)
+  - **Performance**
+    - [Connection Pooling](/guides/performance/connection-pooling.md)
+    - [Concurrency Control](/guides/performance/concurrency.md)
+    - [Batch Requests](/guides/performance/batch-requests.md)
+  - **Observability**
+    - [Observability](/guides/observability/observability.md)
+    - [Header Parsing](/guides/observability/header-parsing.md)
+    - [Rate Limits](/guides/observability/rate-limits.md)
+    - [Playbooks](/guides/observability/playbooks.md)
+  - **Other**
+    - [Plugins](/guides/plugins.md)
+    - [Security](/guides/security.md)
+    - [Contract-First](/guides/contract.md)
+
+- **Examples**
+  - [Examples Index](/examples/README.md)
+  - **Basic**
+    - [Basic Usage](/examples/01-basic-usage.ts)
+  - **Intermediate**
+    - [Auth Interceptors](/examples/02-intermediate-auth-interceptors.ts)
+    - [Pagination](/examples/02-intermediate-pagination.ts)
+    - [HTTP Methods](/examples/02-intermediate-http-methods-advanced.ts)
+    - [Caching & Retry](/examples/02-intermediate-caching-retry.ts)
+    - [User Agent](/examples/02-intermediate-user-agent-simulation.ts)
+    - [Concurrency & Batch](/examples/02-intermediate-concurrency-batch.ts)
+  - **Advanced**
+    - [MCP Integration](/examples/03-advanced-mcp-integration.ts)
+    - [Streaming SSE](/examples/03-advanced-streaming-sse.ts)
+    - [WebSocket](/examples/03-advanced-websocket.ts)
+    - [WHOIS](/examples/03-advanced-whois.ts)
 
 - **API Reference**
   - [Complete API](/api/README.md)
 
 - **Resources**
-  - [Playbooks](/guides/playbooks.md)
   - [Benchmarks](/benchmarks.md)
   - [Migration Guide](/migration.md)
   - [Contributing](/contributing.md)

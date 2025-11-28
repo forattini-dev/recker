@@ -1,9 +1,9 @@
 # Recker
 
-> **The AI & DevX Focused HTTP Client**
+> **The HTTP Client Built for AI Era**
 
 Built for resilience, observability, and developer happiness.
 
-[Get Started](#/README)
-[Features](#/features)
+[Get Started](#/getting-started/quickstart)
+[Overview](#/overview/panorama)
 [Benchmarks](#/benchmarks)

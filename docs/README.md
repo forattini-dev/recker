@@ -1,28 +1,32 @@
 # Recker
 
-<p align="center">
-  <strong>The HTTP Client for the AI Era</strong>
-</p>
+<div align="center">
+  <h1>The HTTP Client for the AI Era</h1>
+  
+  <p>
+    Build resilient, type-safe, and high-performance integrations with the 
+    <strong>Smart SDK Builder</strong> designed for modern backend ecosystems.
+  </p>
 
-<p align="center">
-  Build resilient, type-safe, and high-performance integrations with the
-  <strong>Smart SDK Builder</strong> designed for modern backend ecosystems.
-</p>
-
-<p align="center">
-  <a href="https://www.npmjs.com/package/recker">
-    <img src="https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623" alt="npm version" />
-  </a>
-  <a href="https://github.com/forattini-dev/recker/blob/main/LICENSE">
-    <img src="https://img.shields.io/npm/l/recker.svg?style=flat-square&color=007AFF" alt="license" />
-  </a>
-  <img src="https://img.shields.io/badge/coverage-100%25-34C759?style=flat-square" alt="coverage" />
-  <img src="https://img.shields.io/badge/types-included-34C759?style=flat-square" alt="types" />
-</p>
+  <p>
+    <a href="https://www.npmjs.com/package/recker">
+      <img src="https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623" alt="npm version" />
+    </a>
+    <a href="https://github.com/your-org/recker/blob/main/LICENSE">
+      <img src="https://img.shields.io/npm/l/recker.svg?style=flat-square&color=007AFF" alt="license" />
+    </a>
+    <img src="https://img.shields.io/badge/coverage-100%25-34C759?style=flat-square" alt="coverage" />
+    <img src="https://img.shields.io/badge/types-included-34C759?style=flat-square" alt="types" />
+  </p>
+  
+  <br />
+</div>
 
 ---
 
-**Recker** is not just another `fetch` wrapper. It combines the ergonomics of `ky` with the resilience of `got` and the raw performance of `undici` into a unified **DevX Powerhouse**.
+**Recker** leverages the raw power of [Undici](https://github.com/nodejs/undici) to deliver the ultimate HTTP experience for modern Node.js applications.
+
+Built for the AI era, it provides a unified **DevX Powerhouse** with zero-overhead abstractions, deep observability, and enterprise-grade resilience.
 
 ## Quick navigation
 
