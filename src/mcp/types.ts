@@ -75,6 +75,7 @@ export interface MCPResource {
 }
 
 export interface MCPResourceContent {
+  type: 'resource';
   uri: string;
   mimeType?: string;
   text?: string;

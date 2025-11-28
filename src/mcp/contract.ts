@@ -330,9 +330,9 @@ export function createMCPBatch<T extends MCPContractDefinition>(
         const toolDef = contract[tool as string];
 
         // Validate input
-        let validatedArgs = args || {};
+        let validatedArgs: Record<string, unknown> = (args || {}) as Record<string, unknown>;
         if (toolDef?.inputSchema) {
-          validatedArgs = toolDef.inputSchema.parse(args);
+          validatedArgs = toolDef.inputSchema.parse(args) as Record<string, unknown>;
         }
 
         const result = await mcp.tools.call(tool as string, validatedArgs);
@@ -565,7 +565,7 @@ export function createValidatedSSEStream<T extends ZodSchema>(
     callOptions?: Pick<SSEStreamOptions, 'signal' | 'timeout'>
   ): AsyncGenerator<SSEEvent> {
     // Validate input
-    const validatedArgs = inputSchema.parse(args);
+    const validatedArgs = inputSchema.parse(args) as Record<string, unknown>;
     const body = { ...validatedArgs, ...extraParams };
 
     const response = await client.post(endpoint, {
