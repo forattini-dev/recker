@@ -964,21 +964,21 @@ const client = createClient({
 
 ## Batch Requests
 
-### client.multi()
+### client.batch()
 
 Execute multiple requests concurrently.
 
 ```typescript
-multi<T>(
+batch<T>(
   requests: Array<{ path: string; options?: RequestOptions }>,
-  options?: MultiOptions
+  options?: BatchOptions
 ): Promise<RunnerResult<T>>
 ```
 
 **Options:**
 
 ```typescript
-interface MultiOptions {
+interface BatchOptions {
   concurrency?: number;
   mapResponse?: (res: ReckerResponse) => Promise<T> | T;
 }
@@ -1001,7 +1001,7 @@ interface RunnerResult<T> {
 **Example:**
 
 ```typescript
-const { results, stats } = await client.multi<User>(
+const { results, stats } = await client.batch<User>(
   [
     { path: '/users/1' },
     { path: '/users/2' },

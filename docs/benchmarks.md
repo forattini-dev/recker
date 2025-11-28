@@ -208,7 +208,7 @@ got:    1260µs  ← 42% slower
 ```typescript
 createClient({
   dedup: {}, // Collapse duplicate requests
-  cache: { strategy: 'stale-while-revalidate', ttl: 60_000 }
+  cache: { strategy: 'stale-while-revalidate', ttl: 60000 }
 });
 ```
 

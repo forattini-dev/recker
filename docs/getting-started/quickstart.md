@@ -32,7 +32,7 @@ const client = createClient({
   // Cache responses
   cache: {
     strategy: 'stale-while-revalidate',
-    ttl: 60_000 // 1 minute
+    ttl: 60000 // 1 minute
   },
   
   // Deduplicate parallel requests

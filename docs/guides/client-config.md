@@ -120,12 +120,12 @@ const results = await Promise.all([
 
 Abort/timeout signals still propagate: if a request is aborted while queued, it is removed before dispatch.
 
-## Multi-request helper (RequestRunner + RequestPool)
+## Batch request helper (RequestRunner + RequestPool)
 
-Use `client.multi()` to dispatch many requests with controlled fan-out:
+Use `client.batch()` to dispatch many requests with controlled fan-out:
 
 ```typescript
-const { results, stats } = await client.multi(
+const { results, stats } = await client.batch(
   [
     { path: '/users/1' },
     { path: '/users/2' },
@@ -138,5 +138,5 @@ const { results, stats } = await client.multi(
 );
 ```
 
-- If `rateLimit` is configured, the request pool has priority and governs start times; `multi` simply enqueues all requests and lets the pool schedule them.
-- If `rateLimit` is not set, `multi` uses a lightweight `RequestRunner` to cap local concurrency (default: `requests.length`).
+- If `rateLimit` is configured, the request pool has priority and governs start times; `batch` simply enqueues all requests and lets the pool schedule them.
+- If `rateLimit` is not set, `batch` uses a lightweight `RequestRunner` to cap local concurrency (default: `requests.length`).

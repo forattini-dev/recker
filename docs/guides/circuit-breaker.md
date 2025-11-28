@@ -22,7 +22,7 @@ const client = createClient({
   plugins: [
     circuitBreaker({
       threshold: 5,             // Trip after 5 failures
-      resetTimeout: 30_000,     // Wait 30s before trying again
+      resetTimeout: 30000,      // Wait 30s before trying again
       shouldTrip: (err, res) => {
         // Optional: Customize what counts as a failure
         // Default is status >= 500

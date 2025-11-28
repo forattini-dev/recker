@@ -186,34 +186,64 @@ body {
   box-shadow: 0 0 0 3px rgba(255,140,0,0.1);
 }
 
-/* Cover Page */
+/* Cover Page - Force Display */
 .cover {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+  height: 100vh !important;
+  position: relative !important;
+}
+
+.cover.show {
+  display: flex !important;
+}
+
+.cover-main {
+  z-index: 1 !important;
+  position: relative !important;
 }
 
 .cover h1 {
-  color: white;
-  font-size: 4rem;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+  color: white !important;
+  font-size: 4rem !important;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.2) !important;
+  margin: 0 !important;
+}
+
+.cover h1 .anchor {
+  display: none !important;
 }
 
 .cover p {
-  color: rgba(255,255,255,0.9);
+  color: rgba(255,255,255,0.9) !important;
+  font-size: 1.2rem !important;
 }
 
-.cover .button {
-  background: var(--secondary);
-  color: var(--text);
-  border-radius: 25px;
-  padding: 12px 30px;
-  font-weight: 600;
-  transition: all 0.3s;
+.cover blockquote {
+  color: rgba(255,255,255,0.95) !important;
+  border-left: 4px solid var(--secondary) !important;
+  background: rgba(0,0,0,0.2) !important;
+  padding: 1rem 1.5rem !important;
 }
 
-.cover .button:hover {
-  background: var(--secondary-light);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255,215,0,0.3);
+.cover a {
+  background: var(--secondary) !important;
+  color: #1a1a1a !important;
+  border-radius: 25px !important;
+  padding: 12px 30px !important;
+  font-weight: 600 !important;
+  transition: all 0.3s !important;
+  text-decoration: none !important;
+  display: inline-block !important;
+  margin: 0.5rem !important;
+}
+
+.cover a:hover {
+  background: var(--secondary-light) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(255,215,0,0.3) !important;
 }
 
 /* Custom Badges */

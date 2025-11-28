@@ -1,28 +1,24 @@
-<!-- hero-fix -->
-
 # Recker
 
-<div align="center">
-  <h1>The HTTP Client for the AI Era</h1>
-  
-  <p>
-    Build resilient, type-safe, and high-performance integrations with the 
-    <strong>Smart SDK Builder</strong> designed for modern backend ecosystems.
-  </p>
+<p align="center">
+  <strong>The HTTP Client for the AI Era</strong>
+</p>
 
-  <p>
-    <a href="https://www.npmjs.com/package/recker">
-      <img src="https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623" alt="npm version" />
-    </a>
-    <a href="https://github.com/your-org/recker/blob/main/LICENSE">
-      <img src="https://img.shields.io/npm/l/recker.svg?style=flat-square&color=007AFF" alt="license" />
-    </a>
-    <img src="https://img.shields.io/badge/coverage-100%25-34C759?style=flat-square" alt="coverage" />
-    <img src="https://img.shields.io/badge/types-included-34C759?style=flat-square" alt="types" />
-  </p>
-  
-  <br />
-</div>
+<p align="center">
+  Build resilient, type-safe, and high-performance integrations with the
+  <strong>Smart SDK Builder</strong> designed for modern backend ecosystems.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/recker">
+    <img src="https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623" alt="npm version" />
+  </a>
+  <a href="https://github.com/forattini-dev/recker/blob/main/LICENSE">
+    <img src="https://img.shields.io/npm/l/recker.svg?style=flat-square&color=007AFF" alt="license" />
+  </a>
+  <img src="https://img.shields.io/badge/coverage-100%25-34C759?style=flat-square" alt="coverage" />
+  <img src="https://img.shields.io/badge/types-included-34C759?style=flat-square" alt="types" />
+</p>
 
 ---
 
@@ -73,7 +69,7 @@ import { createClient } from 'recker';
 const client = createClient({
   baseUrl: 'https://api.example.com',
   retry: { maxAttempts: 3, backoff: 'exponential' },
-  cache: { strategy: 'stale-while-revalidate', ttl: 60_000 },
+  cache: { strategy: 'stale-while-revalidate', ttl: 60000 },
   http2: true,
   concurrency: 20,  // Max 20 concurrent requests
   debug: true

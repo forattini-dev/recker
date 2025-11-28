@@ -12,10 +12,23 @@ import { createClient } from 'recker';
 const client = createClient({ baseUrl: 'https://api.example.com' });
 
 // Query domain information
-const result = await client.whois('example.com');
-console.log(result.raw);        // Full WHOIS response
-console.log(result.data);       // Parsed key-value pairs
-console.log(result.server);     // WHOIS server used
+const result = await client.whois('google.com');
+
+console.log(result.server);  // 'whois.verisign-grs.com'
+console.log(result.data);
+// {
+//   'domain name': 'GOOGLE.COM',
+//   'registrar': 'MarkMonitor Inc.',
+//   'creation date': '1997-09-15T04:00:00Z',
+//   'registry expiry date': '2028-09-14T04:00:00Z',
+//   'name server': [
+//     'NS1.GOOGLE.COM',
+//     'NS2.GOOGLE.COM',
+//     'NS3.GOOGLE.COM',
+//     'NS4.GOOGLE.COM'
+//   ],
+//   'dnssec': 'unsigned'
+// }
 
 // Check if domain is available
 const available = await client.isDomainAvailable('my-startup.com');

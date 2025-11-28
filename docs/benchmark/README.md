@@ -133,7 +133,7 @@ createClient({ dedup: {} })
 ```typescript
 // Aggressive caching
 createClient({
-  cache: { strategy: 'stale-while-revalidate', ttl: 60_000 }
+  cache: { strategy: 'stale-while-revalidate', ttl: 60000 }
 })
 ```
 

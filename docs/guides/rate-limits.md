@@ -6,7 +6,7 @@
 - [Quick setup](#quick-setup)
 - [How the queue decides what runs](#how-the-queue-decides-what-runs)
 - [Abort/timeout while queued](#aborttimeout-while-queued)
-- [Multi-requests (`client.multi`)](#multi-requests-clientmulti)
+- [Batch requests (`client.batch`)](#batch-requests-clientbatch)
 - [Best practices](#best-practices)
 
 ## Quick setup
@@ -40,12 +40,12 @@ All requests now flow through the TaskPool and only start when a slot is free.
 - If you pass `signal`, aborts are observed while queued; the request is removed and rejected before it starts.
 - Per-request timeouts still apply once the task begins (see [Client Configuration](/guides/client-config.md)).
 
-## Multi-requests (`client.multi`)
+## Batch requests (`client.batch`)
 
 Fire many requests at once:
 
 ```typescript
-const { results, stats } = await client.multi(
+const { results, stats } = await client.batch(
   [
     { path: '/users/1' },
     { path: '/users/2' },
@@ -61,10 +61,10 @@ const { results, stats } = await client.multi(
 
 Rules:
 - If `rateLimit` is configured, the TaskPool governs start times; the `concurrency` option is ignored.
-- If **no** `rateLimit` is set, `multi` uses an internal RequestRunner to cap local fan-out.
+- If **no** `rateLimit` is set, `batch` uses an internal RequestRunner to cap local fan-out.
 
 ## Best practices
 
 - Set `requestsPerInterval` + `interval` with 10–20% headroom under the upstream cap to avoid accidental bursts.
 - Combine with [Retry & Backoff](/guides/retry.md) for 429/503 handling.
-- Surface TaskPool metrics via `client.multi` + [Observability](/guides/observability.md) to watch throughput and queueing. 
+- Surface TaskPool metrics via `client.batch` + [Observability](/guides/observability.md) to watch throughput and queueing. 

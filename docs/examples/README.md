@@ -137,7 +137,7 @@ import { createClient } from 'recker';
 const client = createClient({
   baseUrl: 'https://api.example.com',
   retry: { maxAttempts: 3, backoff: 'exponential' },
-  cache: { strategy: 'stale-while-revalidate', ttl: 60_000 },
+  cache: { strategy: 'stale-while-revalidate', ttl: 60000 },
   concurrency: 20,
   debug: true
 });

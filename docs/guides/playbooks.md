@@ -56,7 +56,7 @@ console.log('Status', res.status);
 
 ```typescript
 async function consume() {
-  for await (const event of client.get('/chat/stream', { timeout: 30_000 }).sse()) {
+  for await (const event of client.get('/chat/stream', { timeout: 30000 }).sse()) {
     if (event.data === '[DONE]') break;
     process.stdout.write(JSON.parse(event.data).delta || '');
   }
@@ -89,11 +89,11 @@ const client = createClient({
   }
 });
 
-const { results } = await client.multi(
+const { results } = await client.batch(
   [{ path: '/users/1' }, { path: '/users/2' }, { path: '/users/3' }],
   { mapResponse: (res) => res.json() }
 );
 ```
 
 - TaskPool caps cadence and fan-out; decorrelated retries help with 429/503.
-- Use `multi` for batches; the pool takes precedence over local concurrency.
+- Use `batch` for batches; the pool takes precedence over local concurrency.
