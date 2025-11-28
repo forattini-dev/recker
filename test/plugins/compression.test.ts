@@ -266,7 +266,7 @@ describe('Compression Plugin', () => {
     });
 
     it('should respect custom methods array', async () => {
-        const middleware = compression({ threshold: 0, methods: ['DELETE'] });
+        const middleware = compression({ threshold: 0, methods: ['DELETE'], force: true });
         const req = { method: 'DELETE', body: 'data', headers: new Headers() } as any;
 
         await middleware(req, mockNext);
