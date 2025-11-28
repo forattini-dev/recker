@@ -10,7 +10,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+
+  <!-- Docsify Dark/Light Theme -->
+  <link
+    rel="stylesheet"
+    href="//cdn.jsdelivr.net/npm/docsify-darklight-theme@latest/dist/style.min.css"
+    title="docsify-darklight-theme"
+    type="text/css"
+  />
   <link rel="stylesheet" href="./custom.css">
 
   <style>
@@ -222,6 +229,42 @@
       pagination: {
         previousText: '← Prev',
         nextText: 'Next →'
+      },
+      darklightTheme: {
+        siteFont: 'Space Grotesk, Manrope',
+        defaultTheme: 'dark',
+        codeFontFamily: 'monospace',
+        bodyFontSize: '16px',
+        dark: {
+          accent: '#ff8a00',
+          toogleBackground: '#1a1d24',
+          background: '#0a0d12',
+          textColor: '#e8ecf2',
+          codeTextColor: '#ffd166',
+          codeBackgroundColor: 'rgba(7, 9, 12, 0.8)',
+          borderColor: 'rgba(255, 255, 255, 0.08)',
+          blockQuoteColor: '#ffd166',
+          highlightColor: '#ff8a00',
+          sidebarSublink: '#a6b0c3',
+          codeTypeColor: '#ff8a00',
+          coverBackground: 'radial-gradient(circle at center, #1a1d24 0%, #0a0d12 100%)',
+          toogleImage: 'url(https://cdn.jsdelivr.net/npm/docsify-darklight-theme@latest/icons/sun.svg)'
+        },
+        light: {
+          accent: '#ff8a00',
+          toogleBackground: '#ffffff',
+          background: '#ffffff',
+          textColor: '#0f172a',
+          codeTextColor: '#ff8a00',
+          codeBackgroundColor: '#f7f8fa',
+          borderColor: '#e5e7eb',
+          blockQuoteColor: '#ff8a00',
+          highlightColor: '#ffd166',
+          sidebarSublink: '#6b7280',
+          codeTypeColor: '#ff8a00',
+          coverBackground: 'linear-gradient(to bottom, #ffffff 0%, #f7f8fa 100%)',
+          toogleImage: 'url(https://cdn.jsdelivr.net/npm/docsify-darklight-theme@latest/icons/moon.svg)'
+        }
       }
     };
   </script>
@@ -233,5 +276,30 @@
   <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-typescript.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+
+  <!-- Mermaid for Diagrams -->
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#ff8a00',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#ffd166',
+        lineColor: '#a6b0c3',
+        secondaryColor: '#1a1d24',
+        tertiaryColor: '#0a0d12'
+      }
+    });
+    window.mermaid = mermaid;
+  </script>
+  <script src="//cdn.jsdelivr.net/npm/docsify-mermaid@2/dist/docsify-mermaid.js"></script>
+
+  <!-- Dark/Light Theme Toggle -->
+  <script
+    src="//cdn.jsdelivr.net/npm/docsify-darklight-theme@latest/dist/index.min.js"
+    type="text/javascript">
+  </script>
 </body>
 </html>
