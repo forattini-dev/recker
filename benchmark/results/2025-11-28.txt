@@ -1,0 +1,58 @@
+Benchmark Results - November 28, 2025
+======================================
+
+Environment:
+- CPU: Intel(R) Core(TM) i7-1065G7 CPU @ 1.30GHz (~0.50 GHz during test)
+- Runtime: Node.js 23.8.0 (x64-linux)
+- Tool: mitata
+
+HTTP Clients (GET JSON)
+-----------------------
+
+| Client          | Average   | P75       | P99       | Min       | Max       |
+|-----------------|-----------|-----------|-----------|-----------|-----------|
+| undici (raw)    | 2.92 ms   | 3.37 ms   | 17.47 ms  | 641.50 µs | 24.35 ms  |
+| fetch (native)  | 2.94 ms   | 4.19 ms   | 10.89 ms  | 1.01 ms   | 15.78 ms  |
+| axios           | 3.06 ms   | 3.85 ms   | 10.29 ms  | 1.30 ms   | 13.00 ms  |
+| got             | 5.67 ms   | 7.62 ms   | 20.24 ms  | 1.53 ms   | 23.40 ms  |
+| recker (core)   | 5.95 ms   | 9.12 ms   | 14.85 ms  | 1.44 ms   | 16.14 ms  |
+| ky              | 8.93 ms   | 12.21 ms  | 19.22 ms  | 1.96 ms   | 27.43 ms  |
+
+Memory Usage (heap allocation):
+-------------------------------
+
+| Client          | Min       | Max       | Avg       |
+|-----------------|-----------|-----------|-----------|
+| undici (raw)    | 16 B      | 3.65 MB   | 161.36 KB |
+| fetch (native)  | 10.99 KB  | 870.77 KB | 96.76 KB  |
+| axios           | 256 B     | 1.00 MB   | 111.24 KB |
+| got             | 13.30 KB  | 629.38 KB | 117.84 KB |
+| recker (core)   | 18.19 KB  | 4.16 MB   | 278.82 KB |
+| ky              | 17.58 KB  | 753.57 KB | 135.87 KB |
+
+Rankings (by average time):
+---------------------------
+
+1. undici (raw)    - 2.92 ms (baseline)
+2. fetch (native)  - 2.94 ms (+0.7%)
+3. axios           - 3.06 ms (+4.8%)
+4. got             - 5.67 ms (+94.2%)
+5. recker (core)   - 5.95 ms (+103.8%)
+6. ky              - 8.93 ms (+205.8%)
+
+Key Observations:
+-----------------
+
+1. undici and native fetch are nearly identical (within 1%)
+2. axios is surprisingly competitive, only 5% slower than raw undici
+3. recker and got are in the same tier (~5-6ms)
+4. ky is significantly slower due to its wrapper overhead
+5. CPU was throttled during test (~0.50 GHz vs 1.30 GHz base), affecting absolute times
+6. recker's overhead comes from middleware stack + observability features
+
+Notes:
+------
+- These results reflect a single simple GET JSON benchmark
+- Real-world performance depends heavily on network latency
+- recker's value comes from features (retry, cache, dedup, hooks) not raw speed
+- Memory usage varies significantly between runs due to GC timing

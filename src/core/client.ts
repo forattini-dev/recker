@@ -1,11 +1,10 @@
-import { ClientOptions, Middleware, NextFunction, ReckerRequest, ReckerResponse, RequestOptions, Transport, CacheStorage, Hooks, PaginationConfig, HTTP2Options, PageResult } from '../types/index.js';
+import { ClientOptions, Middleware, NextFunction, ReckerRequest, ReckerResponse, RequestOptions, Transport, CacheStorage, Hooks, PaginationConfig, HTTP2Options, PageResult, CookieJar, CookieOptions, Logger, consoleLogger } from '../types/index.js';
 import { HttpRequest } from './request.js';
 import { HttpResponse } from './response.js';
 import { UndiciTransport } from '../transport/undici.js';
 import { RequestPromise } from './request-promise.js';
-import { HttpError } from '../core/errors.js';
-import { Logger, getLogger } from '../utils/logger.js';
-import { processBody, createFormData, createMultipart } from '../utils/body.js';
+import { HttpError, MaxSizeExceededError, ReckerError } from '../core/errors.js';
+import { processBody, createFormData, createMultipart, isPlainObject } from '../utils/body.js';
 import { AgentManager } from '../utils/agent-manager.js';
 import { RequestPool } from '../utils/request-pool.js';
 import { normalizeConcurrency, createBatchConfig, type NormalizedConcurrencyConfig } from '../utils/concurrency.js';
@@ -18,11 +17,15 @@ import { cache, CacheOptions } from '../plugins/cache.js';
 import { dedup, DedupOptions } from '../plugins/dedup.js';
 import { createXSRFMiddleware, XSRFPluginOptions } from '../plugins/xsrf.js';
 import { createCompressionMiddleware } from '../plugins/compression.js';
+import { serializeXML } from '../plugins/xml.js';
 import { MemoryStorage } from '../cache/memory-storage.js';
 import { FileStorage } from '../cache/file-storage.js';
 import { RequestRunner } from '../runner/request-runner.js';
 import { ReckerWebSocket, type WebSocketOptions } from '../websocket/client.js';
 import { whois as performWhois, isDomainAvailable, type WhoisOptions, type WhoisResult } from '../utils/whois.js';
+import { MemoryCookieJar } from '../cookies/memory-cookie-jar.js';
+import { scrape as scrapeHelper, type ScrapePromise } from '../plugins/scrape.js';
+import type { ScrapeOptions, ExtractedLink, ExtractedImage, ExtractedMeta, OpenGraphData, TwitterCardData, JsonLdData, ExtractedForm, ExtractedTable, ExtractedScript, ExtractedStyle, ExtractionSchema, LinkExtractionOptions, ImageExtractionOptions } from '../scrape/types.js';
 
 // Extended Cache Config for Client
 interface ClientCacheConfig extends Omit<CacheOptions, 'storage'> {
@@ -52,6 +55,9 @@ export class Client {
   private agentManager?: AgentManager;
   private concurrencyConfig: NormalizedConcurrencyConfig;
   private requestPool?: RequestPool;
+  private maxResponseSize?: number;
+  private cookieJar?: CookieJar;
+  private cookieIgnoreInvalid: boolean = false;
   
   constructor(options: ExtendedClientOptions = {}) {
     this.baseUrl = options.baseUrl || '';
@@ -72,11 +78,15 @@ export class Client {
 
     this.defaultParams = options.defaults?.params || {};
     this.paginationConfig = options.pagination;
+    this.maxResponseSize = options.maxResponseSize;
 
-    // Debug mode
+    // Debug mode - use provided logger or console as default
     this.debugEnabled = options.debug === true;
     if (this.debugEnabled) {
-      this.logger = getLogger();
+      this.logger = options.logger ?? consoleLogger;
+    } else if (options.logger) {
+      // Allow logger without debug mode (silent logger can be passed)
+      this.logger = options.logger;
     }
 
     // ========================================
@@ -108,10 +118,22 @@ export class Client {
         proxy: options.proxy,
         http2: http2Options,
         dns: options.dns,
-        agent: this.agentManager
+        agent: this.agentManager,
+        socketPath: options.socketPath,
+        tls: options.tls,
+        observability: options.observability
       });
     } else {
-      throw new Error('baseUrl is required for default UndiciTransport, or provide a custom transport.');
+      throw new ReckerError(
+        'baseUrl is required for default UndiciTransport, or provide a custom transport.',
+        undefined,
+        undefined,
+        [
+          'Set baseUrl when using the built-in Undici transport.',
+          'Pass an absolute URL to each request.',
+          'Provide a custom transport if you need to handle relative paths differently.'
+        ]
+      );
     }
 
     // 1. Auto-wire plugins based on config
@@ -133,12 +155,12 @@ export class Client {
       });
       this.middlewares.unshift(this.requestPool.asMiddleware());
 
-      if (this.debugEnabled) {
-        console.log(`[Recker] Global concurrency limit: ${this.concurrencyConfig.max} concurrent requests`);
+      if (this.debugEnabled && this.logger) {
+        this.logger.debug(`Global concurrency limit: ${this.concurrencyConfig.max} concurrent requests`);
       }
     } else {
-      if (this.debugEnabled) {
-        console.log('[Recker] No global concurrency limit (allows unlimited parallel batches)');
+      if (this.debugEnabled && this.logger) {
+        this.logger.debug('No global concurrency limit (allows unlimited parallel batches)');
       }
     }
 
@@ -184,7 +206,17 @@ export class Client {
       }
     }
 
-    // 5. Debug logging middleware (if enabled)
+    // 5. Cookie jar (if enabled)
+    if (options.cookies) {
+      this.setupCookieJar(options.cookies);
+    }
+
+    // 6. Max response size protection (if enabled)
+    if (this.maxResponseSize !== undefined) {
+      this.middlewares.push(this.createMaxSizeMiddleware(this.maxResponseSize));
+    }
+
+    // 7. Debug logging middleware (if enabled)
     if (this.debugEnabled && this.logger) {
       this.middlewares.unshift(this.createLoggingMiddleware(this.logger));
     }
@@ -200,17 +232,151 @@ export class Client {
     return async (req, next) => {
       const startTime = Date.now();
 
-      logger.logRequest(req);
+      // Log request
+      logger.debug({ type: 'request', method: req.method, url: req.url }, `→ ${req.method} ${req.url}`);
 
       try {
         const response = await next(req);
-        logger.logResponse(req, response, startTime);
+        const duration = Date.now() - startTime;
+
+        // Log response
+        logger.debug(
+          {
+            type: 'response',
+            method: req.method,
+            url: req.url,
+            status: response.status,
+            duration,
+            timings: response.timings,
+          },
+          `← ${response.status} ${req.method} ${req.url} (${duration}ms)`
+        );
+
         return response;
       } catch (error) {
-        logger.logError(req, error as Error);
+        const duration = Date.now() - startTime;
+        const err = error as Error;
+
+        // Log error
+        logger.error(
+          {
+            type: 'error',
+            method: req.method,
+            url: req.url,
+            error: err.message,
+            errorName: err.name,
+            duration,
+          },
+          `✖ ${req.method} ${req.url} - ${err.message}`
+        );
+
         throw error;
       }
     };
+  }
+
+  private createMaxSizeMiddleware(globalMaxSize?: number): Middleware {
+    return async (req, next) => {
+      const response = await next(req);
+
+      const limit = req.maxResponseSize ?? globalMaxSize;
+      if (limit === undefined) return response;
+
+      // Check Content-Length header if present
+      const contentLength = response.headers.get('Content-Length');
+      if (contentLength) {
+        const size = parseInt(contentLength, 10);
+        if (!isNaN(size) && size > limit) {
+          throw new MaxSizeExceededError(limit, size, req);
+        }
+      }
+
+      // TODO: For streaming responses without Content-Length,
+      // we should wrap the response stream and monitor bytes read.
+      // This will be implemented in a future enhancement.
+
+      return response;
+    };
+  }
+
+  /**
+   * Setup cookie jar from options
+   */
+  private setupCookieJar(options: boolean | CookieOptions): void {
+    if (options === true) {
+      // Simple boolean - use built-in memory jar
+      this.cookieJar = new MemoryCookieJar();
+    } else if (typeof options === 'object') {
+      if (options.jar === true) {
+        this.cookieJar = new MemoryCookieJar();
+      } else if (options.jar && typeof options.jar === 'object') {
+        this.cookieJar = options.jar;
+      }
+      this.cookieIgnoreInvalid = options.ignoreInvalid ?? false;
+    }
+
+    if (this.cookieJar) {
+      this.middlewares.push(this.createCookieMiddleware());
+    }
+  }
+
+  /**
+   * Create cookie middleware that:
+   * 1. Injects cookies from jar into request
+   * 2. Stores cookies from Set-Cookie headers
+   */
+  private createCookieMiddleware(): Middleware {
+    return async (req, next) => {
+      const jar = this.cookieJar!;
+
+      // 1. Get cookies for this URL and add to request
+      try {
+        const cookieString = await jar.getCookieString(req.url);
+        if (cookieString) {
+          const existingCookie = req.headers.get('cookie');
+          const newCookie = existingCookie
+            ? `${existingCookie}; ${cookieString}`
+            : cookieString;
+          req.headers.set('cookie', newCookie);
+        }
+      } catch (error) {
+        if (!this.cookieIgnoreInvalid) {
+          throw error;
+        }
+      }
+
+      // 2. Make the request
+      const response = await next(req);
+
+      // 3. Store cookies from response
+      const setCookieHeader = response.headers.get('set-cookie');
+      if (setCookieHeader) {
+        // Split multiple cookies (handling comma in dates is tricky)
+        const cookies = this.splitSetCookieHeader(setCookieHeader);
+
+        for (const cookie of cookies) {
+          try {
+            await jar.setCookie(cookie, req.url);
+          } catch (error) {
+            if (!this.cookieIgnoreInvalid) {
+              throw error;
+            }
+          }
+        }
+      }
+
+      return response;
+    };
+  }
+
+  /**
+   * Split Set-Cookie header into individual cookies
+   * Handles the tricky comma-in-date issue
+   */
+  private splitSetCookieHeader(header: string): string[] {
+    // Pattern: split on comma followed by a cookie name=value pattern
+    // This avoids splitting on commas inside Expires dates
+    return header.split(/,(?=\s*[a-zA-Z0-9_-]+=)/g).map(s => s.trim());
   }
 
   private composeMiddlewares(): (req: ReckerRequest) => Promise<ReckerResponse> {
@@ -280,7 +446,8 @@ export class Client {
   private httpErrorMiddleware: Middleware = async (req, next) => {
     const response = await next(req);
     // Conditional logic: only check if throwHttpErrors is true (default)
-    if (req.throwHttpErrors !== false && !response.ok) {
+    // Also, 304 Not Modified is NOT an error, even if response.ok is false, if throwHttpErrors is false
+    if (req.throwHttpErrors !== false && !response.ok && response.status !== 304) {
       throw new HttpError(response, req);
     }
     return response;
@@ -342,9 +509,18 @@ export class Client {
     const hasRequestParams = requestParams && Object.keys(requestParams).length > 0;
     const hasDefaultParams = Object.keys(this.defaultParams).length > 0;
 
+    // Fast path: no params, simple concatenation
     if (!hasRequestParams && !hasDefaultParams) {
-      if (this.baseUrl && !path.startsWith('http')) {
-        return new URL(path, this.baseUrl).toString();
+      // Absolute URL - return as-is
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        return path;
+      }
+      // Simple path concatenation (avoid URL object overhead)
+      if (this.baseUrl) {
+        // Handle trailing/leading slashes
+        const base = this.baseUrl.endsWith('/') ? this.baseUrl.slice(0, -1) : this.baseUrl;
+        const p = path.startsWith('/') ? path : '/' + path;
+        return base + p;
       }
       return path;
     }
@@ -353,30 +529,56 @@ export class Client {
     const mergedParams = { ...this.defaultParams, ...requestParams };
     const usedParams = new Set<string>();
 
+    // Only scan for path params if path contains ':'
     if (finalPath.includes(':')) {
       finalPath = finalPath.replace(/:([a-zA-Z0-9_]+)/g, (match, paramName) => {
         if (mergedParams && paramName in mergedParams) {
           usedParams.add(paramName);
-          return String(mergedParams[paramName]);
+          return encodeURIComponent(String(mergedParams[paramName]));
         }
-        throw new Error(`Missing required path parameter: ${paramName}`);
+        throw new ReckerError(
+          `Missing required path parameter: ${paramName}`,
+          undefined,
+          undefined,
+          [
+            `Provide '${paramName}' in request params or defaults.`,
+            'Ensure the path template matches the provided params.',
+            'If optional, remove the placeholder from the path.'
+          ]
+        );
       });
     }
 
-    let finalUrl = finalPath;
-    if (this.baseUrl && !finalPath.startsWith('http://') && !finalPath.startsWith('https://')) {
-      finalUrl = new URL(finalPath, this.baseUrl).toString();
-    } else if (!this.baseUrl && !finalPath.startsWith('http://') && !finalPath.startsWith('https://')) {
-      throw new Error('Relative path provided without a baseUrl or explicit transport.');
+    // Build final URL
+    let finalUrl: string;
+    if (finalPath.startsWith('http://') || finalPath.startsWith('https://')) {
+      finalUrl = finalPath;
+    } else if (this.baseUrl) {
+      const base = this.baseUrl.endsWith('/') ? this.baseUrl.slice(0, -1) : this.baseUrl;
+      const p = finalPath.startsWith('/') ? finalPath : '/' + finalPath;
+      finalUrl = base + p;
+    } else {
+      throw new ReckerError(
+        'Relative path provided without a baseUrl or explicit transport.',
+        undefined,
+        undefined,
+        [
+          'Set baseUrl when creating the client.',
+          'Use an absolute URL in request().',
+          'Provide a custom transport that resolves relative paths.'
+        ]
+      );
     }
 
+    // Append remaining params as query string
     const remainingKeys = Object.keys(mergedParams).filter((k) => !usedParams.has(k));
     if (remainingKeys.length > 0) {
-      const urlObj = new URL(finalUrl);
-      remainingKeys.forEach((key) => {
-        urlObj.searchParams.append(key, String(mergedParams[key]));
-      });
-      return urlObj.toString();
+      // Fast path: build query string manually
+      const queryParts = remainingKeys.map(key =>
+        `${encodeURIComponent(key)}=${encodeURIComponent(String(mergedParams[key]))}`
+      );
+      const separator = finalUrl.includes('?') ? '&' : '?';
+      return finalUrl + separator + queryParts.join('&');
     }
 
     return finalUrl;
@@ -385,46 +587,81 @@ export class Client {
   request<T = unknown>(path: string, options: RequestOptions = {}): RequestPromise<T> {
     const url = this.buildUrl(path, options.params);
 
-    let mergedHeaders = this.defaultHeaders;
+    // Optimized: Merge headers efficiently
+    let mergedHeaders: Headers;
     if (options.headers) {
-      mergedHeaders = new Headers(this.defaultHeaders);
-      new Headers(options.headers).forEach((value, key) => (mergedHeaders as Headers).append(key, value));
-    } else if (!(mergedHeaders instanceof Headers)) {
-      mergedHeaders = new Headers(mergedHeaders);
+      // Only create Headers when we need to merge
+      mergedHeaders = this.defaultHeaders instanceof Headers
+        ? new Headers(this.defaultHeaders)
+        : new Headers(this.defaultHeaders);
+      const optHeaders = options.headers instanceof Headers
+        ? options.headers
+        : new Headers(options.headers);
+      optHeaders.forEach((value, key) => mergedHeaders.append(key, value));
+    } else {
+      // Reuse existing Headers if already created
+      mergedHeaders = this.defaultHeaders instanceof Headers
+        ? this.defaultHeaders
+        : new Headers(this.defaultHeaders);
     }
 
-    const controller = new AbortController();
-    let signal = controller.signal;
+    // Optimized: Lazy AbortController - only create when needed
+    const needsController = options.timeout || options.signal;
+    let controller: AbortController | undefined;
+    let signal: AbortSignal | undefined = options.signal;
     let timeoutId: NodeJS.Timeout | undefined;
     let externalAbortCleanup: (() => void) | undefined;
 
-    if (options.signal) {
-      const externalSignal = options.signal;
-      const abortHandler = () => controller.abort(externalSignal.reason);
-      if (externalSignal.aborted) {
-        abortHandler();
-      } else {
-        externalSignal.addEventListener('abort', abortHandler, { once: true });
-        externalAbortCleanup = () => externalSignal.removeEventListener('abort', abortHandler);
-      }
-    }
+    if (needsController) {
+      controller = new AbortController();
+      signal = controller.signal;
 
-    if (options.timeout) {
-      timeoutId = setTimeout(() => controller.abort(new Error('Request timed out')), options.timeout);
+      if (options.signal) {
+        const externalSignal = options.signal;
+        const abortHandler = () => controller!.abort(externalSignal.reason);
+        if (externalSignal.aborted) {
+          abortHandler();
+        } else {
+          externalSignal.addEventListener('abort', abortHandler, { once: true });
+          externalAbortCleanup = () => externalSignal.removeEventListener('abort', abortHandler);
+        }
+      }
+
+      // Handle per-phase or total timeout
+      const timeout = options.timeout;
+      if (timeout) {
+        const totalTimeout = typeof timeout === 'number' ? timeout : timeout.request;
+        if (totalTimeout) {
+          timeoutId = setTimeout(() => controller!.abort(new ReckerError(
+            'Request timed out (total timeout reached)',
+            req,
+            undefined,
+            [
+              'Increase the timeout value for long-running requests.',
+              'Check upstream performance or network latency.',
+              'Use per-phase timeouts to pinpoint where the delay occurs.'
+            ]
+          )), totalTimeout);
+        }
+      }
     }
 
     const req = new HttpRequest(url, {
       ...options,
       headers: mergedHeaders,
       signal,
+      maxResponseSize: options.maxResponseSize ?? this.maxResponseSize
     });
 
     const responsePromise = this.handler(req) as Promise<ReckerResponse<T>>;
 
     if (timeoutId || externalAbortCleanup) {
+      // Cleanup handlers - use catch to prevent unhandled rejection
       responsePromise.finally(() => {
         if (timeoutId) clearTimeout(timeoutId);
         externalAbortCleanup?.();
+      }).catch(() => {
+        // Ignore - the actual error will be propagated through RequestPromise
       });
     }
 
@@ -524,22 +761,87 @@ export class Client {
   /**
    * Private helper to handle requests with body (POST, PUT, PATCH)
    * Processes body and sets appropriate Content-Type header
+   * Priority: form > json > xml > body
    */
   private requestWithBody<T>(
     method: 'POST' | 'PUT' | 'PATCH' | 'PROPFIND' | 'PROPPATCH' | 'LOCK' | 'LINK' | 'UNLINK',
     path: string,
-    body?: any,
-    options: Omit<RequestOptions, 'method' | 'body'> = {}
+    bodyOrOptions?: any,
+    options?: Omit<RequestOptions, 'method' | 'body'>
   ) {
-    const { body: processedBody, contentType } = processBody(body);
-    const headers = new Headers(options.headers);
+    let actualBody = bodyOrOptions;
+    let actualOptions = options;
 
-    // Only set Content-Type if not already set and we have a contentType
-    if (contentType && !headers.has('Content-Type')) {
-      headers.set('Content-Type', contentType);
+    // Check if options is effectively empty (undefined or no keys)
+    // This is necessary because post/put/patch methods default options to {}
+    const isOptionsEmpty = actualOptions === undefined || 
+      (typeof actualOptions === 'object' && actualOptions !== null && Object.keys(actualOptions).length === 0);
+
+    // Overload: post(url, options) handling
+    // If options is undefined, and bodyOrOptions looks like options
+    if (isOptionsEmpty && isPlainObject(bodyOrOptions)) {
+      const potentialOptions = bodyOrOptions as any;
+      // Heuristic to detect if it's options
+      if (
+        potentialOptions.json !== undefined ||
+        potentialOptions.form !== undefined ||
+        potentialOptions.xml !== undefined ||
+        potentialOptions.body !== undefined ||
+        potentialOptions.headers !== undefined ||
+        potentialOptions.timeout !== undefined ||
+        potentialOptions.retry !== undefined ||
+        potentialOptions.hooks !== undefined ||
+        potentialOptions.searchParams !== undefined ||
+        potentialOptions.params !== undefined
+      ) {
+        actualOptions = bodyOrOptions;
+        actualBody = undefined;
+      }
     }
 
-    return this.request<T>(path, { ...options, method, body: processedBody, headers });
+    // Ensure actualOptions is at least an empty object if undefined
+    actualOptions = actualOptions || {};
+
+    // Extract json, form, and xml from options to prevent them from being passed to request()
+    const { json, form, xml, ...restOptions } = actualOptions as any;
+
+    let finalBody = actualBody;
+    let explicitContentType: string | undefined;
+
+    // Priority 1: form option (multipart/form-data)
+    if (form !== undefined) {
+      finalBody = createFormData(form);
+      // Don't set Content-Type - let FormData set boundary
+      explicitContentType = undefined;
+    }
+    // Priority 2: json option (application/json)
+    else if (json !== undefined) {
+      finalBody = JSON.stringify(json);
+      explicitContentType = 'application/json';
+    }
+    // Priority 3: xml option (application/xml)
+    else if (xml !== undefined) {
+      finalBody = '<?xml version="1.0" encoding="UTF-8"?>\n' + serializeXML(xml);
+      explicitContentType = 'application/xml';
+    }
+    // Priority 4: explicit body in options
+    else if (restOptions.body !== undefined) {
+      finalBody = restOptions.body;
+    }
+    // Priority 5: existing body parameter (already in finalBody)
+
+    const { body: processedBody, contentType } = processBody(finalBody);
+    const headers = new Headers(restOptions.headers);
+
+    // Use explicit content type from json/form options, or auto-detected from processBody
+    const finalContentType = explicitContentType ?? contentType;
+
+    // Only set Content-Type if not already set and we have a contentType
+    if (finalContentType && !headers.has('Content-Type')) {
+      headers.set('Content-Type', finalContentType);
+    }
+
+    return this.request<T>(path, { ...restOptions, method, body: processedBody, headers });
   }
 
   post<T = unknown>(path: string, body?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
@@ -689,6 +991,48 @@ export class Client {
     return this.requestWithBody<T>('UNLINK', path, body, options);
   }
 
+  // ============================================
+  // Scraping Methods
+  // ============================================
+
+  /**
+   * Scrape a URL and return a ScrapePromise with extraction methods
+   *
+   * @example
+   * ```typescript
+   * // Get full ScrapeDocument for complex scraping
+   * const doc = await client.scrape('/page').scrape();
+   * const title = doc.select('h1').text();
+   * const items = doc.selectAll('.product').map(el => ({
+   *   name: el.find('.name').text(),
+   *   price: el.find('.price').text()
+   * }));
+   *
+   * // Quick extraction
+   * const links = await client.scrape('/page').links({ absolute: true });
+   * const meta = await client.scrape('/page').meta();
+   * const og = await client.scrape('/page').openGraph();
+   *
+   * // Declarative extraction
+   * const data = await client.scrape('/product').extract({
+   *   title: 'h1',
+   *   price: { selector: '.price', transform: v => parseFloat(v.replace('$', '')) },
+   *   images: { selector: 'img', attribute: 'src', multiple: true }
+   * });
+   *
+   * // With different HTTP method
+   * const doc = await client.scrape('/search', {
+   *   method: 'POST',
+   *   body: { query: 'test' }
+   * }).scrape();
+   * ```
+   */
+  scrape(path: string, options: RequestOptions = {}): ScrapePromise<ReckerResponse> {
+    const method = options.method || 'GET';
+    const requestPromise = this.request(path, { ...options, method });
+    return scrapeHelper(requestPromise);
+  }
+
   paginate<T>(path: string, options: RequestOptions & PaginationOptions<T> = {}): AsyncGenerator<T> {
     // Split request options from pagination options
     const { getItems, getNextUrl, maxPages, pageParam, limitParam, resultsPath, nextCursorPath, ...reqOptions } = options;
@@ -776,7 +1120,16 @@ export class Client {
       const base = this.baseUrl.replace(/^http/, 'ws');
       wsUrl = new URL(path, base).toString();
     } else {
-      throw new Error('WebSocket requires either a full ws:// URL or a baseUrl');
+      throw new ReckerError(
+        'WebSocket requires either a full ws:// URL or a baseUrl',
+        undefined,
+        undefined,
+        [
+          'Pass a full ws:// or wss:// URL to websocket().',
+          'Configure baseUrl so relative websocket paths can be resolved.',
+          'Ensure the baseUrl uses http/https so it can be converted to ws/wss.'
+        ]
+      );
     }
 
     // Merge default headers if any

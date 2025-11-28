@@ -26,7 +26,10 @@
     "whois",
     "dns",
     "proxy",
-    "ai"
+    "ai",
+    "scraping",
+    "cheerio",
+    "html-parser"
   ],
   "author": "Forattini Dev",
   "license": "MIT",
@@ -53,9 +56,21 @@
       "types": "./dist/core/client.d.ts",
       "import": "./dist/core/client.js"
     },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    },
+    "./presets": {
+      "types": "./dist/presets/index.d.ts",
+      "import": "./dist/presets/index.js"
+    },
     "./plugins/*": {
       "types": "./dist/plugins/*.d.ts",
       "import": "./dist/plugins/*.js"
+    },
+    "./scrape": {
+      "types": "./dist/scrape/index.d.ts",
+      "import": "./dist/scrape/index.js"
     },
     "./utils/*": {
       "types": "./dist/utils/*.d.ts",
@@ -82,17 +97,40 @@
     "access": "public"
   },
   "dependencies": {
+    "basic-ftp": "^5.0.5",
+    "glob": "^13.0.0",
+    "ssh2-sftp-client": "^12.0.1",
+    "telnet-client": "^2.2.9",
     "undici": "^7.16.0",
     "zod": "^4.1.13"
   },
+  "peerDependencies": {
+    "cheerio": "^1.0.0",
+    "ioredis": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "cheerio": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@types/needle": "^3.3.0",
     "@types/node": "^24.10.1",
+    "@types/ssh2-sftp-client": "^9.0.5",
+    "@types/superagent": "^8.1.9",
     "@vitest/coverage-v8": "^3.2.4",
     "axios": "^1.13.2",
+    "cheerio": "^1.0.0",
+    "domhandler": "^5.0.3",
     "got": "^14.6.5",
     "husky": "^9.1.7",
     "ky": "^1.14.0",
     "mitata": "^1.0.34",
+    "needle": "^3.3.1",
+    "superagent": "^10.2.3",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"

@@ -1,10 +1,7 @@
-/**
- * Model Context Protocol (MCP) Client
- * Smart, type-safe integration with MCP servers over HTTP/SSE
- */
-
 import { EventEmitter } from 'events';
 import { createClient, Client } from '../core/client.js';
+import { ReckerError } from '../core/errors.js';
+import { Logger, consoleLogger } from '../types/logger.js';
 import type {
   JsonRpcRequest,
   JsonRpcResponse,
@@ -38,7 +35,7 @@ export interface MCPClientOptions {
   timeout?: number;
   retries?: number;
   debug?: boolean;
-  transport?: any; // Custom transport for testing
+  transport?: any;
 }
 
 interface ResolvedMCPClientOptions {
@@ -53,7 +50,7 @@ interface ResolvedMCPClientOptions {
 }
 
 /**
- * MCP Client - Intuitive interface for Model Context Protocol
+ * MCP (Model Context Protocol) Client for interacting with MCP servers.
  *
  * @example
  * ```typescript
@@ -102,8 +99,6 @@ export class MCPClient extends EventEmitter {
     };
 
     this.endpoint = this.options.endpoint;
-
-    // Create Recker client for HTTP requests
     this.client = createClient({
       baseUrl: this.endpoint,
       headers: {
@@ -114,19 +109,17 @@ export class MCPClient extends EventEmitter {
         maxAttempts: this.options.retries,
         backoff: 'exponential',
       },
-      transport: options.transport, // Allow custom transport for testing
+      transport: options.transport,
     });
 
     if (this.options.debug) {
-      this.on('request', (req) => console.log('[MCP Request]', req));
-      this.on('response', (res) => console.log('[MCP Response]', res));
-      this.on('notification', (notif) => console.log('[MCP Notification]', notif));
+      const logger = consoleLogger;
+      this.on('request', (req) => logger.debug({ type: 'mcp-request', data: req }, `[MCP Request] ${JSON.stringify(req)}`));
+      this.on('response', (res) => logger.debug({ type: 'mcp-response', data: res }, `[MCP Response] ${JSON.stringify(res)}`));
+      this.on('notification', (notif) => logger.debug({ type: 'mcp-notification', data: notif }, `[MCP Notification] ${JSON.stringify(notif)}`));
     }
   }
 
-  /**
-   * Connect and initialize MCP session
-   */
   async connect(): Promise<MCPServerInfo> {
     const response = await this.request<MCPInitializeResponse>('initialize', {
       protocolVersion: this.options.protocolVersion,
@@ -144,16 +137,12 @@ export class MCPClient extends EventEmitter {
     this.serverInfo = response.serverInfo;
     this.initialized = true;
 
-    // Start SSE connection for notifications
     await this.connectSSE();
 
     this.emit('connected', this.serverInfo);
     return this.serverInfo;
   }
 
-  /**
-   * Disconnect from MCP server
-   */
   async disconnect(): Promise<void> {
     if (this.sseConnection) {
       this.sseConnection.abort();
@@ -163,21 +152,12 @@ export class MCPClient extends EventEmitter {
     this.emit('disconnected');
   }
 
-  /**
-   * Tools API - Intuitive tool management
-   */
   public readonly tools = {
-    /**
-     * List all available tools
-     */
     list: async (): Promise<MCPTool[]> => {
       const response = await this.request<MCPToolsListResponse>('tools/list');
       return response.tools;
     },
 
-    /**
-     * Call a tool with arguments
-     */
     call: async (name: string, args?: Record<string, unknown>): Promise<MCPToolResult> => {
       const response = await this.request<MCPToolResult>('tools/call', {
         name,
@@ -186,30 +166,18 @@ export class MCPClient extends EventEmitter {
       return response;
     },
 
-    /**
-     * Helper: Get tool by name
-     */
     get: async (name: string): Promise<MCPTool | undefined> => {
       const tools = await this.tools.list();
       return tools.find(t => t.name === name);
     },
   };
 
-  /**
-   * Resources API - Easy resource access
-   */
   public readonly resources = {
-    /**
-     * List all available resources
-     */
     list: async (): Promise<MCPResource[]> => {
       const response = await this.request<MCPResourcesListResponse>('resources/list');
       return response.resources;
     },
 
-    /**
-     * Read resource content
-     */
     read: async (uri: string): Promise<MCPResourceContent[]> => {
       const response = await this.request<MCPResourcesReadResponse>('resources/read', {
         uri,
@@ -217,36 +185,21 @@ export class MCPClient extends EventEmitter {
       return response.contents;
     },
 
-    /**
-     * Subscribe to resource updates
-     */
     subscribe: async (uri: string): Promise<void> => {
       await this.request('resources/subscribe', { uri });
     },
 
-    /**
-     * Unsubscribe from resource updates
-     */
     unsubscribe: async (uri: string): Promise<void> => {
       await this.request('resources/unsubscribe', { uri });
     },
   };
 
-  /**
-   * Prompts API - Template management
-   */
   public readonly prompts = {
-    /**
-     * List all available prompts
-     */
     list: async (): Promise<MCPPrompt[]> => {
       const response = await this.request<MCPPromptsListResponse>('prompts/list');
       return response.prompts;
     },
 
-    /**
-     * Get a prompt with arguments
-     */
     get: async (name: string, args?: Record<string, unknown>): Promise<MCPPromptMessage[]> => {
       const response = await this.request<MCPPromptsGetResponse>('prompts/get', {
         name,
@@ -256,32 +209,30 @@ export class MCPClient extends EventEmitter {
     },
   };
 
-  /**
-   * Ping the server
-   */
   async ping(): Promise<void> {
     await this.request('ping');
   }
 
-  /**
-   * Get server information
-   */
   getServerInfo(): MCPServerInfo | undefined {
     return this.serverInfo;
   }
 
-  /**
-   * Check if connected
-   */
   isConnected(): boolean {
     return this.initialized;
   }
 
-  // Private methods
-
   private async request<T = unknown>(method: string, params?: unknown): Promise<T> {
     if (!this.initialized && method !== 'initialize') {
-      throw new Error('MCP client not initialized. Call connect() first.');
+      throw new ReckerError(
+        'MCP client not initialized. Call connect() first.',
+        undefined,
+        undefined,
+        [
+          'Call connect() before invoking MCP methods.',
+          'Check for initialization errors in serverInfo.',
+          'Ensure the MCP server URL and credentials are correct.'
+        ]
+      );
     }
 
     const request: JsonRpcRequest = {
@@ -300,7 +251,16 @@ export class MCPClient extends EventEmitter {
     this.emit('response', response);
 
     if (response.error) {
-      const error = new Error(response.error.message);
+      const error = new ReckerError(
+        response.error.message,
+        undefined,
+        undefined,
+        [
+          'Inspect MCP server logs for the reported error.',
+          'Validate request params against the tool schema.',
+          'Retry if the error is transient.'
+        ]
+      );
       (error as any).code = response.error.code;
       (error as any).data = response.error.data;
       throw error;
@@ -317,7 +277,6 @@ export class MCPClient extends EventEmitter {
         signal: this.sseConnection.signal,
       });
 
-      // Consume SSE stream
       for await (const event of response.sse()) {
         this.handleSSEEvent(event);
       }
@@ -332,7 +291,6 @@ export class MCPClient extends EventEmitter {
     try {
       const data = JSON.parse(event.data);
 
-      // Handle different notification types
       switch (data.method) {
         case 'notifications/progress':
           this.emit('progress', data.params as MCPProgressNotification);
@@ -364,7 +322,7 @@ export class MCPClient extends EventEmitter {
 }
 
 /**
- * Create an MCP client
+ * Creates a new MCP client instance.
  *
  * @example
  * ```typescript

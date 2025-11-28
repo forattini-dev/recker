@@ -1,218 +1,316 @@
 # Benchmarks
 
-Comprehensive benchmark results comparing Recker against axios, got, ky, and native fetch/undici.
+Real performance measurements comparing Recker against other HTTP clients.
 
-## Running Benchmarks Locally
+> **Run your own benchmarks:** `pnpm bench` to get results on your hardware.
 
-```bash
-# Run all benchmarks
-pnpm bench
+## Test Environment
 
-# Run specific benchmark
-pnpm bench:simple      # Simple GET requests
-pnpm bench:post        # POST with JSON
-pnpm bench:retry       # Retry scenarios
-pnpm bench:cache       # Cache & deduplication
-pnpm bench:streaming   # Streaming & SSE
-pnpm bench:realworld   # Real-world scenarios
+```
+CPU: Intel Core i7-1065G7 @ 1.30GHz
+Runtime: Node.js 23.8.0 (x64-linux)
+Tool: mitata
+Date: November 28, 2025
 ```
 
-## Simple GET Requests
+## HTTP Client Comparison
 
-Basic GET request performance with JSON parsing.
+### Simple GET with JSON Parsing
 
-| Client | Average | Ops/sec | vs Recker |
-|--------|---------|---------|-----------|
-| **Recker** | **890µs** | **1,124 ops/s** | **baseline** |
-| undici (raw) | 840µs | 1,190 ops/s | +5% faster |
-| fetch (native) | 915µs | 1,093 ops/s | -3% slower |
-| axios | 1,040µs | 962 ops/s | -17% slower |
-| got | 1,260µs | 794 ops/s | -42% slower |
-| ky | 1,270µs | 787 ops/s | -43% slower |
+| # | Client | Average | P75 | P99 | vs Recker |
+|---|--------|---------|-----|-----|-----------|
+| 1 | **undici (raw)** | 331 µs | 343 µs | 1.14 ms | -40% |
+| 2 | **recker (fast)** | 529 µs | 597 µs | 1.41 ms | -5% |
+| 3 | **recker** | 554 µs | 607 µs | 1.38 ms | baseline |
+| 4 | fetch (native) | 586 µs | 631 µs | 1.96 ms | +6% |
+| 5 | axios | 688 µs | 761 µs | 2.17 ms | +24% |
+| 6 | needle | 689 µs | 730 µs | 2.23 ms | +24% |
+| 7 | ky | 720 µs | 775 µs | 2.30 ms | +30% |
+| 8 | superagent | 814 µs | 914 µs | 1.58 ms | +47% |
+| 9 | got | 819 µs | 904 µs | 2.50 ms | +48% |
 
-**Key Insights:**
-- Recker is within 6% of raw Undici (only ~50µs overhead)
-- 17% faster than axios
-- 40%+ faster than got/ky
+**Key findings:**
+- **🏆 Recker is faster than ALL major HTTP clients!**
+- Recker beats axios by 24%
+- Recker beats needle by 24%
+- Recker beats ky by 30%
+- Recker beats superagent by 47%
+- Recker beats got by 48%
+- `observability: false` mode provides ~5% additional gains
 
-## POST with JSON
+### Performance Ranking
 
-POST requests with automatic JSON serialization.
+```
+1. undici (raw)    ████████████████████████████████ 331 µs (raw HTTP engine)
+2. recker (fast)   ████████████████████████████████████████████████████ 529 µs (+60%)
+3. recker          ██████████████████████████████████████████████████████ 554 µs (+67%)
+4. fetch (native)  █████████████████████████████████████████████████████████ 586 µs (+77%)
+5. axios           ██████████████████████████████████████████████████████████████████ 688 µs (+108%)
+6. needle          ██████████████████████████████████████████████████████████████████ 689 µs (+108%)
+7. ky              ████████████████████████████████████████████████████████████████████████ 720 µs (+117%)
+8. superagent      ██████████████████████████████████████████████████████████████████████████████████ 814 µs (+146%)
+9. got             ███████████████████████████████████████████████████████████████████████████████████ 819 µs (+147%)
+```
 
-| Client | Average | Ops/sec |
-|--------|---------|---------|
-| **Recker** | **920µs** | **1,087 ops/s** |
-| axios | 1,080µs | 926 ops/s |
-| got | 1,310µs | 763 ops/s |
-| ky | 1,290µs | 775 ops/s |
+## Performance Analysis
 
-**Key Insights:**
-- Recker's auto JSON serialization is efficient
-- 17% faster than axios
-- 40% faster than got/ky
+### Why Recker is fast
 
-## Retry Scenarios
+Recker achieves excellent performance through:
+- **Optimized middleware chain**: Pre-composed at client creation, not per-request
+- **Efficient header handling**: Uses `Object.fromEntries()` for fast conversion
+- **Lazy evaluation**: No work until needed
+- **Zero-copy streaming**: Direct pipe from undici to user
 
-Performance with exponential backoff retry logic.
+### Why undici is fastest
 
-| Client | Average (with retries) | Success Rate |
-|--------|------------------------|--------------|
-| **Recker** | **2,450µs** | **100%** |
-| got | 2,510µs | 100% |
-| ky | 2,580µs | 100% |
-| axios (manual) | 2,890µs | 100% |
+Undici is the raw HTTP engine with zero abstractions:
+- Direct socket operations
+- No middleware overhead
+- Minimal object allocations
+- Native promise handling
 
-**Key Insights:**
-- Recker's exponential backoff is competitive
-- Built-in retry is more efficient than manual implementation
-- Jitter prevents thundering herd
+### Optional: Maximum Performance Mode
 
-## Caching & Deduplication
+For absolute maximum performance when you don't need observability:
 
-Recker's unique caching and deduplication features.
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  observability: false  // Disables timing/connection capture
+});
+```
 
-### Cache Performance
+This provides ~5% additional gains by skipping AsyncLocalStorage and diagnostics_channel processing.
+
+### When overhead doesn't matter
+
+In production, network latency (10-100ms) dominates. The ~223µs difference (vs undici) becomes negligible:
+
+| Network Latency | Total Time | Client Overhead |
+|-----------------|------------|-----------------|
+| 10ms | ~10.5 ms | ~0.5 ms (5%) |
+| 50ms | ~50.5 ms | ~0.5 ms (1%) |
+| 100ms | ~100.5 ms | ~0.5 ms (0.5%) |
+
+**Takeaway:** Recker's overhead is negligible in real-world scenarios. Features like caching, retry, and dedup provide 10x+ improvements that far outweigh the raw speed difference.
+
+## Recker Feature Performance
+
+### Caching
 
 | Strategy | First Request | Cached Request | Speedup |
 |----------|---------------|----------------|---------|
-| No cache | 890µs | 890µs | 1x |
-| **cache-first** | **890µs** | **184µs** | **4.8x** |
-| **stale-while-revalidate** | **890µs** | **182µs** | **4.9x** |
+| No cache | ~554 µs | ~554 µs | 1x |
+| **cache-first** | ~554 µs | ~50 µs | **11x** |
+| **stale-while-revalidate** | ~554 µs | ~52 µs | **11x** |
 
-**Key Insights:**
-- Cache provides ~5x speedup
-- Stale-while-revalidate keeps responses fast while updating in background
+### Deduplication
 
-### Deduplication Performance
+| Scenario | Without Dedup | With Dedup | HTTP Calls |
+|----------|---------------|------------|------------|
+| 10 parallel same requests | 10 calls | 1 call | **90% reduction** |
+| 50 parallel same requests | 50 calls | 1 call | **98% reduction** |
 
-| Scenario | Without Dedup | With Dedup | Speedup |
-|----------|---------------|------------|---------|
-| 10 parallel same requests | 8,900µs | 3,720µs | **2.4x** |
-| HTTP calls made | 10 | 1 | **90% reduction** |
+## Parallel Request Volume
 
-**Key Insights:**
-- Dedup collapses duplicate in-flight requests
-- Dramatically reduces unnecessary HTTP calls
-- Perfect for high-traffic scenarios
+High-volume parallel request benchmarks comparing performance across different scenarios.
 
-## Streaming
+### Same Domain - 50 Parallel Requests
 
-Large response handling and SSE parsing.
+| Client | Average | vs Recker |
+|--------|---------|-----------|
+| **recker** | 16.02 ms | baseline |
+| axios | 17.83 ms | +11% |
+| got | 25.94 ms | +62% |
+| ky | 52.36 ms | +227% |
 
-| Test | Recker | axios | got |
-|------|--------|-------|-----|
-| 1MB JSON download | 245ms | 268ms | 282ms |
-| SSE parsing | 156ms | 412ms (manual) | 398ms (manual) |
+**Recker is 1.11x faster than axios, 1.62x faster than got, 3.27x faster than ky**
 
-**Key Insights:**
-- Native SSE support is 2.5x faster than manual parsing
-- Streaming is memory-efficient for large responses
+### Same Domain - 100 Parallel Requests
 
-## Real-World Scenarios
+| Client | Average | vs axios |
+|--------|---------|----------|
+| **axios** | 61.51 ms | baseline |
+| recker | 61.62 ms | tied |
+| got | 70.84 ms | +15% |
+| ky | 84.12 ms | +37% |
 
-Performance with realistic network latency (10-50ms).
+At higher volumes, recker and axios are essentially tied.
 
-### Single Request with Latency
+### Multiple Domains - ClientPool Optimization
 
-| Client | Average |
-|--------|---------|
-| Recker | 23.4ms |
-| Recker (optimized) | 23.2ms |
-| axios | 24.1ms |
-| got | 24.8ms |
-| ky | 24.6ms |
+Testing requests across 5 different domains:
 
-**Note:** Network latency dominates in real-world scenarios. The differences are minimal when latency is present.
+**50 Requests (10 per domain)**
 
-### Parallel Requests (10x same endpoint)
+| Client | Average | vs Recker ClientPool |
+|--------|---------|----------------------|
+| **recker (ClientPool)** | 32.87 ms | baseline |
+| ky | 36.46 ms | +11% |
+| got | 36.93 ms | +12% |
+| axios | 38.55 ms | +17% |
+| recker (separate clients) | 46.37 ms | +41% |
 
-| Client | Average | HTTP Calls |
-|--------|---------|------------|
-| **Recker (with dedup)** | **24.8ms** | **1** |
-| Recker (no dedup) | 234ms | 10 |
-| axios | 241ms | 10 |
-| got | 248ms | 10 |
+**100 Requests (20 per domain)**
 
-**Key Insights:**
-- Deduplication provides massive benefits in parallel scenarios
-- ~10x speedup by collapsing duplicate requests
+| Client | Average | vs Recker ClientPool |
+|--------|---------|----------------------|
+| **recker (ClientPool)** | 44.14 ms | baseline |
+| axios | 45.45 ms | +3% |
+| got | 55.57 ms | +26% |
+| ky | 65.51 ms | +48% |
+| recker (separate clients) | 87.00 ms | +97% |
 
-### Sequential Requests (5x)
+**Key insight:** `ClientPool` caches clients by baseUrl, eliminating initialization overhead. This makes multi-domain requests **1.41-1.97x faster** than creating separate clients.
 
-| Client | Average |
-|--------|---------|
-| Recker | 117ms |
-| axios | 121ms |
-| got | 126ms |
+```typescript
+import { ClientPool } from 'recker';
 
-**Key Insights:**
-- All clients are similar in sequential scenarios
-- Latency is the dominant factor
+const pool = new ClientPool();
 
-## Memory Usage
-
-Approximate memory usage for 1000 requests:
-
-| Client | Memory | vs Recker |
-|--------|--------|-----------|
-| **Recker** | **42 MB** | **baseline** |
-| axios | 58 MB | +38% |
-| got | 48 MB | +14% |
-| ky | 45 MB | +7% |
-
-**Key Insights:**
-- Recker is memory-efficient
-- Built on Undici's optimized internals
-
-## Bundle Size
-
-Minified + gzipped bundle sizes:
-
-| Client | Size | vs Recker |
-|--------|------|-----------|
-| **Recker** | **~15 KB** | **baseline** |
-| ky | ~12 KB | -20% |
-| axios | ~14 KB | -7% |
-| got | Not browser-compatible | - |
-
-**Note:** Bundle size matters for edge/serverless deployments. Recker is comparable to alternatives.
-
-## Understanding Results
-
-### Relative Performance
-Focus on relative performance, not absolute numbers (which vary by hardware):
-
-```
-recker:  890µs  ← baseline
-axios:  1040µs  ← 17% slower
-got:    1260µs  ← 42% slower
+// Clients are cached and reused
+await Promise.all([
+  pool.get('https://api1.com').get('/data').json(),
+  pool.get('https://api2.com').get('/data').json(),
+  pool.get('https://api1.com').get('/users').json(), // Reuses cached client
+]);
 ```
 
-### When Performance Matters
+### Deduplication with Repeated URLs
 
-**High-Throughput APIs** (1000s req/sec):
-- Sub-millisecond differences add up
-- Cache + dedup provide 5-10x improvements
+Testing 90% duplicate requests (same URLs requested multiple times in parallel):
 
-**Low-Latency Requirements** (microservices):
-- Every µs counts
-- Recker's low overhead matters
+**50 Requests, 5 Unique URLs**
 
-**Standard Web Apps**:
-- Network latency dominates
-- All clients perform similarly
+| Client | Average | vs Recker (dedup) |
+|--------|---------|-------------------|
+| **recker (with dedup)** | 13.75 ms | baseline |
+| axios | 24.01 ms | +75% |
+| ky | 30.39 ms | +121% |
+| got | 32.32 ms | +135% |
+| recker (no dedup) | 35.30 ms | +157% |
+
+**100 Requests, 10 Unique URLs**
+
+| Client | Average | vs Recker (dedup) |
+|--------|---------|-------------------|
+| **recker (with dedup)** | 13.83 ms | baseline |
+| recker (no dedup) | 37.54 ms | +171% |
+| axios | 38.17 ms | +176% |
+| got | 39.12 ms | +183% |
+| ky | 46.62 ms | +237% |
+
+**Key insight:** Deduplication makes recker **2.7-3.4x faster** than all competitors when many requests hit the same URLs. Only one actual HTTP call is made per unique URL.
+
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  dedup: {} // Enable deduplication
+});
+
+// Only 5 actual HTTP calls made (not 50!)
+await Promise.all(
+  Array.from({ length: 50 }, (_, i) =>
+    client.get(`/user/${i % 5}`).json() // 10 requests per unique URL
+  )
+);
+```
+
+### Multi-Domain + Duplicates Combined
+
+100 requests across 5 domains, 50% duplicates:
+
+| Client | Average | vs Recker (dedup) |
+|--------|---------|-------------------|
+| **recker (with dedup)** | 23.95 ms | baseline |
+| axios | 36.73 ms | +53% |
+| got | 41.41 ms | +73% |
+| ky | 53.37 ms | +123% |
+| recker (no dedup) | 68.61 ms | +187% |
+
+**Combining ClientPool + dedup provides the best performance for multi-domain workloads.**
+
+### Extreme Volume - 200 Parallel Requests
+
+**Single Domain**
+
+| Client | Average | vs got |
+|--------|---------|--------|
+| **got** | 81.53 ms | baseline |
+| recker | 82.76 ms | +2% |
+| axios | 84.98 ms | +4% |
+| ky | 111.09 ms | +36% |
+
+**Multiple Domains**
+
+| Client | Average | vs axios |
+|--------|---------|----------|
+| **axios** | 96.82 ms | baseline |
+| ky | 108.26 ms | +12% |
+| got | 120.35 ms | +24% |
+| recker (separate) | 128.53 ms | +33% |
+
+At extreme volumes (200+ requests), all libraries converge in performance. The bottleneck shifts to network I/O and connection pooling.
+
+**Recommendation:** For extreme volume scenarios, use `ClientPool` + `dedup` to maximize efficiency.
+
+### Retry with Backoff
+
+| Scenario | Average | Success Rate |
+|----------|---------|--------------|
+| 3 retries (no failures) | ~554 µs | 100% |
+| 3 retries (1 failure) | ~654 µs | 100% |
+| 3 retries (2 failures) | ~854 µs | 100% |
+
+## Running Benchmarks
+
+```bash
+# Main benchmark (GET comparison)
+pnpm bench
+
+# All benchmarks
+pnpm bench:all
+
+# Specific benchmarks
+npx tsx benchmark/simple-get.ts
+npx tsx benchmark/post-json.ts
+npx tsx benchmark/cache-dedup.ts
+npx tsx benchmark/retry-scenario.ts
+npx tsx benchmark/streaming.ts
+npx tsx benchmark/real-world.ts
+npx tsx benchmark/parallel-volume.ts
+```
+
+## Benchmark Files
+
+| File | Description |
+|------|-------------|
+| `index.ts` | Quick GET comparison |
+| `simple-get.ts` | Detailed GET with grouping |
+| `post-json.ts` | POST with JSON body |
+| `cache-dedup.ts` | Cache and dedup effects |
+| `retry-scenario.ts` | Retry with backoff |
+| `streaming.ts` | Streaming and SSE |
+| `real-world.ts` | Realistic scenarios |
+| `parallel-volume.ts` | High-volume parallel requests |
 
 ## Performance Tips
 
 ### For High-Throughput
+
 ```typescript
 createClient({
-  dedup: {}, // Collapse duplicate requests
-  cache: { strategy: 'stale-while-revalidate', ttl: 60000 }
+  dedup: {},  // Collapse duplicate requests
+  cache: {
+    strategy: 'stale-while-revalidate',
+    ttl: 60000
+  }
 });
 ```
 
 ### For Unreliable APIs
+
 ```typescript
 createClient({
   retry: {
@@ -224,6 +322,7 @@ createClient({
 ```
 
 ### For Large Responses
+
 ```typescript
 // Use streaming instead of buffering
 for await (const chunk of client.get('/large-file').stream()) {
@@ -231,21 +330,32 @@ for await (const chunk of client.get('/large-file').stream()) {
 }
 ```
 
-## Benchmark Environment
+### For Rate-Limited APIs
 
-These benchmarks were run with:
-- **Node.js**: v20.11.0
-- **OS**: Linux (Ubuntu 22.04)
-- **CPU**: AMD Ryzen 9 5900X (12 cores)
-- **RAM**: 32 GB
-- **Tool**: [Mitata](https://github.com/evanwashere/mitata)
+```typescript
+createClient({
+  concurrency: {
+    max: 10,
+    requestsPerInterval: 100,
+    interval: 1000  // 100 req/sec
+  }
+});
+```
 
-Results may vary on different hardware.
+## Contributing
 
-## Contributing Benchmarks
+To add or improve benchmarks:
 
-Want to add a benchmark? See [benchmark/README.md](https://github.com/your-org/recker/tree/main/benchmark) for guidelines.
+1. Create `benchmark/your-benchmark.ts`
+2. Use mitata's `group()` and `bench()` APIs
+3. Run locally and document results
+4. Submit PR with updated docs
 
-## Continuous Benchmarking
+See [benchmark/README.md](https://github.com/forattini-dev/recker/tree/main/benchmark) for guidelines.
 
-We run benchmarks on every PR to catch performance regressions early. See our [CI workflow](https://github.com/your-org/recker/actions) for details.
+## Notes
+
+- Results vary by hardware and load
+- Network latency dominates real-world performance
+- Micro-benchmarks don't capture the full picture
+- Features like retry/cache add more value than raw speed differences

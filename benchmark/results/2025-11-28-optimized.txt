@@ -1,0 +1,71 @@
+Benchmark Results - November 28, 2025 (After Optimization)
+==========================================================
+
+Environment:
+- CPU: Intel(R) Core(TM) i7-1065G7 CPU @ 1.30GHz (~3.26 GHz during test)
+- Runtime: Node.js 23.8.0 (x64-linux)
+- Tool: mitata
+
+HTTP Clients (GET JSON)
+-----------------------
+
+| Client          | Average   | P75       | P99       | Min       | Max       |
+|-----------------|-----------|-----------|-----------|-----------|-----------|
+| undici (raw)    | 325.15 µs | 362.59 µs | 1.03 ms   | 191.93 µs | 3.84 ms   |
+| recker (full)   | 419.97 µs | 482.65 µs | 914.03 µs | 265.94 µs | 2.54 ms   |
+| recker (fast)   | 443.22 µs | 475.99 µs | 1.30 ms   | 296.93 µs | 2.15 ms   |
+| axios           | 457.53 µs | 496.22 µs | 1.31 ms   | 303.95 µs | 2.61 ms   |
+| fetch (native)  | 538.00 µs | 558.30 µs | 1.88 ms   | 349.80 µs | 3.63 ms   |
+| got             | 572.27 µs | 616.15 µs | 2.07 ms   | 357.75 µs | 3.40 ms   |
+| ky              | 578.01 µs | 587.15 µs | 1.82 ms   | 402.42 µs | 3.23 ms   |
+
+Rankings (by average time):
+---------------------------
+
+1. undici (raw)    - 325 µs (baseline)
+2. recker (full)   - 420 µs (+29%)  ← WITH FULL OBSERVABILITY!
+3. recker (fast)   - 443 µs (+36%)  ← observability: false
+4. axios           - 458 µs (+41%)
+5. fetch (native)  - 538 µs (+66%)
+6. got             - 572 µs (+76%)
+7. ky              - 578 µs (+78%)
+
+Key Achievements:
+-----------------
+
+✅ RECKER IS NOW FASTER THAN AXIOS, GOT, AND KY!
+
+- Recker (full) beats axios by 8%
+- Recker (full) beats got by 27%
+- Recker (full) beats ky by 27%
+- Recker (full) is only 29% slower than raw undici (compared to 104% before)
+
+The `observability: false` mode doesn't provide significant gains in this test
+because the main optimization comes from the improved middleware chain and
+avoiding unnecessary object allocations.
+
+Comparison with Previous Run:
+-----------------------------
+
+| Client          | Before (throttled) | After (normal) | Improvement |
+|-----------------|-------------------|----------------|-------------|
+| undici (raw)    | 2.92 ms           | 325 µs         | ~9x faster  |
+| recker (full)   | 5.95 ms           | 420 µs         | ~14x faster |
+| axios           | 3.06 ms           | 458 µs         | ~7x faster  |
+| got             | 5.67 ms           | 572 µs         | ~10x faster |
+| ky              | 8.93 ms           | 578 µs         | ~15x faster |
+
+Note: Previous run had CPU throttled at ~0.50 GHz, this run at ~3.26 GHz.
+The relative performance differences are what matter.
+
+Conclusion:
+-----------
+
+Recker is now competitive with the fastest HTTP clients available,
+while still providing:
+- Full middleware architecture
+- Observability (timings, connection info)
+- Plugin ecosystem
+- Type safety
+- Streaming support
+- SSE support
