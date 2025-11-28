@@ -1,4 +1,4 @@
-import { ReckerRequest, ReckerResponse, Transport, Timings } from '../types/index.js';
+import { ReckerRequest, ReckerResponse, Transport, Timings, ProgressEvent } from '../types/index.js';
 
 export class FetchTransport implements Transport {
   constructor() {}
@@ -74,21 +74,23 @@ export class FetchTransport implements Transport {
            }
         },
 
-        async *download() {
+        async *download(): AsyncGenerator<ProgressEvent> {
             // Not fully implemented in fetch without Content-Length knowledge upfront and manual stream reading
             if (!response.body) return;
             const reader = response.body.getReader();
             let loaded = 0;
-            const total = Number(response.headers.get('content-length')) || 0;
-            
+            const total = Number(response.headers.get('content-length')) || undefined;
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 loaded += value.length;
                 yield {
                     loaded,
+                    transferred: loaded,
                     total,
-                    percent: total ? (loaded / total) * 100 : undefined
+                    percent: total ? (loaded / total) * 100 : undefined,
+                    direction: 'download'
                 };
             }
         },
@@ -157,17 +159,23 @@ class FetchResponseWrapper implements ReckerResponse {
         }
     }
     
-    async *download() {
-         if (!this.raw.body) return;
-            const reader = this.raw.body.getReader();
-            let loaded = 0;
-            const total = Number(this.raw.headers.get('content-length')) || 0;
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                loaded += value.length;
-                yield { loaded, total, percent: total ? (loaded / total) * 100 : 0 };
-            }
+    async *download(): AsyncGenerator<ProgressEvent> {
+        if (!this.raw.body) return;
+        const reader = this.raw.body.getReader();
+        let loaded = 0;
+        const total = Number(this.raw.headers.get('content-length')) || undefined;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            loaded += value.length;
+            yield {
+                loaded,
+                transferred: loaded,
+                total,
+                percent: total ? (loaded / total) * 100 : undefined,
+                direction: 'download'
+            };
+        }
     }
 
     async *[Symbol.asyncIterator]() {

@@ -4,6 +4,7 @@
  */
 
 import { createConnection, Socket } from 'net';
+import { ReckerError } from '../core/errors.js';
 
 export interface WhoisOptions {
   /**
@@ -196,7 +197,16 @@ async function queryWhoisServer(
 
     const timeoutId = setTimeout(() => {
       socket?.destroy();
-      reject(new Error(`WHOIS query timed out after ${timeout}ms`));
+      reject(new ReckerError(
+        `WHOIS query timed out after ${timeout}ms`,
+        undefined,
+        undefined,
+        [
+          'Increase the WHOIS timeout for slower registries.',
+          'Check network connectivity to the WHOIS server.',
+          'Retry the query; some registries respond slowly under load.'
+        ]
+      ));
     }, timeout);
 
     socket = createConnection({ host: server, port }, () => {
@@ -214,7 +224,16 @@ async function queryWhoisServer(
 
     socket.on('error', (error) => {
       clearTimeout(timeoutId);
-      reject(new Error(`WHOIS query failed: ${error.message}`));
+      reject(new ReckerError(
+        `WHOIS query failed: ${error.message}`,
+        undefined,
+        undefined,
+        [
+          'Verify the WHOIS server is reachable and correct.',
+          'Check network/firewall settings blocking WHOIS port 43.',
+          'Retry the query; transient network issues can occur.'
+        ]
+      ));
     });
   });
 }

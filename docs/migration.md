@@ -157,12 +157,27 @@ axios.get('/file', {
   }
 });
 
-// Recker
-const response = await client.get('/file');
+// Recker – callback style
+await client.get('/file', {
+  onDownloadProgress: (progress) => {
+    console.log(progress.percent);
+  }
+});
 
+// Recker – async iterator style
+const response = await client.get('/file');
 for await (const progress of response.download()) {
   console.log(progress.percent);
 }
+```
+
+```typescript
+// Upload progress
+await client.post('/upload', payload, {
+  onUploadProgress: (progress) => {
+    console.log(progress.percent);
+  }
+});
 ```
 
 ### Base URL & Defaults
@@ -663,7 +678,7 @@ await client.batch(requests);
 ## Next Steps
 
 - Check out [Examples](/examples.md) for more use cases
-- Read about [Unified Concurrency](/guides/concurrency.md) in detail
-- Learn about [Batch Requests](/guides/batch-requests.md)
+- Read about [Unified Concurrency](/guides/performance/concurrency.md) in detail
+- Learn about [Batch Requests](/guides/performance/batch-requests.md)
 - Read about [Performance](/benchmarks.md) improvements
-- Learn about [advanced features](/guides/hooks.md)
+- Learn about [advanced features](/guides/plugins.md)

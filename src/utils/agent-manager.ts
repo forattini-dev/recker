@@ -31,7 +31,7 @@ export interface AgentStats {
 export class AgentManager {
   private globalAgent?: Agent;
   private domainAgents: Map<string, Agent>;
-  private options: Required<AgentOptions>;
+  private options: Required<Omit<AgentOptions, 'localAddress' | 'clientTtl' | 'maxHeaderSize'>> & Pick<AgentOptions, 'localAddress' | 'clientTtl' | 'maxHeaderSize'>;
 
   constructor(options: AgentOptions = {}) {
     this.domainAgents = new Map();
@@ -39,10 +39,16 @@ export class AgentManager {
       connections: options.connections ?? 10,
       pipelining: options.pipelining ?? 1,
       keepAlive: options.keepAlive ?? true,
-      keepAliveTimeout: options.keepAliveTimeout ?? 4000,
-      keepAliveMaxTimeout: options.keepAliveMaxTimeout ?? 600000,
-      connectTimeout: options.connectTimeout ?? 10000,
+      keepAliveTimeout: options.keepAliveTimeout ?? 4 * 1000,
+      keepAliveMaxTimeout: options.keepAliveMaxTimeout ?? 10 * 60 * 1000, // 10 minutes
+      keepAliveTimeoutThreshold: options.keepAliveTimeoutThreshold ?? 1 * 1000, // 1 second
+      connectTimeout: options.connectTimeout ?? 10 * 1000,
       perDomainPooling: options.perDomainPooling ?? true,
+      localAddress: options.localAddress,
+      maxRequestsPerClient: options.maxRequestsPerClient ?? 0,
+      maxCachedSessions: options.maxCachedSessions ?? 100,
+      maxHeaderSize: options.maxHeaderSize,
+      clientTtl: options.clientTtl ?? null,
     };
   }
 
@@ -142,11 +148,20 @@ export class AgentManager {
     return new Agent({
       connections: options.connections,
       pipelining: options.pipelining,
+      maxHeaderSize: options.maxHeaderSize,
+      maxRequestsPerClient: options.maxRequestsPerClient,
+      maxCachedSessions: options.maxCachedSessions,
+      clientTtl: options.clientTtl ?? null,
+      keepAliveTimeout: options.keepAliveTimeout,
+      keepAliveMaxTimeout: options.keepAliveMaxTimeout,
+      keepAliveTimeoutThreshold: options.keepAliveTimeoutThreshold,
+      connectTimeout: options.connectTimeout,
+      socketPath: undefined,
       connect: {
         timeout: options.connectTimeout,
         keepAlive: options.keepAlive,
-        // Use keepAliveInitialDelay for the initial delay before first keep-alive probe
-        keepAliveInitialDelay: options.keepAliveTimeout ?? 1000,
+        keepAliveInitialDelay: options.keepAliveTimeout,
+        localAddress: options.localAddress,
       },
     });
   }

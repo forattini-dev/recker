@@ -5,6 +5,12 @@
 
 import { WebSocket } from 'undici';
 import { EventEmitter } from 'events';
+import type { TLSOptions, ProxyOptions } from '../types/index.js';
+import type { Dispatcher } from 'undici';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { nodeToWebStream, webToNodeStream } from '../utils/streaming.js';
+import { ReckerError } from '../core/errors.js';
 
 export interface WebSocketOptions {
   /**
@@ -16,6 +22,27 @@ export interface WebSocketOptions {
    * Headers to send during handshake
    */
   headers?: Record<string, string>;
+
+  /**
+   * Undici dispatcher to use (supports ProxyAgent/AgentManager).
+   */
+  dispatcher?: Dispatcher;
+
+  /**
+   * Proxy configuration (maps to ProxyAgent).
+   */
+  proxy?: ProxyOptions | string;
+
+  /**
+   * TLS options for secure connections.
+   */
+  tls?: TLSOptions;
+
+  /**
+   * Enable permessage-deflate extension.
+   * @default false
+   */
+  perMessageDeflate?: boolean;
 
   /**
    * Auto-reconnect on disconnect
@@ -41,11 +68,24 @@ export interface WebSocketOptions {
    * @default 30000
    */
   heartbeatInterval?: number;
+
+  /**
+   * How long to wait for a pong before considering the connection dead.
+   * @default 10000
+   */
+  heartbeatTimeout?: number;
 }
 
 export interface WebSocketMessage {
   data: string | Buffer;
   isBinary: boolean;
+}
+
+interface BackoffOptions {
+  base: number;
+  factor: number;
+  jitter: boolean;
+  max?: number;
 }
 
 /**
@@ -54,12 +94,15 @@ export interface WebSocketMessage {
 export class ReckerWebSocket extends EventEmitter {
   private ws: WebSocket | null = null;
   private url: string;
-  private options: Required<WebSocketOptions>;
+  private options: Required<Pick<WebSocketOptions, 'protocols' | 'headers' | 'reconnect' | 'reconnectDelay' | 'maxReconnectAttempts' | 'heartbeatInterval' | 'heartbeatTimeout' | 'perMessageDeflate'>> & Pick<WebSocketOptions, 'dispatcher' | 'proxy' | 'tls'>;
   private reconnectAttempts = 0;
   private reconnectTimer?: NodeJS.Timeout;
   private heartbeatTimer?: NodeJS.Timeout;
   private isClosed = false;
   private isReconnecting = false;
+  private pongWatchdog?: NodeJS.Timeout;
+  private backoff: BackoffOptions;
+  private closedByUser = false;
 
   constructor(url: string, options: WebSocketOptions = {}) {
     super();
@@ -71,6 +114,18 @@ export class ReckerWebSocket extends EventEmitter {
       reconnectDelay: options.reconnectDelay ?? 1000,
       maxReconnectAttempts: options.maxReconnectAttempts ?? 5,
       heartbeatInterval: options.heartbeatInterval ?? 30000,
+      heartbeatTimeout: options.heartbeatTimeout ?? 10000,
+      dispatcher: options.dispatcher,
+      proxy: options.proxy,
+      tls: options.tls,
+      perMessageDeflate: options.perMessageDeflate ?? false
+    };
+
+    this.backoff = {
+      base: this.options.reconnectDelay,
+      factor: 2,
+      jitter: true,
+      max: 30000
     };
   }
 
@@ -80,7 +135,28 @@ export class ReckerWebSocket extends EventEmitter {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.ws = new WebSocket(this.url, this.options.protocols);
+        const wsOptions: any = {
+          headers: this.options.headers,
+          dispatcher: this.options.dispatcher,
+          perMessageDeflate: this.options.perMessageDeflate,
+        };
+
+        // Proxy support via ProxyAgent if provided in options
+        if (this.options.proxy) {
+          const proxyConfig: ProxyOptions = typeof this.options.proxy === 'string'
+            ? { url: this.options.proxy }
+            : this.options.proxy;
+          // Lazy require to avoid circular deps
+          const { ProxyAgent } = require('undici');
+          wsOptions.dispatcher = new ProxyAgent(proxyConfig.url);
+        }
+
+        if (this.options.tls) {
+          wsOptions.tls = this.options.tls;
+        }
+
+        // @ts-expect-error - undici WebSocket accepts options as third argument
+        this.ws = new WebSocket(this.url, this.options.protocols, wsOptions);
 
         this.ws.addEventListener('open', () => {
           this.reconnectAttempts = 0;
@@ -96,20 +172,34 @@ export class ReckerWebSocket extends EventEmitter {
             isBinary: event.data instanceof Buffer
           };
           this.emit('message', message);
+          this.stopPongWatchdog(); // got data, connection is alive
         });
 
         this.ws.addEventListener('close', (event) => {
           this.stopHeartbeat();
+          this.stopPongWatchdog();
           this.emit('close', event.code, event.reason);
           
-          if (!this.isClosed && this.options.reconnect) {
+          if (!this.closedByUser && !this.isClosed && this.options.reconnect) {
             this.attemptReconnect();
           }
         });
 
         this.ws.addEventListener('error', (event) => {
-          this.emit('error', event.error || new Error('WebSocket error'));
-          reject(event.error || new Error('WebSocket connection failed'));
+          const err = event.error instanceof Error
+            ? event.error
+            : new ReckerError(
+                'WebSocket connection error',
+                undefined,
+                undefined,
+                [
+                  'Verify the WebSocket endpoint URL and protocol (ws/wss).',
+                  'Check proxy/TLS settings if connecting through a proxy.',
+                  'Inspect server logs for handshake failures.'
+                ]
+              );
+          this.emit('error', err);
+          reject(err);
         });
 
       } catch (error) {
@@ -121,18 +211,45 @@ export class ReckerWebSocket extends EventEmitter {
   /**
    * Send data through WebSocket
    */
-  send(data: string | Buffer | ArrayBuffer): void {
+  async send(data: string | Buffer | ArrayBuffer | ArrayBufferView, options?: { awaitDrain?: boolean; highWaterMark?: number }): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error('WebSocket is not connected');
+      throw new ReckerError(
+        'WebSocket is not connected',
+        undefined,
+        undefined,
+        [
+          'Call connect() before sending messages.',
+          'Listen to the open event to ensure the socket is ready.',
+          'Check for prior connection errors or closed states.'
+        ]
+      );
     }
-    this.ws.send(data);
+
+    const awaitDrain = options?.awaitDrain ?? false;
+    const highWaterMark = options?.highWaterMark ?? 16 * 1024; // 16KB default
+
+    this.ws.send(data as any);
+
+    if (awaitDrain) {
+      await this.waitForDrain(highWaterMark);
+    }
+  }
+
+  /**
+   * Send a Node.js Readable stream as a sequence of binary frames.
+   * Optional backpressure wait based on bufferedAmount.
+   */
+  async sendStream(stream: Readable, options?: { awaitDrain?: boolean; highWaterMark?: number }): Promise<void> {
+    for await (const chunk of stream) {
+      await this.send(chunk as Buffer, options);
+    }
   }
 
   /**
    * Send JSON data
    */
   sendJSON(data: any): void {
-    this.send(JSON.stringify(data));
+    void this.send(JSON.stringify(data));
   }
 
   /**
@@ -140,6 +257,7 @@ export class ReckerWebSocket extends EventEmitter {
    */
   close(code = 1000, reason = ''): void {
     this.isClosed = true;
+    this.closedByUser = true;
     this.stopHeartbeat();
     this.clearReconnectTimer();
     
@@ -154,14 +272,23 @@ export class ReckerWebSocket extends EventEmitter {
    * Note: Sends a heartbeat message. WebSocket protocol-level ping/pong is automatic.
    */
   ping(): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // Undici WebSocket doesn't expose ping() in browser-compatible API
-      // Send a heartbeat message instead
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+    // If undici exposes ping, prefer it (Node-only).
+    const anyWs = this.ws as any;
+    if (typeof anyWs.ping === 'function') {
       try {
-        this.ws.send('__heartbeat__');
-      } catch (e) {
-        // Ignore errors during heartbeat
+        anyWs.ping();
+        return;
+      } catch {
+        // fallback to data ping
       }
+    }
+
+    try {
+      this.ws.send('__heartbeat__');
+    } catch {
+      // Ignore errors during heartbeat
     }
   }
 
@@ -177,6 +304,47 @@ export class ReckerWebSocket extends EventEmitter {
    */
   get isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /**
+   * Convert the websocket into a duplex Node.js stream (adapter).
+   * Useful for piping data between WS and file/network streams.
+   */
+  toReadable(): Readable | null {
+    if (!this.ws) return null;
+    // Undici exposes a WHATWG stream for incoming messages; wrap into Node stream.
+    const wsAny = this.ws as any;
+    if (wsAny.readable) {
+      return webToNodeStream(wsAny.readable);
+    }
+    return null;
+  }
+
+  /**
+   * Pipe a Node.js Readable into the WebSocket (binary frames).
+   */
+  async pipeFrom(source: Readable, options?: { awaitDrain?: boolean; highWaterMark?: number }): Promise<void> {
+    await this.sendStream(source, options);
+  }
+
+  /**
+   * Pipe websocket incoming data to a destination writable stream.
+   */
+  async pipeTo(destination: NodeJS.WritableStream): Promise<void> {
+    const readable = this.toReadable();
+    if (!readable) {
+      throw new ReckerError(
+        'WebSocket has no readable stream',
+        undefined,
+        undefined,
+        [
+          'Ensure the WebSocket is connected before piping.',
+          'Verify the runtime supports readable streams on WebSocket.',
+          'Fallback to event-based message handling if streaming is unavailable.'
+        ]
+      );
+    }
+    await pipeline(readable, destination);
   }
 
   /**
@@ -245,14 +413,16 @@ export class ReckerWebSocket extends EventEmitter {
     this.isReconnecting = true;
     this.reconnectAttempts++;
 
-    const delay = this.options.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    this.emit('reconnecting', this.reconnectAttempts, delay);
+    const baseDelay = this.backoff.base * Math.pow(this.backoff.factor, this.reconnectAttempts - 1);
+    const capped = this.backoff.max ? Math.min(baseDelay, this.backoff.max) : baseDelay;
+    const jittered = this.backoff.jitter ? randomJitter(capped) : capped;
+    this.emit('reconnecting', this.reconnectAttempts, jittered);
 
     this.reconnectTimer = setTimeout(() => {
       this.connect().catch((error) => {
         this.emit('reconnect-error', error);
       });
-    }, delay);
+    }, jittered);
   }
 
   private clearReconnectTimer(): void {
@@ -268,6 +438,7 @@ export class ReckerWebSocket extends EventEmitter {
     this.heartbeatTimer = setInterval(() => {
       if (this.isConnected) {
         this.ping();
+        this.startPongWatchdog();
       }
     }, this.options.heartbeatInterval);
   }
@@ -277,6 +448,48 @@ export class ReckerWebSocket extends EventEmitter {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = undefined;
     }
+    this.stopPongWatchdog();
+  }
+
+  private startPongWatchdog(): void {
+    this.stopPongWatchdog();
+    if (this.options.heartbeatTimeout <= 0) return;
+
+    this.pongWatchdog = setTimeout(() => {
+      this.emit('heartbeat-timeout');
+      if (!this.closedByUser && this.options.reconnect) {
+        this.ws?.close(4000, 'heartbeat timeout');
+      }
+    }, this.options.heartbeatTimeout);
+  }
+
+  private stopPongWatchdog(): void {
+    if (this.pongWatchdog) {
+      clearTimeout(this.pongWatchdog);
+      this.pongWatchdog = undefined;
+    }
+  }
+
+  private getBufferedAmount(): number {
+    // undici's WHATWG WebSocket doesn't expose bufferedAmount; default to 0.
+    return (this.ws as any)?.bufferedAmount ?? 0;
+  }
+
+  private async waitForDrain(highWaterMark: number): Promise<void> {
+    const buffered = this.getBufferedAmount();
+    if (buffered <= highWaterMark) return;
+
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        if (this.getBufferedAmount() <= highWaterMark || !this.isConnected) {
+          resolve();
+        } else {
+          setTimeout(check, 10);
+        }
+      };
+
+      setTimeout(check, 10);
+    });
   }
 }
 
@@ -289,4 +502,9 @@ export function websocket(url: string, options?: WebSocketOptions): ReckerWebSoc
     // Error will be emitted via 'error' event
   });
   return ws;
+}
+
+function randomJitter(value: number) {
+  const jitter = 0.2 * value;
+  return value - jitter + Math.random() * (2 * jitter);
 }

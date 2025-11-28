@@ -99,7 +99,7 @@ for await (const progress of response.download()) {
 ```typescript
 // Perfect for OpenAI streaming
 const response = await client.post('/chat/completions', {
-  model: 'gpt-4',
+  model: 'gpt-5',
   messages: [{ role: 'user', content: 'Hello!' }],
   stream: true
 });

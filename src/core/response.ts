@@ -5,7 +5,9 @@ import { cleanHtml } from '../utils/html-cleaner.js';
 import { calculateProgress } from '../utils/progress.js';
 import { webToNodeStream } from '../utils/streaming.js';
 import { parseHeaders, type HeaderInfo, type CacheInfo, type RateLimitInfo } from '../utils/header-parser.js';
+import { parseLinkHeader, type LinkHeaderParser } from '../utils/link-header.js';
 import type { Readable } from 'node:stream';
+import { ReckerError } from './errors.js';
 
 export class HttpResponse<T = unknown> implements ReckerResponse<T> {
   public readonly timings?: Timings;
@@ -66,6 +68,25 @@ export class HttpResponse<T = unknown> implements ReckerResponse<T> {
    */
   get rateLimit(): RateLimitInfo {
     return parseHeaders(this.headers, this.status).rateLimit;
+  }
+
+  /**
+   * Get parsed Link header for pagination and resource relationships
+   * Returns null if no Link header is present
+   *
+   * @example
+   * ```typescript
+   * const response = await client.get('/api/users?page=1');
+   * const links = response.links();
+   *
+   * if (links?.hasNext()) {
+   *   const nextUrl = links.getPagination().next;
+   *   const nextPage = await client.get(nextUrl);
+   * }
+   * ```
+   */
+  links(): LinkHeaderParser | null {
+    return parseLinkHeader(this.headers);
   }
 
   /**
@@ -135,7 +156,16 @@ export class HttpResponse<T = unknown> implements ReckerResponse<T> {
   async pipe(destination: NodeJS.WritableStream): Promise<void> {
     const nodeStream = this.toNodeStream();
     if (!nodeStream) {
-      throw new Error('Response has no body to pipe');
+      throw new ReckerError(
+        'Response has no body to pipe',
+        undefined,
+        this,
+        [
+          'Ensure the request method returns a body (e.g., not HEAD).',
+          'Check the upstream response status and headers.',
+          'Verify the request was not aborted before receiving a body.'
+        ]
+      );
     }
 
     return new Promise((resolve, reject) => {
@@ -160,6 +190,14 @@ export class HttpResponse<T = unknown> implements ReckerResponse<T> {
   /**
    * Download with progress tracking
    * Yields progress events as the response is downloaded
+   *
+   * @example
+   * ```typescript
+   * const response = await client.get('/large-file.zip');
+   * for await (const progress of response.download()) {
+   *   console.log(`${progress.percent?.toFixed(1)}% (${progress.rate} B/s)`);
+   * }
+   * ```
    */
   async *download(): AsyncGenerator<ProgressEvent> {
     if (!this.raw.body) {
@@ -170,40 +208,63 @@ export class HttpResponse<T = unknown> implements ReckerResponse<T> {
     const total = contentLength ? parseInt(contentLength, 10) : undefined;
     let loaded = 0;
     const startTime = Date.now();
-    let lastUpdate = startTime;
+    let lastUpdate = 0;
+    let lastLoaded = 0;
+    let lastRateUpdate = startTime;
+    let smoothedRate = 0;
+    const rateSmoothingFactor = 0.3;
+
+    const createProgress = (isFinal: boolean): ProgressEvent => {
+      const now = Date.now();
+      const intervalMs = now - lastRateUpdate;
+      const bytesInInterval = loaded - lastLoaded;
+
+      if (intervalMs > 0) {
+        const instantRate = (bytesInInterval / intervalMs) * 1000;
+        smoothedRate = smoothedRate === 0
+          ? instantRate
+          : smoothedRate * (1 - rateSmoothingFactor) + instantRate * rateSmoothingFactor;
+      }
+
+      lastLoaded = loaded;
+      lastRateUpdate = now;
+
+      let percent: number | undefined;
+      if (total) {
+        percent = isFinal ? 100 : Math.min((loaded / total) * 100, 99.9);
+      }
+
+      return {
+        loaded,
+        transferred: loaded,
+        total,
+        percent,
+        rate: smoothedRate,
+        estimated: total && smoothedRate > 0 ? ((total - loaded) / smoothedRate) * 1000 : undefined,
+        direction: 'download',
+      };
+    };
 
     const reader = this.raw.body.getReader();
     try {
+      // Emit initial progress
+      yield createProgress(false);
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
           // Final progress update
-          const elapsed = (Date.now() - startTime) / 1000;
-          const rate = elapsed > 0 ? loaded / elapsed : 0;
-          yield {
-            loaded,
-            total,
-            percent: total ? 100 : undefined,
-            rate,
-          };
+          yield createProgress(true);
           break;
         }
 
         if (value) {
           loaded += value.byteLength;
           const now = Date.now();
-          const elapsed = (now - startTime) / 1000;
-          const rate = elapsed > 0 ? loaded / elapsed : 0;
 
           // Throttle updates (max 10 per second)
           if (now - lastUpdate > 100) {
-            yield {
-              loaded,
-              total,
-              percent: total ? (loaded / total) * 100 : undefined,
-              rate,
-              estimated: total && rate > 0 ? ((total - loaded) / rate) * 1000 : undefined,
-            };
+            yield createProgress(false);
             lastUpdate = now;
           }
         }

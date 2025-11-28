@@ -70,14 +70,14 @@ All notable changes are tracked here.
 
 ### 📚 Documentation
 - Updated CLAUDE.md with all new features
-- Comprehensive concurrency guide in `docs/guides/concurrency.md`
+- Comprehensive concurrency guide in `docs/guides/performance/concurrency.md`
 - API documentation for all HTTP methods
 - Testing best practices with MockTransport examples
 
 ## [Initial Release]
 
 ### Added
-- Core client on Undici with middleware/plugin architecture
+- Core client with middleware/plugin architecture
 - Resilience features: retry, cache, dedup, circuit breaker
 - Observability: timings, HTTP/2/3 connection info, debug timeline
 - Streaming/SSE support and pagination helpers

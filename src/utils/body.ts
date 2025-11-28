@@ -80,7 +80,7 @@ export function processBody(body: BodyInput): ProcessedBody {
   // URLSearchParams - application/x-www-form-urlencoded
   if (body instanceof URLSearchParams) {
     return {
-      body,
+      body: body.toString(),
       contentType: 'application/x-www-form-urlencoded'
     };
   }
@@ -109,8 +109,26 @@ export function processBody(body: BodyInput): ProcessedBody {
     };
   }
 
-  // Plain object or array - JSON
-  if (isPlainObject(body) || Array.isArray(body)) {
+  // Plain object - check for files first before JSON
+  if (isPlainObject(body)) {
+    // Auto-detect file uploads and convert to FormData
+    if (isFileUpload(body)) {
+      return {
+        body: createFormData(body),
+        // Don't set Content-Type - let browser/undici set multipart boundary
+        contentType: undefined
+      };
+    }
+
+    // Plain object without files - JSON
+    return {
+      body: JSON.stringify(body),
+      contentType: 'application/json'
+    };
+  }
+
+  // Array - JSON
+  if (Array.isArray(body)) {
     return {
       body: JSON.stringify(body),
       contentType: 'application/json'

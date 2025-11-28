@@ -9,7 +9,7 @@ Recker is a modern HTTP client built for Node.js 18+ with developer experience a
 ### HTTP Client
 - **Modern API**: Promise-based with async/await support
 - **TypeScript-first**: Full type safety and IntelliSense
-- **Multiple transports**: Undici (default) and Fetch API
+- **Multiple transports**: Native high-performance engine and Fetch API
 - **Request chaining**: Fluent, chainable API design
 - **JSON by default**: Automatic content-type handling
 
@@ -452,12 +452,12 @@ for await (const page of users) {
 }
 ```
 
-[Learn more →](guides/pagination.md)
+[Learn more →](examples/02-intermediate-pagination.ts)
 
 ## 📦 Bundle Size
 
 - **Tree-shakeable**: Only bundle what you use
-- **Minimal dependencies**: Only `undici` and `zod`
+- **Minimal dependencies**: Lightweight and efficient
 - **47.9 kB gzipped**: Tiny bundle size
 - **Subpath exports**: Import only what you need
 

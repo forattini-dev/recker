@@ -19,13 +19,20 @@
  *   - [1] err: Error|null - Error object if failed, null if succeeded
  *   - [2] data: any - The result data if succeeded, undefined if failed
  */
+import { ReckerError } from '../core/errors.js';
+
 export function tryFn<T>(
   fnOrPromise: (() => Promise<T>) | Promise<T> | (() => T) | T
 ): Promise<[boolean, Error | null, T | undefined]> | [boolean, Error | null, T | undefined] {
   if (fnOrPromise == null) {
-    const err = new Error('fnOrPromise cannot be null or undefined');
+    const err = new ReckerError(
+      'fnOrPromise cannot be null or undefined',
+      undefined,
+      undefined,
+      ['Pass a valid function or promise to tryFn.', 'Check the caller to ensure an undefined value is not passed.']
+    );
     err.stack = new Error().stack;
-    return [false, err, undefined];
+    return [false, err as Error, undefined];
   }
 
   if (typeof fnOrPromise === 'function') {
@@ -57,14 +64,14 @@ export function tryFn<T>(
                 } catch (_) {}
               }
             }
-            return [false, error instanceof Error ? error : new Error(String(error)), undefined];
+            return [false, wrapUnknownError(error, 'Function threw an error'), undefined];
           });
       }
 
       return [true, null, result];
 
     } catch (error) {
-      return [false, error instanceof Error ? error : new Error(String(error)), undefined];
+      return [false, wrapUnknownError(error, 'Function threw an error'), undefined];
     }
   }
 
@@ -72,7 +79,7 @@ export function tryFn<T>(
     return Promise.resolve(fnOrPromise)
       .then((data: T): [boolean, Error | null, T | undefined] => [true, null, data])
       .catch((error: any): [boolean, Error | null, T | undefined] => {
-        return [false, error instanceof Error ? error : new Error(String(error)), undefined];
+        return [false, wrapUnknownError(error, 'Promise rejected'), undefined];
       });
   }
 
@@ -84,8 +91,18 @@ export function tryFnSync<T>(fn: () => T): [boolean, Error | null, T | undefined
     const result = fn();
     return [true, null, result];
   } catch (err) {
-    return [false, err instanceof Error ? err : new Error(String(err)), undefined];
+    return [false, wrapUnknownError(err, 'Synchronous function threw an error'), undefined];
   }
 }
 
 export default tryFn;
+
+function wrapUnknownError(err: any, context: string): Error {
+  if (err instanceof Error) return err;
+  return new ReckerError(
+    `${context}: ${String(err)}`,
+    undefined,
+    undefined,
+    ['Inspect the original value being thrown.', 'Ensure errors are instances of Error or ReckerError.', 'Add contextual information when throwing custom errors.']
+  );
+}

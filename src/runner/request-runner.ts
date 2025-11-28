@@ -104,6 +104,7 @@ export class RequestRunner extends EventEmitter {
       this.stats.successful++;
       this.emit('taskComplete', { task, result });
     } catch (error) {
+      console.error('[RequestRunner Debug]', error);
       this.stats.failed++;
       this.emit('taskError', { task, error });
     } finally {

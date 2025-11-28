@@ -31,7 +31,7 @@
     "cheerio",
     "html-parser"
   ],
-  "author": "Forattini Dev",
+  "author": "fforattini",
   "license": "MIT",
   "homepage": "https://forattini-dev.github.io/recker",
   "repository": {
@@ -86,7 +86,7 @@
     "test:coverage": "vitest run --coverage",
     "bench": "tsx benchmark/index.ts",
     "bench:all": "tsx benchmark/run-all.ts",
-    "docs:dev": "npx -y docsify-cli serve docs --port 3000",
+    "docs:dev": "docsify serve docs --port 3000",
     "docs:preview": "npx -y docsify-cli serve docs --port 3000 --open",
     "lint": "echo \"No linting configured for this project.\" && exit 0"
   },
@@ -124,6 +124,7 @@
     "@vitest/coverage-v8": "^3.2.4",
     "axios": "^1.13.2",
     "cheerio": "^1.0.0",
+    "docsify-cli": "^4.4.4",
     "domhandler": "^5.0.3",
     "got": "^14.6.5",
     "husky": "^9.1.7",

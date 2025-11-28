@@ -1,9 +1,3 @@
-/**
- * Model Context Protocol (MCP) Types
- * @see https://modelcontextprotocol.io
- */
-
-// JSON-RPC 2.0 Base Types
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
   id?: string | number;
@@ -30,7 +24,6 @@ export interface JsonRpcNotification {
   params?: Record<string, unknown> | unknown[];
 }
 
-// MCP Protocol Types
 export interface MCPServerInfo {
   name: string;
   version: string;
@@ -53,7 +46,6 @@ export interface MCPCapabilities {
   logging?: Record<string, unknown>;
 }
 
-// Tools
 export interface MCPTool {
   name: string;
   description?: string;
@@ -75,7 +67,6 @@ export interface MCPToolResult {
   isError?: boolean;
 }
 
-// Resources
 export interface MCPResource {
   uri: string;
   name: string;
@@ -87,10 +78,9 @@ export interface MCPResourceContent {
   uri: string;
   mimeType?: string;
   text?: string;
-  blob?: string; // base64
+  blob?: string;
 }
 
-// Prompts
 export interface MCPPrompt {
   name: string;
   description?: string;
@@ -108,7 +98,6 @@ export interface MCPPromptMessage {
   content: MCPContent;
 }
 
-// Content Types
 export type MCPContent = MCPTextContent | MCPImageContent | MCPResourceContent;
 
 export interface MCPTextContent {
@@ -118,11 +107,10 @@ export interface MCPTextContent {
 
 export interface MCPImageContent {
   type: 'image';
-  data: string; // base64
+  data: string;
   mimeType: string;
 }
 
-// MCP Methods
 export type MCPMethod =
   | 'initialize'
   | 'ping'
@@ -137,7 +125,6 @@ export type MCPMethod =
   | 'sampling/createMessage'
   | 'logging/setLevel';
 
-// Request/Response Types for Each Method
 export interface MCPInitializeRequest {
   protocolVersion: string;
   capabilities: Partial<MCPCapabilities>;
@@ -188,7 +175,6 @@ export interface MCPPromptsGetResponse {
   messages: MCPPromptMessage[];
 }
 
-// Notifications
 export type MCPNotification =
   | 'notifications/initialized'
   | 'notifications/progress'
@@ -204,11 +190,10 @@ export interface MCPProgressNotification {
   total?: number;
 }
 
-// Transport
 export interface MCPTransportOptions {
   endpoint: string;
   headers?: Record<string, string>;
   timeout?: number;
   retries?: number;
-  transport?: any; // Custom transport for testing
+  transport?: any;
 }

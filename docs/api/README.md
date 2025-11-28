@@ -1066,7 +1066,7 @@ const user = await contractClient.get('/users/123');
 
 - [Client Configuration Guide](../guides/client-config.md)
 - [Plugins Guide](../guides/plugins.md)
-- [Batch Requests Guide](../guides/batch-requests.md)
+- [Batch Requests Guide](../guides/performance/batch-requests.md)
 - [Header Parsing Guide](../guides/header-parsing.md)
 - [WebSocket Guide](../guides/websocket.md)
 - [WHOIS Guide](../guides/whois.md)

@@ -30,8 +30,7 @@ export interface NormalizedConcurrencyConfig {
   };
 }
 
-const DEFAULT_INTERVAL = 1000;
-
+  const DEFAULT_INTERVAL = 1 * 1000;
 /**
  * Normalize concurrency configuration from various input formats
  *
@@ -165,10 +164,14 @@ function normalizeAgentConfig(
   const defaults: AgentOptions = {
     pipelining: 1,
     keepAlive: true,
-    keepAliveTimeout: 4000,
-    keepAliveMaxTimeout: 600000,
-    connectTimeout: 10000,
+    keepAliveTimeout: 4 * 1000,
+    keepAliveMaxTimeout: 10 * 60 * 1000,
+    keepAliveTimeoutThreshold: 1 * 1000,
+    connectTimeout: 10 * 1000,
     perDomainPooling: true,
+    maxCachedSessions: 100,
+    maxRequestsPerClient: 0,
+    clientTtl: null,
   };
 
   // Merge user config with defaults
@@ -177,7 +180,7 @@ function normalizeAgentConfig(
   // Resolve 'auto' connections
   let connections: number;
 
-  if (agentConfig?.connections === 'auto' || agentConfig?.connections === undefined) {
+  if ((agentConfig?.connections as string | number | undefined) === 'auto' || agentConfig?.connections === undefined) {
     connections = calculateOptimalConnections(
       maxConcurrent,
       http2Enabled,

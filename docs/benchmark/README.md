@@ -1,6 +1,6 @@
 # Recker Benchmarks
 
-Comprehensive benchmark suite comparing Recker against axios, got, ky, and native fetch.
+Comprehensive benchmark suite for measuring Recker's performance.
 
 ## Running Benchmarks
 
@@ -23,12 +23,9 @@ pnpm bench:realworld   # Real-world scenarios
 Tests basic GET request performance with JSON parsing.
 
 **What it measures:**
-- Baseline overhead vs raw undici/fetch
 - Client initialization cost
 - JSON parsing performance
 - Cache/dedup benefits
-
-**Expected results:** Recker should be within 5-10% of raw undici, faster than axios/got.
 
 ### 2. POST JSON (`post-json.ts`)
 Tests POST requests with automatic JSON serialization.
@@ -38,8 +35,6 @@ Tests POST requests with automatic JSON serialization.
 - Content-Type header handling
 - Response parsing
 
-**Expected results:** Recker's auto JSON serialization should match or beat competitors.
-
 ### 3. Retry Scenario (`retry-scenario.ts`)
 Tests retry logic with exponential backoff when server returns 503 errors.
 
@@ -47,8 +42,6 @@ Tests retry logic with exponential backoff when server returns 503 errors.
 - Retry strategy overhead
 - Backoff timing accuracy
 - Error handling performance
-
-**Expected results:** Recker's exponential backoff should be competitive with got/ky.
 
 ### 4. Cache & Dedup (`cache-dedup.ts`)
 Tests caching strategies and request deduplication.
@@ -68,8 +61,6 @@ Tests streaming capabilities including SSE parsing.
 - Chunked transfer encoding
 - Server-Sent Events parsing
 
-**Expected results:** Recker's native SSE support should significantly outperform manual parsing.
-
 ### 6. Real-world (`real-world.ts`)
 Tests realistic API scenarios with simulated network latency.
 
@@ -77,8 +68,6 @@ Tests realistic API scenarios with simulated network latency.
 - Performance with realistic latency (10-50ms)
 - Sequential vs parallel requests
 - Cache/dedup benefits in real scenarios
-
-**Expected results:** Recker with cache+dedup should show clear advantages in parallel scenarios.
 
 ## Understanding Results
 
@@ -90,16 +79,15 @@ Mitata benchmark output includes:
 
 ### What to look for:
 
-✅ **Recker should be:**
-- Comparable to raw undici/fetch (within 10%)
-- Faster than axios in most scenarios
-- Competitive with got/ky
-- Significantly faster with cache/dedup enabled
+✅ **Good results:**
+- Cache providing 10x+ speedup
+- Dedup reducing HTTP calls
+- Consistent p99 latencies
 
 ❌ **Red flags:**
-- >20% slower than competitors in simple scenarios
-- Cache not providing 10x+ speedup
+- Cache not providing expected speedup
 - Dedup not reducing HTTP calls
+- High variance between runs
 
 ## Interpreting Performance
 
@@ -107,15 +95,15 @@ Mitata benchmark output includes:
 Don't focus too much on absolute μs/ms numbers. They vary by machine.
 
 ### Relative Performance
-Focus on relative performance between clients:
+Focus on performance with and without optimizations:
 ```
-recker:  1.5ms  ← baseline
-got:     1.8ms  ← 20% slower
-axios:   2.1ms  ← 40% slower
+no cache:     1.5ms  ← baseline
+with cache:   0.15ms ← 10x faster
+with dedup:   0.8ms  ← 2x faster (parallel)
 ```
 
 ### Real-world Impact
-- Sub-1ms differences are negligible
+- Sub-1ms differences are negligible for most apps
 - 10-50ms differences matter for high-throughput APIs
 - Cache/dedup can provide 10-100x improvements
 
@@ -157,11 +145,9 @@ To add a new benchmark:
 ### Benchmark Guidelines:
 
 - ✅ Test realistic scenarios
-- ✅ Include multiple clients for comparison
 - ✅ Use consistent test data
 - ✅ Warm up caches before measuring
 - ❌ Don't test artificial micro-optimizations
-- ❌ Don't cherry-pick favorable scenarios
 
 ## CI/CD Integration
 
@@ -196,6 +182,5 @@ lscpu             # CPU (Linux)
 
 ## Questions?
 
-- Performance issues? [Open an issue](https://github.com/your-org/recker/issues)
+- Performance issues? [Open an issue](https://github.com/forattini-dev/recker/issues)
 - Benchmark ideas? Submit a PR!
-- Questions? Check [CLAUDE.md](../CLAUDE.md) or ask in discussions

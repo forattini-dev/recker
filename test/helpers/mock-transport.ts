@@ -1,4 +1,5 @@
-import type { ReckerRequest, ReckerResponse, Transport } from '../../src/types/index.js';
+import { HttpResponse } from '../../src/core/response.js'; // Import real HttpResponse
+import type { ReckerRequest, ReckerResponse, Transport } from '../../../src/types/index.js';
 
 interface MockResponse {
   status: number;
@@ -36,32 +37,47 @@ export class MockTransport implements Transport {
   }
 
   async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
-    const url = new URL(req.url);
-    const key = `${req.method}:${url.pathname}${url.search}`;
+    // Try exact match first (e.g. "GET:https://example.com/foo" or "GET:/foo")
+    let key = `${req.method}:${req.url}`;
+    let responses = this.mockResponses.get(key);
+
+    // If not found, try matching by pathname if it's a full URL
+    if (!responses) {
+      try {
+        const url = new URL(req.url);
+        const pathKey = `${req.method}:${url.pathname}${url.search}`;
+        responses = this.mockResponses.get(pathKey);
+        if (responses) key = pathKey; // Found by path
+      } catch {
+        // Invalid URL (relative path), already tried exact match
+      }
+    }
 
     // Track call count
     const count = (this.callCounts.get(key) || 0) + 1;
     this.callCounts.set(key, count);
 
-    const responses = this.mockResponses.get(key);
-
     if (!responses || responses.length === 0) {
-      throw new Error(`No mock response for ${key}`);
+      throw new Error(`No mock response configured for ${key}. Request URL: ${req.url}`);
     }
+
+    console.log(`[MockTransport] Dispatching ${key}, count: ${count}. Available responses: ${responses.length}`);
+    responses.forEach((r, i) => console.log(`  [${i}] times: ${r.times}, status: ${r.status}`));
 
     // Find the right response based on call count and times
     let mockResponse: MockResponse | undefined;
     let cumulativeTimes = 0;
 
-    for (const response of responses) {
+    for (const [index, response] of responses.entries()) {
       if (response.times === undefined) {
-        // Unlimited uses
+        console.log(`[MockTransport] Selected response ${index} (unlimited)`);
         mockResponse = response;
         break;
       }
 
       cumulativeTimes += response.times;
       if (count <= cumulativeTimes) {
+        console.log(`[MockTransport] Selected response ${index} (count ${count} <= cumulative ${cumulativeTimes})`);
         mockResponse = response;
         break;
       }
@@ -71,75 +87,67 @@ export class MockTransport implements Transport {
       throw new Error(`No more mock responses available for ${key} (called ${count} times)`);
     }
 
-    // Add delay if specified
+    // Add delay if specified (supports abort signal via AbortSignal.timeout style)
     if (mockResponse.delay) {
-      await new Promise(resolve => setTimeout(resolve, mockResponse.delay));
+      // Check if already aborted before starting delay
+      if (req.signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      // Simple delay with abort check - avoids promise rejection handling issues
+      const aborted = await new Promise<boolean>(resolve => {
+        let done = false;
+
+        const timer = setTimeout(() => {
+          if (!done) {
+            done = true;
+            req.signal?.removeEventListener('abort', onAbort);
+            resolve(false); // Not aborted
+          }
+        }, mockResponse.delay);
+
+        const onAbort = () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(true); // Aborted
+          }
+        };
+
+        req.signal?.addEventListener('abort', onAbort, { once: true });
+      });
+
+      if (aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
     }
 
     const headers = new Headers(mockResponse.headers || { 'content-type': 'application/json' });
     const bodyString = typeof mockResponse.body === 'string' ? mockResponse.body : JSON.stringify(mockResponse.body);
 
-    // Status 204 No Content cannot have a body
-    const responseBody = mockResponse.status === 204 ? null : bodyString;
+    // Status 204 No Content and 304 Not Modified cannot have a body
+    const responseBody = (mockResponse.status === 204 || mockResponse.status === 304) ? null : bodyString;
 
-    const response = new Response(responseBody, {
+    const statusTexts: Record<number, string> = {
+      200: 'OK',
+      201: 'Created',
+      204: 'No Content',
+      207: 'Multi-Status',
+      304: 'Not Modified',
+      400: 'Bad Request',
+      401: 'Unauthorized',
+      403: 'Forbidden',
+      404: 'Not Found',
+      500: 'Internal Server Error'
+    };
+
+    const webResponse = new Response(responseBody, {
       status: mockResponse.status,
-      statusText: mockResponse.status === 200 ? 'OK' : mockResponse.status === 201 ? 'Created' : mockResponse.status === 204 ? 'No Content' : mockResponse.status === 207 ? 'Multi-Status' : 'Error',
+      statusText: statusTexts[mockResponse.status] || 'Unknown',
       headers
     });
 
-    return {
-      status: mockResponse.status,
-      statusText: response.statusText,
-      headers,
-      ok: mockResponse.status >= 200 && mockResponse.status < 300,
-      url: req.url,
-      raw: response,
-      json: async () => mockResponse.body,
-      text: async () => bodyString,
-      cleanText: async () => bodyString,
-      blob: async () => new Blob([bodyString]),
-      read: () => response.body,
-      clone: () => {
-        // Return a cloned response with the same data
-        return {
-          status: mockResponse.status,
-          statusText: response.statusText,
-          headers: response.headers,
-          ok: mockResponse.status >= 200 && mockResponse.status < 300,
-          url: req.url,
-          raw: response,
-          json: async () => mockResponse.body,
-          text: async () => bodyString,
-          cleanText: async () => bodyString,
-          blob: async () => new Blob([bodyString]),
-          read: () => response.body,
-          clone: () => {
-            throw new Error('Cannot clone a cloned response');
-          },
-          sse: async function* () {
-            // Mock SSE - just return empty stream for now
-            return;
-          },
-          download: async function* () {
-            throw new Error('Not implemented in mock');
-          },
-          [Symbol.asyncIterator]: async function* () {
-            throw new Error('Not implemented in mock');
-          }
-        } as any;
-      },
-      sse: async function* () {
-        // Mock SSE - just return empty stream for now
-        // Tests can override this if needed
-        return;
-      },
-      download: async function* () {
-        throw new Error('Not implemented in mock');
-      },
-      [Symbol.asyncIterator]: async function* () {
-        throw new Error('Not implemented in mock');
-      }
-    };
+    // Return a real HttpResponse instance
+    return new HttpResponse(webResponse);
   }
 }

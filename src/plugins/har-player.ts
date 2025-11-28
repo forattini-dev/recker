@@ -1,6 +1,7 @@
 import { Plugin, Middleware, ReckerRequest, ReckerResponse } from '../types/index.js';
 import { readFileSync } from 'node:fs';
 import { HttpResponse } from '../core/response.js';
+import { ReckerError } from '../core/errors.js';
 
 export interface HarPlayerOptions {
   path: string; // Path to .har file
@@ -30,7 +31,16 @@ export function harPlayer(options: HarPlayerOptions): Plugin {
     const har = JSON.parse(content);
     entries = har.log.entries;
   } catch (err) {
-    console.warn(`[Recker] Failed to load HAR file: ${options.path}`, err);
+    throw new ReckerError(
+      `Failed to load HAR file: ${options.path}`,
+      undefined,
+      undefined,
+      [
+        'Ensure the HAR file exists at the specified path.',
+        'Check that the file is valid JSON.',
+        'Verify the HAR file has the correct structure (log.entries).'
+      ]
+    );
   }
 
   // Helper to match request against HAR entry
@@ -81,7 +91,16 @@ export function harPlayer(options: HarPlayerOptions): Plugin {
     }
 
     if (options.strict) {
-      throw new Error(`[Recker HAR Player] No matching recording found for ${req.method} ${req.url}`);
+      throw new ReckerError(
+        `[Recker HAR Player] No matching recording found for ${req.method} ${req.url}`,
+        req,
+        undefined,
+        [
+          'Ensure the HAR file contains an entry for this URL/method.',
+          'Normalize query parameters or body to match the recorded request.',
+          'Regenerate the HAR with the exact same request.'
+        ]
+      );
     }
 
     // Pass through if not strict (mixed mode)

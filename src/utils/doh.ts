@@ -1,4 +1,5 @@
 import { request } from 'undici';
+import { ReckerError } from '../core/errors.js';
 
 export type DoHProvider = 'cloudflare' | 'google' | 'quad9' | string;
 
@@ -41,13 +42,35 @@ export function createDoHLookup(provider: DoHProvider = 'cloudflare') {
       });
 
       if (statusCode !== 200) {
-        throw new Error(`DoH request failed with status ${statusCode}`);
+        throw new ReckerError(
+          `DoH request failed with status ${statusCode}`,
+          undefined,
+          undefined,
+          [
+            'Verify the DNS-over-HTTPS endpoint URL.',
+            'Check network connectivity and TLS settings for the DoH provider.',
+            'Retry the request; some providers throttle bursts.'
+          ]
+        );
       }
 
       const data = await body.json() as DoHResponse;
 
       if (data.Status !== 0 || !data.Answer || data.Answer.length === 0) {
-        return callback(new Error(`DNS lookup failed for ${hostname}`), '', 4);
+        return callback(
+          new ReckerError(
+            `DNS lookup failed for ${hostname}`,
+            undefined,
+            undefined,
+            [
+              'Confirm the hostname is correct.',
+              'Check that the DoH provider is reachable.',
+              'Retry or fall back to system DNS if the provider is down.'
+            ]
+          ),
+          '',
+          4
+        );
       }
 
       // Find first A record
@@ -56,7 +79,20 @@ export function createDoHLookup(provider: DoHProvider = 'cloudflare') {
         return callback(null, record.data, 4);
       }
 
-      callback(new Error(`No A record found for ${hostname}`), '', 4);
+      callback(
+        new ReckerError(
+          `No A record found for ${hostname}`,
+          undefined,
+          undefined,
+          [
+            'Verify the domain has an A record (or use AAAA for IPv6).',
+            'Check DNS propagation if the record was recently added.',
+            'Try an alternate resolver to rule out stale caches.'
+          ]
+        ),
+        '',
+        4
+      );
 
     } catch (err) {
       callback(err as Error, '', 0);

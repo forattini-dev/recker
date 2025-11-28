@@ -59,7 +59,7 @@ When you install Recker, you get:
 - ✅ **Core HTTP Client** - All HTTP methods
 - ✅ **Built-in Plugins** - Retry, cache, dedup, compression
 - ✅ **TypeScript Types** - Full type definitions
-- ✅ **Zero Dependencies** - Only peer dependencies (Undici)
+- ✅ **Lightweight** - Minimal dependencies
 
 ## TypeScript Support
 

@@ -12,7 +12,7 @@ const client = createClient({
 
 // Stream OpenAI chat completions
 for await (const event of client.post('/v1/chat/completions', {
-  model: 'gpt-4',
+  model: 'gpt-5',
   messages: [{ role: 'user', content: 'Hello!' }],
   stream: true
 }).sse()) {

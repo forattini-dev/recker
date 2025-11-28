@@ -4,7 +4,7 @@
  */
 
 // Retry defaults
-export const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
+export const DEFAULT_MAX_RETRY_DELAY_MS = 30000;
 export const DEFAULT_RETRY_ATTEMPTS = 3;
 export const DEFAULT_BASE_DELAY_MS = 100;
 
@@ -13,12 +13,12 @@ export const PROGRESS_THROTTLE_INTERVAL_MS = 100;
 export const PROGRESS_UPDATES_PER_SECOND = 10;
 
 // Timeouts
-export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-export const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+export const DEFAULT_CONNECT_TIMEOUT_MS = 10000;
 
 // Cache defaults
-export const DEFAULT_CACHE_TTL_MS = 60_000; // 1 minute
-export const DEFAULT_STALE_TTL_MS = 300_000; // 5 minutes
+export const DEFAULT_CACHE_TTL_MS = 60000; // 1 minute
+export const DEFAULT_STALE_TTL_MS = 300000; // 5 minutes
 
 // HTTP/2 defaults
 export const DEFAULT_HTTP2_MAX_CONCURRENT_STREAMS = 100;
@@ -35,4 +35,4 @@ export const DEFAULT_LIMIT_PARAM = 'limit';
 
 // Circuit breaker defaults
 export const DEFAULT_FAILURE_THRESHOLD = 5;
-export const DEFAULT_RESET_TIMEOUT_MS = 60_000; // 1 minute
+export const DEFAULT_RESET_TIMEOUT_MS = 60000; // 1 minute

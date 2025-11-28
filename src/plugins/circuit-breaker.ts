@@ -28,7 +28,7 @@ export class CircuitBreakerError extends Error {
 
 export function circuitBreaker(options: CircuitBreakerOptions = {}): Plugin {
   const threshold = options.threshold || 5;
-  const resetTimeout = options.resetTimeout || 30000; // 30s
+  const resetTimeout = options.resetTimeout || 30 * 1000; // 30s
   
   // Map host/domain -> stats
   const circuits = new Map<string, CircuitStats>();

@@ -1,4 +1,5 @@
 import type { Middleware, ReckerRequest, ReckerResponse, NextFunction } from '../types/index.js';
+import { ReckerError } from '../core/errors.js';
 
 export interface RequestPoolOptions {
   /**
@@ -50,7 +51,12 @@ export class RequestPool {
 
   run<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (signal?.aborted) {
-      return Promise.reject(signal.reason ?? new Error('Request aborted before enqueue'));
+      return Promise.reject(signal.reason ?? new ReckerError(
+        'Request aborted before enqueue',
+        undefined,
+        undefined,
+        ['Ensure the AbortSignal is not already aborted when calling the request.', 'Remove or reset the signal before enqueueing.']
+      ));
     }
 
     return new Promise<T>((resolve, reject) => {
@@ -59,7 +65,12 @@ export class RequestPool {
       if (signal) {
         const onAbort = () => {
           this._removeFromQueue(request);
-          reject(signal.reason ?? new Error('Request aborted while queued'));
+          reject(signal.reason ?? new ReckerError(
+            'Request aborted while queued',
+            undefined,
+            undefined,
+            ['Avoid aborting immediately after queuing.', 'Increase timeouts or adjust rate limits if cancellations are unintended.']
+          ));
           this._schedule();
         };
         signal.addEventListener('abort', onAbort, { once: true });
@@ -112,7 +123,12 @@ export class RequestPool {
 
       if (request.signal?.aborted) {
         request.abortCleanup?.();
-        request.reject(request.signal.reason ?? new Error('Request aborted while queued'));
+        request.reject(request.signal.reason ?? new ReckerError(
+          'Request aborted while queued',
+          undefined,
+          undefined,
+          ['Avoid aborting immediately after queuing.', 'Increase timeouts or adjust rate limits if cancellations are unintended.']
+        ));
         continue;
       }
 

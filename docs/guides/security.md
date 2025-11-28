@@ -1,78 +1,48 @@
-# Advanced Security & DNS
+# Security & Safety
 
-Recker provides tools for enterprise-grade security requirements, including mutual TLS (mTLS), custom Certificates, and secure DNS (DoH).
+Recker includes built-in protections to keep your application safe from untrusted inputs and attacks.
 
-## Certificate Toolkit
+## Response Size Limit (DoS Protection)
 
-Easily configure mTLS or custom CAs without fighting with `https.Agent`.
+Prevent memory exhaustion attacks by limiting the maximum response size. If a server returns more data than allowed, Recker aborts the request immediately.
 
 ```typescript
-import { createClient, createCertAgent } from 'recker';
-
-const agent = createCertAgent({
-  // Automatically loads from file path OR PEM string
-  cert: './client.crt',
-  key: './client.key',
-  ca: './ca.crt', // Trust internal CA
-  rejectUnauthorized: true
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  maxResponseSize: 5 * 1024 * 1024 // Max 5MB
 });
 
+try {
+  await client.get('/massive-file.json');
+} catch (err) {
+  if (err.code === 'MAX_SIZE_EXCEEDED') {
+    console.error('Response too large!');
+  }
+}
+```
+
+## XSRF Protection
+
+Automatically handle Cross-Site Request Forgery tokens.
+
+```typescript
 const client = createClient({
-  baseUrl: 'https://secure-api.internal',
-  // Override transport agent
-  transport: new UndiciTransport('https://secure-api.internal', { dispatcher: agent })
+  xsrf: {
+    cookieName: 'XSRF-TOKEN',
+    headerName: 'X-XSRF-TOKEN'
+  }
 });
 ```
 
-## DNS over HTTPS (DoH)
+## Secure Proxy
 
-Bypass local DNS blocking, censorship, or logging by resolving domains via HTTPS (Cloudflare, Google).
-
-```typescript
-import { createClient, createDoHLookup } from 'recker';
-import { Agent } from 'undici';
-
-const client = createClient({
-  transport: new UndiciTransport('https://api.example.com', {
-    // Inject custom lookup
-    agent: new Agent({
-      connect: {
-        lookup: createDoHLookup('cloudflare') // Uses 1.1.1.1
-      }
-    })
-  })
-});
-```
-
-## Server-Timing
-
-Automatically parse performance metrics sent by the backend (W3C Server-Timing).
+Use `proxyAgent` with authentication to securely route traffic.
 
 ```typescript
-import { serverTiming } from 'recker';
-
 const client = createClient({
-  plugins: [serverTiming()]
-});
-
-const res = await client.get('/dashboard');
-console.log(res.serverTimings);
-// [
-//   { name: 'db', duration: 50, description: 'Postgres' },
-//   { name: 'render', duration: 120 }
-// ]
-```
-
-## HAR Recording
-
-Record your API session for debugging in Chrome DevTools.
-
-```typescript
-import { harRecorder } from 'recker';
-
-const client = createClient({
-  plugins: [
-    harRecorder({ path: './debug-session.har' })
-  ]
+  proxy: {
+    url: 'https://secure-proxy.com:8080',
+    auth: { username: 'user', password: 'pwd' }
+  }
 });
 ```

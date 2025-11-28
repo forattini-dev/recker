@@ -5,8 +5,21 @@ export interface SSEEvent {
   retry?: number;
 }
 
+import { ReckerError } from '../core/errors.js';
+
 export async function* parseSSE(response: Response): AsyncGenerator<SSEEvent> {
-  if (!response.body) throw new Error('Response body is null');
+  if (!response.body) {
+    throw new ReckerError(
+      'Response body is empty; cannot parse SSE stream.',
+      undefined,
+      undefined,
+      [
+        'Ensure the server is sending an SSE stream with a response body.',
+        'Check that the request was not a HEAD/204 response.',
+        'Verify connection was not closed before the body was received.'
+      ]
+    );
+  }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

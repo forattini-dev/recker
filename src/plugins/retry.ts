@@ -12,6 +12,12 @@ export interface RetryOptions {
   statusCodes?: number[];
   shouldRetry?: (error: unknown) => boolean;
   onRetry?: (attempt: number, error: unknown, delay: number) => void;
+  /**
+   * Respect the Retry-After header from 429/503 responses
+   * When true, uses the header value as delay instead of backoff calculation
+   * @default true
+   */
+  respectRetryAfter?: boolean;
 }
 
 /**
@@ -60,14 +66,43 @@ function calculateDelay(
   return Math.max(0, Math.floor(calculatedDelay));
 }
 
+/**
+ * Parse Retry-After header value
+ * Supports:
+ * - Seconds: "120" (delay in seconds)
+ * - HTTP-date: "Wed, 21 Oct 2025 07:28:00 GMT"
+ *
+ * @returns Delay in milliseconds, or undefined if invalid
+ */
+function parseRetryAfter(headerValue: string | null): number | undefined {
+  if (!headerValue) return undefined;
+
+  // Try parsing as seconds (integer)
+  const seconds = parseInt(headerValue, 10);
+  if (!isNaN(seconds) && seconds >= 0) {
+    return seconds * 1000;
+  }
+
+  // Try parsing as HTTP-date
+  const date = Date.parse(headerValue);
+  if (!isNaN(date)) {
+    const delay = date - Date.now();
+    // Only use if the date is in the future
+    return delay > 0 ? delay : undefined;
+  }
+
+  return undefined;
+}
+
 export function retry(options: RetryOptions = {}): Plugin {
   const maxAttempts = options.maxAttempts || 3;
   const baseDelay = options.delay || 1000;
-  const maxDelay = options.maxDelay || 30_000;
+  const maxDelay = options.maxDelay || 30000;
   const backoffStrategy = options.backoff || 'exponential';
   const useJitter = options.jitter !== false; // Default true
   const statusCodes = options.statusCodes || [408, 429, 500, 502, 503, 504];
   const onRetry = options.onRetry;
+  const respectRetryAfter = options.respectRetryAfter !== false; // Default true
 
   const defaultShouldRetry = (error: unknown) => {
     if (error instanceof NetworkError) return true;
@@ -95,7 +130,17 @@ export function retry(options: RetryOptions = {}): Plugin {
 
             // Retry based on Status Code
             if (attempt < maxAttempts && !res.ok && statusCodes.includes(res.status)) {
-            const delayMs = calculateDelay(attempt, baseDelay, maxDelay, backoffStrategy, useJitter);
+            // Check for Retry-After header
+            let delayMs: number;
+            if (respectRetryAfter) {
+                const retryAfterDelay = parseRetryAfter(res.headers.get('Retry-After'));
+                // Use Retry-After if present, otherwise fall back to backoff
+                delayMs = retryAfterDelay !== undefined
+                ? Math.min(retryAfterDelay, maxDelay)
+                : calculateDelay(attempt, baseDelay, maxDelay, backoffStrategy, useJitter);
+            } else {
+                delayMs = calculateDelay(attempt, baseDelay, maxDelay, backoffStrategy, useJitter);
+            }
             const err = new HttpError(res, req);
 
             if (onRetry) {

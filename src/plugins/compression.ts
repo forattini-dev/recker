@@ -6,6 +6,7 @@
 import { gzip, deflate, brotliCompress } from 'node:zlib';
 import { promisify } from 'node:util';
 import { Middleware, CompressionOptions } from '../types/index.js';
+import { ReckerError } from '../core/errors.js';
 
 const gzipAsync = promisify(gzip);
 const deflateAsync = promisify(deflate);
@@ -105,8 +106,13 @@ async function compress(data: Buffer, algorithm: CompressionAlgorithm): Promise<
     case 'br':
       return await brotliAsync(data);
     default:
-      throw new Error(`Unsupported compression algorithm: ${algorithm}`);
-  }
+      throw new ReckerError(
+        `Unsupported compression algorithm: ${algorithm}`,
+        undefined,
+        undefined,
+        ['Use one of: gzip, br, deflate.', 'Remove compression setting or switch to a supported algorithm.']
+      );
+    }
 }
 
 /**
@@ -202,9 +208,8 @@ export function compression(options: CompressionOptions = {}): Middleware {
       };
 
       return next(compressedReq);
-    } catch (error) {
-      // If compression fails, send uncompressed
-      console.error('Compression failed:', error);
+    } catch {
+      // If compression fails, send uncompressed silently
       return next(req);
     }
   };

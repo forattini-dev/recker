@@ -1,68 +1,88 @@
 # Recker
 
 <div align="center">
-  <h1>The HTTP Client for the AI Era</h1>
-  
-  <p>
-    Build resilient, type-safe, and high-performance integrations with the 
-    <strong>Smart SDK Builder</strong> designed for modern backend ecosystems.
-  </p>
 
-  <p>
-    <a href="https://www.npmjs.com/package/recker">
-      <img src="https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623" alt="npm version" />
-    </a>
-    <a href="https://github.com/your-org/recker/blob/main/LICENSE">
-      <img src="https://img.shields.io/npm/l/recker.svg?style=flat-square&color=007AFF" alt="license" />
-    </a>
-    <img src="https://img.shields.io/badge/coverage-100%25-34C759?style=flat-square" alt="coverage" />
-    <img src="https://img.shields.io/badge/types-included-34C759?style=flat-square" alt="types" />
-  </p>
-  
-  <br />
+### The HTTP SDK for the AI Era
+
+**Stop fetching. Start orchestrating.**
+
+[![npm version](https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623)](https://www.npmjs.com/package/recker)
+[![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Coverage](https://img.shields.io/badge/coverage-78%25-F5A623?style=flat-square)](https://github.com/forattini-dev/recker)
+
 </div>
 
 ---
 
-**Recker** leverages the raw power of [Undici](https://github.com/nodejs/undici) to deliver the ultimate HTTP experience for modern Node.js applications.
+Modern applications demand more than just HTTP requests. They need **streaming for LLMs**, **scraping for data extraction**, **observability for debugging**, and **resilience for production**. Recker delivers all of this in a single, type-safe package built on the fastest HTTP engine available.
 
-Built for the AI era, it provides a unified **DevX Powerhouse** with zero-overhead abstractions, deep observability, and enterprise-grade resilience.
+```typescript
+import { createClient } from 'recker';
 
-## Quick navigation
+const client = createClient({ baseUrl: 'https://api.openai.com/v1' });
 
-- [Why Recker](#why-recker)
-- [Quick Install](#quick-install)
-- [Quick Example](#quick-example)
-- [Key Features](#key-features)
-- [Observability](./guides/observability.md)
-- [Unified Concurrency](./guides/concurrency.md)
-- [Batch Requests](./guides/batch-requests.md)
-- [Playbooks](./guides/playbooks.md)
-- [Contributing](./contributing.md)
+// Stream AI completions with real-time SSE parsing
+for await (const event of client.post('/chat/completions', {
+  json: { model: 'gpt-5', messages: [...], stream: true }
+}).sse()) {
+  process.stdout.write(event.data);
+}
+```
 
-## Why Recker
+## Highlights
 
-Recker is built for the **modern web**. It combines blazing-fast performance with the modern features developers need:
+| Feature | Description |
+|:--------|:------------|
+| **High Performance** | Built on Node.js's fastest HTTP engine with optimized connection pooling. |
+| **AI-First Streaming** | Native SSE parsing, async iteration, progress tracking for LLM apps. |
+| **HTML Scraping** | jQuery-like API with Cheerio. Extract links, images, meta, OpenGraph, JSON-LD. |
+| **Type-Safe Contracts** | Define your API with Zod schemas. Get autocomplete and validation for free. |
+| **Full Observability** | DNS/TCP/TLS/TTFB timings, connection info, HAR recording, Server-Timing. |
+| **Resilience Built-In** | Retry with backoff, circuit breaker, rate limiting, request deduplication. |
+| **Network Utilities** | WHOIS lookups, DNS resolution, DoH queries, SSL certificate inspection. |
 
-✨ **Smart Retry** with exponential backoff
-🔄 **Request Deduplication** (90% reduction in HTTP calls)
-📊 **Progress Tracking** with ETA
-🌊 **Native SSE Support** for AI streaming
-💾 **Memory-Efficient Streaming** for large files
-🎯 **Auto Pagination** for paginated APIs
-⚡ **HTTP/2** with multiplexing
-🔧 **All HTTP Methods** - Standard, WebDAV, CDN, diagnostics, and Link methods
-🚀 **Unified Concurrency** - Global limits, rate limiting, and connection pooling
-🌐 **Multi-Domain Batches** - Parallel execution across multiple domains
-🔐 **XSRF Protection** built-in
-🎨 **Beautiful Debug Mode**  
+## Quick Navigation
+
+<div class="feature-cards">
+
+- **Getting Started**
+  - [Installation](getting-started/installation.md)
+  - [Quick Start](getting-started/quickstart.md)
+  - [Client Configuration](guides/client-config.md)
+
+- **Core Features**
+  - [Streaming & SSE](guides/streaming.md)
+  - [HTML Scraping](guides/scraping.md)
+  - [GraphQL](guides/graphql.md)
+  - [Contract-First API](guides/contract.md)
+
+- **Resilience**
+  - [Retry Strategies](guides/advanced/retry.md)
+  - [Circuit Breaker](guides/advanced/circuit-breaker.md)
+  - [Caching (SWR)](guides/caching.md)
+
+- **Advanced**
+  - [Concurrency & Rate Limiting](guides/performance/concurrency.md)
+  - [Network Utilities](guides/advanced-networking.md)
+  - [Testing](guides/testing.md)
+  - [Plugin Development](guides/plugins.md)
+
+</div>
 
 ## Quick Install
 
 ```bash
-npm install recker
-# or
 pnpm add recker
+# or
+npm install recker
+```
+
+**Optional peer dependencies:**
+```bash
+pnpm add cheerio    # For HTML scraping
+pnpm add ioredis    # For Redis cache storage
 ```
 
 ## Quick Example
@@ -72,96 +92,84 @@ import { createClient } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
-  retry: { maxAttempts: 3, backoff: 'exponential' },
-  cache: { strategy: 'stale-while-revalidate', ttl: 60000 },
-  http2: true,
-  concurrency: 20,  // Max 20 concurrent requests
-  debug: true
+  headers: { 'Authorization': 'Bearer token' }
 });
 
-// Simple GET
-const data = await client.get('/users').json();
+// GET with automatic JSON parsing
+const users = await client.get('/users').json<User[]>();
 
-// Batch requests with concurrency control
-const { results, stats } = await client.batch([
-  { path: '/users/1' },
-  { path: '/users/2' },
-  { path: '/users/3' }
-], { concurrency: 5 });
+// POST with body
+const created = await client.post('/users', {
+  json: { name: 'John', email: 'john@example.com' }
+}).json<User>();
 
-// Stream OpenAI responses
-for await (const event of client.post('/chat', payload).sse()) {
-  console.log(event.data);
-}
-
-// Auto pagination
-for await (const user of client.paginate('/users')) {
-  console.log(user.name);
-}
-
-// Streaming file download (Recker responses are async-iterable)
-for await (const chunk of client.get('/large-file')) {
-  process.stdout.write(Buffer.from(chunk));
-}
+// Path parameters + query string
+const user = await client.get('/users/:id', {
+  params: { id: '123', expand: 'profile' }
+}).json<User>();
+// → GET /users/123?expand=profile
 ```
 
-## Learn More
-
-- [Client configuration](./guides/client-config.md)
-- [Streaming & SSE](./guides/streaming.md)
-- [Metrics & timings](./guides/observability.md)
-- [Circuit breaker & resilience](./guides/circuit-breaker.md)
-- [Migration guide](./migration.md)
-
-## Key Features
-
-| Feature | Description |
-|---------|-------------|
-| **Unified Concurrency** | Global limits, rate limiting, connection pooling, HTTP/2 streams |
-| **Batch Requests** | Parallel execution with per-batch concurrency control |
-| **Multi-Domain** | Separate connection pools per domain for efficient multi-domain requests |
-| **Smart Retry** | Exponential, linear, or decorrelated jitter backoff |
-| **Deduplication** | Automatically dedup parallel requests |
-| **Caching** | Multiple strategies with custom storage |
-| **Progress** | Real-time upload/download progress with ETA |
-| **Streaming** | Bidirectional streaming for large files |
-| **SSE** | Native Server-Sent Events support |
-| **Pagination** | Auto-detect Link headers, cursors, page numbers |
-| **HTTP/2** | Multiplexing and server push support |
-| **Compression** | Auto compress request bodies (gzip/brotli) |
-| **XSRF** | Automatic CSRF token handling |
-| **Proxy** | Native HTTP/HTTPS/SOCKS proxy support |
-| **Debug** | Colored timeline visualization |
-| **TypeScript** | Full type safety with Zod validation |
-
-## Observability snapshot
+## Streaming for AI
 
 ```typescript
-const res = await client.get('/health');
-console.log(res.timings); // DNS/TCP/TLS/TTFB/content/total
-console.log(res.connection); // protocol, cipher, reuse, http2/http3 details
+// Server-Sent Events (SSE) for LLM streaming
+const response = client.post('/v1/chat/completions', {
+  json: { model: 'gpt-5', messages, stream: true }
+});
+
+for await (const event of response.sse()) {
+  if (event.event === 'message') {
+    const chunk = JSON.parse(event.data);
+    process.stdout.write(chunk.choices[0].delta.content || '');
+  }
+}
 ```
 
-See the full guide at [metrics & timings](./guides/observability.md).
+## HTML Scraping
 
-## Performance
+```typescript
+// Built-in scraping with Cheerio
+const doc = await client.scrape('https://news.ycombinator.com');
 
-Recker is **fast**:
+// Extract structured data
+const stories = doc.selectAll('.athing').map(el => ({
+  title: el.find('.titleline a').text(),
+  url: el.find('.titleline a').attr('href'),
+  score: el.next().find('.score').text()
+}));
 
-- **17% faster** than axios
-- **40% faster** than got/ky
-- **5x speedup** with smart caching
+// Quick extraction methods
+const links = doc.links({ absolute: true });
+const meta = doc.meta();
+const og = doc.openGraph();
+const jsonLd = doc.jsonLd();
+```
 
-[See full benchmarks →](benchmarks.md)
+## Observability
+
+```typescript
+const response = await client.get('/api/data');
+
+// Detailed timing breakdown
+console.log(response.timings);
+// { dns: 12, tcp: 8, tls: 45, firstByte: 23, total: 156 }
+
+// Connection info
+console.log(response.connection);
+// { protocol: 'h2', cipher: 'TLS_AES_256_GCM_SHA384', remoteAddress: '...' }
+```
 
 ## Community
 
-- [GitHub Discussions](https://github.com/forattini-dev/recker/discussions)
+- [GitHub Repository](https://github.com/forattini-dev/recker)
 - [Report Issues](https://github.com/forattini-dev/recker/issues)
-- [Contributing Guide](./contributing.md)
+- [Contributing Guide](contributing.md)
 
 ---
 
-<div style="text-align: center; color: #666; margin-top: 3rem;">
-  Built with ❤️ for the Node.js community
+<div align="center">
+
+**Built for the AI era.**
+
 </div>

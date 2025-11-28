@@ -1,9 +1,16 @@
 import { Plugin, Middleware, ReckerRequest, ReckerResponse } from '../types/index.js';
 import { Client } from '../core/client.js';
+import { ReckerError } from '../core/errors.js';
 
-export class GraphQLError extends Error {
-  constructor(public errors: any[], public response: ReckerResponse) {
-    super(errors[0].message);
+export class GraphQLError extends ReckerError {
+  constructor(public errors: any[], public response: ReckerResponse, request?: ReckerRequest) {
+    const message = errors?.[0]?.message || 'GraphQL response contains errors';
+    const suggestions = [
+      'Check the GraphQL query and variables for schema compliance.',
+      'Inspect the GraphQL errors array for details.',
+      'Fix validation errors before retrying; network errors may be retriable.'
+    ];
+    super(message, request, response, suggestions, false);
     this.name = 'GraphQLError';
   }
 }
@@ -52,7 +59,7 @@ export function graphqlPlugin(options: GraphQLOptions = {}): Plugin {
  * Helper to make GraphQL requests cleaner.
  * 
  * @example
- * const data = await graphql(client, 'query { users { name } }', { limit: 10 });
+ * const data = await graphql(client, 'query GetUser { users { name } }', { limit: 10 });
  */
 export async function graphql<T = any>(
     client: Client, 
@@ -60,7 +67,26 @@ export async function graphql<T = any>(
     variables: Record<string, any> = {},
     options: any = {} // RequestOptions
 ): Promise<T> {
-    const body = { query, variables };
-    const res = await client.post('', body, options).json<{ data: T }>();
+    // Extract operation name if present (simple regex)
+    const opMatch = query.match(/(query|mutation|subscription)\s+([a-zA-Z0-9_]+)/);
+    const operationName = opMatch ? opMatch[2] : undefined;
+
+    const payload = { query, variables, operationName };
+
+    // Use GET if configured, otherwise default to POST
+    if (options.method === 'GET') {
+        // For GET, variables must be JSON stringified in query params
+        const params = {
+            query,
+            variables: JSON.stringify(variables),
+            ...(operationName && { operationName })
+        };
+        // Merge with existing params
+        options.params = { ...options.params, ...params };
+        const res = await client.get('', options).json<{ data: T }>();
+        return res.data;
+    }
+
+    const res = await client.post('', payload, options).json<{ data: T }>();
     return res.data;
 }

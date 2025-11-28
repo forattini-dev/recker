@@ -6,6 +6,11 @@ export interface UploadOptions {
   concurrency?: number; // Default 3
   uploadChunk: (chunk: Buffer, index: number, total: number) => Promise<void>;
   onProgress?: (loaded: number, total: number) => void;
+  /**
+   * Resume from the given chunk index (0-based). Useful for resuming
+   * interrupted multipart uploads where some chunks are already persisted.
+   */
+  resumeFromChunk?: number;
 }
 
 export async function uploadParallel(options: UploadOptions) {
@@ -13,11 +18,11 @@ export async function uploadParallel(options: UploadOptions) {
   const concurrency = options.concurrency || 3;
   
   let buffer = Buffer.alloc(0);
-  let chunkIndex = 0;
+  let chunkIndex = options.resumeFromChunk || 0;
   let loaded = 0;
   
   const queue: Promise<void>[] = [];
-  
+
   const processChunk = async (chunk: Buffer, idx: number) => {
       await options.uploadChunk(chunk, idx, 0); // Total size might be unknown
       loaded += chunk.length;
@@ -27,7 +32,10 @@ export async function uploadParallel(options: UploadOptions) {
   if (Buffer.isBuffer(options.file)) {
       // Buffer handling
       const total = options.file.length;
-      for (let i = 0; i < total; i += chunkSize) {
+      let start = (options.resumeFromChunk ?? 0) * chunkSize;
+      if (start > total) start = total;
+
+      for (let i = start; i < total; i += chunkSize) {
           const chunk = options.file.slice(i, i + chunkSize);
           const p = processChunk(chunk, chunkIndex++);
           queue.push(p);
@@ -45,8 +53,21 @@ export async function uploadParallel(options: UploadOptions) {
   }
 
   // Stream handling
+  let bytesToSkip = (options.resumeFromChunk ?? 0) * chunkSize;
   for await (const chunk of options.file) {
-      buffer = Buffer.concat([buffer, chunk]);
+      // Skip bytes until resume boundary
+      if (bytesToSkip > 0) {
+          const slice = chunk as Buffer;
+          if (bytesToSkip >= slice.length) {
+              bytesToSkip -= slice.length;
+              continue;
+          } else {
+              buffer = Buffer.concat([buffer, slice.slice(bytesToSkip)]);
+              bytesToSkip = 0;
+          }
+      } else {
+          buffer = Buffer.concat([buffer, chunk]);
+      }
       
       while (buffer.length >= chunkSize) {
           const chunkToUpload = buffer.slice(0, chunkSize);

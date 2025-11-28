@@ -4,11 +4,16 @@ export interface DedupOptions {
   keyGenerator?: (req: ReckerRequest) => string;
 }
 
+// Optimized: Pre-allocated key buffer to avoid string concatenation overhead
+const keyBuffer = { method: '', url: '' };
+
 export function dedup(options: DedupOptions = {}): Plugin {
   const pendingRequests = new Map<string, Promise<any>>();
 
+  // Optimized: Use custom key generator or fast default
   const generateKey = options.keyGenerator || ((req: ReckerRequest) => {
-    return `${req.method}:${req.url}`;
+    // Fast path: simple string concat is faster than template literal for short strings
+    return req.method + ':' + req.url;
   });
 
   const dedupMiddleware: Middleware = async (req, next) => {

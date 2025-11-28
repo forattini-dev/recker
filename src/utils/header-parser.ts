@@ -16,7 +16,7 @@ export interface PlatformInfo {
   provider?: string;
 
   /** Provider category */
-  category?: 'cdn' | 'cloud' | 'hosting' | 'server' | 'proxy' | 'unknown';
+  category?: 'cdn' | 'cloud' | 'hosting' | 'server' | 'proxy' | 'security' | 'framework' | 'unknown';
 
   /** Edge location, datacenter, or region */
   region?: string;
@@ -273,6 +273,129 @@ const PLATFORM_DETECTORS = [
       metadata: {
         origin: headers.get('x-render-origin-server')
       }
+    })
+  },
+
+  // Security & WAFs
+  {
+    name: 'datadome',
+    category: 'security' as const,
+    headers: ['x-datadome', 'x-datadome-cid'],
+    detect: (headers: Headers) => headers.get('x-datadome') !== null || headers.get('x-datadome-cid') !== null,
+    extract: (headers: Headers): DetectorExtract => ({
+      metadata: { cid: headers.get('x-datadome-cid') }
+    })
+  },
+  {
+    name: 'incapsula',
+    category: 'security' as const,
+    headers: ['x-iinfo', 'x-cdn'],
+    detect: (headers: Headers) => headers.get('x-iinfo') !== null || (headers.get('x-cdn') || '').includes('Incapsula'),
+    extract: (headers: Headers): DetectorExtract => ({
+      metadata: { iinfo: headers.get('x-iinfo') }
+    })
+  },
+  {
+    name: 'imperva',
+    category: 'security' as const,
+    headers: ['x-imperva-uuid'],
+    detect: (headers: Headers) => headers.get('x-imperva-uuid') !== null,
+    extract: (headers: Headers): DetectorExtract => ({
+      metadata: { uuid: headers.get('x-imperva-uuid') }
+    })
+  },
+  {
+    name: 'aws-waf',
+    category: 'security' as const,
+    headers: ['x-amzn-waf-action'], // Often stripped, but sometimes present
+    detect: (headers: Headers) => headers.get('server') === 'awselb/2.0', // Heuristic
+    extract: (headers: Headers): DetectorExtract => ({})
+  },
+
+  // Load Balancers & Servers
+  {
+    name: 'envoy',
+    category: 'proxy' as const,
+    headers: ['x-envoy-upstream-service-time'],
+    detect: (headers: Headers) => headers.get('x-envoy-upstream-service-time') !== null || headers.get('server') === 'envoy',
+    extract: (headers: Headers): DetectorExtract => ({})
+  },
+  {
+    name: 'traefik',
+    category: 'proxy' as const,
+    headers: [],
+    detect: (headers: Headers) => (headers.get('server') || '').toLowerCase().includes('traefik'),
+    extract: (headers: Headers): DetectorExtract => ({})
+  },
+  {
+    name: 'caddy',
+    category: 'server' as const,
+    headers: [],
+    detect: (headers: Headers) => (headers.get('server') || '').toLowerCase().includes('caddy'),
+    extract: (headers: Headers): DetectorExtract => ({})
+  },
+  {
+    name: 'haproxy',
+    category: 'proxy' as const,
+    headers: [],
+    detect: (headers: Headers) => (headers.get('server') || '').toLowerCase().includes('haproxy'),
+    extract: (headers: Headers): DetectorExtract => ({})
+  },
+  {
+    name: 'iis',
+    category: 'server' as const,
+    headers: ['x-powered-by'],
+    detect: (headers: Headers) => (headers.get('server') || '').toLowerCase().includes('iis'),
+    extract: (headers: Headers): DetectorExtract => ({})
+  },
+  {
+    name: 'kestrel',
+    category: 'server' as const,
+    headers: [],
+    detect: (headers: Headers) => (headers.get('server') || '').toLowerCase().includes('kestrel'),
+    extract: (headers: Headers): DetectorExtract => ({})
+  },
+
+  // Frameworks
+  {
+    name: 'express',
+    category: 'framework' as const,
+    headers: ['x-powered-by'],
+    detect: (headers: Headers) => (headers.get('x-powered-by') || '').toLowerCase().includes('express'),
+    extract: (headers: Headers): DetectorExtract => ({})
+  },
+  {
+    name: 'rails',
+    category: 'framework' as const,
+    headers: ['x-runtime', 'x-request-id'],
+    detect: (headers: Headers) => headers.get('x-runtime') !== null && !(headers.get('x-powered-by') || '').includes('Express'),
+    extract: (headers: Headers): DetectorExtract => ({
+      metadata: { runtime: headers.get('x-runtime') }
+    })
+  },
+  {
+    name: 'django',
+    category: 'framework' as const,
+    headers: [],
+    detect: (headers: Headers) => (headers.get('server') || '').toLowerCase().includes('wsgi'),
+    extract: (headers: Headers): DetectorExtract => ({})
+  },
+  {
+    name: 'aspnet',
+    category: 'framework' as const,
+    headers: ['x-aspnet-version', 'x-powered-by'],
+    detect: (headers: Headers) => headers.get('x-aspnet-version') !== null || (headers.get('x-powered-by') || '').includes('ASP.NET'),
+    extract: (headers: Headers): DetectorExtract => ({
+      metadata: { version: headers.get('x-aspnet-version') }
+    })
+  },
+  {
+    name: 'php',
+    category: 'framework' as const,
+    headers: ['x-powered-by'],
+    detect: (headers: Headers) => (headers.get('x-powered-by') || '').toLowerCase().includes('php'),
+    extract: (headers: Headers): DetectorExtract => ({
+      metadata: { version: headers.get('x-powered-by') }
     })
   }
 ];
@@ -660,6 +783,62 @@ export function parseAcceptInfo(headers: Headers): AcceptInfo {
   return info;
 }
 
+export interface AuthInfo {
+  methods: string[]; // Basic, Bearer, Digest, Negotiate
+  realm?: string;
+  error?: string;
+  errorDescription?: string;
+}
+
+export function parseAuthInfo(headers: Headers): AuthInfo {
+  const info: AuthInfo = { methods: [] };
+  const wwwAuth = headers.get('www-authenticate');
+  
+  if (wwwAuth) {
+    if (wwwAuth.toLowerCase().includes('basic')) info.methods.push('Basic');
+    if (wwwAuth.toLowerCase().includes('bearer')) info.methods.push('Bearer');
+    if (wwwAuth.toLowerCase().includes('digest')) info.methods.push('Digest');
+    if (wwwAuth.toLowerCase().includes('negotiate')) info.methods.push('Negotiate');
+    if (wwwAuth.toLowerCase().includes('aws4-hmac-sha256')) info.methods.push('AWS4');
+
+    const realmMatch = wwwAuth.match(/realm="([^"]+)"/);
+    if (realmMatch) info.realm = realmMatch[1];
+    
+    const errorMatch = wwwAuth.match(/error="([^"]+)"/);
+    if (errorMatch) info.error = errorMatch[1];
+
+    const descMatch = wwwAuth.match(/error_description="([^"]+)"/);
+    if (descMatch) info.errorDescription = descMatch[1];
+  }
+
+  // Check custom auth error headers
+  const xAuthError = headers.get('x-auth-error') || headers.get('x-authentication-error');
+  if (xAuthError) {
+      if (!info.error) info.error = xAuthError;
+  }
+
+  return info;
+}
+
+export interface ClockSkewInfo {
+  serverTime?: Date;
+  skewMs?: number; // Difference (Server - Client)
+}
+
+export function parseClockSkew(headers: Headers): ClockSkewInfo {
+  const dateHeader = headers.get('date');
+  if (!dateHeader) return {};
+
+  const serverTime = new Date(dateHeader);
+  if (isNaN(serverTime.getTime())) return {};
+
+  // Calculate skew (Server - Local)
+  // Positive means server is ahead (in future)
+  const skewMs = serverTime.getTime() - Date.now();
+
+  return { serverTime, skewMs };
+}
+
 /**
  * Convenience function to parse all header info at once
  */
@@ -671,6 +850,8 @@ export interface HeaderInfo {
   csp: CSPInfo;
   contentType: ContentTypeInfo;
   accept: AcceptInfo;
+  auth: AuthInfo;
+  clockSkew: ClockSkewInfo;
 }
 
 export function parseHeaders(headers: Headers, status: number): HeaderInfo {
@@ -681,6 +862,8 @@ export function parseHeaders(headers: Headers, status: number): HeaderInfo {
     compression: parseCompressionInfo(headers),
     csp: parseCSPInfo(headers),
     contentType: parseContentType(headers),
-    accept: parseAcceptInfo(headers)
+    accept: parseAcceptInfo(headers),
+    auth: parseAuthInfo(headers),
+    clockSkew: parseClockSkew(headers)
   };
 }
