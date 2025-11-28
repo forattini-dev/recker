@@ -216,4 +216,28 @@ describe('Progress Tracking', () => {
       expect(event.direction).toBeUndefined();
     });
   });
+
+  describe('Error handling', () => {
+    it('should propagate stream errors', async () => {
+      const error = new Error('Stream error');
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data'));
+        },
+        pull() {
+          throw error;
+        }
+      });
+
+      const progressStream = createProgressStream(stream, () => {}, { total: 100 });
+      const reader = progressStream.getReader();
+
+      await expect((async () => {
+        while (true) {
+          const { done } = await reader.read();
+          if (done) break;
+        }
+      })()).rejects.toThrow('Stream error');
+    });
+  });
 });

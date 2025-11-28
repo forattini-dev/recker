@@ -762,3 +762,504 @@ describe('UndiciTransport proxy configurations', () => {
     });
   });
 });
+
+describe('UndiciTransport redirect scenarios', () => {
+  let server: HttpServer;
+  let serverUrl: string;
+
+  beforeAll(async () => {
+    return new Promise<void>((resolve) => {
+      server = createServer((req: IncomingMessage, res: ServerResponse) => {
+        if (req.url === '/redirect-303') {
+          res.writeHead(303, { 'Location': '/get-only' });
+          res.end();
+        } else if (req.url === '/redirect-307' && req.method === 'POST') {
+          res.writeHead(307, { 'Location': '/echo-post' });
+          res.end();
+        } else if (req.url === '/redirect-301' && req.method === 'POST') {
+          res.writeHead(301, { 'Location': '/get-only' });
+          res.end();
+        } else if (req.url === '/redirect-302' && req.method === 'POST') {
+          res.writeHead(302, { 'Location': '/get-only' });
+          res.end();
+        } else if (req.url === '/get-only') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ method: req.method }));
+        } else if (req.url === '/echo-post') {
+          let body = '';
+          req.on('data', chunk => body += chunk);
+          req.on('end', () => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ method: req.method, body }));
+          });
+        } else {
+          res.writeHead(404);
+          res.end();
+        }
+      });
+
+      server.listen(0, () => {
+        const addr = server.address() as { port: number };
+        serverUrl = `http://localhost:${addr.port}`;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  it('should convert POST to GET on 303 redirect', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const request = new HttpRequest(`${serverUrl}/redirect-303`, {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ data: 'test' }),
+      maxRedirects: 5,
+      followRedirects: true,
+      beforeRedirect: async () => {},
+    } as any);
+
+    const response = await transport.dispatch(request);
+    const json = await response.json();
+    expect(json.method).toBe('GET');
+  });
+
+  it('should preserve POST method on 307 redirect', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const request = new HttpRequest(`${serverUrl}/redirect-307`, {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ data: 'test' }),
+      maxRedirects: 5,
+      followRedirects: true,
+      beforeRedirect: async () => {},
+    } as any);
+
+    const response = await transport.dispatch(request);
+    const json = await response.json();
+    expect(json.method).toBe('POST');
+    expect(json.body).toContain('test');
+  });
+
+  it('should convert POST to GET on 301 redirect', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const request = new HttpRequest(`${serverUrl}/redirect-301`, {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ data: 'test' }),
+      maxRedirects: 5,
+      followRedirects: true,
+      beforeRedirect: async () => {},
+    } as any);
+
+    const response = await transport.dispatch(request);
+    const json = await response.json();
+    expect(json.method).toBe('GET');
+  });
+
+  it('should convert POST to GET on 302 redirect', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const request = new HttpRequest(`${serverUrl}/redirect-302`, {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ data: 'test' }),
+      maxRedirects: 5,
+      followRedirects: true,
+      beforeRedirect: async () => {},
+    } as any);
+
+    const response = await transport.dispatch(request);
+    const json = await response.json();
+    expect(json.method).toBe('GET');
+  });
+
+  it('should not convert GET to different method on 301 redirect', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const request = new HttpRequest(`${serverUrl}/redirect-303`, {
+      method: 'GET',
+      maxRedirects: 5,
+      followRedirects: true,
+      beforeRedirect: async () => {},
+    } as any);
+
+    // GET remains GET on redirect
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.method).toBe('GET');
+  });
+});
+
+describe('UndiciTransport fast path (observability disabled)', () => {
+  let server: HttpServer;
+  let serverUrl: string;
+
+  beforeAll(async () => {
+    return new Promise<void>((resolve) => {
+      server = createServer((req: IncomingMessage, res: ServerResponse) => {
+        if (req.url === '/json') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } else if (req.url === '/echo') {
+          let body = '';
+          req.on('data', chunk => body += chunk);
+          req.on('end', () => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(body);
+          });
+        } else if (req.url === '/redirect-303') {
+          res.writeHead(303, { 'Location': '/json' });
+          res.end();
+        } else if (req.url === '/redirect-307') {
+          res.writeHead(307, { 'Location': '/echo' });
+          res.end();
+        } else if (req.url === '/slow') {
+          setTimeout(() => {
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.end('slow');
+          }, 500);
+        } else {
+          res.writeHead(404);
+          res.end();
+        }
+      });
+
+      server.listen(0, () => {
+        const addr = server.address() as { port: number };
+        serverUrl = `http://localhost:${addr.port}`;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  it('should handle GET request with observability disabled', async () => {
+    const transport = new UndiciTransport(serverUrl, { observability: false });
+    const request = new HttpRequest(`${serverUrl}/json`, { method: 'GET' });
+
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+    expect(response.timings).toEqual({});
+    expect(response.connection).toEqual({});
+  });
+
+  it('should handle 303 redirect in fast path', async () => {
+    const transport = new UndiciTransport(serverUrl, { observability: false });
+    const request = new HttpRequest(`${serverUrl}/redirect-303`, {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ test: true }),
+      maxRedirects: 5,
+      followRedirects: true,
+      beforeRedirect: async () => {},
+    } as any);
+
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+  });
+
+  it('should handle 307 redirect preserving method in fast path', async () => {
+    const transport = new UndiciTransport(serverUrl, { observability: false });
+    const request = new HttpRequest(`${serverUrl}/redirect-307`, {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ test: true }),
+      maxRedirects: 5,
+      followRedirects: true,
+      beforeRedirect: async () => {},
+    } as any);
+
+    const response = await transport.dispatch(request);
+    const json = await response.json();
+    expect(json.test).toBe(true);
+  });
+
+  it('should stop redirect with false in fast path', async () => {
+    const transport = new UndiciTransport(serverUrl, { observability: false });
+    const request = new HttpRequest(`${serverUrl}/redirect-303`, {
+      method: 'GET',
+      maxRedirects: 5,
+      followRedirects: true,
+      beforeRedirect: async () => false,
+    } as any);
+
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(303);
+  });
+
+  it('should handle timeout in fast path', async () => {
+    const transport = new UndiciTransport(serverUrl, { observability: false });
+    const request = new HttpRequest(`${serverUrl}/slow`, {
+      method: 'GET',
+      timeout: {
+        request: 100,
+      },
+    } as any);
+
+    await expect(transport.dispatch(request)).rejects.toThrow(TimeoutError);
+  });
+
+  it('should handle NetworkError in fast path', async () => {
+    const transport = new UndiciTransport('http://localhost:9999', { observability: false });
+    const request = new HttpRequest('http://localhost:9999/json', { method: 'GET' });
+
+    await expect(transport.dispatch(request)).rejects.toThrow(NetworkError);
+  });
+
+  it('should combine user signal with timeout in fast path', async () => {
+    const transport = new UndiciTransport(serverUrl, { observability: false });
+    const controller = new AbortController();
+
+    const request = new HttpRequest(`${serverUrl}/slow`, {
+      method: 'GET',
+      signal: controller.signal,
+      timeout: {
+        request: 5000, // Long timeout, but user will abort
+      },
+    } as any);
+
+    setTimeout(() => controller.abort(), 50);
+
+    await expect(transport.dispatch(request)).rejects.toThrow();
+  });
+
+  it('should handle already aborted signal in fast path', async () => {
+    const transport = new UndiciTransport(serverUrl, { observability: false });
+    const controller = new AbortController();
+    controller.abort();
+
+    const request = new HttpRequest(`${serverUrl}/json`, {
+      method: 'GET',
+      signal: controller.signal,
+      timeout: {
+        request: 5000,
+      },
+    } as any);
+
+    await expect(transport.dispatch(request)).rejects.toThrow();
+  });
+
+  it('should handle FormData body in fast path', async () => {
+    const transport = new UndiciTransport(serverUrl, { observability: false });
+    const formData = new FormData();
+    formData.append('field', 'value');
+
+    const request = new HttpRequest(`${serverUrl}/echo`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+  });
+
+  it('should handle HTTP/2 configuration in fast path', async () => {
+    const transport = new UndiciTransport(serverUrl, {
+      observability: false,
+      http2: { enabled: true, maxConcurrentStreams: 50, pipelining: 1 },
+    });
+
+    const request = new HttpRequest(`${serverUrl}/json`, { method: 'GET' });
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+  });
+
+  it('should disable HTTP/2 per-request in fast path', async () => {
+    const transport = new UndiciTransport(serverUrl, {
+      observability: false,
+      http2: { enabled: true },
+    });
+
+    const request = new HttpRequest(`${serverUrl}/json`, {
+      method: 'GET',
+      http2: false,
+    } as any);
+
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('UndiciTransport socket path', () => {
+  it('should create transport with socket path', () => {
+    const transport = new UndiciTransport('http://localhost', {
+      socketPath: '/var/run/docker.sock',
+    });
+    expect(transport).toBeInstanceOf(UndiciTransport);
+  });
+});
+
+describe('UndiciTransport upload progress', () => {
+  let server: HttpServer;
+  let serverUrl: string;
+
+  beforeAll(async () => {
+    return new Promise<void>((resolve) => {
+      server = createServer((req: IncomingMessage, res: ServerResponse) => {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ size: body.length }));
+        });
+      });
+
+      server.listen(0, () => {
+        const addr = server.address() as { port: number };
+        serverUrl = `http://localhost:${addr.port}`;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  it('should handle TypedArray body with progress', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const progressEvents: any[] = [];
+    const data = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+    const request = new HttpRequest(`${serverUrl}/upload`, {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'application/octet-stream' }),
+      body: data,
+      onUploadProgress: (event: any) => progressEvents.push(event),
+    } as any);
+
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+  });
+
+  it('should handle ArrayBuffer body with progress', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const progressEvents: any[] = [];
+    const buffer = new ArrayBuffer(100);
+    new Uint8Array(buffer).fill(65);
+
+    const request = new HttpRequest(`${serverUrl}/upload`, {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'application/octet-stream' }),
+      body: buffer,
+      onUploadProgress: (event: any) => progressEvents.push(event),
+    } as any);
+
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+  });
+
+  it('should handle ReadableStream body with progress', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const progressEvents: any[] = [];
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('test data'));
+        controller.close();
+      },
+    });
+
+    const request = new HttpRequest(`${serverUrl}/upload`, {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'text/plain' }),
+      body: stream,
+      onUploadProgress: (event: any) => progressEvents.push(event),
+    } as any);
+
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+  });
+
+  it('should handle null body with progress callback', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const progressEvents: any[] = [];
+
+    const request = new HttpRequest(`${serverUrl}/upload`, {
+      method: 'POST',
+      body: null,
+      onUploadProgress: (event: any) => progressEvents.push(event),
+    } as any);
+
+    const response = await transport.dispatch(request);
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('UndiciTransport combined timeout and signal', () => {
+  let server: HttpServer;
+  let serverUrl: string;
+
+  beforeAll(async () => {
+    return new Promise<void>((resolve) => {
+      server = createServer((req: IncomingMessage, res: ServerResponse) => {
+        setTimeout(() => {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end('slow');
+        }, 1000);
+      });
+
+      server.listen(0, () => {
+        const addr = server.address() as { port: number };
+        serverUrl = `http://localhost:${addr.port}`;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  it('should timeout when user signal is also present', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const controller = new AbortController();
+
+    const request = new HttpRequest(`${serverUrl}/slow`, {
+      method: 'GET',
+      signal: controller.signal,
+      timeout: {
+        request: 100,
+      },
+    } as any);
+
+    await expect(transport.dispatch(request)).rejects.toThrow(TimeoutError);
+  });
+
+  it('should abort when user signal aborts before timeout', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const controller = new AbortController();
+
+    const request = new HttpRequest(`${serverUrl}/slow`, {
+      method: 'GET',
+      signal: controller.signal,
+      timeout: {
+        request: 5000,
+      },
+    } as any);
+
+    setTimeout(() => controller.abort(), 50);
+
+    await expect(transport.dispatch(request)).rejects.toThrow();
+  });
+
+  it('should handle already aborted signal with timeout', async () => {
+    const transport = new UndiciTransport(serverUrl);
+    const controller = new AbortController();
+    controller.abort();
+
+    const request = new HttpRequest(`${serverUrl}/slow`, {
+      method: 'GET',
+      signal: controller.signal,
+      timeout: {
+        request: 5000,
+      },
+    } as any);
+
+    await expect(transport.dispatch(request)).rejects.toThrow();
+  });
+});

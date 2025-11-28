@@ -53,4 +53,83 @@ describe('tryFn', () => {
       expect(ok).toBe(false);
       expect(err?.message).toContain('cannot be null');
   });
+
+  it('should handle direct values', () => {
+    // Pass a direct value (not a function or promise)
+    const [ok, err, data] = tryFn(42) as [boolean, Error | null, number | undefined];
+    expect(ok).toBe(true);
+    expect(err).toBeNull();
+    expect(data).toBe(42);
+  });
+
+  it('should handle direct string values', () => {
+    const [ok, err, data] = tryFn('hello') as [boolean, Error | null, string | undefined];
+    expect(ok).toBe(true);
+    expect(err).toBeNull();
+    expect(data).toBe('hello');
+  });
+
+  it('should handle direct object values', () => {
+    const obj = { foo: 'bar' };
+    const [ok, err, data] = tryFn(obj) as [boolean, Error | null, typeof obj | undefined];
+    expect(ok).toBe(true);
+    expect(err).toBeNull();
+    expect(data).toBe(obj);
+  });
+
+  it('should wrap non-Error throws in async function', async () => {
+    const [ok, err, data] = await tryFn(async () => {
+      throw 'string error';
+    });
+    expect(ok).toBe(false);
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain('string error');
+    expect(data).toBeUndefined();
+  });
+
+  it('should wrap non-Error throws in sync function', () => {
+    const [ok, err, data] = tryFnSync(() => {
+      throw 'string error';
+    });
+    expect(ok).toBe(false);
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain('string error');
+    expect(data).toBeUndefined();
+  });
+
+  it('should wrap non-Error rejection from promise', async () => {
+    const [ok, err, data] = await tryFn(Promise.reject('rejected string'));
+    expect(ok).toBe(false);
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain('rejected string');
+    expect(data).toBeUndefined();
+  });
+
+  it('should handle sync function returning null', () => {
+    const [ok, err, data] = tryFn(() => null as any) as [boolean, Error | null, null | undefined];
+    expect(ok).toBe(true);
+    expect(err).toBeNull();
+    expect(data).toBeNull();
+  });
+
+  it('should handle sync function returning promise', async () => {
+    const [ok, err, data] = await tryFn(() => Promise.resolve('from sync fn'));
+    expect(ok).toBe(true);
+    expect(err).toBeNull();
+    expect(data).toBe('from sync fn');
+  });
+
+  it('should handle sync function throwing error', () => {
+    const [ok, err, data] = tryFn(() => { throw new Error('sync throw'); }) as [boolean, Error | null, unknown];
+    expect(ok).toBe(false);
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toBe('sync throw');
+  });
+
+  it('should handle undefined input', () => {
+    // @ts-ignore
+    const [ok, err] = tryFn(undefined);
+    expect(ok).toBe(false);
+    expect(err?.message).toContain('cannot be null');
+  });
 });

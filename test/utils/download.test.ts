@@ -211,5 +211,51 @@ describe('Download Utils', () => {
       expect(result.status).toBe(200);
       expect(result.resumed).toBe(false);
     });
+
+    it('should handle resume with existing file but no Range header preset', async () => {
+      const client = createClient({ baseUrl });
+      const dest = join(tempDir, 'resume.bin');
+
+      // Create partial file (first 5 bytes: "Hello")
+      await writeFile(dest, 'Hello');
+
+      // Use Headers object with Range already set
+      const result = await downloadToFile(client, `${baseUrl}/range-file`, dest, {
+        resume: true,
+        headers: new Headers({ 'X-Custom': 'test' }) // No Range preset, will be added
+      });
+
+      expect(result.resumed).toBe(true);
+    });
+
+    it('should not override existing Range header', async () => {
+      const client = createClient({ baseUrl });
+      const dest = join(tempDir, 'resume.bin');
+
+      // Create partial file
+      await writeFile(dest, 'Hello');
+
+      // Set custom Range header - should be respected
+      const result = await downloadToFile(client, `${baseUrl}/range-file`, dest, {
+        resume: true,
+        headers: { 'Range': 'bytes=0-' } // Custom range
+      });
+
+      // Since we request bytes=0-, we get full content, status 206
+      expect(result.status).toBe(206);
+    });
+
+    it('should pass additional request options', async () => {
+      const client = createClient({ baseUrl });
+      const dest = join(tempDir, 'test.bin');
+
+      const result = await downloadToFile(client, `${baseUrl}/file`, dest, {
+        request: {
+          timeout: { request: 30000 }
+        }
+      });
+
+      expect(result.status).toBe(200);
+    });
   });
 });

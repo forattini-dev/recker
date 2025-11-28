@@ -243,5 +243,380 @@ describe('SFTP Protocol Utility', () => {
         })
       ).rejects.toThrow('Test error');
     });
+
+    it('should throw when connection fails', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockRejectedValue(new Error('Connection refused')),
+        end: vi.fn()
+      } as any));
+
+      await expect(
+        sftp({ host: 'bad.host' }, async () => {
+          return 'should not reach';
+        })
+      ).rejects.toThrow('Connection refused');
+    });
+  });
+
+  describe('downloadToStream', () => {
+    it('should download to writable stream', async () => {
+      await sftpClient.connect();
+      const { Writable } = await import('node:stream');
+      const stream = new Writable({ write(c, e, cb) { cb(); } });
+
+      const result = await sftpClient.downloadToStream('/remote/file.txt', stream);
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Downloaded');
+    });
+
+    it('should handle download stream errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        get: vi.fn().mockRejectedValue(new Error('Stream download failed'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+
+      const { Writable } = await import('node:stream');
+      const stream = new Writable({ write(c, e, cb) { cb(); } });
+
+      const result = await client.downloadToStream('/fail', stream);
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Stream download failed');
+    });
+  });
+
+  describe('downloadToBuffer', () => {
+    it('should download to buffer', async () => {
+      await sftpClient.connect();
+      const result = await sftpClient.downloadToBuffer('/file.txt');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBeInstanceOf(Buffer);
+    });
+
+    it('should convert string to buffer', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        get: vi.fn().mockResolvedValue('string content')
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.downloadToBuffer('/file.txt');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBeInstanceOf(Buffer);
+      expect(result.data!.toString()).toBe('string content');
+    });
+
+    it('should handle buffer download errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        get: vi.fn().mockRejectedValue(new Error('Buffer download failed'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.downloadToBuffer('/fail');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Buffer download failed');
+    });
+  });
+
+  describe('uploadFromStream', () => {
+    it('should upload from readable stream', async () => {
+      await sftpClient.connect();
+      const { Readable } = await import('node:stream');
+      const stream = Readable.from(Buffer.from('test content'));
+
+      const result = await sftpClient.uploadFromStream(stream, '/remote/file.txt');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Uploaded');
+    });
+
+    it('should handle upload stream errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        put: vi.fn().mockRejectedValue(new Error('Stream upload failed'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+
+      const { Readable } = await import('node:stream');
+      const stream = Readable.from(Buffer.from('test'));
+
+      const result = await client.uploadFromStream(stream, '/fail');
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Stream upload failed');
+    });
+  });
+
+  describe('uploadFromBuffer', () => {
+    it('should upload from buffer', async () => {
+      await sftpClient.connect();
+      const result = await sftpClient.uploadFromBuffer(Buffer.from('test'), '/remote/file.txt');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Uploaded');
+    });
+
+    it('should upload from string', async () => {
+      await sftpClient.connect();
+      const result = await sftpClient.uploadFromBuffer('test content', '/remote/file.txt');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should handle buffer upload errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        put: vi.fn().mockRejectedValue(new Error('Buffer upload failed'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.uploadFromBuffer('test', '/fail');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Buffer upload failed');
+    });
+  });
+
+  describe('error handling', () => {
+    it('should handle list errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        list: vi.fn().mockRejectedValue(new Error('List failed'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.list('/');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('List failed');
+    });
+
+    it('should handle stat errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        stat: vi.fn().mockRejectedValue(new Error('Stat failed'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.stat('/fail');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Stat failed');
+    });
+
+    it('should handle download errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        fastGet: vi.fn().mockRejectedValue(new Error('Download error'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.download('/fail', './local');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Download error');
+    });
+
+    it('should handle upload errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        fastPut: vi.fn().mockRejectedValue(new Error('Upload error'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.upload('./local', '/fail');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Upload error');
+    });
+
+    it('should handle delete errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        delete: vi.fn().mockRejectedValue(new Error('Delete error'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.delete('/fail');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Delete error');
+    });
+
+    it('should handle mkdir errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        mkdir: vi.fn().mockRejectedValue(new Error('Mkdir error'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.mkdir('/fail');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Mkdir error');
+    });
+
+    it('should handle rmdir errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        rmdir: vi.fn().mockRejectedValue(new Error('Rmdir error'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.rmdir('/fail');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Rmdir error');
+    });
+
+    it('should handle rename errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        rename: vi.fn().mockRejectedValue(new Error('Rename error'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.rename('/old', '/new');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Rename error');
+    });
+
+    it('should handle chmod errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        chmod: vi.fn().mockRejectedValue(new Error('Chmod error'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.chmod('/fail', 0o755);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Chmod error');
+    });
+
+    it('should handle pwd errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        cwd: vi.fn().mockRejectedValue(new Error('PWD error'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.pwd();
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('PWD error');
+    });
+
+    it('should handle append errors', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        append: vi.fn().mockRejectedValue(new Error('Append error'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.append('data', '/fail');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Append error');
+    });
+
+    it('should return false for exists on error', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        exists: vi.fn().mockRejectedValue(new Error('Access denied'))
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const exists = await client.exists('/protected');
+
+      expect(exists).toBe(false);
+    });
+  });
+
+  describe('file type mapping', () => {
+    it('should handle unknown file type', async () => {
+      const SFTPClient = (await import('ssh2-sftp-client')).default;
+      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        end: vi.fn(),
+        list: vi.fn().mockResolvedValue([
+          { name: 'unknown', type: 'x', size: 0, modifyTime: 1700000000, accessTime: 1700000000, rights: { user: 'rwx', group: 'rx', other: 'rx' }, owner: 1000, group: 1000 }
+        ])
+      } as any));
+
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
+      const result = await client.list('/');
+
+      expect(result.success).toBe(true);
+      expect(result.data![0].type).toBe('unknown');
+    });
+  });
+
+  describe('getClient', () => {
+    it('should return underlying client', () => {
+      const client = createSFTP({ host: 'test.com' });
+      const underlying = client.getClient();
+      expect(underlying).toBeDefined();
+    });
   });
 });

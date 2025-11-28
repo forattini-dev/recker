@@ -9,6 +9,7 @@ import {
   detectCharset,
   decodeText,
   isCharsetSupported,
+  getSupportedEncodings,
 } from '../../src/utils/charset.js';
 
 describe('Charset Detection', () => {
@@ -224,6 +225,37 @@ describe('Charset Detection', () => {
     it('should normalize charset before checking', () => {
       expect(isCharsetSupported('UTF8')).toBe(true);
       expect(isCharsetSupported('latin1')).toBe(true);
+    });
+  });
+
+  describe('getSupportedEncodings', () => {
+    it('should return array of supported encodings', () => {
+      const encodings = getSupportedEncodings();
+      expect(Array.isArray(encodings)).toBe(true);
+      expect(encodings.length).toBeGreaterThan(0);
+      expect(encodings).toContain('utf-8');
+      expect(encodings).toContain('iso-8859-1');
+      expect(encodings).toContain('windows-1252');
+    });
+  });
+
+  describe('stripBOM edge cases', () => {
+    it('should strip UTF-16 BE BOM', () => {
+      const buffer = new Uint8Array([0xFE, 0xFF, 0x00, 0x48]);
+      const result = stripBOM(buffer);
+      expect(result).toEqual(new Uint8Array([0x00, 0x48]));
+    });
+
+    it('should strip UTF-32 LE BOM', () => {
+      const buffer = new Uint8Array([0xFF, 0xFE, 0x00, 0x00, 0x48, 0x00, 0x00, 0x00]);
+      const result = stripBOM(buffer);
+      expect(result).toEqual(new Uint8Array([0x48, 0x00, 0x00, 0x00]));
+    });
+
+    it('should strip UTF-32 BE BOM', () => {
+      const buffer = new Uint8Array([0x00, 0x00, 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x48]);
+      const result = stripBOM(buffer);
+      expect(result).toEqual(new Uint8Array([0x00, 0x00, 0x00, 0x48]));
     });
   });
 });

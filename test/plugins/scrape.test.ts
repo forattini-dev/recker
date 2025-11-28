@@ -613,6 +613,37 @@ describe('Extractors', () => {
       expect(rows[0]).toEqual(['Widget', '$10', '100']);
       expect(rows[1]).toEqual(['Gadget', '$20', '50']);
     });
+
+    it('should handle table without thead using first row as headers', () => {
+      const noTheadHtml = `
+        <table>
+          <tr><th>Name</th><th>Value</th></tr>
+          <tr><td>A</td><td>1</td></tr>
+          <tr><td>B</td><td>2</td></tr>
+        </table>
+      `;
+      const $noThead = load(noTheadHtml);
+      const tables = extractTables($noThead);
+
+      expect(tables.length).toBe(1);
+      expect(tables[0].headers).toEqual(['Name', 'Value']);
+      expect(tables[0].rows).toHaveLength(2);
+    });
+
+    it('should handle table without thead and no th elements', () => {
+      const noTheadNoThHtml = `
+        <table>
+          <tr><td>Name</td><td>Value</td></tr>
+          <tr><td>A</td><td>1</td></tr>
+        </table>
+      `;
+      const $noTheadNoTh = load(noTheadNoThHtml);
+      const tables = extractTables($noTheadNoTh);
+
+      expect(tables.length).toBe(1);
+      // First row becomes headers but data is preserved
+      expect(tables[0].headers).toEqual(['Name', 'Value']);
+    });
   });
 
   describe('extractScripts', () => {

@@ -42,6 +42,11 @@ describe('Security Utils', () => {
         expect(info.daysRemaining).toBeGreaterThanOrEqual(0);
     });
 
+    it('should inspect TLS with custom port', async () => {
+        const info = await inspectTLS('example.com', 8443);
+        expect(info.valid).toBe(true);
+    });
+
     it('should get DNS security records', async () => {
         const records = await getSecurityRecords('example.com');
         expect(records.spf?.[0]).toContain('v=spf1');

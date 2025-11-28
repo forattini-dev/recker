@@ -210,6 +210,20 @@ describe('gRPC-Web Plugin', () => {
     });
   });
 
+  // Note: Binary format tests are skipped as MockTransport doesn't properly handle Blob responses
+  // for binary gRPC-Web format. The text format tests below cover the core functionality.
+
+  describe('GrpcError details', () => {
+    it('should store details from status', () => {
+      const error = new GrpcError(
+        { code: GrpcStatusCode.INVALID_ARGUMENT, message: 'Bad request', details: { field: 'name' } },
+        { 'x-debug': 'value' }
+      );
+
+      expect(error.details).toEqual({ field: 'name' });
+    });
+  });
+
   // Note: Full integration tests for gRPC-Web require a real gRPC-Web server
   // or complex mocking of the binary protocol. These tests verify the API surface.
 
@@ -433,5 +447,181 @@ describe('gRPC-Web Plugin', () => {
 
       expect(result.status.code).toBe(GrpcStatusCode.OK);
     });
+
+    it('should handle error status from header', async () => {
+      const encoder = new TextEncoder();
+      const trailerData = encoder.encode('grpc-status:0\r\ngrpc-message:\r\n');
+      const trailerFrame = encodeGrpcFrame(trailerData, true);
+
+      // Message to make it not empty
+      const response = { message: 'Hello' };
+      const messageData = encoder.encode(JSON.stringify(response));
+      const messageFrame = encodeGrpcFrame(messageData);
+
+      const fullResponse = new Uint8Array(messageFrame.length + trailerFrame.length);
+      fullResponse.set(messageFrame);
+      fullResponse.set(trailerFrame, messageFrame.length);
+
+      const base64 = Buffer.from(fullResponse).toString('base64');
+
+      mockTransport.setMockResponse('POST', '/test.Service/HeaderError', 200, base64, {
+        'Content-Type': 'application/grpc-web-text',
+        'grpc-status': '13',  // INTERNAL error from header
+        'grpc-message': 'Internal Server Error',
+      });
+
+      const client = createClient({
+        baseUrl: 'https://api.example.com',
+        transport: mockTransport
+      });
+
+      const grpcClient = createGrpcWebClient(client, {
+        baseUrl: 'https://api.example.com',
+        textFormat: true
+      });
+
+      const codec = jsonCodec<{ name: string }>();
+
+      await expect(
+        grpcClient.unary('test.Service', 'HeaderError', { name: 'test' }, codec)
+      ).rejects.toThrow(GrpcError);
+    });
+
+    it('should handle incomplete frames gracefully', async () => {
+      // Only partial frame data (less than 5 bytes header)
+      const incomplete = new Uint8Array([0, 0, 0]);
+      const base64 = Buffer.from(incomplete).toString('base64');
+
+      mockTransport.setMockResponse('POST', '/test.Service/Incomplete', 200, base64, {
+        'Content-Type': 'application/grpc-web-text',
+      });
+
+      const client = createClient({
+        baseUrl: 'https://api.example.com',
+        transport: mockTransport
+      });
+
+      const grpcClient = createGrpcWebClient(client, {
+        baseUrl: 'https://api.example.com',
+        textFormat: true
+      });
+
+      const codec = jsonCodec<{ name: string }>();
+
+      // Should throw because no message
+      await expect(
+        grpcClient.unary('test.Service', 'Incomplete', { name: 'test' }, codec)
+      ).rejects.toThrow('No message in response');
+    });
+
+    it('should handle frame with payload exceeding buffer', async () => {
+      // Frame header says 1000 bytes but only 5 bytes follow
+      const frame = new Uint8Array(10);
+      frame[0] = 0; // data frame
+      const view = new DataView(frame.buffer);
+      view.setUint32(1, 1000, false); // claims 1000 bytes
+      // Only 5 more bytes available
+
+      const base64 = Buffer.from(frame).toString('base64');
+
+      mockTransport.setMockResponse('POST', '/test.Service/BadFrame', 200, base64, {
+        'Content-Type': 'application/grpc-web-text',
+      });
+
+      const client = createClient({
+        baseUrl: 'https://api.example.com',
+        transport: mockTransport
+      });
+
+      const grpcClient = createGrpcWebClient(client, {
+        baseUrl: 'https://api.example.com',
+        textFormat: true
+      });
+
+      const codec = jsonCodec<{ name: string }>();
+
+      // Should throw because no message could be parsed
+      await expect(
+        grpcClient.unary('test.Service', 'BadFrame', { name: 'test' }, codec)
+      ).rejects.toThrow('No message in response');
+    });
+
+    it('should handle trailer without colon', async () => {
+      const encoder = new TextEncoder();
+      // Trailer line without colon - should be skipped
+      const trailerData = encoder.encode('invalid-line-no-colon\r\ngrpc-status:0\r\ngrpc-message:\r\n');
+      const trailerFrame = encodeGrpcFrame(trailerData, true);
+
+      const response = { message: 'Hello' };
+      const messageData = encoder.encode(JSON.stringify(response));
+      const messageFrame = encodeGrpcFrame(messageData);
+
+      const fullResponse = new Uint8Array(messageFrame.length + trailerFrame.length);
+      fullResponse.set(messageFrame);
+      fullResponse.set(trailerFrame, messageFrame.length);
+
+      const base64 = Buffer.from(fullResponse).toString('base64');
+
+      mockTransport.setMockResponse('POST', '/test.Service/BadTrailer', 200, base64, {
+        'Content-Type': 'application/grpc-web-text',
+        'grpc-status': '0',
+      });
+
+      const client = createClient({
+        baseUrl: 'https://api.example.com',
+        transport: mockTransport
+      });
+
+      const grpcClient = createGrpcWebClient(client, {
+        baseUrl: 'https://api.example.com',
+        textFormat: true
+      });
+
+      const codec = jsonCodec<{ name: string }>();
+      const result = await grpcClient.unary('test.Service', 'BadTrailer', { name: 'World' }, codec);
+
+      expect(result.message).toEqual({ message: 'Hello' });
+    });
+  });
+
+  describe('server streaming', () => {
+    function encodeGrpcFrame(data: Uint8Array, isTrailers: boolean = false): Uint8Array {
+      const frame = new Uint8Array(5 + data.length);
+      frame[0] = isTrailers ? 128 : 0;
+      const view = new DataView(frame.buffer);
+      view.setUint32(1, data.length, false);
+      frame.set(data, 5);
+      return frame;
+    }
+
+    it('should throw when no response body for streaming', async () => {
+      mockTransport.setMockResponse('POST', '/test.Service/NoBodyStream', 204, null, {
+        'Content-Type': 'application/grpc-web-text',
+      });
+
+      const client = createClient({
+        baseUrl: 'https://api.example.com',
+        transport: mockTransport
+      });
+
+      const grpcClient = createGrpcWebClient(client, {
+        baseUrl: 'https://api.example.com',
+        textFormat: true
+      });
+
+      const codec = jsonCodec<{ name: string }>();
+
+      const stream = grpcClient.serverStream('test.Service', 'NoBodyStream', { name: 'test' }, codec);
+
+      await expect(async () => {
+        for await (const _ of stream) {
+          // Should throw
+        }
+      }).rejects.toThrow('No response body');
+    });
+
+    // Note: Additional server streaming tests would require integration-level testing
+    // with a real gRPC-Web server, as MockTransport doesn't properly preserve
+    // ReadableStream bodies through the transport layer.
   });
 });

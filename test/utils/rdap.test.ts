@@ -177,5 +177,48 @@ describe('RDAP Utils', () => {
 
       await expect(rdap(client, 'notfound.com')).rejects.toThrow('RDAP entry not found');
     });
+
+    it('should rethrow non-404 errors', async () => {
+      const client = createClient({
+        transport: {
+          dispatch: async () => {
+            const error: any = new Error('Server Error');
+            error.status = 500;
+            throw error;
+          }
+        }
+      });
+
+      await expect(rdap(client, 'example.com')).rejects.toThrow('Server Error');
+    });
+
+    it('should handle io TLD with /domain/ in base URL', async () => {
+      const client = createClient({
+        transport: {
+          dispatch: async (req) => {
+            // Verify the URL doesn't have double /domain/domain/
+            expect(req.url).not.toContain('/domain/domain/');
+            const newUrl = req.url.replace(/https?:\/\/[^\/]+/, baseUrl);
+            const response = await fetch(newUrl);
+            return {
+              ok: response.ok,
+              status: response.status,
+              statusText: response.statusText,
+              headers: new Headers(response.headers),
+              json: () => response.json(),
+              text: () => response.text(),
+              blob: () => response.blob(),
+              read: () => null,
+              timings: {},
+              connection: {},
+              url: newUrl
+            } as any;
+          }
+        }
+      });
+
+      const result = await rdap(client, 'test.io');
+      expect(result.handle).toBe('TEST-IO');
+    });
   });
 });

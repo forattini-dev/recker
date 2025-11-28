@@ -92,21 +92,48 @@ describe('Streaming Utils', () => {
 
             await expect(promise).resolves.toBeUndefined();
         });
-        
+
         it('should handle errors', async () => {
              const source = new Readable({
-                 read() { 
-                     this.destroy(new Error('Upload Fail')); 
+                 read() {
+                     this.destroy(new Error('Upload Fail'));
                  }
              });
              const { stream, promise } = createUploadStream(source);
-             
+
              const reader = stream.getReader();
              try {
                  while(true) await reader.read();
              } catch {}
-             
+
              await expect(promise).rejects.toThrow('Upload Fail');
+        });
+    });
+
+    describe('pipeStream with progress', () => {
+        it('should track progress when onProgress is provided', async () => {
+            const source = Readable.from([Buffer.from('hello world')]);
+            const dest = new PassThrough();
+            const onProgress = vi.fn();
+
+            await pipeStream(source, dest, { onProgress, total: 11 });
+
+            expect(onProgress).toHaveBeenCalled();
+        });
+    });
+
+    describe('trackStreamProgress throttling', () => {
+        it('should track progress without total', async () => {
+            const source = Readable.from([Buffer.alloc(100), Buffer.alloc(100)]);
+            const onProgress = vi.fn();
+
+            const tracked = trackStreamProgress(source, { onProgress });
+
+            for await (const _ of tracked) {}
+
+            expect(onProgress).toHaveBeenCalled();
+            const lastCall = onProgress.mock.calls[onProgress.mock.calls.length - 1][0];
+            expect(lastCall.percent).toBeUndefined();
         });
     });
 });

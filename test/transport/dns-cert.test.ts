@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { createCertAgent, loadCert } from '../../src/utils/cert.js';
+import { createCertAgent, getCertInfo } from '../../src/utils/cert.js';
 import { createDoHLookup } from '../../src/utils/doh.js';
 import { createLookupFunction } from '../../src/utils/dns.js';
 import { Agent } from 'undici';
@@ -32,9 +32,9 @@ describe('DNS & Cert Utils', () => {
         vi.clearAllMocks();
     });
 
-    it('Cert Agent: should load certs', () => {
+    it('Cert Agent: should load certs from file', () => {
         vi.mocked(readFileSync).mockReturnValue(Buffer.from('cert-content'));
-        
+
         const agent = createCertAgent({
             cert: './cert.pem',
             rejectUnauthorized: false
@@ -43,6 +43,57 @@ describe('DNS & Cert Utils', () => {
         const opts = (agent as any).opts.connect;
         expect(opts.cert).toEqual(Buffer.from('cert-content'));
         expect(opts.rejectUnauthorized).toBe(false);
+    });
+
+    it('Cert Agent: should handle PEM string directly', () => {
+        const pemString = '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----';
+
+        const agent = createCertAgent({
+            cert: pemString
+        });
+
+        const opts = (agent as any).opts.connect;
+        expect(opts.cert).toBe(pemString);
+    });
+
+    it('Cert Agent: should handle Buffer directly', () => {
+        const buffer = Buffer.from('cert-buffer');
+
+        const agent = createCertAgent({
+            cert: buffer
+        });
+
+        const opts = (agent as any).opts.connect;
+        expect(opts.cert).toBe(buffer);
+    });
+
+    it('Cert Agent: should handle file read error gracefully', () => {
+        vi.mocked(readFileSync).mockImplementation(() => {
+            throw new Error('File not found');
+        });
+
+        // Path that doesn't look like PEM
+        const agent = createCertAgent({
+            cert: './nonexistent.pem'
+        });
+
+        const opts = (agent as any).opts.connect;
+        // Should return the path as-is when file read fails
+        expect(opts.cert).toBe('./nonexistent.pem');
+    });
+
+    it('Cert Agent: should handle undefined cert', () => {
+        const agent = createCertAgent({
+            rejectUnauthorized: true
+        });
+
+        const opts = (agent as any).opts.connect;
+        expect(opts.cert).toBeUndefined();
+    });
+
+    it('getCertInfo: should return authorized placeholder', () => {
+        const result = getCertInfo({});
+        expect(result.authorized).toBe(true);
     });
 
     it('DNS Lookup: should override host', async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createClient } from '../../src/core/client.js';
 import { createMockClient, MockClient, MockTransport } from '../../src/testing/index.js';
 
@@ -185,6 +185,157 @@ describe('Testing Utilities', () => {
       mock.delete('/users/1').reply(204);
       const result = await client.delete('/users/1');
       expect(result.status).toBe(204);
+    });
+
+    it('should mock with intercept method', async () => {
+      mock.intercept({ path: '/custom', method: 'GET' }).reply(200, { custom: true });
+      const result = await client.get('/custom').json();
+      expect(result).toEqual({ custom: true });
+    });
+  });
+
+  describe('Global Mock', () => {
+    let mockAgent: ReturnType<typeof import('../../src/testing/index.js').installGlobalMock>;
+
+    afterEach(async () => {
+      const { uninstallGlobalMock } = await import('../../src/testing/index.js');
+      uninstallGlobalMock();
+    });
+
+    it('should install and uninstall global mock', async () => {
+      const { installGlobalMock, uninstallGlobalMock } = await import('../../src/testing/index.js');
+
+      mockAgent = installGlobalMock();
+      expect(mockAgent).toBeDefined();
+
+      uninstallGlobalMock();
+    });
+
+    it('should throw on unmocked requests when disableNetConnect is true', async () => {
+      const { installGlobalMock } = await import('../../src/testing/index.js');
+
+      mockAgent = installGlobalMock({ throwOnUnmocked: true });
+      expect(mockAgent).toBeDefined();
+    });
+  });
+
+  describe('MockClient additional methods', () => {
+    let mock: MockClient;
+    let client: ReturnType<typeof createClient>;
+
+    beforeEach(() => {
+      const result = createMockClient();
+      mock = result.mock;
+      client = createClient({
+        baseUrl: 'https://api.example.com',
+        transport: result.transport
+      });
+    });
+
+    it('should throw error when reply called without intercept', () => {
+      expect(() => mock.reply(200)).toThrow('No intercept defined');
+    });
+
+    it('should throw error when replyOnce called without intercept', () => {
+      expect(() => mock.replyOnce(200)).toThrow('No intercept defined');
+    });
+
+    it('should throw error when replyWithDelay called without intercept', () => {
+      expect(() => mock.replyWithDelay(100, 200)).toThrow('No intercept defined');
+    });
+
+    it('should throw error when replyWithError called without intercept', () => {
+      expect(() => mock.replyWithError('error')).toThrow('No intercept defined');
+    });
+
+    it('should reset history only with resetHistory', async () => {
+      mock.get('/test').reply(200, {});
+      await client.get('/test');
+      expect(mock.callCount()).toBe(1);
+
+      mock.resetHistory();
+      expect(mock.callCount()).toBe(0);
+
+      // Mock should still work
+      await client.get('/test');
+      expect(mock.callCount()).toBe(1);
+    });
+
+    it('should return history', async () => {
+      mock.get('/test').reply(200, {});
+      await client.get('/test');
+
+      const history = mock.history();
+      expect(history).toHaveLength(1);
+      expect(history[0].method).toBe('GET');
+      expect(history[0].url).toContain('/test');
+    });
+
+    it('should handle called with regex pattern', async () => {
+      mock.get('/users/123').reply(200, {});
+      await client.get('/users/123');
+
+      expect(mock.called('GET', /users\/\d+/)).toBe(true);
+      expect(mock.called('GET', /posts\/\d+/)).toBe(false);
+    });
+
+    it('should handle callCount with regex pattern', async () => {
+      mock.get('/users/123').reply(200, {});
+      mock.get('/users/456').reply(200, {});
+      await client.get('/users/123');
+      await client.get('/users/456');
+
+      expect(mock.callCount('GET', /users\/\d+/)).toBe(2);
+    });
+
+    it('should return call count without method filter', async () => {
+      mock.get('/test').reply(200, {});
+      mock.post('/test').reply(200, {});
+      await client.get('/test');
+      await client.post('/test', {});
+
+      expect(mock.callCount()).toBe(2);
+    });
+
+    it('should handle replyWithError with Error instance', async () => {
+      const error = new Error('Custom Error');
+      mock.get('/error').replyWithError(error);
+
+      await expect(client.get('/error')).rejects.toThrow('Custom Error');
+    });
+  });
+
+  describe('MockTransport body handling', () => {
+    it('should handle FormData body', async () => {
+      const { mock, transport } = createMockClient();
+      mock.post('/form').reply(200, { received: true });
+
+      const client = createClient({
+        baseUrl: 'https://api.example.com',
+        transport
+      });
+
+      const formData = new FormData();
+      formData.append('field', 'value');
+
+      const result = await client.post('/form', { body: formData });
+      expect(result.status).toBe(200);
+    });
+
+    it('should handle URLSearchParams body', async () => {
+      const { mock, transport } = createMockClient();
+      mock.post('/params').reply(200, { received: true });
+
+      const client = createClient({
+        baseUrl: 'https://api.example.com',
+        transport
+      });
+
+      const params = new URLSearchParams();
+      params.append('key', 'value');
+
+      const result = await client.post('/params', { body: params });
+      expect(result.status).toBe(200);
     });
   });
 });

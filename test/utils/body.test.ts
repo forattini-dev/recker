@@ -202,4 +202,25 @@ describe('Body Processing', () => {
       expect(result.contentType).toBe('application/json');
     });
   });
+
+  describe('Edge cases', () => {
+    it('should handle ReadableStream', () => {
+      const stream = new ReadableStream();
+      const result = processBody(stream);
+
+      expect(result.body).toBe(stream);
+      expect(result.contentType).toBe('application/octet-stream');
+    });
+
+    it('should handle object without prototype', () => {
+      // Object.create(null) creates an object without prototype
+      const obj = Object.create(null);
+      obj.name = 'test';
+
+      const result = processBody(obj);
+
+      expect(result.body).toBe(JSON.stringify(obj));
+      expect(result.contentType).toBe('application/json');
+    });
+  });
 });
