@@ -12,7 +12,7 @@ import {
   extractScripts,
   extractStyles,
 } from '../../src/scrape/extractors.js';
-import { scrape, parseHtml } from '../../src/plugins/scrape.js';
+import { scrape, parseHtml, scrapeResponse } from '../../src/plugins/scrape.js';
 import { load } from 'cheerio';
 
 // Sample HTML for testing
@@ -755,5 +755,339 @@ describe('ScrapeDocument built-in extractors', () => {
   it('should extract styles via document method', () => {
     const styles = doc.styles();
     expect(styles.length).toBeGreaterThan(0);
+  });
+});
+
+describe('scrape() function with RequestPromise', () => {
+  // Create a mock response that implements the minimum ReckerResponse interface
+  function createMockResponse(html: string, url = 'https://example.com') {
+    return {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      url,
+      headers: new Headers({ 'content-type': 'text/html' }),
+      body: null,
+      text: () => Promise.resolve(html),
+      json: () => Promise.resolve({}),
+      blob: () => Promise.resolve(new Blob([html])),
+      arrayBuffer: () => Promise.resolve(new TextEncoder().encode(html).buffer),
+      clone: () => createMockResponse(html, url),
+      timings: { total: 100 },
+      connection: {},
+      read: () => new ReadableStream(),
+      [Symbol.asyncIterator]: async function* () {
+        yield new TextEncoder().encode(html);
+      },
+    };
+  }
+
+  it('should scrape HTML from a promise', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const doc = await scrape(mockPromise).scrape();
+    expect(doc.title()).toBe('Sample Page');
+  });
+
+  it('should use response URL as baseUrl when not specified', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml, 'https://custom.example.com'));
+    const doc = await scrape(mockPromise).scrape();
+    expect(doc.baseUrl).toBe('https://custom.example.com');
+  });
+
+  it('should allow custom baseUrl in options', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml, 'https://example.com'));
+    const doc = await scrape(mockPromise).scrape({ baseUrl: 'https://override.example.com' });
+    expect(doc.baseUrl).toBe('https://override.example.com');
+  });
+
+  it('should extract links via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const links = await scrape(mockPromise).links();
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.find(l => l.text === 'Home')).toBeDefined();
+  });
+
+  it('should extract links with options via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const links = await scrape(mockPromise).links({ absolute: true });
+    expect(links.length).toBeGreaterThan(0);
+    const homeLink = links.find(l => l.text === 'Home');
+    expect(homeLink?.href).toBe('https://example.com/');
+  });
+
+  it('should extract images via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const images = await scrape(mockPromise).images();
+    expect(images.length).toBe(2);
+  });
+
+  it('should extract images with options via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const images = await scrape(mockPromise).images({ absolute: true });
+    const productImg = images.find(i => i.alt === 'Product Image');
+    expect(productImg?.src).toBe('https://example.com/images/product.jpg');
+  });
+
+  it('should extract meta via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const meta = await scrape(mockPromise).meta();
+    expect(meta.title).toBe('Sample Page');
+    expect(meta.description).toBe('A sample page for testing');
+  });
+
+  it('should extract openGraph via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const og = await scrape(mockPromise).openGraph();
+    expect(og.title).toBe('OG Title');
+    expect(og.type).toBe('website');
+  });
+
+  it('should extract twitterCard via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const twitter = await scrape(mockPromise).twitterCard();
+    expect(twitter.card).toBe('summary_large_image');
+    expect(twitter.site).toBe('@example');
+  });
+
+  it('should extract jsonLd via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const jsonLd = await scrape(mockPromise).jsonLd();
+    expect(jsonLd.length).toBe(2);
+    const product = jsonLd.find(j => j['@type'] === 'Product');
+    expect(product?.name).toBe('Sample Product');
+  });
+
+  it('should extract forms via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const forms = await scrape(mockPromise).forms();
+    expect(forms.length).toBe(1);
+    expect(forms[0].action).toBe('/submit');
+  });
+
+  it('should extract forms with selector via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const forms = await scrape(mockPromise).forms('#contactForm');
+    expect(forms.length).toBe(1);
+  });
+
+  it('should extract tables via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const tables = await scrape(mockPromise).tables();
+    expect(tables.length).toBe(1);
+    expect(tables[0].caption).toBe('Price Table');
+  });
+
+  it('should extract tables with selector via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const tables = await scrape(mockPromise).tables('table');
+    expect(tables.length).toBe(1);
+  });
+
+  it('should extract scripts via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const scripts = await scrape(mockPromise).scripts();
+    expect(scripts.length).toBeGreaterThan(0);
+    const asyncScript = scripts.find(s => s.src === '/js/app.js');
+    expect(asyncScript?.async).toBe(true);
+  });
+
+  it('should extract styles via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const styles = await scrape(mockPromise).styles();
+    expect(styles.length).toBeGreaterThan(0);
+  });
+
+  it('should use declarative extraction via scrape wrapper', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const data = await scrape(mockPromise).extract({
+      title: 'h1',
+      description: '.intro',
+      price: { selector: '.price', transform: (v) => parseFloat(v.replace('$', '')) },
+      links: { selector: 'nav a', attribute: 'href', multiple: true },
+    });
+    expect(data.title).toBe('Main Title');
+    expect(data.description).toBe('Welcome to the sample page.');
+    expect(data.price).toBe(99.99);
+    expect(data.links).toHaveLength(6);
+  });
+
+  it('should resolve as promise with then', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const response = await scrape(mockPromise);
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('scrapeResponse() function', () => {
+  // Create a mock response
+  function createMockResponse(html: string, url = 'https://example.com') {
+    return {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      url,
+      headers: new Headers({ 'content-type': 'text/html' }),
+      text: () => Promise.resolve(html),
+    };
+  }
+
+  it('should scrape response and return ScrapeDocument', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const doc = await scrapeResponse(mockPromise);
+    expect(doc.title()).toBe('Sample Page');
+  });
+
+  it('should use response URL as baseUrl', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml, 'https://custom.example.com'));
+    const doc = await scrapeResponse(mockPromise);
+    expect(doc.baseUrl).toBe('https://custom.example.com');
+  });
+
+  it('should allow custom baseUrl override', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const doc = await scrapeResponse(mockPromise, { baseUrl: 'https://override.example.com' });
+    expect(doc.baseUrl).toBe('https://override.example.com');
+  });
+
+  it('should support all ScrapeDocument methods', async () => {
+    const mockPromise = Promise.resolve(createMockResponse(sampleHtml));
+    const doc = await scrapeResponse(mockPromise);
+
+    expect(doc.select('h1').text()).toBe('Main Title');
+    expect(doc.exists('nav')).toBe(true);
+    expect(doc.count('nav a')).toBe(6);
+    expect(doc.text('.intro')).toBe('Welcome to the sample page.');
+  });
+});
+
+describe('ScrapeDocument additional methods', () => {
+  let doc: ScrapeDocument;
+
+  beforeEach(() => {
+    doc = new ScrapeDocument(sampleHtml, { baseUrl: 'https://example.com' });
+  });
+
+  it('should get innerHtml', () => {
+    const html = doc.innerHtml('.intro');
+    expect(html).toBe('Welcome to the sample page.');
+  });
+
+  it('should get outerHtml', () => {
+    const html = doc.outerHtml('.intro');
+    expect(html).toContain('<p class="intro">');
+    expect(html).toContain('</p>');
+  });
+
+  it('should return null for innerHtml of non-existent element', () => {
+    const html = doc.innerHtml('.nonexistent');
+    expect(html).toBeNull();
+  });
+
+  it('should get root element', () => {
+    const root = doc.root();
+    expect(root.exists()).toBe(true);
+  });
+
+  it('should get raw cheerio instance', () => {
+    const raw = doc.raw;
+    expect(raw).toBeDefined();
+    expect(typeof raw).toBe('function');
+  });
+
+  it('should query as alias for select', () => {
+    const element = doc.query('h1');
+    expect(element.text()).toBe('Main Title');
+  });
+
+  it('should queryAll as alias for selectAll', () => {
+    const elements = doc.queryAll('nav a');
+    expect(elements).toHaveLength(6);
+  });
+
+  it('should selectFirst element', () => {
+    const element = doc.selectFirst('nav a');
+    expect(element.text()).toBe('Home');
+  });
+
+  it('should find elements by text with custom selector', () => {
+    const elements = doc.findByText('Widget', 'td');
+    expect(elements.length).toBeGreaterThan(0);
+  });
+
+  it('should find by exact text with custom selector', () => {
+    const elements = doc.findByExactText('Widget', 'td');
+    expect(elements.length).toBe(1);
+  });
+
+  it('should find by data attribute without value', () => {
+    const elements = doc.findByData('id');
+    expect(elements.length).toBe(1);
+  });
+});
+
+describe('ScrapeElement additional methods', () => {
+  let doc: ScrapeDocument;
+
+  beforeEach(() => {
+    doc = new ScrapeDocument(sampleHtml, { baseUrl: 'https://example.com' });
+  });
+
+  it('should get tagName', () => {
+    const element = doc.select('h1');
+    expect(element.tagName()).toBe('h1');
+  });
+
+  it('should get previous sibling', () => {
+    const p = doc.select('section p');
+    const prev = p.prev('h2');
+    expect(prev.text()).toBe('Section Title');
+  });
+
+  it('should get all siblings', () => {
+    const h2 = doc.select('section h2');
+    const siblings = h2.siblings();
+    expect(siblings.length).toBeGreaterThan(0);
+  });
+
+  it('should find elements within', () => {
+    const article = doc.select('article');
+    const found = article.find('.price');
+    expect(found.text()).toBe('$99.99');
+  });
+
+  it('should get previous sibling without selector', () => {
+    const p = doc.select('section p');
+    const prev = p.prev();
+    expect(prev.tagName()).toBe('h2');
+  });
+
+  it('should get next sibling without selector', () => {
+    const h2 = doc.select('section h2');
+    const next = h2.next();
+    expect(next.tagName()).toBe('p');
+  });
+
+  it('should handle filter with no matches', () => {
+    const links = doc.select('nav a').filter('.nonexistent');
+    expect(links.length).toBe(0);
+  });
+
+  it('should handle not() with empty result', () => {
+    const links = doc.select('nav a').not('a');
+    expect(links.length).toBe(0);
+  });
+
+  it('should get element at negative index (from end)', () => {
+    const links = doc.select('nav a');
+    // eq() with negative does work in cheerio - -1 means last element
+    const result = links.eq(-1);
+    expect(result.exists()).toBe(true);
+    expect(result.text()).toBe('Phone');
+  });
+
+  it('should handle find on non-existent element', () => {
+    const nonExistent = doc.select('.nonexistent');
+    const result = nonExistent.find('a');
+    expect(result.exists()).toBe(false);
   });
 });
