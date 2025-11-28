@@ -72,7 +72,8 @@
     "bench": "tsx benchmark/index.ts",
     "bench:all": "tsx benchmark/run-all.ts",
     "docs:dev": "npx -y docsify-cli serve docs --port 3000",
-    "docs:preview": "npx -y docsify-cli serve docs --port 3000 --open"
+    "docs:preview": "npx -y docsify-cli serve docs --port 3000 --open",
+    "lint": "echo \"No linting configured for this project.\" && exit 0"
   },
   "engines": {
     "node": ">=18"
