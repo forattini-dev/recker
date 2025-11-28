@@ -86,7 +86,7 @@ export function createContract<T extends ContractDefinition>(
 
       } catch (err: any) {
           // 5. Handle Typed Errors
-          if (endpoint.errors && err instanceof HttpError) {
+          if (endpoint.errors && err instanceof HttpError && err.response) {
               const schema = endpoint.errors[err.status];
               if (schema) {
                   // Parse error body against schema
@@ -98,7 +98,7 @@ export function createContract<T extends ContractDefinition>(
                       // If parsing fails, throw original or parse error?
                       // Throw original HttpError if body doesn't match schema?
                       // Or wrap? Let's rethrow original if validation fails implies it's not the expected error format.
-                      throw err; 
+                      throw err;
                   }
               }
           }

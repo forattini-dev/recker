@@ -29,11 +29,27 @@ import type {
   MCPTransportOptions,
 } from './types.js';
 
-export interface MCPClientOptions extends Partial<MCPTransportOptions> {
+export interface MCPClientOptions {
+  endpoint: string;
   clientName?: string;
   clientVersion?: string;
   protocolVersion?: string;
+  headers?: Record<string, string>;
+  timeout?: number;
+  retries?: number;
   debug?: boolean;
+  transport?: any; // Custom transport for testing
+}
+
+interface ResolvedMCPClientOptions {
+  endpoint: string;
+  clientName: string;
+  clientVersion: string;
+  protocolVersion: string;
+  headers: Record<string, string>;
+  timeout: number;
+  retries: number;
+  debug: boolean;
 }
 
 /**
@@ -69,7 +85,7 @@ export class MCPClient extends EventEmitter {
   private initialized = false;
   private sseConnection?: AbortController;
 
-  public readonly options: Required<MCPClientOptions>;
+  public readonly options: ResolvedMCPClientOptions;
 
   constructor(options: MCPClientOptions) {
     super();
@@ -94,7 +110,6 @@ export class MCPClient extends EventEmitter {
         'Content-Type': 'application/json',
         ...this.options.headers,
       },
-      timeout: this.options.timeout,
       retry: {
         maxAttempts: this.options.retries,
         backoff: 'exponential',
