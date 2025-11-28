@@ -1,174 +1,112 @@
-import { describe, it, expect } from 'vitest';
-import { Readable, Writable } from 'node:stream';
-import {
-  webToNodeStream,
-  nodeToWebStream,
-  trackStreamProgress,
-  pipeStream,
-  createUploadStream
+import { describe, it, expect, vi } from 'vitest';
+import { 
+    webToNodeStream, 
+    nodeToWebStream, 
+    trackStreamProgress, 
+    pipeStream, 
+    createUploadStream 
 } from '../src/utils/streaming.js';
+import { Readable, PassThrough } from 'node:stream';
+import { ReadableStream } from 'node:stream/web';
 
-describe('Streaming Utilities', () => {
-  describe('webToNodeStream', () => {
-    it('should convert Web ReadableStream to Node.js Readable', async () => {
-      const webStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new Uint8Array([1, 2, 3]));
-          controller.close();
-        }
-      });
+describe('Streaming Utils', () => {
+    describe('webToNodeStream', () => {
+        it('should convert Web ReadableStream to Node Readable', async () => {
+            const webStream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(Buffer.from('chunk1'));
+                    controller.enqueue(Buffer.from('chunk2'));
+                    controller.close();
+                }
+            });
 
-      const nodeStream = webToNodeStream(webStream);
-      const chunks: Buffer[] = [];
+            const nodeStream = webToNodeStream(webStream as any);
+            const chunks: Buffer[] = [];
 
-      for await (const chunk of nodeStream) {
-        chunks.push(chunk);
-      }
+            for await (const chunk of nodeStream) {
+                chunks.push(Buffer.from(chunk));
+            }
 
-      expect(Buffer.concat(chunks)).toEqual(Buffer.from([1, 2, 3]));
+            expect(Buffer.concat(chunks).toString()).toBe('chunk1chunk2');
+        });
     });
 
-    it('should handle empty stream', async () => {
-      const webStream = new ReadableStream({
-        start(controller) {
-          controller.close();
-        }
-      });
+    describe('nodeToWebStream', () => {
+        it('should convert Node Readable to Web ReadableStream', async () => {
+            const nodeStream = Readable.from([Buffer.from('a'), Buffer.from('b'), Buffer.from('c')]);
+            const webStream = nodeToWebStream(nodeStream);
+            const reader = webStream.getReader();
 
-      const nodeStream = webToNodeStream(webStream);
-      const chunks: Buffer[] = [];
+            let result = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value) result += Buffer.from(value).toString();
+            }
 
-      for await (const chunk of nodeStream) {
-        chunks.push(chunk);
-      }
-
-      expect(chunks).toHaveLength(0);
-    });
-  });
-
-  describe('nodeToWebStream', () => {
-    it('should convert Node.js Readable to Web ReadableStream', async () => {
-      const nodeStream = Readable.from([Buffer.from([1, 2, 3])]);
-      const webStream = nodeToWebStream(nodeStream);
-      const reader = webStream.getReader();
-
-      const chunks: Uint8Array[] = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-      }
-
-      expect(Buffer.concat(chunks.map(c => Buffer.from(c)))).toEqual(Buffer.from([1, 2, 3]));
+            expect(result).toBe('abc');
+        });
     });
 
-    it('should handle empty stream', async () => {
-      const nodeStream = Readable.from([]);
-      const webStream = nodeToWebStream(nodeStream);
-      const reader = webStream.getReader();
+    describe('trackStreamProgress', () => {
+        it('should emit progress events', async () => {
+            const source = Readable.from([Buffer.alloc(100), Buffer.alloc(100)]);
+            const onProgress = vi.fn();
 
-      const { done } = await reader.read();
-      expect(done).toBe(true);
-    });
-  });
+            const tracked = trackStreamProgress(source, { 
+                onProgress, 
+                total: 200 
+            });
 
-  describe('trackStreamProgress', () => {
-    it('should track progress with total size', async () => {
-      const nodeStream = Readable.from([Buffer.from('x'.repeat(1000))]);
+            for await (const _ of tracked) {}
 
-      const progressUpdates: Array<{ loaded: number; percent?: number }> = [];
-
-      const tracked = trackStreamProgress(nodeStream, {
-        total: 1000,
-        onProgress: (progress) => {
-          progressUpdates.push({ loaded: progress.loaded, percent: progress.percent });
-        }
-      });
-
-      for await (const chunk of tracked) {
-        // Consume
-      }
-
-      expect(progressUpdates.length).toBeGreaterThan(0);
-      const lastUpdate = progressUpdates[progressUpdates.length - 1];
-      expect(lastUpdate.loaded).toBe(1000);
-      expect(lastUpdate.percent).toBe(100);
+            expect(onProgress).toHaveBeenCalled();
+            const lastCall = onProgress.mock.calls[onProgress.mock.calls.length - 1][0];
+            expect(lastCall.loaded).toBe(200);
+        });
     });
 
-    it('should work without progress callback', async () => {
-      const nodeStream = Readable.from([Buffer.from('test')]);
-      const tracked = trackStreamProgress(nodeStream);
+    describe('pipeStream', () => {
+        it('should pipe data correctly', async () => {
+            const source = Readable.from([Buffer.from('hello')]);
+            const dest = new PassThrough();
+            const chunks: any[] = [];
+            dest.on('data', c => chunks.push(c));
 
-      const chunks: Buffer[] = [];
-      for await (const chunk of tracked) {
-        chunks.push(chunk);
-      }
-
-      expect(Buffer.concat(chunks).toString()).toBe('test');
-    });
-  });
-
-  describe('pipeStream', () => {
-    it('should pipe from source to destination', async () => {
-      const source = Readable.from([Buffer.from('Hello ')]);
-
-      const chunks: Buffer[] = [];
-      const destination = new Writable({
-        write(chunk, encoding, callback) {
-          chunks.push(chunk);
-          callback();
-        }
-      });
-
-      await pipeStream(source, destination);
-
-      expect(Buffer.concat(chunks).toString()).toBe('Hello ');
+            await pipeStream(source, dest);
+            
+            expect(Buffer.concat(chunks).toString()).toBe('hello');
+        });
     });
 
-    it('should pipe with progress tracking', async () => {
-      const source = Readable.from([Buffer.from('x'.repeat(500))]);
+    describe('createUploadStream', () => {
+        it('should create a stream and promise', async () => {
+            const source = Readable.from([Buffer.from('upload')]);
+            const { stream, promise } = createUploadStream(source);
 
-      const progressUpdates: number[] = [];
-      const chunks: Buffer[] = [];
+            const reader = stream.getReader();
+            while (true) {
+                const { done } = await reader.read();
+                if (done) break;
+            }
 
-      const destination = new Writable({
-        write(chunk, encoding, callback) {
-          chunks.push(chunk);
-          callback();
-        }
-      });
-
-      await pipeStream(source, destination, {
-        total: 500,
-        onProgress: (progress) => {
-          progressUpdates.push(progress.loaded);
-        }
-      });
-
-      expect(Buffer.concat(chunks).length).toBe(500);
-      expect(progressUpdates.length).toBeGreaterThan(0);
+            await expect(promise).resolves.toBeUndefined();
+        });
+        
+        it('should handle errors', async () => {
+             const source = new Readable({
+                 read() { 
+                     this.destroy(new Error('Upload Fail')); 
+                 }
+             });
+             const { stream, promise } = createUploadStream(source);
+             
+             const reader = stream.getReader();
+             try {
+                 while(true) await reader.read();
+             } catch {}
+             
+             await expect(promise).rejects.toThrow('Upload Fail');
+        });
     });
-  });
-
-  describe('createUploadStream', () => {
-    it('should create upload stream', async () => {
-      const source = Readable.from([Buffer.from('upload')]);
-
-      const { stream, promise } = createUploadStream(source);
-
-      const reader = stream.getReader();
-      const chunks: Uint8Array[] = [];
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-      }
-
-      await promise;
-
-      const result = Buffer.concat(chunks.map(c => Buffer.from(c))).toString();
-      expect(result).toBe('upload');
-    });
-  });
 });

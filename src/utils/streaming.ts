@@ -126,7 +126,9 @@ export async function pipeStream(
 export function createUploadStream(source: Readable) {
   const passThrough = new PassThrough();
 
+  // Use pipeline-like error propagation manually or just listen
   source.pipe(passThrough);
+  source.on('error', (err) => passThrough.destroy(err));
 
   return {
     stream: nodeToWebStream(passThrough),

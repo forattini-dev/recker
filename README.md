@@ -40,7 +40,9 @@
 ## 📦 Installation
 
 ```bash
-npm install recker undici zod
+npm install recker
+# or
+pnpm add recker
 ```
 
 ## 🚀 Quick Start
