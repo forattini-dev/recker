@@ -71,14 +71,11 @@ describe('Multi-Domain Parallelism', () => {
     expect(results[0].results).toHaveLength(2);
     expect(results[1].results).toHaveLength(2);
 
-    console.log(`[Multi-Domain Parallelism] 4 requests across 2 batches completed in ${duration}ms`);
-
     // All should be successful with mocks
     const successCount = results.reduce((sum, batch) =>
       sum + batch.results.filter(r => !(r instanceof Error)).length, 0
     );
     const successRate = successCount / 4;
-    console.log(`Success rate: ${(successRate * 100).toFixed(1)}% (${successCount}/4)`);
     expect(successRate).toBe(1); // Expect 100% success with mocks
   });
 
@@ -124,8 +121,6 @@ describe('Multi-Domain Parallelism', () => {
 
     expect(results).toHaveLength(2);
 
-    console.log(`[Global Limit] 4 requests with max=3 completed in ${duration}ms`);
-
     // Should have results from both batches
     const totalResults = results[0].results.length + results[1].results.length;
     expect(totalResults).toBe(4);
@@ -170,9 +165,6 @@ describe('Multi-Domain Parallelism', () => {
     const duration = Date.now() - start;
 
     expect(results).toHaveLength(6);
-
-    console.log(`[Per-Domain Pooling] 6 requests across 3 domains completed in ${duration}ms`);
-    console.log(`Stats:`, stats);
 
     // All should be successful with mocks
     expect(stats.successful).toBe(6);
@@ -225,8 +217,6 @@ describe('Multi-Domain Parallelism', () => {
     const totalRequests = results.reduce((sum, batch) => sum + batch.results.length, 0);
     expect(totalRequests).toBe(6);
 
-    console.log(`[Batch-Only Limit] 6 requests across 2 batches (3 each) completed in ${duration}ms`);
-
     // All should be successful with mocks
     const successCount = results.reduce((sum, batch) => sum + batch.stats.successful, 0);
     expect(successCount).toBe(6);
@@ -272,8 +262,6 @@ describe('Multi-Domain Parallelism', () => {
     // First 2 start at 0ms
     // Next 2 start at 1000ms
     // Last 1 starts at 2000ms
-    console.log(`[Rate Limiting] 5 requests with 2 req/sec limit completed in ${duration}ms`);
-    console.log(`Stats:`, stats);
 
     // All should be successful with mocks
     expect(stats.successful).toBe(5);
@@ -312,8 +300,6 @@ describe('Multi-Domain Parallelism', () => {
     const duration = Date.now() - start;
 
     expect(results).toHaveLength(2);
-
-    console.log(`[Batch Override] 4 requests with different batch concurrency completed in ${duration}ms`);
 
     // All should be successful with mocks
     const successCount = results.reduce((sum, batch) => sum + batch.stats.successful, 0);
@@ -359,9 +345,6 @@ describe('Multi-Domain Parallelism', () => {
     const duration = Date.now() - start;
 
     expect(results).toHaveLength(10);
-
-    console.log(`[Mixed Domains] 10 requests across 5 domains completed in ${duration}ms`);
-    console.log(`Stats:`, stats);
 
     // All should be successful with mocks
     expect(stats.successful).toBe(10);

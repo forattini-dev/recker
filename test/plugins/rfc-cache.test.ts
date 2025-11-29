@@ -90,7 +90,6 @@ describe('RFC-Compliant Cache', () => {
 
       // Second request - should get 304 and return cached
       const response = await client.get('/api/data');
-      console.log('DEBUG: Test received headers:', [...response.headers.entries()]);
 
       // Should return cached data with revalidated status
       expect(response.headers.get('X-Cache')).toBe('revalidated');

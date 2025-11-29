@@ -350,7 +350,6 @@ function createCachedResponse(entry: CacheEntry, cacheStatus: 'hit' | 'stale' | 
   });
 
   const httpResponse = new HttpResponse(response);
-  // console.log('[DEBUG createCachedResponse] Created response with status:', httpResponse.status, 'X-Cache:', httpResponse.headers.get('X-Cache'));
   return httpResponse;
 }
 
@@ -564,17 +563,13 @@ export function cache(options: CacheOptions = {}): Plugin {
       // If no cachedEntry (or not satisfied), or if revalidation is required
       if (cachedEntry) {
         // Need to revalidate - use conditional request
-        console.log('[DEBUG EXTREME] Revalidating. Entry:', !!cachedEntry);
         const conditionalReq = createConditionalRequest(req, cachedEntry);
 
         try {
-          console.log('[DEBUG EXTREME] Calling next(conditionalReq)');
           const response = await next(conditionalReq);
-          console.log('[DEBUG EXTREME] Returned from next. Status:', response.status);
 
           // 304 Not Modified - refresh the cache entry's timestamp
           if (response.status === 304) {
-            console.log('[DEBUG EXTREME] Status is 304. Updating cache.');
             const updatedEntry: CacheEntry = {
               ...cachedEntry,
               timestamp: now,
@@ -589,8 +584,6 @@ export function cache(options: CacheOptions = {}): Plugin {
 
             // Directly return the cached response, preventing it from going to httpErrorMiddleware
             return createCachedResponse(updatedEntry, 'revalidated');
-          } else {
-             console.log('[DEBUG EXTREME] Status is NOT 304. Status:', response.status);
           }
 
           // New response - cache it

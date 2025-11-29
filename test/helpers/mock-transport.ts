@@ -61,23 +61,18 @@ export class MockTransport implements Transport {
       throw new Error(`No mock response configured for ${key}. Request URL: ${req.url}`);
     }
 
-    console.log(`[MockTransport] Dispatching ${key}, count: ${count}. Available responses: ${responses.length}`);
-    responses.forEach((r, i) => console.log(`  [${i}] times: ${r.times}, status: ${r.status}`));
-
     // Find the right response based on call count and times
     let mockResponse: MockResponse | undefined;
     let cumulativeTimes = 0;
 
-    for (const [index, response] of responses.entries()) {
+    for (const [, response] of responses.entries()) {
       if (response.times === undefined) {
-        console.log(`[MockTransport] Selected response ${index} (unlimited)`);
         mockResponse = response;
         break;
       }
 
       cumulativeTimes += response.times;
       if (count <= cumulativeTimes) {
-        console.log(`[MockTransport] Selected response ${index} (count ${count} <= cumulative ${cumulativeTimes})`);
         mockResponse = response;
         break;
       }
