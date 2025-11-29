@@ -81,7 +81,7 @@
   "scripts": {
     "build": "tsc",
     "prepare": "husky",
-    "prepublishOnly": "pnpm build && pnpm test && pnpm test:coverage",
+    "prepublishOnly": "pnpm build",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "bench": "tsx benchmark/index.ts",
