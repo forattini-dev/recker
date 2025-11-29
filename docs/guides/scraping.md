@@ -4,10 +4,19 @@ Recker includes a powerful HTML scraping system built on [Cheerio](https://cheer
 
 ## Installation
 
-Cheerio is an optional peer dependency:
+Cheerio is an **optional peer dependency** that is loaded dynamically only when you use scraping features. This means:
+
+- Recker works without cheerio installed (scraping features will throw a helpful error)
+- No cheerio code is loaded until you actually call a scraping method
+- Bundle size stays minimal for users who don't need scraping
 
 ```bash
 pnpm add cheerio
+```
+
+If you try to use scraping without cheerio installed, you'll get a clear error:
+```
+cheerio is required for scraping but not installed. Install it with: pnpm add cheerio
 ```
 
 ## Basic Usage
@@ -541,6 +550,31 @@ const client = createClient({
   }
 });
 ```
+
+## Direct ScrapeDocument Usage
+
+If you need to parse HTML strings directly without making HTTP requests, use `ScrapeDocument.create()`:
+
+```typescript
+import { ScrapeDocument } from 'recker/scrape';
+
+// Create from HTML string (async factory method)
+const html = '<html><body><h1>Hello World</h1></body></html>';
+const doc = await ScrapeDocument.create(html);
+
+console.log(doc.select('h1').text()); // "Hello World"
+```
+
+You can also use `parseHtml()` from the scrape plugin:
+
+```typescript
+import { parseHtml } from 'recker/plugins/scrape';
+
+const doc = await parseHtml('<html><body><h1>Hello</h1></body></html>');
+console.log(doc.title()); // undefined (no <title> tag)
+```
+
+> **Note:** `ScrapeDocument.create()` is an async factory method because cheerio is loaded dynamically. This keeps the bundle size small for users who don't use scraping features.
 
 ## TypeScript Support
 
