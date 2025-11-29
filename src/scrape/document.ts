@@ -2,10 +2,10 @@
  * ScrapeDocument - Main wrapper for HTML parsing and extraction
  *
  * Provides a rich API for querying, traversing, and extracting data from HTML documents.
+ * Cheerio is a peer dependency - install it with: pnpm add cheerio
  */
 
-import { load, type CheerioAPI } from 'cheerio';
-import type { Cheerio } from 'cheerio';
+import type { CheerioAPI, Cheerio } from 'cheerio';
 import type { Element } from 'domhandler';
 import { ScrapeElement } from './element.js';
 import {
@@ -38,13 +38,48 @@ import type {
   ImageExtractionOptions,
 } from './types.js';
 
+// Cached cheerio load function
+let cheerioLoad: ((html: string) => CheerioAPI) | null = null;
+
+/**
+ * Dynamically load cheerio
+ * @throws Error if cheerio is not installed
+ */
+async function loadCheerio(): Promise<(html: string) => CheerioAPI> {
+  if (cheerioLoad) {
+    return cheerioLoad;
+  }
+
+  try {
+    const cheerio = await import('cheerio');
+    cheerioLoad = cheerio.load;
+    return cheerioLoad;
+  } catch {
+    throw new Error(
+      'cheerio is required for scraping but not installed. Install it with: pnpm add cheerio'
+    );
+  }
+}
+
 export class ScrapeDocument {
   private $: CheerioAPI;
   private options: ScrapeOptions;
 
-  constructor(html: string, options?: ScrapeOptions) {
-    this.$ = load(html);
+  /**
+   * @internal Use ScrapeDocument.create() instead
+   */
+  constructor($: CheerioAPI, options?: ScrapeOptions) {
+    this.$ = $;
     this.options = options || {};
+  }
+
+  /**
+   * Create a new ScrapeDocument from HTML string
+   * Dynamically loads cheerio as a peer dependency
+   */
+  static async create(html: string, options?: ScrapeOptions): Promise<ScrapeDocument> {
+    const load = await loadCheerio();
+    return new ScrapeDocument(load(html), options);
   }
 
   // === Query Methods ===

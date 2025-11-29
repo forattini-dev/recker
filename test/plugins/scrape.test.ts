@@ -139,8 +139,8 @@ const sampleHtml = `
 describe('ScrapeElement', () => {
   let doc: ScrapeDocument;
 
-  beforeEach(() => {
-    doc = new ScrapeDocument(sampleHtml, { baseUrl: 'https://example.com' });
+  beforeEach(async () => {
+    doc = await ScrapeDocument.create(sampleHtml, { baseUrl: 'https://example.com' });
   });
 
   describe('traversal methods', () => {
@@ -315,8 +315,8 @@ describe('ScrapeElement', () => {
 describe('ScrapeDocument', () => {
   let doc: ScrapeDocument;
 
-  beforeEach(() => {
-    doc = new ScrapeDocument(sampleHtml, { baseUrl: 'https://example.com' });
+  beforeEach(async () => {
+    doc = await ScrapeDocument.create(sampleHtml, { baseUrl: 'https://example.com' });
   });
 
   describe('query methods', () => {
@@ -734,8 +734,8 @@ describe('client.scrape() method', () => {
 describe('ScrapeDocument built-in extractors', () => {
   let doc: ScrapeDocument;
 
-  beforeEach(() => {
-    doc = new ScrapeDocument(sampleHtml, { baseUrl: 'https://example.com' });
+  beforeEach(async () => {
+    doc = await ScrapeDocument.create(sampleHtml, { baseUrl: 'https://example.com' });
   });
 
   it('should extract links via document method', () => {
@@ -994,8 +994,8 @@ describe('scrapeResponse() function', () => {
 describe('ScrapeDocument additional methods', () => {
   let doc: ScrapeDocument;
 
-  beforeEach(() => {
-    doc = new ScrapeDocument(sampleHtml, { baseUrl: 'https://example.com' });
+  beforeEach(async () => {
+    doc = await ScrapeDocument.create(sampleHtml, { baseUrl: 'https://example.com' });
   });
 
   it('should get innerHtml', () => {
@@ -1059,8 +1059,8 @@ describe('ScrapeDocument additional methods', () => {
 describe('ScrapeElement additional methods', () => {
   let doc: ScrapeDocument;
 
-  beforeEach(() => {
-    doc = new ScrapeDocument(sampleHtml, { baseUrl: 'https://example.com' });
+  beforeEach(async () => {
+    doc = await ScrapeDocument.create(sampleHtml, { baseUrl: 'https://example.com' });
   });
 
   it('should get tagName', () => {

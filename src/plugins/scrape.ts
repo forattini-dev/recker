@@ -43,16 +43,10 @@ import type {
 // Lazy import ScrapeDocument to avoid loading cheerio unless needed
 let ScrapeDocumentClass: typeof import('../scrape/document.js').ScrapeDocument | null = null;
 
-async function getScrapeDocument() {
+async function getScrapeDocumentClass() {
   if (!ScrapeDocumentClass) {
-    try {
-      const module = await import('../scrape/document.js');
-      ScrapeDocumentClass = module.ScrapeDocument;
-    } catch (error) {
-      throw new Error(
-        'Failed to load scrape module. Make sure cheerio is installed: pnpm add cheerio'
-      );
-    }
+    const module = await import('../scrape/document.js');
+    ScrapeDocumentClass = module.ScrapeDocument;
   }
   return ScrapeDocumentClass;
 }
@@ -155,10 +149,10 @@ export function scrape<T extends ReckerResponse>(
 
   // Helper to get document
   const getDocument = async (options?: ScrapeOptions) => {
-    const ScrapeDoc = await getScrapeDocument();
+    const ScrapeDoc = await getScrapeDocumentClass();
     const response = await basePromise;
     const html = await response.text();
-    return new ScrapeDoc(html, {
+    return ScrapeDoc.create(html, {
       baseUrl: options?.baseUrl || response.url,
       ...options,
     });
@@ -245,8 +239,8 @@ export async function parseHtml(
   html: string,
   options?: ScrapeOptions
 ): Promise<import('../scrape/document.js').ScrapeDocument> {
-  const ScrapeDoc = await getScrapeDocument();
-  return new ScrapeDoc(html, options);
+  const ScrapeDoc = await getScrapeDocumentClass();
+  return ScrapeDoc.create(html, options);
 }
 
 /**
@@ -264,10 +258,10 @@ export async function scrapeResponse(
   promise: Promise<ReckerResponse>,
   options?: ScrapeOptions
 ): Promise<import('../scrape/document.js').ScrapeDocument> {
-  const ScrapeDoc = await getScrapeDocument();
+  const ScrapeDoc = await getScrapeDocumentClass();
   const response = await promise;
   const html = await response.text();
-  return new ScrapeDoc(html, {
+  return ScrapeDoc.create(html, {
     baseUrl: options?.baseUrl || response.url,
     ...options,
   });
