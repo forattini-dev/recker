@@ -746,15 +746,18 @@ export class RekShell {
 
   // === Web Scraping Methods ===
 
-  private async runScrap(url: string) {
+  private async runScrap(url?: string) {
+    // If no URL provided, use baseUrl
     if (!url) {
-      console.log(pc.yellow('Usage: scrap <url>'));
-      console.log(pc.gray('  Examples: scrap https://news.ycombinator.com'));
-      return;
-    }
-
-    // Build full URL
-    if (!url.startsWith('http')) {
+      if (!this.baseUrl) {
+        console.log(pc.yellow('Usage: scrap <url>'));
+        console.log(pc.gray('  Examples: scrap https://news.ycombinator.com'));
+        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
+      url = this.baseUrl;
+    } else if (!url.startsWith('http')) {
+      // Build full URL from relative path
       url = this.baseUrl ? `${this.baseUrl}${url.startsWith('/') ? '' : '/'}${url}` : `https://${url}`;
     }
 
