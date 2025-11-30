@@ -402,6 +402,67 @@ ${pc.bold(pc.yellow('Examples:'))}
         await startLoadDashboard({ url, users, duration, mode, http2, rampUp });
     });
 
+  // MCP Server command
+  program
+    .command('mcp')
+    .description('Start MCP server for AI agents to access Recker documentation')
+    .option('-p, --port <number>', 'Server port', '3100')
+    .option('-d, --docs <path>', 'Path to documentation folder')
+    .option('--debug', 'Enable debug logging')
+    .addHelpText('after', `
+${pc.bold(pc.yellow('Usage:'))}
+  ${pc.green('$ rek mcp')}                    ${pc.gray('Start server on port 3100')}
+  ${pc.green('$ rek mcp -p 8080')}            ${pc.gray('Start on custom port')}
+  ${pc.green('$ rek mcp --debug')}            ${pc.gray('Enable debug logging')}
+
+${pc.bold(pc.yellow('Tools provided:'))}
+  ${pc.cyan('search_docs')}  Search documentation by keyword
+  ${pc.cyan('get_doc')}      Get full content of a doc file
+
+${pc.bold(pc.yellow('Claude Code config (~/.claude.json):'))}
+  ${pc.gray(`{
+    "mcpServers": {
+      "recker-docs": {
+        "command": "npx",
+        "args": ["recker", "mcp"]
+      }
+    }
+  }`)}
+`)
+    .action(async (options: { port: string; docs?: string; debug?: boolean }) => {
+      const { MCPServer } = await import('../mcp/server.js');
+
+      const server = new MCPServer({
+        port: parseInt(options.port),
+        docsPath: options.docs,
+        debug: options.debug,
+      });
+
+      await server.start();
+
+      console.log(pc.green(`
+┌─────────────────────────────────────────────┐
+│  ${pc.bold('Recker MCP Server')}                         │
+├─────────────────────────────────────────────┤
+│  Endpoint: ${pc.cyan(`http://localhost:${options.port}`)}         │
+│  Docs indexed: ${pc.yellow(String(server.getDocsCount()).padEnd(28))}│
+│                                             │
+│  Tools:                                     │
+│    • ${pc.cyan('search_docs')} - Search documentation     │
+│    • ${pc.cyan('get_doc')}     - Get full doc content     │
+│                                             │
+│  Press ${pc.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      // Keep alive
+      process.on('SIGINT', async () => {
+        console.log(pc.yellow('\nShutting down MCP server...'));
+        await server.stop();
+        process.exit(0);
+      });
+    });
+
   program.parse();
 }
 
