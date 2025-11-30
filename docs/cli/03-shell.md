@@ -5,10 +5,16 @@ The Rek Shell is a REPL (Read-Eval-Print-Loop) environment for API development. 
 ## Starting the Shell
 
 ```bash
+# If installed globally
 rek shell
-# or
+
+# Without installation (always use @latest)
+npx recker@latest shell
+```
+
+Alternative aliases:
+```bash
 rek interactive
-# or
 rek repl
 ```
 

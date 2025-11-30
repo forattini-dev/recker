@@ -16,7 +16,26 @@ The `rek` CLI is not just an alternative to cURL. It's a **complete API Workstat
 | AI Chat | No | OpenAI/Anthropic integration |
 | WebSocket | Requires `wscat` | Native support |
 
+## Quick Start (No Install)
+
+Run directly with `npx` - always use `@latest` to get the newest version:
+
+```bash
+# Interactive shell
+npx recker@latest shell
+
+# Simple GET request
+npx recker@latest httpbin.org/json
+
+# POST with JSON
+npx recker@latest httpbin.org/post name="Cyber" role="Admin"
+```
+
+> **Tip:** Always use `npx recker@latest` to avoid cached old versions.
+
 ## Installation
+
+For frequent use, install globally:
 
 ```bash
 # npm
