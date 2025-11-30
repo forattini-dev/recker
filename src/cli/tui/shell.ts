@@ -1,5 +1,7 @@
 import readline from 'node:readline';
 import { promises as dns } from 'node:dns';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
 import { requireOptional } from '../../utils/optional-require.js';
 import { createClient } from '../../core/client.js';
 import { startInteractiveWebSocket } from './websocket.js';
@@ -38,6 +40,8 @@ export class RekShell {
   private baseUrl: string = '';
   private lastResponse: any = null;
   private variables: Record<string, any> = {};
+  private envVars: Record<string, string> = {};
+  private envLoaded: boolean = false;
   private initialized = false;
   private currentDoc: ScrapeDocument | null = null;
   private currentDocUrl: string = '';
@@ -105,7 +109,7 @@ export class RekShell {
       'ws', 'udp', 'load', 'chat', 'ai',
       'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
       'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
-      'help', 'clear', 'exit', 'set', 'url', 'vars'
+      'help', 'clear', 'exit', 'set', 'url', 'vars', 'env'
     ];
 
     const hits = commands.filter((c) => c.startsWith(line));
@@ -176,7 +180,10 @@ export class RekShell {
         this.setVariable(parts.slice(1));
         return;
       case 'vars':
-        console.log(this.variables);
+        this.showVars();
+        return;
+      case 'env':
+        await this.loadEnvFile(parts[1]);
         return;
       case 'load':
         await this.runLoadTest(parts.slice(1));
@@ -422,6 +429,87 @@ export class RekShell {
     console.log(colors.gray(`Variable $${key} set.`));
   }
 
+  private showVars() {
+    const hasVars = Object.keys(this.variables).length > 0;
+    const hasEnvVars = Object.keys(this.envVars).length > 0;
+
+    if (!hasVars && !hasEnvVars) {
+      console.log(colors.gray('No variables set.'));
+      console.log(colors.gray('Use "set key=value" to set variables or "env" to load .env file.'));
+      return;
+    }
+
+    if (hasVars) {
+      console.log(colors.bold(colors.yellow('\nSession Variables:')));
+      for (const [key, value] of Object.entries(this.variables)) {
+        console.log(`  ${colors.cyan('$' + key)} = ${colors.green(String(value))}`);
+      }
+    }
+
+    if (hasEnvVars) {
+      console.log(colors.bold(colors.yellow('\nEnvironment Variables (.env):')));
+      for (const [key, value] of Object.entries(this.envVars)) {
+        // Mask sensitive values
+        const displayValue = key.toLowerCase().includes('key') ||
+                           key.toLowerCase().includes('secret') ||
+                           key.toLowerCase().includes('password') ||
+                           key.toLowerCase().includes('token')
+          ? colors.gray('***' + value.slice(-4))
+          : colors.green(value);
+        console.log(`  ${colors.cyan('$' + key)} = ${displayValue}`);
+      }
+    }
+    console.log('');
+  }
+
+  /**
+   * Load environment variables from a .env file
+   */
+  async loadEnvFile(filePath?: string) {
+    const envPath = filePath || join(process.cwd(), '.env');
+
+    try {
+      const content = await fs.readFile(envPath, 'utf-8');
+      const lines = content.split('\n');
+      let count = 0;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        // Skip empty lines and comments
+        if (!trimmed || trimmed.startsWith('#')) continue;
+
+        // Parse KEY=value format
+        const match = trimmed.match(/^([^=]+)=(.*)$/);
+        if (match) {
+          const [, key, value] = match;
+          const cleanKey = key.trim();
+          // Remove surrounding quotes from value
+          let cleanValue = value.trim();
+          if ((cleanValue.startsWith('"') && cleanValue.endsWith('"')) ||
+              (cleanValue.startsWith("'") && cleanValue.endsWith("'"))) {
+            cleanValue = cleanValue.slice(1, -1);
+          }
+
+          this.envVars[cleanKey] = cleanValue;
+          // Also set in process.env
+          process.env[cleanKey] = cleanValue;
+          count++;
+        }
+      }
+
+      this.envLoaded = true;
+      console.log(colors.green(`✓ Loaded ${count} variables from ${colors.cyan(envPath)}`));
+      console.log(colors.gray('Use "vars" to list all variables.'));
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        console.log(colors.yellow(`No .env file found at ${envPath}`));
+        console.log(colors.gray('Create a .env file with KEY=value pairs to use this feature.'));
+      } else {
+        console.log(colors.red(`Error loading .env: ${error.message}`));
+      }
+    }
+  }
+
   private resolveVariables(value: string): string {
     if (value.startsWith('$')) {
       const key = value.slice(1); // remove $
@@ -437,7 +525,8 @@ export class RekShell {
         return String(current);
       }
 
-      return this.variables[key] || value;
+      // Check session variables first, then env vars, then process.env
+      return this.variables[key] || this.envVars[key] || process.env[key] || value;
     }
     return value;
   }
@@ -1881,7 +1970,8 @@ export class RekShell {
   ${colors.bold('Core Commands:')}
     ${colors.green('url <url>')}           Set persistent Base URL.
     ${colors.green('set <key>=<val>')}     Set a session variable.
-    ${colors.green('vars')}                List all session variables.
+    ${colors.green('vars')}                List all session and env variables.
+    ${colors.green('env [path]')}          Load .env file (default: ./.env).
     ${colors.green('clear')}               Clear the screen.
     ${colors.green('exit')}                Exit the console.
 
