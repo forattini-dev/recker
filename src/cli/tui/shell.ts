@@ -101,10 +101,10 @@ export class RekShell {
       this.prompt();
     });
 
-    // Prevent Ctrl+C from closing the shell
+    // Ctrl+C exits the shell
     this.rl.on('SIGINT', () => {
-      readline.clearLine(process.stdout, 0);
-      this.prompt();
+      console.log('');
+      this.rl.close();
     });
 
     this.rl.on('close', () => {
