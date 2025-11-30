@@ -7,16 +7,13 @@ import { whois, isDomainAvailable } from '../../utils/whois.js';
 import { inspectTLS } from '../../utils/tls-inspector.js';
 import { getSecurityRecords } from '../../utils/dns-toolkit.js';
 import { rdap } from '../../utils/rdap.js';
-import type { ScrapeDocument } from '../../scrape/document.js';
+import { ScrapeDocument } from '../../scrape/document.js';
 import colors from '../../utils/colors.js';
 
-// Lazy-loaded optional dependencies
+// Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
-let cheerioAvailable = false;
-let ScrapeDocumentClass: typeof import('../../scrape/document.js').ScrapeDocument | null = null;
 
 async function initDependencies() {
-  // Check for cardinal (syntax highlighting)
   if (!highlight) {
     try {
       const cardinal = await requireOptional<{ highlight: typeof highlight }>('cardinal', 'recker/cli');
@@ -24,19 +21,6 @@ async function initDependencies() {
     } catch {
       // Fallback: no syntax highlighting if cardinal not installed
       highlight = (code: string) => code;
-    }
-  }
-
-  // Check for cheerio (web scraping)
-  if (!ScrapeDocumentClass) {
-    try {
-      // Try to import cheerio to check if it's available
-      await import('cheerio');
-      const scrapeModule = await import('../../scrape/document.js');
-      ScrapeDocumentClass = scrapeModule.ScrapeDocument;
-      cheerioAvailable = true;
-    } catch {
-      cheerioAvailable = false;
     }
   }
 }
@@ -57,9 +41,6 @@ export class RekShell {
   private initialized = false;
   private currentDoc: ScrapeDocument | null = null;
   private currentDocUrl: string = '';
-
-  /** Commands that require cheerio */
-  private static readonly SCRAP_COMMANDS = ['scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$table'];
 
   constructor() {
     // We initialize with a placeholder base URL because the Client enforces it.
@@ -119,17 +100,13 @@ export class RekShell {
   }
 
   private completer(line: string) {
-    let commands = [
+    const commands = [
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
       'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
+      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$table',
       'help', 'clear', 'exit', 'set', 'url', 'vars'
     ];
-
-    // Only show scrap commands if cheerio is available
-    if (cheerioAvailable) {
-      commands = commands.concat(RekShell.SCRAP_COMMANDS);
-    }
 
     const hits = commands.filter((c) => c.startsWith(line));
     return [hits.length ? hits : commands, line];
@@ -879,15 +856,6 @@ export class RekShell {
   // === Web Scraping Methods ===
 
   private async runScrap(url?: string) {
-    // Check if cheerio is available
-    if (!cheerioAvailable || !ScrapeDocumentClass) {
-      console.log(colors.yellow('Web scraping requires cheerio to be installed.'));
-      console.log(colors.gray('  Install it with: pnpm add cheerio'));
-      console.log(colors.gray('  Then restart the shell.'));
-      console.log('');
-      return;
-    }
-
     // If no URL provided, use baseUrl
     if (!url) {
       if (!this.baseUrl) {
@@ -910,7 +878,7 @@ export class RekShell {
       const html = await response.text();
       const duration = Math.round(performance.now() - startTime);
 
-      this.currentDoc = await ScrapeDocumentClass.create(html);
+      this.currentDoc = await ScrapeDocument.create(html);
       this.currentDocUrl = url;
 
       const elementCount = this.currentDoc.select('*').length;
@@ -1170,21 +1138,6 @@ export class RekShell {
   }
 
   private printHelp() {
-    const scrapingSection = cheerioAvailable ? `
-  ${colors.bold('Web Scraping:')}
-    ${colors.green('scrap <url>')}         Fetch and parse HTML document.
-    ${colors.green('$ <selector>')}        Query elements (CSS selector).
-    ${colors.green('$text <selector>')}    Extract text content.
-    ${colors.green('$attr <name> <sel>')}  Extract attribute values.
-    ${colors.green('$html <selector>')}    Get inner HTML.
-    ${colors.green('$links [selector]')}   List all links.
-    ${colors.green('$images [selector]')}  List all images.
-    ${colors.green('$table <selector>')}   Extract table as data.
-` : `
-  ${colors.gray('Web Scraping:')} ${colors.yellow('(disabled - install cheerio to enable)')}
-    ${colors.gray('pnpm add cheerio')}
-`;
-
     console.log(`
   ${colors.bold(colors.cyan('Rek Console Help'))}
 
@@ -1222,7 +1175,17 @@ export class RekShell {
     ${colors.green('dns <domain>')}        Full DNS lookup (A, AAAA, MX, NS, SPF, DMARC).
     ${colors.green('rdap <domain>')}       RDAP lookup (modern WHOIS).
     ${colors.green('ping <host>')}         Quick TCP connectivity check.
-${scrapingSection}
+
+  ${colors.bold('Web Scraping:')}
+    ${colors.green('scrap <url>')}         Fetch and parse HTML document.
+    ${colors.green('$ <selector>')}        Query elements (CSS selector).
+    ${colors.green('$text <selector>')}    Extract text content.
+    ${colors.green('$attr <name> <sel>')}  Extract attribute values.
+    ${colors.green('$html <selector>')}    Get inner HTML.
+    ${colors.green('$links [selector]')}   List all links.
+    ${colors.green('$images [selector]')}  List all images.
+    ${colors.green('$table <selector>')}   Extract table as data.
+
   ${colors.bold('Examples:')}
     › url httpbin.org
     › get /json
