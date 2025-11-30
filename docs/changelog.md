@@ -6,6 +6,25 @@ All notable changes are tracked here.
 
 ### ✨ Added
 
+#### CLI Stdin Pipe Support
+- Pipe request body from stdin: `cat body.json | rek POST api.com/users`
+- Auto-detect JSON vs plain text content type
+- Works with echo, curl, and file piping
+
+#### CLI Environment Variables
+- `-e, --env [path]` flag to load `.env` files
+- Shell `env` command for interactive sessions
+- Variables available in headers and URLs via `$VAR_NAME`
+- Sensitive values (key, secret, token, password) masked in `vars` output
+
+#### Shell Source Code Analysis Tools
+- `$sourcemaps` - Find sourcemap URLs in scraped pages
+- `$unmap <url>` - Download and parse sourcemaps
+- `$unmap:view <n>` - View original source file by index
+- `$unmap:save [dir]` - Save all original sources to disk
+- `$beautify <url>` - Format minified JS/CSS code
+- `$beautify:save [file]` - Save beautified code
+
 #### Complete HTTP Methods Support (19 methods)
 - **Standard Methods**: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
 - **Diagnostic Methods**: TRACE, CONNECT
