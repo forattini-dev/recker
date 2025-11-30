@@ -58,10 +58,12 @@ export class Client {
   private maxResponseSize?: number;
   private cookieJar?: CookieJar;
   private cookieIgnoreInvalid: boolean = false;
+  private defaultTimeout?: number | import('../types/index.js').TimeoutOptions;
   
   constructor(options: ExtendedClientOptions = {}) {
     this.baseUrl = options.baseUrl || '';
     this.middlewares = options.middlewares || [];
+    this.defaultTimeout = options.timeout;
     this.hooks = {
       beforeRequest: options.hooks?.beforeRequest || [],
       afterResponse: options.hooks?.afterResponse || [],
@@ -606,7 +608,7 @@ export class Client {
     }
 
     // Optimized: Lazy AbortController - only create when needed
-    const needsController = options.timeout || options.signal;
+    const needsController = options.timeout || options.signal || this.defaultTimeout;
     let controller: AbortController | undefined;
     let signal: AbortSignal | undefined = options.signal;
     let timeoutId: NodeJS.Timeout | undefined;
@@ -628,7 +630,7 @@ export class Client {
       }
 
       // Handle per-phase or total timeout
-      const timeout = options.timeout;
+      const timeout = options.timeout ?? this.defaultTimeout;
       if (timeout) {
         const totalTimeout = typeof timeout === 'number' ? timeout : timeout.request;
         if (totalTimeout) {

@@ -228,9 +228,9 @@ describe('Presets', () => {
       const config = azureOpenai({
         resourceName: 'my-resource',
         apiKey: 'azure_key_123',
-        deploymentName: 'gpt-4'
+        deploymentName: 'gpt-5-1'
       });
-      expect(config.baseUrl).toBe('https://my-resource.openai.azure.com/openai/deployments/gpt-4');
+      expect(config.baseUrl).toBe('https://my-resource.openai.azure.com/openai/deployments/gpt-5-1');
     });
 
     it('should use custom API version', () => {

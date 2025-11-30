@@ -48,3 +48,14 @@ export type {
   MockResponseOptions,
   MockInterceptOptions,
 } from './mock.js';
+
+// UDP Testing
+export {
+  MockUDPServer,
+  createMockUDPServer,
+} from './mock-udp-server.js';
+
+export type {
+  MockUDPServerOptions,
+  ReceivedMessage,
+} from './mock-udp-server.js';

@@ -33,7 +33,7 @@
  * ```
  */
 
-import { z, ZodSchema } from 'zod';
+import type { z, ZodSchema } from 'zod';
 import type { MCPClient } from './client.js';
 import type { MCPToolResult } from './types.js';
 import type { Client } from '../core/client.js';
@@ -426,8 +426,7 @@ export interface SSEStreamFunction {
  * const openai = createMCPSSEStream(client, '/v1/completions', {
  *   inputParam: 'prompt',
  *   eventType: ['delta', 'message'],
- *   extraParams: { model: 'gpt-4', stream: true }
- * });
+    *   extraParams: { model: 'gpt-5.1', stream: true } * });
  * ```
  */
 export function createMCPSSEStream(
@@ -635,9 +634,8 @@ export function createValidatedSSEStream<T extends ZodSchema>(
  * @example
  * ```typescript
  * const openai = createMCPSSEStream(client, '/v1/chat/completions', {
- *   extractData: openAIExtractor,
- *   extraParams: { model: 'gpt-4', stream: true }
- * });
+    *   extractData: openAIExtractor,
+    *   extraParams: { model: 'gpt-5.1', stream: true } * });
  * ```
  */
 export function openAIExtractor(event: SSEEvent): string | null {
@@ -672,7 +670,7 @@ export function openAIExtractor(event: SSEEvent): string | null {
  * const claude = createMCPSSEStream(client, '/v1/messages', {
  *   extractData: anthropicExtractor,
  *   eventType: ['content_block_delta', 'message_delta'],
- *   extraParams: { model: 'claude-3-opus', stream: true }
+ *   extraParams: { model: 'claude-opus-4-5', stream: true }
  * });
  * ```
  */
