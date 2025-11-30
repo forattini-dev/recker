@@ -71,6 +71,16 @@ export class RekShell {
     return `${base} ${pc.magenta('›')} `;
   }
 
+  /** Extract domain/hostname from baseUrl */
+  private getBaseDomain(): string | null {
+    if (!this.baseUrl) return null;
+    try {
+      return new URL(this.baseUrl).hostname;
+    } catch {
+      return null;
+    }
+  }
+
   private completer(line: string) {
     const commands = [
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
@@ -295,7 +305,7 @@ export class RekShell {
     let targetUrl = '';
     let users = 50;
     let duration = 300;
-    let mode: any = 'throughput';
+    let mode: any = 'realistic';
     let http2 = false;
     let rampUp = 5; // Default to 5 seconds for rampUp
 
@@ -477,11 +487,15 @@ export class RekShell {
     console.log(''); // Spacer
   }
 
-  private async runWhois(domain: string) {
+  private async runWhois(domain?: string) {
     if (!domain) {
-      console.log(pc.yellow('Usage: whois <domain>'));
-      console.log(pc.gray('  Examples: whois google.com | whois 8.8.8.8'));
-      return;
+      domain = this.getBaseDomain() || '';
+      if (!domain) {
+        console.log(pc.yellow('Usage: whois <domain>'));
+        console.log(pc.gray('  Examples: whois google.com | whois 8.8.8.8'));
+        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
     }
 
     console.log(pc.gray(`Looking up ${domain}...`));
@@ -523,15 +537,19 @@ export class RekShell {
     console.log('');
   }
 
-  private async runTLS(host: string, port: number = 443) {
+  private async runTLS(host?: string, port: number = 443) {
     if (!host) {
-      console.log(pc.yellow('Usage: tls <host> [port]'));
-      console.log(pc.gray('  Examples: tls google.com | tls api.stripe.com 443'));
-      return;
+      host = this.getBaseDomain() || '';
+      if (!host) {
+        console.log(pc.yellow('Usage: tls <host> [port]'));
+        console.log(pc.gray('  Examples: tls google.com | tls api.stripe.com 443'));
+        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
+    } else {
+      // Strip protocol if present
+      host = host.replace(/^https?:\/\//, '').split('/')[0];
     }
-
-    // Strip protocol if present
-    host = host.replace(/^https?:\/\//, '').split('/')[0];
 
     console.log(pc.gray(`Inspecting TLS for ${host}:${port}...`));
     const startTime = performance.now();
@@ -578,11 +596,15 @@ export class RekShell {
     console.log('');
   }
 
-  private async runDNS(domain: string) {
+  private async runDNS(domain?: string) {
     if (!domain) {
-      console.log(pc.yellow('Usage: dns <domain>'));
-      console.log(pc.gray('  Examples: dns google.com | dns github.com'));
-      return;
+      domain = this.getBaseDomain() || '';
+      if (!domain) {
+        console.log(pc.yellow('Usage: dns <domain>'));
+        console.log(pc.gray('  Examples: dns google.com | dns github.com'));
+        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
     }
 
     console.log(pc.gray(`Resolving DNS for ${domain}...`));
@@ -649,11 +671,15 @@ export class RekShell {
     console.log('');
   }
 
-  private async runRDAP(domain: string) {
+  private async runRDAP(domain?: string) {
     if (!domain) {
-      console.log(pc.yellow('Usage: rdap <domain>'));
-      console.log(pc.gray('  Examples: rdap google.com | rdap 8.8.8.8'));
-      return;
+      domain = this.getBaseDomain() || '';
+      if (!domain) {
+        console.log(pc.yellow('Usage: rdap <domain>'));
+        console.log(pc.gray('  Examples: rdap google.com | rdap 8.8.8.8'));
+        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
     }
 
     console.log(pc.gray(`RDAP lookup for ${domain}...`));
@@ -708,14 +734,18 @@ export class RekShell {
     console.log('');
   }
 
-  private async runPing(host: string) {
+  private async runPing(host?: string) {
     if (!host) {
-      console.log(pc.yellow('Usage: ping <host>'));
-      return;
+      host = this.getBaseDomain() || '';
+      if (!host) {
+        console.log(pc.yellow('Usage: ping <host>'));
+        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
+    } else {
+      // Strip protocol if present
+      host = host.replace(/^https?:\/\//, '').split('/')[0];
     }
-
-    // Strip protocol if present
-    host = host.replace(/^https?:\/\//, '').split('/')[0];
 
     console.log(pc.gray(`Pinging ${host}...`));
 
@@ -1050,7 +1080,7 @@ export class RekShell {
                              ${pc.white('users=50')}      ${pc.gray('Concurrent users')}
                              ${pc.white('duration=300')}  ${pc.gray('Duration in seconds')}
                              ${pc.white('ramp=5')}        ${pc.gray('Ramp-up time in seconds')}
-                             ${pc.white('mode=throughput')}${pc.gray('throughput | stress | realistic')}
+                             ${pc.white('mode=realistic')} ${pc.gray('realistic | throughput | stress')}
                              ${pc.white('http2=false')}   ${pc.gray('Force HTTP/2')}
 
     ${pc.green('chat <provider>')}     Start AI Chat.
