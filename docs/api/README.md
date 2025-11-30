@@ -1064,10 +1064,10 @@ const user = await contractClient.get('/users/123');
 
 ## See Also
 
-- [Client Configuration Guide](../guides/client-config.md)
-- [Plugins Guide](../guides/plugins.md)
-- [Batch Requests Guide](../guides/performance/batch-requests.md)
-- [Header Parsing Guide](../guides/header-parsing.md)
-- [WebSocket Guide](../guides/websocket.md)
-- [WHOIS Guide](../guides/whois.md)
-- [DNS Guide](../guides/dns.md)
+- [Client Configuration Guide](../http/05-configuration.md)
+- [Plugins Guide](../http/10-plugins.md)
+- [Concurrency & Batch Requests](../http/08-concurrency.md)
+- [Responses & Headers](../http/03-responses.md)
+- [WebSocket Guide](../protocols/01-websocket.md)
+- [WHOIS Guide](../protocols/05-whois-rdap.md)
+- [DNS Guide](../protocols/04-dns.md)

@@ -2,6 +2,76 @@
 
 Learn how to handle responses, streaming, downloads, and uploads.
 
+## Response Object
+
+Every request returns a `ReckerResponse` object with the following shape:
+
+```typescript
+interface ReckerResponse<T = unknown> {
+  // HTTP status
+  status: number;           // 200, 404, 500, etc.
+  statusText: string;       // "OK", "Not Found", etc.
+  ok: boolean;              // true if status is 2xx
+  url: string;              // Final URL (after redirects)
+  headers: Headers;         // Response headers
+
+  // Performance metrics
+  timings?: {
+    queuing?: number;       // Time waiting in queue (ms)
+    dns?: number;           // DNS lookup time (ms)
+    tcp?: number;           // TCP connection time (ms)
+    tls?: number;           // TLS handshake time (ms)
+    firstByte?: number;     // Time To First Byte (ms)
+    content?: number;       // Content download time (ms)
+    total?: number;         // Total request time (ms)
+  };
+
+  // Connection info
+  connection?: {
+    protocol?: string;      // "h2", "HTTP/1.1", "h3"
+    cipher?: string;        // TLS cipher suite
+    remoteAddress?: string; // Server IP address
+    remotePort?: number;    // Server port
+    reused?: boolean;       // Connection reuse
+    rtt?: number;           // Round-trip time (ms)
+  };
+
+  // Data access methods
+  json<R = T>(): Promise<R>;           // Parse as JSON
+  text(): Promise<string>;             // Get as text
+  cleanText(): Promise<string>;        // HTML → clean text (for AI)
+  blob(): Promise<Blob>;               // Get as Blob
+  buffer(): Promise<Buffer>;           // Get as Node.js Buffer
+  arrayBuffer(): Promise<ArrayBuffer>; // Get as ArrayBuffer
+
+  // Streaming
+  read(): ReadableStream<Uint8Array> | null;  // Web Streams API
+  sse(): AsyncGenerator<SSEEvent>;            // Server-Sent Events
+  download(): AsyncGenerator<ProgressEvent>;  // Download with progress
+  [Symbol.asyncIterator](): AsyncGenerator<Uint8Array>; // Async iteration
+
+  // Utilities
+  clone(): ReckerResponse<T>;          // Clone response
+  raw: Response;                       // Original fetch Response
+}
+
+interface ProgressEvent {
+  loaded: number;      // Bytes transferred
+  total?: number;      // Total bytes (may be unknown)
+  percent?: number;    // Percentage (0-100)
+  rate?: number;       // Bytes per second
+  estimated?: number;  // Estimated time remaining (ms)
+  direction?: 'upload' | 'download';
+}
+
+interface SSEEvent {
+  id?: string;         // Event ID
+  event?: string;      // Event type (e.g., "message", "error")
+  data: string;        // Event data (JSON string for AI APIs)
+  retry?: number;      // Reconnection delay (ms)
+}
+```
+
 ## Parsing Responses
 
 ### JSON
@@ -106,17 +176,6 @@ for await (const event of response.sse()) {
   if (content) {
     process.stdout.write(content);
   }
-}
-```
-
-#### SSE Event Structure
-
-```typescript
-interface SSEEvent {
-  event?: string;   // Event type
-  data: string;     // Event data
-  id?: string;      // Event ID
-  retry?: number;   // Reconnection delay
 }
 ```
 

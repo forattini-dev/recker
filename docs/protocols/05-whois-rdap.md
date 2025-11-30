@@ -4,6 +4,64 @@ Domain and IP registration lookup utilities.
 
 ## WHOIS
 
+### Type Definitions
+
+```typescript
+interface WhoisOptions {
+  /** Custom WHOIS server to query */
+  server?: string;
+
+  /** Port to connect to (default: 43) */
+  port?: number;
+
+  /** Connection timeout in milliseconds (default: 10000) */
+  timeout?: number;
+
+  /** Follow referrals to other WHOIS servers (default: true) */
+  follow?: boolean;
+}
+
+interface WhoisResult {
+  /** Raw WHOIS response text */
+  raw: string;
+
+  /** Query that was performed */
+  query: string;
+
+  /** Server that was queried */
+  server: string;
+
+  /**
+   * Parsed key-value pairs from response
+   * Keys are lowercase. Values can be string or string[] for multiple entries.
+   *
+   * Common fields (vary by TLD/registrar):
+   * - 'domain name': Domain queried
+   * - 'registrar': Registrar name
+   * - 'registrar url': Registrar website
+   * - 'registrar iana id': IANA registrar ID
+   * - 'registrar abuse contact email': Abuse email
+   * - 'registrar abuse contact phone': Abuse phone
+   * - 'creation date': Domain creation date (ISO format)
+   * - 'registry expiry date': Expiration date (ISO format)
+   * - 'updated date': Last update date (ISO format)
+   * - 'domain status': Status flags (often array)
+   * - 'name server': Name servers (often array)
+   * - 'dnssec': DNSSEC status ('unsigned', 'signedDelegation', etc.)
+   *
+   * For IP lookups (ARIN/RIPE/APNIC):
+   * - 'organization': Organization name
+   * - 'orgname': Organization name (alt)
+   * - 'cidr': Network CIDR notation
+   * - 'inetnum': IP range
+   * - 'netname': Network name
+   * - 'country': Country code
+   * - 'abuse-mailbox': Abuse email
+   */
+  data: Record<string, string | string[]>;
+}
+```
+
 ### Quick Start
 
 ```typescript
@@ -260,23 +318,28 @@ console.log(`${status.domain} expires in ${status.daysUntil} days`);
 ### Bulk Domain Check
 
 ```typescript
+import { createClient } from 'recker';
 import { isDomainAvailable } from 'recker/utils/whois';
 
-async function checkBulkAvailability(domains: string[]) {
-  const results = await Promise.all(
-    domains.map(async (domain) => ({
-      domain,
-      available: await isDomainAvailable(domain)
-    }))
-  );
-
-  return results;
-}
+const client = createClient();
 
 const domains = ['cool-startup.com', 'my-app.io', 'new-service.dev'];
-const availability = await checkBulkAvailability(domains);
 
-for (const { domain, available } of availability) {
+// Use batch for controlled concurrency and rate limiting
+const { results, stats } = await client.batch(
+  domains.map(domain => ({ domain })),
+  {
+    concurrency: 3,  // Respect WHOIS rate limits
+    mapResponse: async (_, item) => ({
+      domain: item.domain,
+      available: await isDomainAvailable(item.domain)
+    })
+  }
+);
+
+console.log(`Checked ${stats.total} domains in ${stats.duration}ms`);
+
+for (const { domain, available } of results) {
   console.log(`${domain}: ${available ? 'Available' : 'Taken'}`);
 }
 ```

@@ -4,7 +4,7 @@
 
 ### The HTTP SDK for the AI Era
 
-**Fast. Observable. Type-safe.**
+**Fast as infrastructure demands. AI-ready from the first byte. Observable down to the millisecond. Resilient when everything else fails.**
 
 [![npm version](https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623)](https://www.npmjs.com/package/recker)
 [![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)
@@ -49,25 +49,24 @@ for await (const event of client.post('/chat/completions', {
 
 - **Getting Started**
   - [Installation](getting-started/installation.md)
-  - [Quick Start](getting-started/quickstart.md)
-  - [Client Configuration](guides/client-config.md)
+  - [Quick Start](http/01-quickstart.md)
+  - [Client Configuration](http/05-configuration.md)
 
 - **Core Features**
-  - [Streaming & SSE](guides/streaming.md)
-  - [HTML Scraping](guides/scraping.md)
-  - [GraphQL](guides/graphql.md)
-  - [Contract-First API](guides/contract.md)
+  - [Streaming & SSE](ai/02-streaming.md)
+  - [HTML Scraping](http/14-scraping.md)
+  - [GraphQL](http/13-graphql.md)
+  - [Validation & Contracts](http/04-validation.md)
 
 - **Resilience**
-  - [Retry Strategies](guides/advanced/retry.md)
-  - [Circuit Breaker](guides/advanced/circuit-breaker.md)
-  - [Caching (SWR)](guides/caching.md)
+  - [Retry & Circuit Breaker](http/07-resilience.md)
+  - [Caching (SWR)](http/09-cache.md)
 
 - **Advanced**
-  - [Concurrency & Rate Limiting](guides/performance/concurrency.md)
-  - [Network Utilities](guides/advanced-networking.md)
-  - [Testing](guides/testing.md)
-  - [Plugin Development](guides/plugins.md)
+  - [Concurrency & Rate Limiting](http/08-concurrency.md)
+  - [Observability](http/12-observability.md)
+  - [Testing](reference/03-testing.md)
+  - [Plugin Development](http/10-plugins.md)
 
 </div>
 
