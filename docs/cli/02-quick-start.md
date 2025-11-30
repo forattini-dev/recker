@@ -2,6 +2,8 @@
 
 Master the `rek` syntax in minutes. The CLI uses intelligent inference to minimize typing while maximizing expressiveness.
 
+> **No install?** Use `npx recker@latest <command>` instead of `rek <command>`.
+
 ## Basic Requests
 
 ### GET Requests

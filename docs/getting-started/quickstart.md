@@ -124,6 +124,6 @@ const allItems = await client.getAll('/items');
 
 ## Next Steps
 
-- [Core Concepts →](getting-started/concepts.md)
-- [HTTP Methods →](features/http-methods.md)
-- [API Reference →](api/client.md)
+- [HTTP Fundamentals →](/http/02-fundamentals.md)
+- [Configuration & Hooks →](/http/05-configuration.md)
+- [API Reference →](/reference/01-api.md)

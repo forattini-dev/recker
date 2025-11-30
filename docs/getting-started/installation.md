@@ -5,6 +5,14 @@
 - **Node.js** (Active LTS or Current)
 - Works with: npm, pnpm, yarn, bun
 
+## Try Without Installing
+
+```bash
+# Always use @latest to get the newest version
+npx recker@latest shell
+npx recker@latest httpbin.org/json
+```
+
 ## Package Managers
 
 <tabs>
@@ -79,5 +87,5 @@ const users: User[] = await client.get('/users').json<User[]>();
 
 ## Next Steps
 
-- [Quick Start →](getting-started/quickstart.md)
-- [Core Concepts →](getting-started/concepts.md)
+- [Quick Start →](/getting-started/quickstart.md)
+- [HTTP Fundamentals →](/http/02-fundamentals.md)
