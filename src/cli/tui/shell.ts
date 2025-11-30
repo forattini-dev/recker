@@ -104,7 +104,7 @@ export class RekShell {
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
       'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
-      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$table',
+      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$table',
       'help', 'clear', 'exit', 'set', 'url', 'vars'
     ];
 
@@ -230,6 +230,15 @@ export class RekShell {
         return;
       case '$sourcemaps':
         await this.runSelectSourcemaps();
+        return;
+      case '$unmap':
+        await this.runUnmap(parts.slice(1).join(' '));
+        return;
+      case '$unmap:view':
+        await this.runUnmapView(parts[1] || '');
+        return;
+      case '$unmap:save':
+        await this.runUnmapSave(parts[1] || '');
         return;
       case '$table':
         await this.runSelectTable(parts.slice(1).join(' '));
@@ -1379,8 +1388,180 @@ export class RekShell {
 
       this.lastResponse = uniqueMaps;
       console.log(colors.gray(`\n  ${confirmed.length} confirmed, ${inferred.length} inferred sourcemap(s)`));
+      console.log(colors.gray(`  Use $unmap <url> to extract original sources`));
     } catch (error: any) {
       console.error(colors.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runUnmap(urlArg: string) {
+    let mapUrl = urlArg;
+
+    // If no URL provided, try to use last sourcemap from $sourcemaps
+    if (!mapUrl && Array.isArray(this.lastResponse)) {
+      const maps = this.lastResponse as Array<{ type: string; url: string }>;
+      const confirmed = maps.filter(m => !m.type.includes('inferred'));
+      if (confirmed.length > 0) {
+        mapUrl = confirmed[0].url;
+        console.log(colors.gray(`Using: ${mapUrl}`));
+      } else if (maps.length > 0) {
+        mapUrl = maps[0].url;
+        console.log(colors.gray(`Using (inferred): ${mapUrl}`));
+      }
+    }
+
+    if (!mapUrl) {
+      console.log(colors.yellow('Usage: $unmap <sourcemap-url>'));
+      console.log(colors.gray('  Or run $sourcemaps first to find sourcemaps'));
+      return;
+    }
+
+    // Resolve relative URL if we have a base
+    if (!mapUrl.startsWith('http') && this.baseUrl) {
+      const base = new URL(this.baseUrl);
+      mapUrl = new URL(mapUrl, base).toString();
+    }
+
+    console.log(colors.cyan(`Fetching sourcemap: ${mapUrl}`));
+
+    try {
+      const response = await this.client.get(mapUrl);
+      const mapData = await response.json() as {
+        version?: number;
+        sources?: string[];
+        sourcesContent?: (string | null)[];
+        names?: string[];
+        mappings?: string;
+        file?: string;
+        sourceRoot?: string;
+      };
+
+      if (!mapData.sources || !Array.isArray(mapData.sources)) {
+        console.log(colors.red('Invalid sourcemap: missing sources array'));
+        return;
+      }
+
+      console.log(colors.green(`\nSourcemap v${mapData.version || '?'}`));
+      if (mapData.file) console.log(colors.gray(`  File: ${mapData.file}`));
+      if (mapData.sourceRoot) console.log(colors.gray(`  Root: ${mapData.sourceRoot}`));
+      console.log(colors.gray(`  Sources: ${mapData.sources.length}`));
+      if (mapData.names) console.log(colors.gray(`  Names: ${mapData.names.length}`));
+
+      // List sources
+      console.log(colors.bold('\nOriginal sources:'));
+      mapData.sources.forEach((source, i) => {
+        const hasContent = mapData.sourcesContent && mapData.sourcesContent[i];
+        const sizeInfo = hasContent
+          ? colors.green(`[${(mapData.sourcesContent![i]!.length / 1024).toFixed(1)}kb]`)
+          : colors.yellow('[no content]');
+        console.log(`${colors.gray(`${i + 1}.`)} ${sizeInfo} ${source}`);
+      });
+
+      // Store for later use
+      this.lastResponse = {
+        url: mapUrl,
+        data: mapData,
+        sources: mapData.sources.map((source, i) => ({
+          path: source,
+          content: mapData.sourcesContent?.[i] || null
+        }))
+      };
+
+      const withContent = mapData.sourcesContent?.filter(c => c).length || 0;
+      console.log(colors.gray(`\n  ${withContent}/${mapData.sources.length} sources have embedded content`));
+
+      if (withContent > 0) {
+        console.log(colors.gray(`  Use $unmap:view <index> to view source content`));
+        console.log(colors.gray(`  Use $unmap:save <dir> to save all sources to disk`));
+      }
+    } catch (error: any) {
+      if (error.status === 404) {
+        console.log(colors.yellow(`Sourcemap not found (404): ${mapUrl}`));
+      } else {
+        console.error(colors.red(`Failed to fetch sourcemap: ${error.message}`));
+      }
+    }
+    console.log('');
+  }
+
+  private async runUnmapView(indexStr: string) {
+    if (!this.lastResponse || !this.lastResponse.sources) {
+      console.log(colors.yellow('No sourcemap loaded. Use $unmap <url> first.'));
+      return;
+    }
+
+    const index = parseInt(indexStr, 10) - 1;
+    const sources = this.lastResponse.sources as Array<{ path: string; content: string | null }>;
+
+    if (isNaN(index) || index < 0 || index >= sources.length) {
+      console.log(colors.yellow(`Invalid index. Use 1-${sources.length}`));
+      return;
+    }
+
+    const source = sources[index];
+    if (!source.content) {
+      console.log(colors.yellow(`No embedded content for: ${source.path}`));
+      return;
+    }
+
+    console.log(colors.bold(`\n─── ${source.path} ───\n`));
+
+    // Try to syntax highlight if it looks like JS/TS
+    const ext = source.path.split('.').pop()?.toLowerCase();
+    if (['js', 'ts', 'jsx', 'tsx', 'mjs', 'cjs'].includes(ext || '')) {
+      try {
+        console.log(highlight(source.content, { linenos: true }));
+      } catch {
+        console.log(source.content);
+      }
+    } else {
+      console.log(source.content);
+    }
+    console.log(colors.bold(`\n─── end ───\n`));
+  }
+
+  private async runUnmapSave(dir: string) {
+    if (!this.lastResponse || !this.lastResponse.sources) {
+      console.log(colors.yellow('No sourcemap loaded. Use $unmap <url> first.'));
+      return;
+    }
+
+    const outputDir = dir || './sourcemap-extracted';
+    const sources = this.lastResponse.sources as Array<{ path: string; content: string | null }>;
+    const { promises: fs } = await import('node:fs');
+    const path = await import('node:path');
+
+    let saved = 0, skipped = 0;
+
+    for (const source of sources) {
+      if (!source.content) {
+        skipped++;
+        continue;
+      }
+
+      // Clean up path (remove webpack:// etc)
+      let cleanPath = source.path
+        .replace(/^webpack:\/\/[^/]*\//, '')
+        .replace(/^\.*\//, '')
+        .replace(/^node_modules\//, 'node_modules/');
+
+      const fullPath = path.join(outputDir, cleanPath);
+      const dirname = path.dirname(fullPath);
+
+      try {
+        await fs.mkdir(dirname, { recursive: true });
+        await fs.writeFile(fullPath, source.content, 'utf-8');
+        saved++;
+        console.log(colors.green(`  ✓ ${cleanPath}`));
+      } catch (err: any) {
+        console.log(colors.red(`  ✗ ${cleanPath}: ${err.message}`));
+      }
+    }
+
+    console.log(colors.gray(`\n  Saved ${saved} files to ${outputDir}`));
+    if (skipped > 0) {
+      console.log(colors.yellow(`  Skipped ${skipped} sources without embedded content`));
     }
     console.log('');
   }
@@ -1481,6 +1662,9 @@ export class RekShell {
     ${colors.green('$scripts')}            List all scripts (external + inline).
     ${colors.green('$css')}                List all stylesheets (external + inline).
     ${colors.green('$sourcemaps')}         Find sourcemaps (confirmed + inferred).
+    ${colors.green('$unmap <url>')}        Download and parse sourcemap.
+    ${colors.green('$unmap:view <n>')}     View source file by index.
+    ${colors.green('$unmap:save [dir]')}   Save all sources to disk.
     ${colors.green('$table <selector>')}   Extract table as data.
 
   ${colors.bold('Examples:')}
