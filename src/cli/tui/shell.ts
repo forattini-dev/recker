@@ -7,6 +7,7 @@ import { whois, isDomainAvailable } from '../../utils/whois.js';
 import { inspectTLS } from '../../utils/tls-inspector.js';
 import { getSecurityRecords } from '../../utils/dns-toolkit.js';
 import { rdap } from '../../utils/rdap.js';
+import { ScrapeDocument } from '../../scrape/document.js';
 import pc from '../../utils/colors.js';
 
 // Lazy-loaded optional dependency
@@ -38,6 +39,8 @@ export class RekShell {
   private lastResponse: any = null;
   private variables: Record<string, any> = {};
   private initialized = false;
+  private currentDoc: ScrapeDocument | null = null;
+  private currentDocUrl: string = '';
 
   constructor() {
     // We initialize with a placeholder base URL because the Client enforces it.
@@ -73,6 +76,7 @@ export class RekShell {
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
       'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
+      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$table',
       'help', 'clear', 'exit', 'set', 'url', 'vars'
     ];
     const hits = commands.filter((c) => c.startsWith(line));
@@ -167,6 +171,30 @@ export class RekShell {
         return;
       case 'ping':
         await this.runPing(parts[1]);
+        return;
+      case 'scrap':
+        await this.runScrap(parts[1]);
+        return;
+      case '$':
+        await this.runSelect(parts.slice(1).join(' '));
+        return;
+      case '$text':
+        await this.runSelectText(parts.slice(1).join(' '));
+        return;
+      case '$attr':
+        await this.runSelectAttr(parts[1], parts.slice(2).join(' '));
+        return;
+      case '$html':
+        await this.runSelectHtml(parts.slice(1).join(' '));
+        return;
+      case '$links':
+        await this.runSelectLinks(parts[1]);
+        return;
+      case '$images':
+        await this.runSelectImages(parts[1]);
+        return;
+      case '$table':
+        await this.runSelectTable(parts.slice(1).join(' '));
         return;
     }
 
@@ -716,6 +744,287 @@ export class RekShell {
     console.log('');
   }
 
+  // === Web Scraping Methods ===
+
+  private async runScrap(url: string) {
+    if (!url) {
+      console.log(pc.yellow('Usage: scrap <url>'));
+      console.log(pc.gray('  Examples: scrap https://news.ycombinator.com'));
+      return;
+    }
+
+    // Build full URL
+    if (!url.startsWith('http')) {
+      url = this.baseUrl ? `${this.baseUrl}${url.startsWith('/') ? '' : '/'}${url}` : `https://${url}`;
+    }
+
+    console.log(pc.gray(`Fetching ${url}...`));
+    const startTime = performance.now();
+
+    try {
+      const response = await this.client.get(url);
+      const html = await response.text();
+      const duration = Math.round(performance.now() - startTime);
+
+      this.currentDoc = await ScrapeDocument.create(html);
+      this.currentDocUrl = url;
+
+      const elementCount = this.currentDoc.select('*').length;
+      const title = this.currentDoc.selectFirst('title').text() || 'No title';
+
+      console.log(pc.green(`✔ Loaded`) + pc.gray(` (${duration}ms)`));
+      console.log(`  ${pc.cyan('Title')}: ${title}`);
+      console.log(`  ${pc.cyan('Elements')}: ${elementCount}`);
+      console.log(`  ${pc.cyan('Size')}: ${(html.length / 1024).toFixed(1)}kb`);
+      console.log(pc.gray('\n  Use $ <selector> to query, $text, $attr, $links, $images, $table'));
+    } catch (error: any) {
+      console.error(pc.red(`Scrape failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runSelect(selector: string) {
+    if (!this.currentDoc) {
+      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+    if (!selector) {
+      console.log(pc.yellow('Usage: $ <selector>'));
+      console.log(pc.gray('  Examples: $ h1 | $ .title | $ a[href*="article"]'));
+      return;
+    }
+
+    try {
+      const elements = this.currentDoc.select(selector);
+      const count = elements.length;
+      console.log(pc.cyan(`Found ${count} element(s)`));
+
+      if (count > 0 && count <= 10) {
+        elements.each((el, i) => {
+          const text = el.text().slice(0, 80).replace(/\s+/g, ' ').trim();
+          console.log(`  ${pc.gray(`${i + 1}.`)} ${text}${text.length >= 80 ? '...' : ''}`);
+        });
+      } else if (count > 10) {
+        console.log(pc.gray('  (showing first 10)'));
+        let shown = 0;
+        elements.each((el, i) => {
+          if (shown >= 10) return;
+          const text = el.text().slice(0, 80).replace(/\s+/g, ' ').trim();
+          console.log(`  ${pc.gray(`${i + 1}.`)} ${text}${text.length >= 80 ? '...' : ''}`);
+          shown++;
+        });
+      }
+      this.lastResponse = { count, selector };
+    } catch (error: any) {
+      console.error(pc.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runSelectText(selector: string) {
+    if (!this.currentDoc) {
+      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+    if (!selector) {
+      console.log(pc.yellow('Usage: $text <selector>'));
+      return;
+    }
+
+    try {
+      const elements = this.currentDoc.select(selector);
+      const texts: string[] = [];
+
+      elements.each((el, i) => {
+        const text = el.text().trim();
+        if (text) {
+          texts.push(text);
+          console.log(`${pc.gray(`${i + 1}.`)} ${text.slice(0, 200)}${text.length > 200 ? '...' : ''}`);
+        }
+      });
+
+      this.lastResponse = texts;
+      console.log(pc.gray(`\n  ${texts.length} text item(s) extracted`));
+    } catch (error: any) {
+      console.error(pc.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runSelectAttr(attrName: string, selector: string) {
+    if (!this.currentDoc) {
+      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+    if (!attrName || !selector) {
+      console.log(pc.yellow('Usage: $attr <attribute> <selector>'));
+      console.log(pc.gray('  Examples: $attr href a | $attr src img'));
+      return;
+    }
+
+    try {
+      const elements = this.currentDoc.select(selector);
+      const attrs: string[] = [];
+
+      elements.each((el, i) => {
+        const value = el.attr(attrName);
+        if (value) {
+          attrs.push(value);
+          console.log(`${pc.gray(`${i + 1}.`)} ${value}`);
+        }
+      });
+
+      this.lastResponse = attrs;
+      console.log(pc.gray(`\n  ${attrs.length} attribute(s) extracted`));
+    } catch (error: any) {
+      console.error(pc.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runSelectHtml(selector: string) {
+    if (!this.currentDoc) {
+      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+    if (!selector) {
+      console.log(pc.yellow('Usage: $html <selector>'));
+      return;
+    }
+
+    try {
+      const element = this.currentDoc.selectFirst(selector);
+      const html = element.html();
+
+      if (html) {
+        console.log(html.slice(0, 1000));
+        if (html.length > 1000) {
+          console.log(pc.gray(`\n  ... (${html.length} chars total)`));
+        }
+        this.lastResponse = html;
+      } else {
+        console.log(pc.gray('No element found'));
+      }
+    } catch (error: any) {
+      console.error(pc.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runSelectLinks(selector?: string) {
+    if (!this.currentDoc) {
+      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+
+    try {
+      const linkSelector = selector || 'a[href]';
+      const elements = this.currentDoc.select(linkSelector);
+      const links: Array<{ text: string; href: string }> = [];
+
+      elements.each((el, i) => {
+        const href = el.attr('href');
+        const text = el.text().trim().slice(0, 50);
+        if (href) {
+          links.push({ text, href });
+          if (i < 20) {
+            console.log(`${pc.gray(`${i + 1}.`)} ${pc.cyan(text || '(no text)')} ${pc.gray('→')} ${href}`);
+          }
+        }
+      });
+
+      if (links.length > 20) {
+        console.log(pc.gray(`  ... and ${links.length - 20} more links`));
+      }
+
+      this.lastResponse = links;
+      console.log(pc.gray(`\n  ${links.length} link(s) found`));
+    } catch (error: any) {
+      console.error(pc.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runSelectImages(selector?: string) {
+    if (!this.currentDoc) {
+      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+
+    try {
+      const imgSelector = selector || 'img[src]';
+      const elements = this.currentDoc.select(imgSelector);
+      const images: Array<{ alt: string; src: string }> = [];
+
+      elements.each((el, i) => {
+        const src = el.attr('src');
+        const alt = el.attr('alt') || '';
+        if (src) {
+          images.push({ alt, src });
+          if (i < 20) {
+            console.log(`${pc.gray(`${i + 1}.`)} ${pc.cyan(alt.slice(0, 30) || '(no alt)')} ${pc.gray('→')} ${src.slice(0, 60)}`);
+          }
+        }
+      });
+
+      if (images.length > 20) {
+        console.log(pc.gray(`  ... and ${images.length - 20} more images`));
+      }
+
+      this.lastResponse = images;
+      console.log(pc.gray(`\n  ${images.length} image(s) found`));
+    } catch (error: any) {
+      console.error(pc.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runSelectTable(selector: string) {
+    if (!this.currentDoc) {
+      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+    if (!selector) {
+      console.log(pc.yellow('Usage: $table <selector>'));
+      console.log(pc.gray('  Examples: $table table | $table .data-table'));
+      return;
+    }
+
+    try {
+      const tables = this.currentDoc.tables(selector);
+
+      if (tables.length === 0) {
+        console.log(pc.gray('No tables found'));
+        return;
+      }
+
+      tables.forEach((table, tableIndex) => {
+        console.log(pc.bold(`\nTable ${tableIndex + 1}:`));
+
+        if (table.headers.length > 0) {
+          console.log(pc.cyan('  Headers: ') + table.headers.join(' | '));
+        }
+
+        console.log(pc.cyan(`  Rows: `) + table.rows.length);
+
+        // Show first 5 rows
+        table.rows.slice(0, 5).forEach((row, i) => {
+          const rowStr = row.map(cell => cell.slice(0, 20)).join(' | ');
+          console.log(`  ${pc.gray(`${i + 1}.`)} ${rowStr}`);
+        });
+
+        if (table.rows.length > 5) {
+          console.log(pc.gray(`  ... and ${table.rows.length - 5} more rows`));
+        }
+      });
+
+      this.lastResponse = tables;
+    } catch (error: any) {
+      console.error(pc.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
   private printHelp() {
     console.log(`
   ${pc.bold(pc.cyan('Rek Console Help'))}
@@ -754,6 +1063,16 @@ export class RekShell {
     ${pc.green('dns <domain>')}        Full DNS lookup (A, AAAA, MX, NS, SPF, DMARC).
     ${pc.green('rdap <domain>')}       RDAP lookup (modern WHOIS).
     ${pc.green('ping <host>')}         Quick TCP connectivity check.
+
+  ${pc.bold('Web Scraping:')}
+    ${pc.green('scrap <url>')}         Fetch and parse HTML document.
+    ${pc.green('$ <selector>')}        Query elements (CSS selector).
+    ${pc.green('$text <selector>')}    Extract text content.
+    ${pc.green('$attr <name> <sel>')}  Extract attribute values.
+    ${pc.green('$html <selector>')}    Get inner HTML.
+    ${pc.green('$links [selector]')}   List all links.
+    ${pc.green('$images [selector]')}  List all images.
+    ${pc.green('$table <selector>')}   Extract table as data.
 
   ${pc.bold('Examples:')}
     › url httpbin.org

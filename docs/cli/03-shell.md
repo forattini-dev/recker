@@ -196,6 +196,114 @@ Connect to WebSocket servers:
 
 See [Protocols](06-protocols.md) for details.
 
+### Web Scraping
+
+Interactively scrape and query HTML documents:
+
+```bash
+# Load a page
+› scrap https://news.ycombinator.com
+✔ Loaded (234ms)
+  Title: Hacker News
+  Elements: 1247
+  Size: 45.2kb
+
+# Query with CSS selectors
+› $ .titleline
+Found 30 element(s)
+  1. Show HN: I built something cool
+  2. Why Rust is taking over systems programming
+  ...
+
+# Extract text content
+› $text .titleline
+1. Show HN: I built something cool
+2. Why Rust is taking over systems programming
+...
+  30 text item(s) extracted
+
+# Get attribute values
+› $attr href .titleline a
+1. https://example.com/article1
+2. https://example.com/article2
+...
+  30 attribute(s) extracted
+
+# List all links
+› $links
+1. new → newest
+2. comments → newcomments
+3. Show HN → show
+...
+  150 link(s) found
+
+# List all images
+› $images
+1. (no alt) → logo.png
+2. upvote → gfx/up.gif
+...
+  25 image(s) found
+
+# Extract tables as data
+› $table table
+Table 1:
+  Headers: Rank | Name | Score
+  Rows: 30
+  1. 1 | Alice | 950
+  2. 2 | Bob | 890
+  ...
+```
+
+#### Scraping Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `scrap <url>` | Fetch and parse HTML document |
+| `$ <selector>` | Count and preview elements matching selector |
+| `$text <selector>` | Extract text content from elements |
+| `$attr <name> <selector>` | Extract attribute values |
+| `$html <selector>` | Get inner HTML of first match |
+| `$links [selector]` | List all links (default: `a[href]`) |
+| `$images [selector]` | List all images (default: `img[src]`) |
+| `$table <selector>` | Extract table data (headers + rows) |
+
+#### Scraping Workflow Example
+
+```bash
+# 1. Load a product listing page
+› scrap https://store.example.com/products
+
+# 2. Find product cards
+› $ .product-card
+Found 24 element(s)
+
+# 3. Extract product names
+› $text .product-card .name
+1. Wireless Headphones
+2. USB-C Cable
+...
+
+# 4. Get product URLs
+› $attr href .product-card a
+1. /products/wireless-headphones
+2. /products/usb-c-cable
+...
+
+# 5. Extract pricing table
+› $table .pricing-table
+Table 1:
+  Headers: Plan | Price | Features
+  Rows: 3
+  1. Basic | $9/mo | 10 users
+  2. Pro | $29/mo | 100 users
+  3. Enterprise | Custom | Unlimited
+
+# 6. Load a different page
+› scrap https://other-site.com/data
+```
+
+> **Note:** Web scraping requires the `cheerio` package. Install with: `pnpm add cheerio`
+
 ## Request Syntax in Shell
 
 The shell uses the same syntax as the CLI:
