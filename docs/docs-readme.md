@@ -21,10 +21,10 @@ pnpm docs:preview
 
 This will automatically open the documentation in your default browser.
 
-### Option 3: Direct docsify-cli
+### Option 3: Direct with serve
 
 ```bash
-npx docsify-cli serve docs --port 3000
+npx serve docs -p 3000
 ```
 
 ## Directory Structure
@@ -120,7 +120,7 @@ For GitHub Pages deployment:
 
 ```bash
 # Change port
-npx docsify-cli serve docs --port 4000
+npx serve docs -p 4000
 ```
 
 ### Page Not Found
