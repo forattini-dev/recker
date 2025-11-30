@@ -62,10 +62,26 @@ export async function handleRequest(options: RequestOptions) {
     // Serialize body if present
     let requestBody = undefined;
     if (options.body) {
-      requestBody = JSON.stringify(options.body);
-      // Ensure Content-Type is set
-      if (!options.headers['Content-Type'] && !options.headers['content-type']) {
-        options.headers['Content-Type'] = 'application/json';
+      // If body is already a string, use it as-is (e.g., from stdin pipe)
+      // Otherwise, serialize as JSON
+      if (typeof options.body === 'string') {
+        requestBody = options.body;
+        // Try to detect if it's JSON content
+        if (!options.headers['Content-Type'] && !options.headers['content-type']) {
+          try {
+            JSON.parse(options.body);
+            options.headers['Content-Type'] = 'application/json';
+          } catch {
+            // Not JSON, use text/plain
+            options.headers['Content-Type'] = 'text/plain';
+          }
+        }
+      } else {
+        requestBody = JSON.stringify(options.body);
+        // Ensure Content-Type is set
+        if (!options.headers['Content-Type'] && !options.headers['content-type']) {
+          options.headers['Content-Type'] = 'application/json';
+        }
       }
     }
 

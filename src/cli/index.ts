@@ -1,6 +1,96 @@
 #!/usr/bin/env node
 import { program } from 'commander';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
 import pc from '../utils/colors.js';
+
+/**
+ * Read data from stdin if piped
+ * Example: cat body.json | rek post api.com/users
+ */
+async function readStdin(): Promise<string | null> {
+  // Check if stdin is a TTY (interactive terminal)
+  // If it's NOT a TTY, data is being piped
+  if (process.stdin.isTTY) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    let data = '';
+
+    // Set a timeout to avoid hanging if no data
+    const timeout = setTimeout(() => {
+      resolve(null);
+    }, 100);
+
+    process.stdin.setEncoding('utf8');
+
+    process.stdin.on('data', (chunk) => {
+      clearTimeout(timeout);
+      data += chunk;
+    });
+
+    process.stdin.on('end', () => {
+      clearTimeout(timeout);
+      resolve(data.trim() || null);
+    });
+
+    process.stdin.on('error', () => {
+      clearTimeout(timeout);
+      resolve(null);
+    });
+
+    // Resume stdin in case it was paused
+    process.stdin.resume();
+  });
+}
+
+/**
+ * Load environment variables from a .env file
+ * @param filePath Path to .env file (default: ./.env)
+ */
+async function loadEnvFile(filePath?: string | boolean): Promise<Record<string, string>> {
+  const envPath = typeof filePath === 'string' ? filePath : join(process.cwd(), '.env');
+  const envVars: Record<string, string> = {};
+
+  try {
+    const content = await fs.readFile(envPath, 'utf-8');
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // Skip empty lines and comments
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      // Parse KEY=value format
+      const match = trimmed.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        const [, key, value] = match;
+        const cleanKey = key.trim();
+        // Remove surrounding quotes from value
+        let cleanValue = value.trim();
+        if ((cleanValue.startsWith('"') && cleanValue.endsWith('"')) ||
+            (cleanValue.startsWith("'") && cleanValue.endsWith("'"))) {
+          cleanValue = cleanValue.slice(1, -1);
+        }
+
+        envVars[cleanKey] = cleanValue;
+        // Also set in process.env
+        process.env[cleanKey] = cleanValue;
+      }
+    }
+
+    console.log(pc.gray(`Loaded ${Object.keys(envVars).length} variables from ${envPath}`));
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      console.log(pc.yellow(`Warning: No .env file found at ${envPath}`));
+    } else {
+      console.log(pc.red(`Error loading .env: ${error.message}`));
+    }
+  }
+
+  return envVars;
+}
 
 /**
  * CLI Entry Point
@@ -70,7 +160,7 @@ async function main() {
       if (!url) {
         url = arg;
         // Only enforce https:// prefix if NO preset is used
-        if (!hasPreset && !url.startsWith('http') && !url.startsWith('ws') && !url.startsWith('udp')) {
+        if (!hasPreset && !url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('ws://') && !url.startsWith('wss://') && !url.startsWith('udp://')) {
           url = `https://${url}`;
         }
       }
@@ -89,6 +179,7 @@ async function main() {
     .argument('[args...]', 'URL, Method, Headers (Key:Value), Data (key=value)')
     .option('-v, --verbose', 'Show full request/response details')
     .option('-j, --json', 'Force JSON content-type')
+    .option('-e, --env [path]', 'Load .env file from current directory or specified path')
     .addHelpText('after', `
 ${pc.bold(pc.yellow('Examples:'))}
   ${pc.green('$ rek httpbin.org/json')}
@@ -99,11 +190,19 @@ ${pc.bold(pc.yellow('Examples:'))}
 ${pc.bold(pc.yellow('Available Presets:'))}
   ${pc.cyan(PRESET_NAMES.map(p => '@' + p).join(', '))}
 `)
-    .action(async (args: string[], options: { verbose?: boolean; json?: boolean }) => {
+    .action(async (args: string[], options: { verbose?: boolean; json?: boolean; env?: string | boolean }) => {
       if (args.length === 0) {
         program.help();
         return;
       }
+
+      // Load .env file if requested
+      if (options.env !== undefined) {
+        await loadEnvFile(options.env);
+      }
+
+      // Read stdin data if piped
+      const stdinData = await readStdin();
 
       let argsToParse = args;
       let presetConfig: any = undefined;
@@ -140,13 +239,14 @@ ${pc.bold(pc.yellow('Available Presets:'))}
         headers['Accept'] = 'application/json';
       }
 
-      // Protocol Switcher
+      // Protocol Switcher for WebSocket
       if (url.startsWith('ws://') || url.startsWith('wss://')) {
         const { startInteractiveWebSocket } = await import('./tui/websocket.js');
         await startInteractiveWebSocket(url, headers);
         return;
       }
 
+      // Protocol Switcher for UDP
       if (url.startsWith('udp://')) {
         console.log(pc.yellow('UDP mode coming soon...'));
         return;
@@ -154,11 +254,24 @@ ${pc.bold(pc.yellow('Available Presets:'))}
 
       // Default HTTP Handler
       try {
+        // Determine request body: stdin data takes precedence, then CLI data args
+        let body: any = undefined;
+        if (stdinData) {
+          // Try to parse stdin as JSON, fallback to raw string
+          try {
+            body = JSON.parse(stdinData);
+          } catch {
+            body = stdinData;
+          }
+        } else if (Object.keys(data).length > 0) {
+          body = data;
+        }
+
         await handleRequest({
           method,
           url,
           headers,
-          body: Object.keys(data).length > 0 ? data : undefined,
+          body,
           verbose: options.verbose,
           presetConfig
         });
