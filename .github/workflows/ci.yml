@@ -64,7 +64,7 @@ jobs:
         with:
           version: 9
 
-      - name: Setup Node.js
+      - name: Setup Node.js (NPM Registry)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -79,7 +79,6 @@ jobs:
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           SHA=$(git rev-parse --short HEAD)
-          # If current version already has alpha, strip it to base
           BASE_VERSION=$(echo $CURRENT_VERSION | cut -d'-' -f1)
           NEW_VERSION="$BASE_VERSION-alpha.$SHA"
 
@@ -90,10 +89,30 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Publish Alpha
+      - name: Publish to NPM (Alpha)
         run: pnpm publish --tag alpha --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Setup Node.js (GitHub Packages)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@forattini-dev'
+
+      - name: Publish to GitHub Packages (Alpha)
+        run: |
+          # Update package name for GitHub Packages scope
+          node -e "
+            const pkg = require('./package.json');
+            pkg.name = '@forattini-dev/recker';
+            pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+          pnpm publish --tag alpha --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # 3. Stable Release (Only on Tag Push v*)
   release-stable:
@@ -108,13 +127,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
 
-      - name: Setup Node.js
+      - name: Setup Node.js (NPM Registry)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -127,14 +148,116 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Publish Stable
+      - name: Publish to NPM (Stable)
         run: pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Setup Node.js (GitHub Packages)
+        uses: actions/setup-node@v4
         with:
-          generate_release_notes: true
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@forattini-dev'
+
+      - name: Publish to GitHub Packages (Stable)
+        run: |
+          node -e "
+            const pkg = require('./package.json');
+            pkg.name = '@forattini-dev/recker';
+            pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+          pnpm publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+
+          echo "## What's Changed" > CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "Changes since $PREV_TAG:" >> CHANGELOG_BODY.md
+            echo "" >> CHANGELOG_BODY.md
+
+            # Features
+            FEATURES=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^feat" 2>/dev/null || true)
+            if [ -n "$FEATURES" ]; then
+              echo "### 🚀 Features" >> CHANGELOG_BODY.md
+              echo "$FEATURES" >> CHANGELOG_BODY.md
+              echo "" >> CHANGELOG_BODY.md
+            fi
+
+            # Fixes
+            FIXES=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^fix" 2>/dev/null || true)
+            if [ -n "$FIXES" ]; then
+              echo "### 🐛 Bug Fixes" >> CHANGELOG_BODY.md
+              echo "$FIXES" >> CHANGELOG_BODY.md
+              echo "" >> CHANGELOG_BODY.md
+            fi
+
+            # Docs
+            DOCS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^docs" 2>/dev/null || true)
+            if [ -n "$DOCS" ]; then
+              echo "### 📚 Documentation" >> CHANGELOG_BODY.md
+              echo "$DOCS" >> CHANGELOG_BODY.md
+              echo "" >> CHANGELOG_BODY.md
+            fi
+
+            # Tests
+            TESTS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^test" 2>/dev/null || true)
+            if [ -n "$TESTS" ]; then
+              echo "### ✅ Tests" >> CHANGELOG_BODY.md
+              echo "$TESTS" >> CHANGELOG_BODY.md
+              echo "" >> CHANGELOG_BODY.md
+            fi
+
+            # CI/Chore
+            CHORE=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^ci\|^chore" 2>/dev/null || true)
+            if [ -n "$CHORE" ]; then
+              echo "### 🔧 Maintenance" >> CHANGELOG_BODY.md
+              echo "$CHORE" >> CHANGELOG_BODY.md
+              echo "" >> CHANGELOG_BODY.md
+            fi
+
+            # Contributors
+            echo "### 👥 Contributors" >> CHANGELOG_BODY.md
+            git log $PREV_TAG..HEAD --pretty=format:"- @%an" | sort -u >> CHANGELOG_BODY.md
+            echo "" >> CHANGELOG_BODY.md
+          else
+            echo "Initial release! 🎉" >> CHANGELOG_BODY.md
+          fi
+
+          echo "" >> CHANGELOG_BODY.md
+          echo "---" >> CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...$CURRENT_TAG" >> CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+          echo "## 📦 Installation" >> CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+          echo "\`\`\`bash" >> CHANGELOG_BODY.md
+          echo "# NPM" >> CHANGELOG_BODY.md
+          echo "npm install recker@$CURRENT_TAG" >> CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+          echo "# PNPM" >> CHANGELOG_BODY.md
+          echo "pnpm add recker@$CURRENT_TAG" >> CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+          echo "# GitHub Packages" >> CHANGELOG_BODY.md
+          echo "npm install @forattini-dev/recker@$CURRENT_TAG --registry=https://npm.pkg.github.com" >> CHANGELOG_BODY.md
+          echo "\`\`\`" >> CHANGELOG_BODY.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG_BODY.md
+          draft: false
+          prerelease: false
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
