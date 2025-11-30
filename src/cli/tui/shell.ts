@@ -81,6 +81,24 @@ export class RekShell {
     }
   }
 
+  /** Extract root domain (e.g., tetis.io from www.tetis.io) for WHOIS/RDAP lookups */
+  private getRootDomain(): string | null {
+    const hostname = this.getBaseDomain();
+    if (!hostname) return null;
+
+    // Remove common subdomains for WHOIS/RDAP lookups
+    const parts = hostname.split('.');
+    if (parts.length <= 2) return hostname;
+
+    // Handle common patterns: www.example.com, api.example.com, etc.
+    // Keep last 2 parts for normal TLDs, or last 3 for co.uk, com.br, etc.
+    const commonSLDs = ['co', 'com', 'net', 'org', 'gov', 'edu', 'ac'];
+    if (parts.length >= 3 && commonSLDs.includes(parts[parts.length - 2])) {
+      return parts.slice(-3).join('.');
+    }
+    return parts.slice(-2).join('.');
+  }
+
   private completer(line: string) {
     const commands = [
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
@@ -489,7 +507,7 @@ export class RekShell {
 
   private async runWhois(domain?: string) {
     if (!domain) {
-      domain = this.getBaseDomain() || '';
+      domain = this.getRootDomain() || '';
       if (!domain) {
         console.log(colors.yellow('Usage: whois <domain>'));
         console.log(colors.gray('  Examples: whois google.com | whois 8.8.8.8'));
@@ -508,7 +526,7 @@ export class RekShell {
       console.log(colors.green(`✔ WHOIS lookup completed`) + colors.gray(` (${duration}ms)`));
       console.log(colors.gray(`Server: ${result.server}\n`));
 
-      // Display parsed fields
+      // Display parsed fields - prioritize important ones
       const importantFields = [
         'domain name', 'registrar', 'registrar url',
         'creation date', 'registry expiry date', 'updated date',
@@ -516,12 +534,31 @@ export class RekShell {
         'organization', 'orgname', 'cidr', 'netname', 'country'
       ];
 
+      let foundFields = 0;
       for (const field of importantFields) {
         const value = result.data[field];
         if (value) {
           const displayValue = Array.isArray(value) ? value.join(', ') : value;
           console.log(`  ${colors.cyan(field)}: ${displayValue}`);
+          foundFields++;
         }
+      }
+
+      // If no important fields found, show all available fields
+      if (foundFields === 0 && Object.keys(result.data).length > 0) {
+        console.log(colors.gray('  (showing all available fields)\n'));
+        for (const [key, value] of Object.entries(result.data)) {
+          if (value) {
+            const displayValue = Array.isArray(value) ? value.join(', ') : String(value);
+            console.log(`  ${colors.cyan(key)}: ${displayValue}`);
+          }
+        }
+      }
+
+      // If still nothing, show raw response
+      if (Object.keys(result.data).length === 0 && result.raw) {
+        console.log(colors.gray('  (raw response)\n'));
+        console.log(colors.white(result.raw.slice(0, 2000)));
       }
 
       // Check availability hint
@@ -673,7 +710,7 @@ export class RekShell {
 
   private async runRDAP(domain?: string) {
     if (!domain) {
-      domain = this.getBaseDomain() || '';
+      domain = this.getRootDomain() || '';
       if (!domain) {
         console.log(colors.yellow('Usage: rdap <domain>'));
         console.log(colors.gray('  Examples: rdap google.com | rdap 8.8.8.8'));
