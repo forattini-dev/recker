@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SFTP, createSFTP, sftp } from '../../src/protocols/sftp.js';
+import { clearModuleCache } from '../../src/utils/optional-require.js';
 
 // Mock ssh2-sftp-client
 vi.mock('ssh2-sftp-client', () => {
@@ -34,6 +35,7 @@ describe('SFTP Protocol Utility', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearModuleCache(); // Clear module cache to reset mocks between tests
     sftpClient = createSFTP({
       host: 'sftp.example.com',
       username: 'testuser',
@@ -613,8 +615,14 @@ describe('SFTP Protocol Utility', () => {
   });
 
   describe('getClient', () => {
-    it('should return underlying client', () => {
+    it('should throw if called before connect', () => {
       const client = createSFTP({ host: 'test.com' });
+      expect(() => client.getClient()).toThrow('Client not initialized. Call connect() first.');
+    });
+
+    it('should return underlying client after connect', async () => {
+      const client = createSFTP({ host: 'test.com' });
+      await client.connect();
       const underlying = client.getClient();
       expect(underlying).toBeDefined();
     });

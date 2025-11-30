@@ -21,17 +21,27 @@
     "hooks",
     "http2",
     "http3",
+    "quic",
+    "udp",
+    "dtls",
+    "webrtc",
     "sse",
     "websocket",
     "whois",
     "dns",
     "proxy",
     "ai",
+    "llm",
+    "openai",
+    "anthropic",
+    "gpt",
+    "claude",
+    "streaming",
     "scraping",
     "cheerio",
     "html-parser"
   ],
-  "author": "fforattini",
+  "author": "filipeforattini",
   "license": "MIT",
   "homepage": "https://forattini-dev.github.io/recker",
   "repository": {
@@ -76,7 +86,26 @@
       "types": "./dist/utils/*.d.ts",
       "import": "./dist/utils/*.js"
     },
+    "./udp": {
+      "types": "./dist/udp/index.d.ts",
+      "import": "./dist/udp/index.js"
+    },
+    "./dns": {
+      "types": "./dist/dns/index.d.ts",
+      "import": "./dist/dns/index.js"
+    },
+    "./webrtc": {
+      "types": "./dist/webrtc/index.d.ts",
+      "import": "./dist/webrtc/index.js"
+    },
+    "./ai": {
+      "types": "./dist/ai/index.d.ts",
+      "import": "./dist/ai/index.js"
+    },
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "rek": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -86,9 +115,9 @@
     "test:coverage": "vitest run --coverage",
     "bench": "tsx benchmark/index.ts",
     "bench:all": "tsx benchmark/run-all.ts",
-    "docs:dev": "docsify serve docs --port 3000",
-    "docs:preview": "npx -y docsify-cli serve docs --port 3000 --open",
-    "lint": "echo \"No linting configured for this project.\" && exit 0"
+    "docs": "npx -y docsify-cli serve docs --port 3000 --open",
+    "lint": "echo \"No linting configured for this project.\" && exit 0",
+    "cli": "tsx src/cli/index.ts"
   },
   "engines": {
     "node": ">=18"
@@ -97,22 +126,28 @@
     "access": "public"
   },
   "dependencies": {
-    "basic-ftp": "^5.0.5",
-    "glob": "^13.0.0",
-    "ssh2-sftp-client": "^12.0.1",
-    "telnet-client": "^2.2.9",
+    "commander": "^12.0.0",
+    "ora": "^8.0.0",
     "undici": "^7.16.0",
-    "zod": "^4.1.13"
+    "zod": "^3.24.0"
   },
   "peerDependencies": {
+    "cardinal": "^2.1.0",
     "cheerio": "^1.0.0",
-    "ioredis": "^5.0.0"
+    "ioredis": "^5.0.0",
+    "ssh2-sftp-client": "^11.0.0"
   },
   "peerDependenciesMeta": {
+    "cardinal": {
+      "optional": true
+    },
     "cheerio": {
       "optional": true
     },
     "ioredis": {
+      "optional": true
+    },
+    "ssh2-sftp-client": {
       "optional": true
     }
   },
@@ -123,7 +158,9 @@
     "@types/superagent": "^8.1.9",
     "@vitest/coverage-v8": "^3.2.4",
     "axios": "^1.13.2",
+    "cardinal": "^2.1.1",
     "cheerio": "^1.0.0",
+    "commander": "^14.0.0",
     "docsify-cli": "^4.4.4",
     "domhandler": "^5.0.3",
     "got": "^14.6.5",
@@ -131,9 +168,13 @@
     "ky": "^1.14.0",
     "mitata": "^1.0.34",
     "needle": "^3.3.1",
+    "ora": "^9.0.0",
+    "picocolors": "^1.1.1",
+    "ssh2-sftp-client": "^12.0.1",
     "superagent": "^10.2.3",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "zod": "^3.24.0"
   }
 }

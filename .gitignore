@@ -43,5 +43,5 @@ GEMINI.md
 .cache/
 
 # Studies
-repositories/
 test-*.*js
+repositories/

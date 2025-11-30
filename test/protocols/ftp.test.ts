@@ -1,51 +1,159 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { EventEmitter } from 'node:events';
 import { FTP, createFTP, ftp } from '../../src/protocols/ftp.js';
 
-// Mock basic-ftp
-vi.mock('basic-ftp', () => {
-  return {
-    Client: vi.fn().mockImplementation(() => {
-      const mockFtp = { verbose: false };
-      return {
-        ftp: mockFtp,
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        list: vi.fn().mockResolvedValue([
-          { name: 'file.txt', type: 1, size: 1024, modifiedAt: new Date(), permissions: { user: 7, group: 5, other: 5 }, rawModifiedAt: '2024-01-01' },
-          { name: 'folder', type: 2, size: 0, modifiedAt: new Date() },
-          { name: 'link', type: 3, size: 0, modifiedAt: new Date() }
-        ]),
-        downloadTo: vi.fn().mockResolvedValue(undefined),
-        uploadFrom: vi.fn().mockResolvedValue(undefined),
-        remove: vi.fn().mockResolvedValue(undefined),
-        ensureDir: vi.fn().mockResolvedValue(undefined),
-        removeDir: vi.fn().mockResolvedValue(undefined),
-        rename: vi.fn().mockResolvedValue(undefined),
-        pwd: vi.fn().mockResolvedValue('/home/user'),
-        cd: vi.fn().mockResolvedValue(undefined),
-        size: vi.fn().mockResolvedValue(2048),
-        trackProgress: vi.fn()
-      };
-    })
+// Mock socket factory for testing
+function createMockSocket() {
+  const emitter = new EventEmitter();
+  emitter.setMaxListeners(50);
+
+  const socket = {
+    emitter,
+    connect: vi.fn(),
+    write: vi.fn(),
+    end: vi.fn(),
+    destroy: vi.fn(),
+    destroyed: false,
+    setTimeout: vi.fn(),
+    on: function(event: string, handler: (...args: unknown[]) => void) {
+      emitter.on(event, handler);
+      return this;
+    },
+    once: function(event: string, handler: (...args: unknown[]) => void) {
+      emitter.once(event, handler);
+      return this;
+    },
+    removeListener: function(event: string, handler: (...args: unknown[]) => void) {
+      emitter.removeListener(event, handler);
+      return this;
+    },
+    emit: (event: string, ...args: unknown[]) => emitter.emit(event, ...args),
   };
-});
+
+  return socket as any;
+}
+
+/**
+ * Creates a mock write function with correct timing for FTP tests.
+ * IMPORTANT: Callback must be called BEFORE data is emitted so that
+ * sendCommand's readResponse() can attach its data listener first.
+ */
+function createMockWrite(
+  mockSocket: ReturnType<typeof createMockSocket>,
+  mockDataSocket?: ReturnType<typeof createMockSocket>,
+  extraHandlers?: Record<string, { response: string; onMatch?: () => void }>
+) {
+  return vi.fn((data: string | Buffer, encoding?: string, callback?: (err?: Error) => void) => {
+    const cmd = data.toString().trim();
+
+    // Call callback first (so readResponse can attach its listener)
+    if (callback) {
+      setImmediate(() => callback());
+    }
+
+    // Then emit response after a delay (so listener is attached)
+    setTimeout(() => {
+      let response = '';
+
+      // Check extra handlers first
+      if (extraHandlers) {
+        for (const [pattern, handler] of Object.entries(extraHandlers)) {
+          if (cmd.startsWith(pattern) || cmd === pattern) {
+            response = handler.response;
+            if (handler.onMatch) handler.onMatch();
+            break;
+          }
+        }
+      }
+
+      // Default handlers
+      if (!response) {
+        if (cmd.startsWith('USER ')) response = '331 Password required\r\n';
+        else if (cmd.startsWith('PASS ')) response = '230 User logged in\r\n';
+        else if (cmd === 'TYPE I') response = '200 Type set to I\r\n';
+        else if (cmd === 'PWD') response = '257 "/home/user" is current directory\r\n';
+        else if (cmd.startsWith('CWD ')) response = '250 Directory changed\r\n';
+        else if (cmd.startsWith('DELE ')) response = '250 File deleted\r\n';
+        else if (cmd.startsWith('MKD ')) response = '257 Directory created\r\n';
+        else if (cmd.startsWith('RMD ')) response = '250 Directory removed\r\n';
+        else if (cmd.startsWith('RNFR ')) response = '350 Ready for destination\r\n';
+        else if (cmd.startsWith('RNTO ')) response = '250 Rename successful\r\n';
+        else if (cmd.startsWith('SIZE ')) response = '213 1024\r\n';
+        else if (cmd === 'QUIT') response = '221 Goodbye\r\n';
+        else response = '500 Unknown command\r\n';
+      }
+
+      mockSocket.emitter.emit('data', Buffer.from(response));
+    }, 5);
+
+    return true;
+  });
+}
 
 describe('FTP Protocol Utility', () => {
   let ftpClient: FTP;
+  let mockControlSocket: ReturnType<typeof createMockSocket>;
+  let mockDataSocket: ReturnType<typeof createMockSocket>;
+  let socketCallCount = 0;
+
+  function socketFactory() {
+    socketCallCount++;
+    if (socketCallCount === 1) {
+      return mockControlSocket;
+    }
+    return mockDataSocket;
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
+    socketCallCount = 0;
+
+    // Create mock sockets
+    mockControlSocket = createMockSocket();
+    mockDataSocket = createMockSocket();
+
+    // Setup default control socket behavior
+    mockControlSocket.connect = vi.fn((port: number, host: string) => {
+      setImmediate(() => {
+        mockControlSocket.emitter.emit('connect');
+        // Delay welcome message to ensure readResponse listener is added
+        setTimeout(() => {
+          mockControlSocket.emitter.emit('data', Buffer.from('220 FTP Server Ready\r\n'));
+        }, 10);
+      });
+    });
+
+    // Use the helper for consistent timing
+    mockControlSocket.write = createMockWrite(mockControlSocket);
+
+    mockControlSocket.end = vi.fn(() => mockControlSocket.emitter.emit('close'));
+    mockControlSocket.destroy = vi.fn(() => mockControlSocket.emitter.emit('close'));
+
+    // Setup data socket
+    mockDataSocket.connect = vi.fn((port: number, host: string) => {
+      setImmediate(() => mockDataSocket.emitter.emit('connect'));
+    });
+    mockDataSocket.write = vi.fn(() => true);
+    mockDataSocket.end = vi.fn(() => {
+      setImmediate(() => mockDataSocket.emitter.emit('end'));
+    });
+
     ftpClient = createFTP({
       host: 'ftp.example.com',
       user: 'testuser',
-      password: 'testpass'
+      password: 'testpass',
+      timeout: 1000,
+      _socketFactory: socketFactory,
     });
   });
 
   afterEach(async () => {
-    if (ftpClient.isConnected()) {
-      await ftpClient.close();
+    try {
+      if (ftpClient.isConnected()) {
+        await ftpClient.close();
+      }
+    } catch {
+      // Ignore cleanup errors
     }
   });
 
@@ -65,139 +173,90 @@ describe('FTP Protocol Utility', () => {
     });
 
     it('should handle connection errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockRejectedValue(new Error('Connection refused')),
-        close: vi.fn()
-      } as any));
+      mockControlSocket.connect = vi.fn(() => {
+        setImmediate(() => {
+          mockControlSocket.emitter.emit('error', new Error('Connection refused'));
+        });
+      });
 
-      const client = createFTP({ host: 'bad.host' });
+      socketCallCount = 0;
+      const client = createFTP({
+        host: 'bad.host',
+        timeout: 200,
+        _socketFactory: socketFactory
+      });
       const result = await client.connect();
 
       expect(result.success).toBe(false);
-      expect(result.message).toBe('Connection refused');
+      expect(result.message).toContain('Connection refused');
     });
-  });
 
-  describe('list', () => {
-    it('should list files in directory', async () => {
-      await ftpClient.connect();
-      const result = await ftpClient.list('/pub');
-
-      expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(3);
-      expect(result.data![0]).toMatchObject({
-        name: 'file.txt',
-        type: 'file',
-        size: 1024
+    it('should handle connection timeout', async () => {
+      mockControlSocket.connect = vi.fn(() => {
+        setImmediate(() => {
+          mockControlSocket.emitter.emit('timeout');
+        });
       });
-      expect(result.data![1]).toMatchObject({
-        name: 'folder',
-        type: 'directory'
+
+      socketCallCount = 0;
+      const client = createFTP({
+        host: 'slow.host',
+        timeout: 200,
+        _socketFactory: socketFactory
       });
-      expect(result.data![2]).toMatchObject({
-        name: 'link',
-        type: 'link'
-      });
-    });
+      const result = await client.connect();
 
-    it('should throw if not connected', async () => {
-      await expect(ftpClient.list()).rejects.toThrow('Not connected to FTP server');
-    });
-  });
-
-  describe('download', () => {
-    it('should download file to local path', async () => {
-      await ftpClient.connect();
-      const result = await ftpClient.download('/remote/file.txt', './local/file.txt');
-
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('Downloaded');
-    });
-
-    it('should support progress tracking', async () => {
-      const progressCb = vi.fn();
-      ftpClient.progress(progressCb);
-
-      await ftpClient.connect();
-      await ftpClient.download('/remote/file.txt', './local/file.txt');
-
-      const client = ftpClient.getClient();
-      expect(client.trackProgress).toHaveBeenCalled();
-    });
-  });
-
-  describe('upload', () => {
-    it('should upload file to remote path', async () => {
-      await ftpClient.connect();
-      const result = await ftpClient.upload('./local/file.txt', '/remote/file.txt');
-
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('Uploaded');
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('timeout');
     });
   });
 
   describe('directory operations', () => {
-    it('should create directory', async () => {
+    beforeEach(async () => {
       await ftpClient.connect();
-      const result = await ftpClient.mkdir('/new/folder');
-
-      expect(result.success).toBe(true);
-    });
-
-    it('should remove directory', async () => {
-      await ftpClient.connect();
-      const result = await ftpClient.rmdir('/old/folder');
-
-      expect(result.success).toBe(true);
     });
 
     it('should get current directory', async () => {
-      await ftpClient.connect();
       const result = await ftpClient.pwd();
-
       expect(result.success).toBe(true);
       expect(result.data).toBe('/home/user');
     });
 
     it('should change directory', async () => {
-      await ftpClient.connect();
       const result = await ftpClient.cd('/other/dir');
+      expect(result.success).toBe(true);
+    });
 
+    it('should create directory', async () => {
+      const result = await ftpClient.mkdir('/new/folder', false);
+      expect(result.success).toBe(true);
+    });
+
+    it('should remove directory', async () => {
+      const result = await ftpClient.rmdir('/old/folder');
       expect(result.success).toBe(true);
     });
   });
 
   describe('file operations', () => {
-    it('should delete file', async () => {
+    beforeEach(async () => {
       await ftpClient.connect();
-      const result = await ftpClient.delete('/remote/file.txt');
+    });
 
+    it('should delete file', async () => {
+      const result = await ftpClient.delete('/remote/file.txt');
       expect(result.success).toBe(true);
     });
 
     it('should rename file', async () => {
-      await ftpClient.connect();
       const result = await ftpClient.rename('/old.txt', '/new.txt');
-
       expect(result.success).toBe(true);
     });
 
     it('should get file size', async () => {
-      await ftpClient.connect();
       const result = await ftpClient.size('/remote/file.txt');
-
       expect(result.success).toBe(true);
-      expect(result.data).toBe(2048);
-    });
-
-    it('should check if file exists', async () => {
-      await ftpClient.connect();
-      const exists = await ftpClient.exists('/home/user/file.txt');
-
-      expect(exists).toBe(true);
+      expect(result.data).toBe(1024);
     });
   });
 
@@ -211,505 +270,443 @@ describe('FTP Protocol Utility', () => {
     });
   });
 
-  describe('ftp helper function', () => {
-    it('should execute operation and close connection', async () => {
-      const result = await ftp(
-        { host: 'ftp.example.com' },
-        async (client) => {
-          const listResult = await client.list('/');
-          return listResult.data;
-        }
-      );
-
-      expect(result).toHaveLength(3);
+  describe('getSocket', () => {
+    it('should throw if called before connect', () => {
+      socketCallCount = 0;
+      const client = createFTP({
+        host: 'test.com',
+        _socketFactory: socketFactory
+      });
+      expect(() => client.getSocket()).toThrow('Not connected');
     });
 
-    it('should close connection even on error', async () => {
-      await expect(
-        ftp({ host: 'ftp.example.com' }, async (client) => {
-          throw new Error('Test error');
-        })
-      ).rejects.toThrow('Test error');
-    });
-
-    it('should throw when connection fails', async () => {
-      const { Client } = await import('basic-ftp');
-      // This mock will be used for the ftp() call
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockRejectedValue(new Error('Connection refused')),
-        close: vi.fn()
-      } as any));
-
-      await expect(
-        ftp({ host: 'bad.host' }, async () => {
-          return 'should not reach';
-        })
-      ).rejects.toThrow('Connection refused');
+    it('should return socket after connect', async () => {
+      await ftpClient.connect();
+      const socket = ftpClient.getSocket();
+      expect(socket).toBeDefined();
     });
   });
 
-  describe('downloadToStream', () => {
-    it('should download to writable stream', async () => {
+  describe('list operation', () => {
+    it('should list files in directory', async () => {
+      const listingData = '-rw-r--r-- 1 user group 1024 Jan 15 12:00 file.txt\r\n' +
+        'drwxr-xr-x 2 user group 4096 Jan 15 12:00 folder\r\n';
+
+      // Setup for LIST operation with PASV
+      mockControlSocket.write = vi.fn((data: string | Buffer, encoding?: string, callback?: (err?: Error) => void) => {
+        const cmd = data.toString().trim();
+
+        // Call callback first
+        if (callback) {
+          setImmediate(() => callback());
+        }
+
+        // Then emit response
+        setTimeout(() => {
+          let response = '';
+
+          if (cmd.startsWith('USER ')) response = '331 Password required\r\n';
+          else if (cmd.startsWith('PASS ')) response = '230 User logged in\r\n';
+          else if (cmd === 'TYPE I') response = '200 Type set to I\r\n';
+          else if (cmd === 'PASV') {
+            response = '227 Entering Passive Mode (127,0,0,1,195,80)\r\n';
+            // Simulate data socket receiving listing
+            setTimeout(() => {
+              mockDataSocket.emitter.emit('data', Buffer.from(listingData));
+              mockDataSocket.emitter.emit('end');
+            }, 20);
+          }
+          else if (cmd.startsWith('LIST ')) {
+            response = '150 Opening data connection\r\n';
+            // Send transfer complete after data
+            setTimeout(() => {
+              mockControlSocket.emitter.emit('data', Buffer.from('226 Transfer complete\r\n'));
+            }, 60);
+          }
+          else if (cmd === 'QUIT') response = '221 Goodbye\r\n';
+          else response = '500 Unknown command\r\n';
+
+          mockControlSocket.emitter.emit('data', Buffer.from(response));
+        }, 5);
+
+        return true;
+      });
+
       await ftpClient.connect();
+      const result = await ftpClient.list('/pub');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBeDefined();
+      expect(result.data!.length).toBe(2);
+      expect(result.data![0]).toMatchObject({
+        name: 'file.txt',
+        type: 'file',
+        size: 1024
+      });
+      expect(result.data![1]).toMatchObject({
+        name: 'folder',
+        type: 'directory'
+      });
+    });
+
+    it('should throw if not connected', async () => {
+      socketCallCount = 0;
+      const client = createFTP({
+        host: 'test.com',
+        _socketFactory: socketFactory
+      });
+      await expect(client.list()).rejects.toThrow('Not connected to FTP server');
+    });
+  });
+
+  describe('configuration options', () => {
+    it('should accept all config options', () => {
+      const client = createFTP({
+        host: 'ftp.example.com',
+        port: 2121,
+        user: 'admin',
+        password: 'secret',
+        secure: true,
+        timeout: 60000,
+        verbose: true,
+        tlsOptions: { rejectUnauthorized: false }
+      });
+
+      expect(client).toBeInstanceOf(FTP);
+    });
+
+    it('should use default port 990 for implicit TLS', () => {
+      const client = createFTP({
+        host: 'ftp.example.com',
+        secure: 'implicit'
+      });
+
+      expect(client).toBeInstanceOf(FTP);
+    });
+  });
+
+  describe('error handling', () => {
+    it('should handle pwd errors', async () => {
+      // Setup write mock that returns error for PWD
+      mockControlSocket.write = vi.fn((data: string | Buffer, encoding?: string, callback?: (err?: Error) => void) => {
+        const cmd = data.toString().trim();
+        // Call callback first
+        if (callback) {
+          setImmediate(() => callback());
+        }
+        setTimeout(() => {
+          let response = '';
+          if (cmd.startsWith('USER ')) response = '331 Password required\r\n';
+          else if (cmd.startsWith('PASS ')) response = '230 User logged in\r\n';
+          else if (cmd === 'TYPE I') response = '200 Type set to I\r\n';
+          else if (cmd === 'PWD') response = '550 PWD failed\r\n';
+          else if (cmd === 'QUIT') response = '221 Goodbye\r\n';
+          else response = '500 Unknown\r\n';
+          mockControlSocket.emitter.emit('data', Buffer.from(response));
+        }, 5);
+        return true;
+      });
+
+      socketCallCount = 0;
+      const client = createFTP({
+        host: 'test.com',
+        timeout: 1000,
+        _socketFactory: socketFactory
+      });
+      await client.connect();
+      const result = await client.pwd();
+      expect(result.success).toBe(false);
+      await client.close();
+    });
+
+    it('should handle cd errors', async () => {
+      // Setup write mock that returns error for CWD
+      mockControlSocket.write = vi.fn((data: string | Buffer, encoding?: string, callback?: (err?: Error) => void) => {
+        const cmd = data.toString().trim();
+        // Call callback first
+        if (callback) {
+          setImmediate(() => callback());
+        }
+        setTimeout(() => {
+          let response = '';
+          if (cmd.startsWith('USER ')) response = '331 Password required\r\n';
+          else if (cmd.startsWith('PASS ')) response = '230 User logged in\r\n';
+          else if (cmd === 'TYPE I') response = '200 Type set to I\r\n';
+          else if (cmd.startsWith('CWD ')) response = '550 Directory not found\r\n';
+          else if (cmd === 'QUIT') response = '221 Goodbye\r\n';
+          else response = '500 Unknown\r\n';
+          mockControlSocket.emitter.emit('data', Buffer.from(response));
+        }, 5);
+        return true;
+      });
+
+      socketCallCount = 0;
+      const client = createFTP({
+        host: 'test.com',
+        timeout: 1000,
+        _socketFactory: socketFactory
+      });
+      await client.connect();
+      const result = await client.cd('/nonexistent');
+      expect(result.success).toBe(false);
+      await client.close();
+    });
+  });
+
+  describe('ftp helper function', () => {
+    it('should throw when connection fails', async () => {
+      // Emit error immediately instead of waiting for actual timeout
+      mockControlSocket.connect = vi.fn(() => {
+        setImmediate(() => {
+          mockControlSocket.emitter.emit('error', new Error('Connection failed'));
+        });
+      });
+
+      socketCallCount = 0;
+      await expect(
+        ftp({ host: 'bad.host', timeout: 200, _socketFactory: socketFactory }, async () => {
+          return 'should not reach';
+        })
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('upload and download', () => {
+    beforeEach(async () => {
+      // Setup for PASV-based transfers
+      mockControlSocket.write = vi.fn((data: string | Buffer, encoding?: string, callback?: (err?: Error) => void) => {
+        const cmd = data.toString().trim();
+
+        // Call callback first
+        if (callback) {
+          setImmediate(() => callback());
+        }
+
+        setTimeout(() => {
+          let response = '';
+
+          if (cmd.startsWith('USER ')) response = '331 Password required\r\n';
+          else if (cmd.startsWith('PASS ')) response = '230 User logged in\r\n';
+          else if (cmd === 'TYPE I') response = '200 Type set to I\r\n';
+          else if (cmd === 'PASV') {
+            response = '227 Entering Passive Mode (127,0,0,1,195,80)\r\n';
+          }
+          else if (cmd.startsWith('STOR ')) {
+            response = '150 Opening data connection\r\n';
+            setTimeout(() => {
+              mockControlSocket.emitter.emit('data', Buffer.from('226 Transfer complete\r\n'));
+            }, 60);
+          }
+          else if (cmd.startsWith('SIZE ')) response = '213 1024\r\n';
+          else if (cmd.startsWith('RETR ')) {
+            response = '150 Opening data connection\r\n';
+            setTimeout(() => {
+              mockDataSocket.emitter.emit('data', Buffer.from('file content'));
+              mockDataSocket.emitter.emit('end');
+            }, 20);
+            setTimeout(() => {
+              mockControlSocket.emitter.emit('data', Buffer.from('226 Transfer complete\r\n'));
+            }, 60);
+          }
+          else if (cmd === 'QUIT') response = '221 Goodbye\r\n';
+          else response = '500 Unknown command\r\n';
+
+          mockControlSocket.emitter.emit('data', Buffer.from(response));
+        }, 5);
+
+        return true;
+      });
+
+      await ftpClient.connect();
+    });
+
+    it('should upload from buffer', async () => {
+      const result = await ftpClient.uploadFromBuffer(Buffer.from('test data'), '/remote/file.txt');
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Uploaded');
+    });
+
+    it('should upload from string', async () => {
+      const result = await ftpClient.uploadFromBuffer('test content', '/remote/file.txt');
+      expect(result.success).toBe(true);
+    });
+
+    it('should download to buffer', async () => {
+      const result = await ftpClient.downloadToBuffer('/remote/file.txt');
+      expect(result.success).toBe(true);
+      expect(result.data).toBeInstanceOf(Buffer);
+      expect(result.data!.toString()).toBe('file content');
+    });
+  });
+
+  describe('progress tracking', () => {
+    it('should call progress callback', async () => {
+      const progressCb = vi.fn();
+      ftpClient.progress(progressCb);
+
+      // Setup for download with progress
+      mockControlSocket.write = vi.fn((data: string | Buffer, encoding?: string, callback?: (err?: Error) => void) => {
+        const cmd = data.toString().trim();
+
+        // Call callback first
+        if (callback) {
+          setImmediate(() => callback());
+        }
+
+        setTimeout(() => {
+          let response = '';
+
+          if (cmd.startsWith('USER ')) response = '331 Password required\r\n';
+          else if (cmd.startsWith('PASS ')) response = '230 User logged in\r\n';
+          else if (cmd === 'TYPE I') response = '200 Type set to I\r\n';
+          else if (cmd === 'PASV') response = '227 Entering Passive Mode (127,0,0,1,195,80)\r\n';
+          else if (cmd.startsWith('SIZE ')) response = '213 1024\r\n';
+          else if (cmd.startsWith('RETR ')) {
+            response = '150 Opening data connection\r\n';
+            setTimeout(() => {
+              mockDataSocket.emitter.emit('data', Buffer.from('file content here'));
+              mockDataSocket.emitter.emit('end');
+            }, 20);
+            setTimeout(() => {
+              mockControlSocket.emitter.emit('data', Buffer.from('226 Transfer complete\r\n'));
+            }, 60);
+          }
+          else if (cmd === 'QUIT') response = '221 Goodbye\r\n';
+          else response = '500 Unknown\r\n';
+
+          mockControlSocket.emitter.emit('data', Buffer.from(response));
+        }, 5);
+
+        return true;
+      });
+
+      await ftpClient.connect();
+
       const { Writable } = await import('node:stream');
       const chunks: Buffer[] = [];
       const stream = new Writable({
         write(chunk, enc, cb) { chunks.push(chunk); cb(); }
       });
 
-      const result = await ftpClient.downloadToStream('/remote/file.txt', stream);
+      await ftpClient.downloadToStream('/file.txt', stream);
 
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('Downloaded');
-    });
-
-    it('should handle download errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        downloadTo: vi.fn().mockRejectedValue(new Error('Download failed')),
-        trackProgress: vi.fn()
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-
-      const { Writable } = await import('node:stream');
-      const stream = new Writable({ write(c, e, cb) { cb(); } });
-
-      const result = await client.downloadToStream('/fail', stream);
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Download failed');
-    });
-
-    it('should track progress during download to stream', async () => {
-      const progressCb = vi.fn();
-      ftpClient.progress(progressCb);
-
-      await ftpClient.connect();
-      const { Writable } = await import('node:stream');
-      const stream = new Writable({ write(c, e, cb) { cb(); } });
-
-      await ftpClient.downloadToStream('/remote/file.txt', stream);
-
-      expect(ftpClient.getClient().trackProgress).toHaveBeenCalled();
+      expect(progressCb).toHaveBeenCalled();
     });
   });
 
-  describe('downloadToBuffer', () => {
-    it('should download to buffer', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        downloadTo: vi.fn().mockImplementation(async (stream: any) => {
-          stream.write(Buffer.from('file content'));
-          stream.end();
-        })
-      } as any));
+  describe('directory listing parser', () => {
+    it('should parse Unix format listings', async () => {
+      const listingData =
+        '-rw-r--r-- 1 user group 1024 Jan 15 12:00 file.txt\r\n' +
+        'drwxr-xr-x 2 user group 4096 Dec 31 2023 folder\r\n';
 
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.downloadToBuffer('/file.txt');
+      mockControlSocket.write = vi.fn((data: string | Buffer, encoding?: string, callback?: (err?: Error) => void) => {
+        const cmd = data.toString().trim();
 
-      expect(result.success).toBe(true);
-      expect(result.data).toBeInstanceOf(Buffer);
-    });
+        // Call callback first
+        if (callback) {
+          setImmediate(() => callback());
+        }
 
-    it('should handle buffer download errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        downloadTo: vi.fn().mockRejectedValue(new Error('Buffer download failed'))
-      } as any));
+        setTimeout(() => {
+          let response = '';
 
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.downloadToBuffer('/fail');
+          if (cmd.startsWith('USER ')) response = '331 Password required\r\n';
+          else if (cmd.startsWith('PASS ')) response = '230 User logged in\r\n';
+          else if (cmd === 'TYPE I') response = '200 Type set to I\r\n';
+          else if (cmd === 'PASV') {
+            response = '227 Entering Passive Mode (127,0,0,1,195,80)\r\n';
+            setTimeout(() => {
+              mockDataSocket.emitter.emit('data', Buffer.from(listingData));
+              mockDataSocket.emitter.emit('end');
+            }, 20);
+          }
+          else if (cmd.startsWith('LIST ')) {
+            response = '150 Opening data connection\r\n';
+            setTimeout(() => {
+              mockControlSocket.emitter.emit('data', Buffer.from('226 Transfer complete\r\n'));
+            }, 60);
+          }
+          else if (cmd === 'QUIT') response = '221 Goodbye\r\n';
+          else response = '500 Unknown\r\n';
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Buffer download failed');
-    });
-  });
+          mockControlSocket.emitter.emit('data', Buffer.from(response));
+        }, 5);
 
-  describe('uploadFromStream', () => {
-    it('should upload from readable stream', async () => {
-      await ftpClient.connect();
-      const { Readable } = await import('node:stream');
-      const stream = Readable.from(Buffer.from('test content'));
+        return true;
+      });
 
-      const result = await ftpClient.uploadFromStream(stream, '/remote/file.txt');
-
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('Uploaded');
-    });
-
-    it('should handle upload stream errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        uploadFrom: vi.fn().mockRejectedValue(new Error('Stream upload failed')),
-        trackProgress: vi.fn()
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-
-      const { Readable } = await import('node:stream');
-      const stream = Readable.from(Buffer.from('test'));
-
-      const result = await client.uploadFromStream(stream, '/fail');
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Stream upload failed');
-    });
-
-    it('should track progress during upload from stream', async () => {
-      const progressCb = vi.fn();
-      ftpClient.progress(progressCb);
-
-      await ftpClient.connect();
-      const { Readable } = await import('node:stream');
-      const stream = Readable.from(Buffer.from('test'));
-
-      await ftpClient.uploadFromStream(stream, '/remote/file.txt');
-
-      expect(ftpClient.getClient().trackProgress).toHaveBeenCalled();
-    });
-  });
-
-  describe('uploadFromBuffer', () => {
-    it('should upload from buffer', async () => {
-      await ftpClient.connect();
-      const result = await ftpClient.uploadFromBuffer(Buffer.from('test'), '/remote/file.txt');
-
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('Uploaded');
-    });
-
-    it('should upload from string', async () => {
-      await ftpClient.connect();
-      const result = await ftpClient.uploadFromBuffer('test content', '/remote/file.txt');
-
-      expect(result.success).toBe(true);
-    });
-
-    it('should handle buffer upload errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        uploadFrom: vi.fn().mockRejectedValue(new Error('Buffer upload failed'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.uploadFromBuffer('test', '/fail');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Buffer upload failed');
-    });
-  });
-
-  describe('error handling', () => {
-    it('should handle list errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        list: vi.fn().mockRejectedValue(new Error('List failed'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.list('/');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('List failed');
-    });
-
-    it('should handle download errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        downloadTo: vi.fn().mockRejectedValue(new Error('Download error')),
-        trackProgress: vi.fn()
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.download('/fail', './local');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Download error');
-    });
-
-    it('should handle upload errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        uploadFrom: vi.fn().mockRejectedValue(new Error('Upload error')),
-        trackProgress: vi.fn()
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.upload('./local', '/fail');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Upload error');
-    });
-
-    it('should handle delete errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        remove: vi.fn().mockRejectedValue(new Error('Delete error'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.delete('/fail');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Delete error');
-    });
-
-    it('should handle mkdir errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        ensureDir: vi.fn().mockRejectedValue(new Error('Mkdir error'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.mkdir('/fail');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Mkdir error');
-    });
-
-    it('should handle rmdir errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        removeDir: vi.fn().mockRejectedValue(new Error('Rmdir error'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.rmdir('/fail');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Rmdir error');
-    });
-
-    it('should handle rename errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        rename: vi.fn().mockRejectedValue(new Error('Rename error'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.rename('/old', '/new');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Rename error');
-    });
-
-    it('should handle pwd errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        pwd: vi.fn().mockRejectedValue(new Error('PWD error'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.pwd();
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('PWD error');
-    });
-
-    it('should handle cd errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        cd: vi.fn().mockRejectedValue(new Error('CD error'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.cd('/fail');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('CD error');
-    });
-
-    it('should handle size errors', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        size: vi.fn().mockRejectedValue(new Error('Size error'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const result = await client.size('/fail');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Size error');
-    });
-  });
-
-  describe('file type mapping', () => {
-    it('should handle unknown file type (0)', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        list: vi.fn().mockResolvedValue([
-          { name: 'unknown', type: 0, size: 0, modifiedAt: new Date() }
-        ])
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
+      socketCallCount = 0;
+      const client = createFTP({
+        host: 'test.com',
+        timeout: 1000,
+        _socketFactory: socketFactory
+      });
       await client.connect();
       const result = await client.list('/');
 
       expect(result.success).toBe(true);
-      expect(result.data![0].type).toBe('unknown');
+      expect(result.data!.length).toBe(2);
+      expect(result.data![0].type).toBe('file');
+      expect(result.data![0].permissions).toBe('rw-r--r--');
+      expect(result.data![1].type).toBe('directory');
     });
 
-    it('should handle undefined file type', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        list: vi.fn().mockResolvedValue([
-          { name: 'unknown', type: 99, size: 0, modifiedAt: new Date() }
-        ])
-      } as any));
+    it('should parse DOS format listings', async () => {
+      const listingData =
+        '01-15-24  12:00PM              1024 file.txt\r\n' +
+        '01-15-24  12:00PM       <DIR>       folder\r\n';
 
-      const client = createFTP({ host: 'test.com' });
+      mockControlSocket.write = vi.fn((data: string | Buffer, encoding?: string, callback?: (err?: Error) => void) => {
+        const cmd = data.toString().trim();
+
+        // Call callback first
+        if (callback) {
+          setImmediate(() => callback());
+        }
+
+        setTimeout(() => {
+          let response = '';
+
+          if (cmd.startsWith('USER ')) response = '331 Password required\r\n';
+          else if (cmd.startsWith('PASS ')) response = '230 User logged in\r\n';
+          else if (cmd === 'TYPE I') response = '200 Type set to I\r\n';
+          else if (cmd === 'PASV') {
+            response = '227 Entering Passive Mode (127,0,0,1,195,80)\r\n';
+            setTimeout(() => {
+              mockDataSocket.emitter.emit('data', Buffer.from(listingData));
+              mockDataSocket.emitter.emit('end');
+            }, 20);
+          }
+          else if (cmd.startsWith('LIST ')) {
+            response = '150 Opening data connection\r\n';
+            setTimeout(() => {
+              mockControlSocket.emitter.emit('data', Buffer.from('226 Transfer complete\r\n'));
+            }, 60);
+          }
+          else if (cmd === 'QUIT') response = '221 Goodbye\r\n';
+          else response = '500 Unknown\r\n';
+
+          mockControlSocket.emitter.emit('data', Buffer.from(response));
+        }, 5);
+
+        return true;
+      });
+
+      socketCallCount = 0;
+      const client = createFTP({
+        host: 'test.com',
+        timeout: 1000,
+        _socketFactory: socketFactory
+      });
       await client.connect();
       const result = await client.list('/');
 
       expect(result.success).toBe(true);
-      expect(result.data![0].type).toBe('unknown');
-    });
-  });
-
-  describe('exists edge cases', () => {
-    it('should handle root path file', async () => {
-      await ftpClient.connect();
-      const exists = await ftpClient.exists('/file.txt');
-      expect(typeof exists).toBe('boolean');
-    });
-
-    it('should return false on list error', async () => {
-      const { Client } = await import('basic-ftp');
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: { verbose: false },
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        list: vi.fn().mockRejectedValue(new Error('Access denied'))
-      } as any));
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-      const exists = await client.exists('/protected/file.txt');
-
-      expect(exists).toBe(false);
-    });
-  });
-
-  describe('verbose mode', () => {
-    it('should enable verbose logging', async () => {
-      const { Client } = await import('basic-ftp');
-      const mockFtp = { verbose: false };
-      vi.mocked(Client).mockImplementationOnce(() => ({
-        ftp: mockFtp,
-        closed: false,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn()
-      } as any));
-
-      const client = createFTP({ host: 'test.com', verbose: true });
-      expect(mockFtp.verbose).toBe(true);
-    });
-  });
-
-  describe('isConnected', () => {
-    it('should return false when client is closed', async () => {
-      const { Client } = await import('basic-ftp');
-      const mockClient = {
-        ftp: { verbose: false },
-        closed: true,
-        access: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn()
-      };
-      vi.mocked(Client).mockImplementationOnce(() => mockClient as any);
-
-      const client = createFTP({ host: 'test.com' });
-      await client.connect();
-
-      // Simulate client being closed
-      mockClient.closed = true;
-
-      expect(client.isConnected()).toBe(false);
+      expect(result.data!.length).toBe(2);
+      expect(result.data![0].type).toBe('file');
+      expect(result.data![0].size).toBe(1024);
+      expect(result.data![1].type).toBe('directory');
     });
   });
 });

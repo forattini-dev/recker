@@ -1,6 +1,13 @@
-import { z, ZodSchema } from 'zod';
+/**
+ * Contract Module
+ * Type-safe API contracts with Zod validation
+ *
+ * Requires: pnpm add zod
+ */
+
+import type { z, ZodSchema } from 'zod';
 import { Client } from '../core/client.js';
-import { Method } from '../types/index.js';
+import type { Method } from '../types/index.js';
 import { HttpError } from '../core/errors.js';
 
 export interface ContractEndpoint {

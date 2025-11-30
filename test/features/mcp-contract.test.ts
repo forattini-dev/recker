@@ -264,7 +264,7 @@ describe('MCP Contract', () => {
       });
 
       const chat = createMCPStream(mcp, 'chat', {
-        extraParams: { model: 'gpt-4', temperature: 0.7 },
+        extraParams: { model: 'gpt-5.1', temperature: 0.7 },
       });
 
       await chat.text('Hello');

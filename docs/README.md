@@ -4,7 +4,7 @@
 
 ### The HTTP SDK for the AI Era
 
-**Stop fetching. Start orchestrating.**
+**Fast. Observable. Type-safe.**
 
 [![npm version](https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623)](https://www.npmjs.com/package/recker)
 [![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)

@@ -1,5 +1,5 @@
 import { ReckerResponse, SSEEvent, ProgressEvent } from '../types/index.js';
-import { ZodSchema } from 'zod';
+import type { ZodSchema } from 'zod';
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';

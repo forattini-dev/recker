@@ -12,7 +12,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Coverage](https://img.shields.io/badge/coverage-78%25-F5A623?style=flat-square)](https://github.com/forattini-dev/recker)
+[![Coverage](https://img.shields.io/badge/coverage-85%25-F5A623?style=flat-square)](https://github.com/forattini-dev/recker)
 [![License](https://img.shields.io/npm/l/recker.svg?style=flat-square&color=007AFF)](https://github.com/forattini-dev/recker/blob/main/LICENSE)
 
 [Documentation](https://forattini-dev.github.io/recker) · [Examples](./docs/examples/README.md) · [Migration](./docs/migration.md)

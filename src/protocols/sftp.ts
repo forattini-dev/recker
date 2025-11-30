@@ -1,11 +1,26 @@
 /**
  * SFTP Protocol Utility
  * Provides a simple async interface for SFTP operations using SSH
+ *
+ * Requires: pnpm add ssh2-sftp-client
  */
 
-import SFTPClient from 'ssh2-sftp-client';
-import type { ConnectOptions, FileInfo, FileStats } from 'ssh2-sftp-client';
 import { Readable, Writable } from 'node:stream';
+import { requireOptional } from '../utils/optional-require.js';
+
+// Type-only imports for TypeScript (these don't require the module at runtime)
+import type SFTPClient from 'ssh2-sftp-client';
+import type { ConnectOptions, FileInfo, FileStats } from 'ssh2-sftp-client';
+
+/**
+ * Load ssh2-sftp-client module dynamically
+ */
+async function loadSFTP(): Promise<typeof import('ssh2-sftp-client')> {
+  return requireOptional<typeof import('ssh2-sftp-client')>(
+    'ssh2-sftp-client',
+    'recker/protocols/sftp'
+  );
+}
 
 export interface SFTPConfig {
   host: string;
@@ -59,19 +74,32 @@ export interface SFTPResponse<T = void> {
  * ```
  */
 export class SFTP {
-  private client: SFTPClient;
+  private client!: SFTPClient;
   private config: SFTPConfig;
   private connected: boolean = false;
+  private initialized = false;
 
   constructor(config: SFTPConfig) {
     this.config = config;
-    this.client = new SFTPClient();
+  }
+
+  /**
+   * Initialize the SFTP client (lazy load ssh2-sftp-client)
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+
+    const SFTPClientClass = await loadSFTP();
+    this.client = new (SFTPClientClass as any).default();
+    this.initialized = true;
   }
 
   /**
    * Connect to the SFTP server
    */
   async connect(): Promise<SFTPResponse> {
+    await this.ensureInitialized();
+
     try {
       const options: ConnectOptions = {
         host: this.config.host,
@@ -457,8 +485,12 @@ export class SFTP {
 
   /**
    * Get the underlying ssh2-sftp-client for advanced operations
+   * Note: Only available after connect() is called
    */
   getClient(): SFTPClient {
+    if (!this.initialized) {
+      throw new Error('Client not initialized. Call connect() first.');
+    }
     return this.client;
   }
 

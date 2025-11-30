@@ -1,71 +1,58 @@
 <!-- docs/_sidebar.md -->
 
-- **Getting Started**
-  - [Installation](getting-started/installation.md)
-  - [Quick Start](getting-started/quickstart.md)
-  - [Feature Overview](guides/panorama.md)
+- **🚀 Getting Started**
+  - [Installation](/getting-started/installation.md)
+  - [Quick Start](/http/01-quickstart.md)
 
-- **Core Concepts**
-  - [Client Configuration](guides/client-config.md)
-  - [Request & Response](guides/request-response.md)
-  - [HTTP Methods](guides/http-methods.md)
-  - [Error Handling](guides/error-handling.md)
-  - [Hooks](guides/hooks.md)
+- **📡 HTTP**
+  - [Fundamentals](/http/02-fundamentals.md)
+  - [Responses & Data](/http/03-responses.md)
+  - [Validation & Contracts](/http/04-validation.md)
+  - [Configuration & Hooks](/http/05-configuration.md)
+  - [Performance](/http/06-performance.md)
+  - [Resilience](/http/07-resilience.md)
+  - [Concurrency & Batch](/http/08-concurrency.md)
+  - [Caching](/http/09-cache.md)
+  - [Plugins](/http/10-plugins.md)
+  - [Specialties](/http/11-specialties.md)
+  - [Observability](/http/12-observability.md)
+  - [GraphQL](/http/13-graphql.md)
+  - [Web Scraping](/http/14-scraping.md)
 
-- **Data Handling**
-  - [Streaming & SSE](guides/streaming.md)
-  - [Pagination](guides/pagination.md)
-  - [Caching](guides/caching.md)
-  - [Cookies](guides/cookies.md)
+- **🤖 AI & LLM**
+  - [Overview](/ai/01-overview.md)
+  - [Streaming](/ai/02-streaming.md)
+  - [Providers](/ai/03-providers.md)
+  - [Patterns](/ai/04-patterns.md)
+  - [MCP](/ai/05-mcp.md)
 
-- **Performance**
-  - [Concurrency Control](guides/concurrency.md)
-  - [Connection Pooling](guides/connection-pooling.md)
-  - [Batch Requests](guides/batch-requests.md)
-  - [Retry & Backoff](guides/retry.md)
-  - [Circuit Breaker](guides/circuit-breaker.md)
-  - [Rate Limits](guides/rate-limits.md)
+- **💻 CLI Tool**
+  - [Overview](/cli/01-overview.md)
+  - [Quick Start](/cli/02-quick-start.md)
+  - [Interactive Shell](/cli/03-shell.md)
+  - [AI Chat](/cli/04-ai-chat.md)
+  - [Load Testing](/cli/05-load-testing.md)
+  - [Protocols](/cli/06-protocols.md)
+  - [Presets](/cli/07-presets.md)
 
-- **Protocols**
-  - [HTTP/3 & QUIC](guides/protocols.md)
-  - [WebSocket](guides/websocket.md)
-  - [GraphQL](guides/graphql.md)
-  - [Enterprise (SOAP, gRPC)](guides/enterprise-protocols.md)
+- **🔌 Protocols**
+  - [WebSocket](/protocols/01-websocket.md)
+  - [FTP & SFTP](/protocols/02-ftp-sftp.md)
+  - [Telnet](/protocols/03-telnet.md)
+  - [DNS](/protocols/04-dns.md)
+  - [WHOIS & RDAP](/protocols/05-whois-rdap.md)
+  - [SSE](/protocols/06-sse.md)
+  - [Enterprise](/protocols/07-enterprise.md)
 
-- **Integrations**
-  - [Authentication](guides/authentication.md)
-  - [API Presets](guides/presets.md)
-  - [HTML Scraping](guides/scraping.md)
-  - [MCP Client](guides/mcp.md)
+- **📚 Reference**
+  - [API Reference](/reference/01-api.md)
+  - [Recipes & Examples](/reference/02-recipes.md)
+  - [Testing](/reference/03-testing.md)
+  - [Presets](/reference/04-presets.md)
+  - [Troubleshooting](/reference/05-troubleshooting.md)
 
-- **Security & Recon**
-  - [Security Best Practices](guides/security.md)
-  - [TLS, DNS, RDAP, WHOIS](guides/security-tools.md)
-  - [DNS & DoH](guides/dns.md)
-  - [WHOIS Lookup](guides/whois.md)
-  - [Proxy & Networking](guides/advanced-networking.md)
-
-- **Observability**
-  - [Debug Mode](guides/debug.md)
-  - [Timings & Metrics](guides/observability.md)
-  - [Header Parsing](guides/header-parsing.md)
-
-- **Testing**
-  - [MockTransport & HAR](guides/testing.md)
-
-- **Extending**
-  - [Building Plugins](guides/plugins.md)
-  - [Contracts](guides/contract.md)
-
-- **Reference**
-  - [API Reference](api/README.md)
-  - [Core Concepts](guides/concepts.md)
-  - [Troubleshooting](guides/troubleshooting.md)
-
-- **Resources**
-  - [Benchmarks](benchmarks.md)
-  - [Migration Guide](migration.md)
-  - [Changelog](changelog.md)
-  - [Contributing](contributing.md)
-  - [Documentation Style](guides/documentation-style.md)
-  - [Acknowledgements](acknowledgements.md)
+- **📖 Resources**
+  - [Benchmarks](/benchmarks.md)
+  - [Changelog](/changelog.md)
+  - [Contributing](/contributing.md)
+  - [Acknowledgements](/acknowledgements.md)
