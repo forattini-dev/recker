@@ -43,11 +43,15 @@ jobs:
       - name: Run Tests
         run: pnpm test
 
-  # 2. Alpha Release (Only on Main Push)
+  # 2. Alpha Release (Only on Main Push, skip version bump commits)
   release-alpha:
     name: Release Alpha
     needs: quality
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      !startsWith(github.event.head_commit.message, 'v') &&
+      !contains(github.event.head_commit.message, 'version bump')
     runs-on: ubuntu-latest
     permissions:
       contents: write
