@@ -1,5 +1,5 @@
-import pc from 'picocolors';
-import asciichart from 'asciichart';
+import pc from '../../utils/colors.js';
+import { plot } from '../../utils/chart.js';
 import readline from 'node:readline';
 import { LoadGenerator, LoadConfig } from '../../bench/generator.js';
 
@@ -124,17 +124,17 @@ function render(
 
     // 1. Active Users Chart
     console.log(pc.bold(pc.blue('👥 Active Users')));
-    console.log(pc.blue(asciichart.plot(usersHistory, { height: 4 })));
+    console.log(pc.blue(plot(usersHistory, { height: 4 })));
     console.log('');
 
     // 2. RPS Chart
     console.log(pc.bold(pc.green('⚡ Requests per Second')));
-    console.log(pc.green(asciichart.plot(rpsHistory, { height: 6 })));
+    console.log(pc.green(plot(rpsHistory, { height: 6 })));
     console.log('');
 
     // 3. Latency Chart
     console.log(pc.bold(pc.magenta('⏱️  Latency P95 (ms)')));
-    console.log(pc.magenta(asciichart.plot(latencyHistory, { height: 4 })));
+    console.log(pc.magenta(plot(latencyHistory, { height: 4 })));
 }
 
 function renderFinalReport(stats: any, config: LoadConfig) {

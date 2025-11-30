@@ -84,7 +84,7 @@ export class RekShell {
 
     // Prevent Ctrl+C from closing the shell
     this.rl.on('SIGINT', () => {
-      this.rl.clearLine(0);
+      readline.clearLine(process.stdout, 0);
       this.prompt();
     });
 
