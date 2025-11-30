@@ -220,7 +220,7 @@ export class RekShell {
         await this.runSelectLinks(parts[1]);
         return;
       case '$images':
-        await this.runSelectImages();
+        await this.runSelectImages(parts.slice(1).join(' ') || undefined);
         return;
       case '$scripts':
         await this.runSelectScripts();
@@ -1109,7 +1109,7 @@ export class RekShell {
     console.log('');
   }
 
-  private async runSelectImages() {
+  private async runSelectImages(selector?: string) {
     if (!this.currentDoc) {
       console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
       return;
@@ -1119,14 +1119,17 @@ export class RekShell {
       const imageExtensions = /\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|tiff|avif)(\?.*)?$/i;
       const images: Array<{ type: string; src: string; alt?: string }> = [];
 
+      // If selector provided, scope searches to that element
+      const scope = selector ? `${selector} ` : '';
+
       // 1. <img> tags
-      this.currentDoc.select('img[src]').each((el) => {
+      this.currentDoc.select(`${scope}img[src]`).each((el) => {
         const src = el.attr('src');
         if (src) images.push({ type: 'img', src, alt: el.attr('alt') });
       });
 
       // 2. <source> tags (picture element)
-      this.currentDoc.select('source[srcset]').each((el) => {
+      this.currentDoc.select(`${scope}source[srcset]`).each((el) => {
         const srcset = el.attr('srcset');
         if (srcset) {
           // Extract first URL from srcset
@@ -1136,7 +1139,7 @@ export class RekShell {
       });
 
       // 3. CSS background-image in style attributes
-      this.currentDoc.select('[style*="background"]').each((el) => {
+      this.currentDoc.select(`${scope}[style*="background"]`).each((el) => {
         const style = el.attr('style') || '';
         const matches = style.match(/url\(['"]?([^'"()]+)['"]?\)/gi);
         if (matches) {
@@ -1147,19 +1150,21 @@ export class RekShell {
         }
       });
 
-      // 4. <link> with image extensions (favicons, apple-touch-icon, etc)
-      this.currentDoc.select('link[href]').each((el) => {
-        const href = el.attr('href');
-        if (href && imageExtensions.test(href)) {
-          images.push({ type: 'link', src: href });
-        }
-      });
+      // 4. <link> with image extensions (only when no selector - these are in <head>)
+      if (!selector) {
+        this.currentDoc.select('link[href]').each((el) => {
+          const href = el.attr('href');
+          if (href && imageExtensions.test(href)) {
+            images.push({ type: 'link', src: href });
+          }
+        });
 
-      // 5. meta og:image, twitter:image
-      this.currentDoc.select('meta[property="og:image"], meta[name="twitter:image"]').each((el) => {
-        const content = el.attr('content');
-        if (content) images.push({ type: 'meta', src: content });
-      });
+        // 5. meta og:image, twitter:image (only when no selector - these are in <head>)
+        this.currentDoc.select('meta[property="og:image"], meta[name="twitter:image"]').each((el) => {
+          const content = el.attr('content');
+          if (content) images.push({ type: 'meta', src: content });
+        });
+      }
 
       // Deduplicate by src
       const uniqueImages = [...new Map(images.map(img => [img.src, img])).values()];
@@ -1915,7 +1920,7 @@ export class RekShell {
     ${colors.green('$attr <name> <sel>')}  Extract attribute values.
     ${colors.green('$html <selector>')}    Get inner HTML.
     ${colors.green('$links [selector]')}   List all links.
-    ${colors.green('$images')}             List all images (img, bg, og:image, favicon).
+    ${colors.green('$images [selector]')}  List all images (img, bg, og:image, favicon).
     ${colors.green('$scripts')}            List all scripts (external + inline).
     ${colors.green('$css')}                List all stylesheets (external + inline).
     ${colors.green('$sourcemaps')}         Find sourcemaps (confirmed + inferred).
