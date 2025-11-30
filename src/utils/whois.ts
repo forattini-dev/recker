@@ -222,10 +222,11 @@ async function queryWhoisServer(
       resolve(response);
     });
 
-    socket.on('error', (error) => {
+    socket.on('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timeoutId);
-      reject(new ReckerError(
-        `WHOIS query failed: ${error.message}`,
+      const errorDetail = error.message || error.code || 'Connection failed';
+      const err = new ReckerError(
+        `WHOIS query failed: ${errorDetail}`,
         undefined,
         undefined,
         [
@@ -233,7 +234,27 @@ async function queryWhoisServer(
           'Check network/firewall settings blocking WHOIS port 43.',
           'Retry the query; transient network issues can occur.'
         ]
-      ));
+      );
+      (err as any).code = error.code;
+      reject(err);
+    });
+
+    socket.on('close', (hadError) => {
+      clearTimeout(timeoutId);
+      if (hadError && !response) {
+        const err = new ReckerError(
+          'WHOIS connection closed unexpectedly',
+          undefined,
+          undefined,
+          [
+            'The WHOIS server may be rate limiting requests.',
+            'Try again in a few seconds.',
+            'Some TLDs have unreliable WHOIS servers.'
+          ]
+        );
+        (err as any).code = 'ECONNRESET';
+        reject(err);
+      }
     });
   });
 }

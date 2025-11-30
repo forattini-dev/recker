@@ -516,60 +516,101 @@ export class RekShell {
       }
     }
 
-    console.log(colors.gray(`Looking up ${domain}...`));
-    const startTime = performance.now();
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-    try {
-      const result = await whois(domain);
-      const duration = Math.round(performance.now() - startTime);
-
-      console.log(colors.green(`✔ WHOIS lookup completed`) + colors.gray(` (${duration}ms)`));
-      console.log(colors.gray(`Server: ${result.server}\n`));
-
-      // Display parsed fields - prioritize important ones
-      const importantFields = [
-        'domain name', 'registrar', 'registrar url',
-        'creation date', 'registry expiry date', 'updated date',
-        'domain status', 'name server', 'dnssec',
-        'organization', 'orgname', 'cidr', 'netname', 'country'
-      ];
-
-      let foundFields = 0;
-      for (const field of importantFields) {
-        const value = result.data[field];
-        if (value) {
-          const displayValue = Array.isArray(value) ? value.join(', ') : value;
-          console.log(`  ${colors.cyan(field)}: ${displayValue}`);
-          foundFields++;
-        }
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (attempt === 1) {
+        console.log(colors.gray(`Looking up ${domain}...`));
+      } else {
+        console.log(colors.gray(`Retrying (${attempt}/${maxRetries})...`));
       }
 
-      // If no important fields found, show all available fields
-      if (foundFields === 0 && Object.keys(result.data).length > 0) {
-        console.log(colors.gray('  (showing all available fields)\n'));
-        for (const [key, value] of Object.entries(result.data)) {
+      const startTime = performance.now();
+
+      try {
+        const result = await whois(domain);
+        const duration = Math.round(performance.now() - startTime);
+
+        console.log(colors.green(`✔ WHOIS lookup completed`) + colors.gray(` (${duration}ms)`));
+        console.log(colors.gray(`Server: ${result.server}\n`));
+
+        // Display parsed fields - prioritize important ones
+        const importantFields = [
+          'domain name', 'registrar', 'registrar url',
+          'creation date', 'registry expiry date', 'updated date',
+          'domain status', 'name server', 'dnssec',
+          'organization', 'orgname', 'cidr', 'netname', 'country'
+        ];
+
+        let foundFields = 0;
+        for (const field of importantFields) {
+          const value = result.data[field];
           if (value) {
-            const displayValue = Array.isArray(value) ? value.join(', ') : String(value);
-            console.log(`  ${colors.cyan(key)}: ${displayValue}`);
+            const displayValue = Array.isArray(value) ? value.join(', ') : value;
+            console.log(`  ${colors.cyan(field)}: ${displayValue}`);
+            foundFields++;
           }
         }
-      }
 
-      // If still nothing, show raw response
-      if (Object.keys(result.data).length === 0 && result.raw) {
-        console.log(colors.gray('  (raw response)\n'));
-        console.log(colors.white(result.raw.slice(0, 2000)));
-      }
+        // If no important fields found, show all available fields
+        if (foundFields === 0 && Object.keys(result.data).length > 0) {
+          console.log(colors.gray('  (showing all available fields)\n'));
+          for (const [key, value] of Object.entries(result.data)) {
+            if (value) {
+              const displayValue = Array.isArray(value) ? value.join(', ') : String(value);
+              console.log(`  ${colors.cyan(key)}: ${displayValue}`);
+            }
+          }
+        }
 
-      // Check availability hint
-      const available = await isDomainAvailable(domain);
-      if (available) {
-        console.log(colors.green(`\n✓ Domain appears to be available`));
-      }
+        // If still nothing, show raw response
+        if (Object.keys(result.data).length === 0 && result.raw) {
+          console.log(colors.gray('  (raw response)\n'));
+          console.log(colors.white(result.raw.slice(0, 2000)));
+        }
 
-      this.lastResponse = result.data;
-    } catch (error: any) {
-      console.error(colors.red(`WHOIS failed: ${error.message}`));
+        // Check availability hint
+        const available = await isDomainAvailable(domain);
+        if (available) {
+          console.log(colors.green(`\n✓ Domain appears to be available`));
+        }
+
+        this.lastResponse = result.data;
+        console.log('');
+        return; // Success, exit the retry loop
+      } catch (error: any) {
+        lastError = error;
+
+        // Check if error is retryable (connection issues, timeouts)
+        const isRetryable = error.code === 'ECONNRESET' ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.code === 'ENOTFOUND' ||
+          error.message?.includes('timeout') ||
+          error.message?.includes('WHOIS query failed');
+
+        if (!isRetryable || attempt === maxRetries) {
+          break; // Don't retry non-retryable errors or on last attempt
+        }
+
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+      }
+    }
+
+    // All retries failed
+    const errorMsg = lastError?.message || 'Unknown error';
+    const errorCode = (lastError as any)?.code;
+    console.error(colors.red(`WHOIS failed: ${errorMsg}`));
+    if (errorCode) {
+      console.error(colors.gray(`  Error code: ${errorCode}`));
+    }
+    if ((lastError as any)?.suggestions?.length) {
+      console.log(colors.yellow('  Suggestions:'));
+      for (const suggestion of (lastError as any).suggestions) {
+        console.log(colors.gray(`    • ${suggestion}`));
+      }
     }
     console.log('');
   }
