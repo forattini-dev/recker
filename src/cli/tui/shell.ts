@@ -104,7 +104,7 @@ export class RekShell {
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
       'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
-      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$table',
+      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$table',
       'help', 'clear', 'exit', 'set', 'url', 'vars'
     ];
 
@@ -227,6 +227,9 @@ export class RekShell {
         return;
       case '$css':
         await this.runSelectCSS();
+        return;
+      case '$sourcemaps':
+        await this.runSelectSourcemaps();
         return;
       case '$table':
         await this.runSelectTable(parts.slice(1).join(' '));
@@ -922,7 +925,7 @@ export class RekShell {
         if (og.url && og.url !== url) console.log(`    ${colors.magenta('URL')}: ${og.url}`);
       }
 
-      console.log(colors.gray('\n  Use $ <selector> to query, $text, $attr, $links, $images, $scripts, $css, $table'));
+      console.log(colors.gray('\n  Use $ <selector> to query, $text, $attr, $links, $images, $scripts, $css, $sourcemaps, $table'));
     } catch (error: any) {
       console.error(colors.red(`Scrape failed: ${error.message}`));
     }
@@ -1297,6 +1300,91 @@ export class RekShell {
     console.log('');
   }
 
+  private async runSelectSourcemaps() {
+    if (!this.currentDoc) {
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+
+    try {
+      const sourcemaps: Array<{ type: string; url: string; source?: string }> = [];
+      const sourceMappingURLPattern = /\/[/*]#\s*sourceMappingURL=([^\s*]+)/gi;
+
+      // 1. Inline <script> with sourceMappingURL comment
+      this.currentDoc.select('script:not([src])').each((el) => {
+        const content = el.text();
+        const matches = content.matchAll(sourceMappingURLPattern);
+        for (const match of matches) {
+          sourcemaps.push({ type: 'inline-js', url: match[1] });
+        }
+      });
+
+      // 2. Inline <style> with sourceMappingURL comment
+      this.currentDoc.select('style').each((el) => {
+        const content = el.text();
+        const matches = content.matchAll(sourceMappingURLPattern);
+        for (const match of matches) {
+          sourcemaps.push({ type: 'inline-css', url: match[1] });
+        }
+      });
+
+      // 3. External scripts - infer .map file existence
+      this.currentDoc.select('script[src]').each((el) => {
+        const src = el.attr('src');
+        if (src && !src.endsWith('.map')) {
+          // Common patterns: file.js -> file.js.map or file.min.js -> file.min.js.map
+          sourcemaps.push({ type: 'js-inferred', url: `${src}.map`, source: src });
+        }
+      });
+
+      // 4. External stylesheets - infer .map file existence
+      this.currentDoc.select('link[rel="stylesheet"]').each((el) => {
+        const href = el.attr('href');
+        if (href && !href.endsWith('.map')) {
+          sourcemaps.push({ type: 'css-inferred', url: `${href}.map`, source: href });
+        }
+      });
+
+      // 5. Direct .map file references (rare but possible)
+      this.currentDoc.select('script[src$=".map"], link[href$=".map"]').each((el) => {
+        const url = el.attr('src') || el.attr('href');
+        if (url) sourcemaps.push({ type: 'direct', url });
+      });
+
+      // Deduplicate by url
+      const uniqueMaps = [...new Map(sourcemaps.map(m => [m.url, m])).values()];
+
+      // Separate confirmed vs inferred
+      const confirmed = uniqueMaps.filter(m => !m.type.includes('inferred'));
+      const inferred = uniqueMaps.filter(m => m.type.includes('inferred'));
+
+      // Display confirmed
+      if (confirmed.length > 0) {
+        console.log(colors.green('Confirmed sourcemaps:'));
+        confirmed.forEach((m, i) => {
+          console.log(`${colors.gray(`${i + 1}.`)} ${colors.cyan(`[${m.type}]`)} ${m.url}`);
+        });
+      }
+
+      // Display inferred
+      if (inferred.length > 0) {
+        console.log(colors.yellow('\nPotential sourcemaps (inferred):'));
+        inferred.slice(0, 15).forEach((m, i) => {
+          console.log(`${colors.gray(`${i + 1}.`)} ${colors.gray(`[${m.type}]`)} ${m.url.slice(0, 70)}`);
+        });
+        if (inferred.length > 15) {
+          console.log(colors.gray(`  ... and ${inferred.length - 15} more`));
+        }
+      }
+
+      this.lastResponse = uniqueMaps;
+      console.log(colors.gray(`\n  ${confirmed.length} confirmed, ${inferred.length} inferred sourcemap(s)`));
+    } catch (error: any) {
+      console.error(colors.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
   private async runSelectTable(selector: string) {
     if (!this.currentDoc) {
       console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
@@ -1392,6 +1480,7 @@ export class RekShell {
     ${colors.green('$images')}             List all images (img, bg, og:image, favicon).
     ${colors.green('$scripts')}            List all scripts (external + inline).
     ${colors.green('$css')}                List all stylesheets (external + inline).
+    ${colors.green('$sourcemaps')}         Find sourcemaps (confirmed + inferred).
     ${colors.green('$table <selector>')}   Extract table as data.
 
   ${colors.bold('Examples:')}
