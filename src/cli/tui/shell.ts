@@ -878,16 +878,44 @@ export class RekShell {
       const html = await response.text();
       const duration = Math.round(performance.now() - startTime);
 
-      this.currentDoc = await ScrapeDocument.create(html);
+      this.currentDoc = await ScrapeDocument.create(html, { baseUrl: url });
       this.currentDocUrl = url;
 
       const elementCount = this.currentDoc.select('*').length;
       const title = this.currentDoc.selectFirst('title').text() || 'No title';
+      const meta = this.currentDoc.meta();
+      const og = this.currentDoc.openGraph();
 
       console.log(colors.green(`✔ Loaded`) + colors.gray(` (${duration}ms)`));
       console.log(`  ${colors.cyan('Title')}: ${title}`);
       console.log(`  ${colors.cyan('Elements')}: ${elementCount}`);
       console.log(`  ${colors.cyan('Size')}: ${(html.length / 1024).toFixed(1)}kb`);
+
+      // Show meta description if available
+      if (meta.description) {
+        const desc = meta.description.length > 100 ? meta.description.slice(0, 100) + '...' : meta.description;
+        console.log(`  ${colors.cyan('Description')}: ${desc}`);
+      }
+
+      // Show OpenGraph data if available
+      const hasOg = og.title || og.description || og.image || og.siteName;
+      if (hasOg) {
+        console.log(colors.bold('\n  OpenGraph:'));
+        if (og.siteName) console.log(`    ${colors.magenta('Site')}: ${og.siteName}`);
+        if (og.title && og.title !== title) console.log(`    ${colors.magenta('Title')}: ${og.title}`);
+        if (og.type) console.log(`    ${colors.magenta('Type')}: ${og.type}`);
+        if (og.description) {
+          const ogDesc = og.description.length > 80 ? og.description.slice(0, 80) + '...' : og.description;
+          console.log(`    ${colors.magenta('Description')}: ${ogDesc}`);
+        }
+        if (og.image) {
+          const images = Array.isArray(og.image) ? og.image : [og.image];
+          console.log(`    ${colors.magenta('Image')}: ${images[0]}`);
+          if (images.length > 1) console.log(colors.gray(`      (+${images.length - 1} more)`));
+        }
+        if (og.url && og.url !== url) console.log(`    ${colors.magenta('URL')}: ${og.url}`);
+      }
+
       console.log(colors.gray('\n  Use $ <selector> to query, $text, $attr, $links, $images, $table'));
     } catch (error: any) {
       console.error(colors.red(`Scrape failed: ${error.message}`));
