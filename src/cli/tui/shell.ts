@@ -104,7 +104,7 @@ export class RekShell {
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
       'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
-      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$table',
+      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
       'help', 'clear', 'exit', 'set', 'url', 'vars'
     ];
 
@@ -239,6 +239,12 @@ export class RekShell {
         return;
       case '$unmap:save':
         await this.runUnmapSave(parts[1] || '');
+        return;
+      case '$beautify':
+        await this.runBeautify(parts.slice(1).join(' '));
+        return;
+      case '$beautify:save':
+        await this.runBeautifySave(parts[1] || '');
         return;
       case '$table':
         await this.runSelectTable(parts.slice(1).join(' '));
@@ -1566,6 +1572,257 @@ export class RekShell {
     console.log('');
   }
 
+  private async runBeautify(urlArg: string) {
+    if (!urlArg) {
+      console.log(colors.yellow('Usage: $beautify <url-to-js-or-css>'));
+      console.log(colors.gray('  Downloads and formats minified JS/CSS code'));
+      return;
+    }
+
+    let url = urlArg;
+    // Resolve relative URL if we have a base
+    if (!url.startsWith('http') && this.baseUrl) {
+      const base = new URL(this.baseUrl);
+      url = new URL(url, base).toString();
+    }
+
+    console.log(colors.cyan(`Fetching: ${url}`));
+
+    try {
+      const response = await this.client.get(url);
+      const code = await response.text();
+      const isCSS = url.endsWith('.css') || response.headers.get('content-type')?.includes('css');
+
+      console.log(colors.gray(`  Size: ${(code.length / 1024).toFixed(1)}kb`));
+
+      const formatted = isCSS ? this.beautifyCSS(code) : this.beautifyJS(code);
+
+      console.log(colors.bold(`\n─── Beautified ${isCSS ? 'CSS' : 'JS'} ───\n`));
+
+      // Try to syntax highlight
+      try {
+        console.log(highlight(formatted, { linenos: true }));
+      } catch {
+        console.log(formatted);
+      }
+
+      console.log(colors.bold(`\n─── end ───`));
+
+      // Store for potential save
+      this.lastResponse = { url, original: code, formatted, type: isCSS ? 'css' : 'js' };
+      console.log(colors.gray(`\n  Use $beautify:save <file> to save formatted code`));
+    } catch (error: any) {
+      console.error(colors.red(`Failed to fetch: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private beautifyJS(code: string): string {
+    let result = '';
+    let indent = 0;
+    let inString: string | null = null;
+    let inComment = false;
+    let inLineComment = false;
+    let i = 0;
+
+    const addNewline = () => {
+      result += '\n' + '  '.repeat(indent);
+    };
+
+    while (i < code.length) {
+      const char = code[i];
+      const next = code[i + 1];
+      const prev = code[i - 1];
+
+      // Handle strings
+      if (!inComment && !inLineComment) {
+        if ((char === '"' || char === "'" || char === '`') && prev !== '\\') {
+          if (inString === char) {
+            inString = null;
+          } else if (!inString) {
+            inString = char;
+          }
+        }
+      }
+
+      // Handle comments
+      if (!inString && !inComment && !inLineComment) {
+        if (char === '/' && next === '*') {
+          inComment = true;
+          result += char;
+          i++;
+          continue;
+        }
+        if (char === '/' && next === '/') {
+          inLineComment = true;
+          result += char;
+          i++;
+          continue;
+        }
+      }
+
+      if (inComment && char === '*' && next === '/') {
+        result += '*/';
+        inComment = false;
+        i += 2;
+        continue;
+      }
+
+      if (inLineComment && char === '\n') {
+        inLineComment = false;
+      }
+
+      // Skip if in string or comment
+      if (inString || inComment || inLineComment) {
+        result += char;
+        i++;
+        continue;
+      }
+
+      // Handle braces
+      if (char === '{') {
+        result += ' {';
+        indent++;
+        addNewline();
+        i++;
+        continue;
+      }
+
+      if (char === '}') {
+        indent = Math.max(0, indent - 1);
+        addNewline();
+        result += '}';
+        if (next && next !== ';' && next !== ',' && next !== ')' && next !== '\n') {
+          addNewline();
+        }
+        i++;
+        continue;
+      }
+
+      // Handle semicolons
+      if (char === ';') {
+        result += ';';
+        if (next && next !== '}' && next !== '\n') {
+          addNewline();
+        }
+        i++;
+        continue;
+      }
+
+      // Remove excessive whitespace
+      if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+        if (result.length > 0 && !/\s$/.test(result)) {
+          result += ' ';
+        }
+        i++;
+        continue;
+      }
+
+      result += char;
+      i++;
+    }
+
+    return result.trim();
+  }
+
+  private beautifyCSS(code: string): string {
+    let result = '';
+    let indent = 0;
+    let inString: string | null = null;
+    let i = 0;
+
+    const addNewline = () => {
+      result += '\n' + '  '.repeat(indent);
+    };
+
+    while (i < code.length) {
+      const char = code[i];
+      const next = code[i + 1];
+      const prev = code[i - 1];
+
+      // Handle strings
+      if ((char === '"' || char === "'") && prev !== '\\') {
+        if (inString === char) {
+          inString = null;
+        } else if (!inString) {
+          inString = char;
+        }
+      }
+
+      if (inString) {
+        result += char;
+        i++;
+        continue;
+      }
+
+      // Handle braces
+      if (char === '{') {
+        result += ' {';
+        indent++;
+        addNewline();
+        i++;
+        continue;
+      }
+
+      if (char === '}') {
+        indent = Math.max(0, indent - 1);
+        addNewline();
+        result += '}';
+        addNewline();
+        i++;
+        continue;
+      }
+
+      // Handle semicolons
+      if (char === ';') {
+        result += ';';
+        addNewline();
+        i++;
+        continue;
+      }
+
+      // Handle commas in selectors
+      if (char === ',' && indent === 0) {
+        result += ',';
+        addNewline();
+        i++;
+        continue;
+      }
+
+      // Remove excessive whitespace
+      if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+        if (result.length > 0 && !/\s$/.test(result)) {
+          result += ' ';
+        }
+        i++;
+        continue;
+      }
+
+      result += char;
+      i++;
+    }
+
+    return result.trim();
+  }
+
+  private async runBeautifySave(filename: string) {
+    if (!this.lastResponse || !this.lastResponse.formatted) {
+      console.log(colors.yellow('No beautified code. Use $beautify <url> first.'));
+      return;
+    }
+
+    const outputFile = filename || `beautified.${this.lastResponse.type}`;
+    const { promises: fs } = await import('node:fs');
+
+    try {
+      await fs.writeFile(outputFile, this.lastResponse.formatted, 'utf-8');
+      console.log(colors.green(`  ✓ Saved to ${outputFile}`));
+    } catch (err: any) {
+      console.log(colors.red(`  ✗ Failed to save: ${err.message}`));
+    }
+    console.log('');
+  }
+
   private async runSelectTable(selector: string) {
     if (!this.currentDoc) {
       console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
@@ -1665,6 +1922,8 @@ export class RekShell {
     ${colors.green('$unmap <url>')}        Download and parse sourcemap.
     ${colors.green('$unmap:view <n>')}     View source file by index.
     ${colors.green('$unmap:save [dir]')}   Save all sources to disk.
+    ${colors.green('$beautify <url>')}     Format minified JS/CSS code.
+    ${colors.green('$beautify:save [f]')}  Save beautified code to file.
     ${colors.green('$table <selector>')}   Extract table as data.
 
   ${colors.bold('Examples:')}
