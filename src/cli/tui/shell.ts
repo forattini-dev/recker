@@ -922,7 +922,7 @@ export class RekShell {
         if (og.url && og.url !== url) console.log(`    ${colors.magenta('URL')}: ${og.url}`);
       }
 
-      console.log(colors.gray('\n  Use $ <selector> to query, $text, $attr, $links, $images, $table'));
+      console.log(colors.gray('\n  Use $ <selector> to query, $text, $attr, $links, $images, $scripts, $css, $table'));
     } catch (error: any) {
       console.error(colors.red(`Scrape failed: ${error.message}`));
     }

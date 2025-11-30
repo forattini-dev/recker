@@ -191,11 +191,11 @@ try {
 ## Testing Locally
 
 ```bash
-# Install docsify CLI
-pnpm add -g docsify-cli
+# Run from project root
+pnpm docs
 
-# Serve docs
-docsify serve docs
+# Or manually
+npx serve docs -p 3000
 
 # Open http://localhost:3000
 ```
