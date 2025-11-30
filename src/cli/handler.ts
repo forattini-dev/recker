@@ -12,8 +12,13 @@ const ora = oraImport;
  */
 async function initDependencies() {
   if (!highlight) {
-    const cardinal = await requireOptional<{ highlight: typeof highlight }>('cardinal', 'recker/cli');
-    highlight = cardinal.highlight;
+    try {
+      const cardinal = await requireOptional<{ highlight: typeof highlight }>('cardinal', 'recker/cli');
+      highlight = cardinal.highlight;
+    } catch {
+      // Fallback: no syntax highlighting if cardinal not installed
+      highlight = (code: string) => code;
+    }
   }
 }
 

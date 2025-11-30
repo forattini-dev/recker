@@ -1,7 +1,12 @@
 import readline from 'node:readline';
+import { promises as dns } from 'node:dns';
 import { requireOptional } from '../../utils/optional-require.js';
 import { createClient } from '../../core/client.js';
 import { startInteractiveWebSocket } from './websocket.js';
+import { whois, isDomainAvailable } from '../../utils/whois.js';
+import { inspectTLS } from '../../utils/tls-inspector.js';
+import { getSecurityRecords } from '../../utils/dns-toolkit.js';
+import { rdap } from '../../utils/rdap.js';
 import pc from '../../utils/colors.js';
 
 // Lazy-loaded optional dependency
@@ -9,8 +14,13 @@ let highlight: (code: string, opts?: any) => string;
 
 async function initDependencies() {
   if (!highlight) {
-    const cardinal = await requireOptional<{ highlight: typeof highlight }>('cardinal', 'recker/cli');
-    highlight = cardinal.highlight;
+    try {
+      const cardinal = await requireOptional<{ highlight: typeof highlight }>('cardinal', 'recker/cli');
+      highlight = cardinal.highlight;
+    } catch {
+      // Fallback: no syntax highlighting if cardinal not installed
+      highlight = (code: string) => code;
+    }
   }
 }
 
@@ -59,7 +69,12 @@ export class RekShell {
   }
 
   private completer(line: string) {
-    const commands = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'ws', 'udp', 'load', 'chat', 'ai', 'help', 'clear', 'exit', 'set', 'url'];
+    const commands = [
+      'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
+      'ws', 'udp', 'load', 'chat', 'ai',
+      'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
+      'help', 'clear', 'exit', 'set', 'url', 'vars'
+    ];
     const hits = commands.filter((c) => c.startsWith(line));
     return [hits.length ? hits : commands, line];
   }
@@ -136,6 +151,22 @@ export class RekShell {
       case 'ai':
       case 'chat':
         await this.runAIChat(parts.slice(1));
+        return;
+      case 'whois':
+        await this.runWhois(parts[1]);
+        return;
+      case 'tls':
+      case 'ssl':
+        await this.runTLS(parts[1], parts[2] ? parseInt(parts[2]) : 443);
+        return;
+      case 'dns':
+        await this.runDNS(parts[1]);
+        return;
+      case 'rdap':
+        await this.runRDAP(parts[1]);
+        return;
+      case 'ping':
+        await this.runPing(parts[1]);
         return;
     }
 
@@ -418,6 +449,273 @@ export class RekShell {
     console.log(''); // Spacer
   }
 
+  private async runWhois(domain: string) {
+    if (!domain) {
+      console.log(pc.yellow('Usage: whois <domain>'));
+      console.log(pc.gray('  Examples: whois google.com | whois 8.8.8.8'));
+      return;
+    }
+
+    console.log(pc.gray(`Looking up ${domain}...`));
+    const startTime = performance.now();
+
+    try {
+      const result = await whois(domain);
+      const duration = Math.round(performance.now() - startTime);
+
+      console.log(pc.green(`✔ WHOIS lookup completed`) + pc.gray(` (${duration}ms)`));
+      console.log(pc.gray(`Server: ${result.server}\n`));
+
+      // Display parsed fields
+      const importantFields = [
+        'domain name', 'registrar', 'registrar url',
+        'creation date', 'registry expiry date', 'updated date',
+        'domain status', 'name server', 'dnssec',
+        'organization', 'orgname', 'cidr', 'netname', 'country'
+      ];
+
+      for (const field of importantFields) {
+        const value = result.data[field];
+        if (value) {
+          const displayValue = Array.isArray(value) ? value.join(', ') : value;
+          console.log(`  ${pc.cyan(field)}: ${displayValue}`);
+        }
+      }
+
+      // Check availability hint
+      const available = await isDomainAvailable(domain);
+      if (available) {
+        console.log(pc.green(`\n✓ Domain appears to be available`));
+      }
+
+      this.lastResponse = result.data;
+    } catch (error: any) {
+      console.error(pc.red(`WHOIS failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runTLS(host: string, port: number = 443) {
+    if (!host) {
+      console.log(pc.yellow('Usage: tls <host> [port]'));
+      console.log(pc.gray('  Examples: tls google.com | tls api.stripe.com 443'));
+      return;
+    }
+
+    // Strip protocol if present
+    host = host.replace(/^https?:\/\//, '').split('/')[0];
+
+    console.log(pc.gray(`Inspecting TLS for ${host}:${port}...`));
+    const startTime = performance.now();
+
+    try {
+      const info = await inspectTLS(host, port);
+      const duration = Math.round(performance.now() - startTime);
+
+      const statusIcon = info.valid ? pc.green('✔') : pc.red('✖');
+      const statusText = info.valid ? pc.green('Valid') : pc.red('Invalid/Expired');
+
+      console.log(`${statusIcon} Certificate ${statusText}` + pc.gray(` (${duration}ms)\n`));
+
+      // Certificate info
+      console.log(pc.bold('  Certificate:'));
+      console.log(`    ${pc.cyan('Subject')}: ${info.subject?.CN || info.subject?.O || 'N/A'}`);
+      console.log(`    ${pc.cyan('Issuer')}: ${info.issuer?.CN || info.issuer?.O || 'N/A'}`);
+      console.log(`    ${pc.cyan('Valid From')}: ${info.validFrom.toISOString()}`);
+      console.log(`    ${pc.cyan('Valid To')}: ${info.validTo.toISOString()}`);
+
+      // Days remaining with color coding
+      const daysColor = info.daysRemaining < 30 ? pc.red : info.daysRemaining < 90 ? pc.yellow : pc.green;
+      console.log(`    ${pc.cyan('Days Remaining')}: ${daysColor(String(info.daysRemaining))}`);
+
+      // Connection info
+      console.log(pc.bold('\n  Connection:'));
+      console.log(`    ${pc.cyan('Protocol')}: ${info.protocol || 'N/A'}`);
+      console.log(`    ${pc.cyan('Cipher')}: ${info.cipher?.name || 'N/A'}`);
+      console.log(`    ${pc.cyan('Authorized')}: ${info.authorized ? pc.green('Yes') : pc.red('No')}`);
+      if (info.authorizationError) {
+        console.log(`    ${pc.cyan('Auth Error')}: ${pc.red(String(info.authorizationError))}`);
+      }
+
+      // Fingerprints
+      console.log(pc.bold('\n  Fingerprints:'));
+      console.log(`    ${pc.cyan('SHA1')}: ${info.fingerprint}`);
+      console.log(`    ${pc.cyan('SHA256')}: ${info.fingerprint256}`);
+      console.log(`    ${pc.cyan('Serial')}: ${info.serialNumber}`);
+
+      this.lastResponse = info;
+    } catch (error: any) {
+      console.error(pc.red(`TLS inspection failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runDNS(domain: string) {
+    if (!domain) {
+      console.log(pc.yellow('Usage: dns <domain>'));
+      console.log(pc.gray('  Examples: dns google.com | dns github.com'));
+      return;
+    }
+
+    console.log(pc.gray(`Resolving DNS for ${domain}...`));
+    const startTime = performance.now();
+
+    try {
+      // Parallel DNS lookups
+      const [a, aaaa, mx, ns, txt, security] = await Promise.all([
+        dns.resolve4(domain).catch(() => []),
+        dns.resolve6(domain).catch(() => []),
+        dns.resolveMx(domain).catch(() => []),
+        dns.resolveNs(domain).catch(() => []),
+        dns.resolveTxt(domain).catch(() => []),
+        getSecurityRecords(domain).catch(() => ({}))
+      ]);
+
+      const duration = Math.round(performance.now() - startTime);
+      console.log(pc.green(`✔ DNS resolved`) + pc.gray(` (${duration}ms)\n`));
+
+      // A Records
+      if (a.length) {
+        console.log(pc.bold('  A Records (IPv4):'));
+        a.forEach(ip => console.log(`    ${pc.cyan('→')} ${ip}`));
+      }
+
+      // AAAA Records
+      if (aaaa.length) {
+        console.log(pc.bold('  AAAA Records (IPv6):'));
+        aaaa.forEach(ip => console.log(`    ${pc.cyan('→')} ${ip}`));
+      }
+
+      // NS Records
+      if (ns.length) {
+        console.log(pc.bold('  NS Records:'));
+        ns.forEach(n => console.log(`    ${pc.cyan('→')} ${n}`));
+      }
+
+      // MX Records
+      if (mx.length) {
+        console.log(pc.bold('  MX Records:'));
+        mx.sort((a, b) => a.priority - b.priority)
+          .forEach(m => console.log(`    ${pc.cyan(String(m.priority).padStart(3))} ${m.exchange}`));
+      }
+
+      // Security Records
+      const sec = security as any;
+      if (sec.spf?.length) {
+        console.log(pc.bold('  SPF:'));
+        console.log(`    ${pc.gray(sec.spf[0].slice(0, 80))}${sec.spf[0].length > 80 ? '...' : ''}`);
+      }
+      if (sec.dmarc) {
+        console.log(pc.bold('  DMARC:'));
+        console.log(`    ${pc.gray(sec.dmarc.slice(0, 80))}${sec.dmarc.length > 80 ? '...' : ''}`);
+      }
+      if (sec.caa?.issue?.length) {
+        console.log(pc.bold('  CAA:'));
+        sec.caa.issue.forEach((ca: string) => console.log(`    ${pc.cyan('issue')} ${ca}`));
+      }
+
+      this.lastResponse = { a, aaaa, mx, ns, txt, security };
+    } catch (error: any) {
+      console.error(pc.red(`DNS lookup failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runRDAP(domain: string) {
+    if (!domain) {
+      console.log(pc.yellow('Usage: rdap <domain>'));
+      console.log(pc.gray('  Examples: rdap google.com | rdap 8.8.8.8'));
+      return;
+    }
+
+    console.log(pc.gray(`RDAP lookup for ${domain}...`));
+    const startTime = performance.now();
+
+    try {
+      const result = await rdap(this.client, domain);
+      const duration = Math.round(performance.now() - startTime);
+
+      console.log(pc.green(`✔ RDAP lookup completed`) + pc.gray(` (${duration}ms)\n`));
+
+      // Status
+      if (result.status?.length) {
+        console.log(pc.bold('  Status:'));
+        result.status.forEach((s: string) => console.log(`    ${pc.cyan('→')} ${s}`));
+      }
+
+      // Events (registration, expiration, etc.)
+      if (result.events?.length) {
+        console.log(pc.bold('  Events:'));
+        result.events.forEach((e: any) => {
+          const date = new Date(e.eventDate).toISOString().split('T')[0];
+          console.log(`    ${pc.cyan(e.eventAction.padEnd(15))} ${date}`);
+        });
+      }
+
+      // Entities
+      if (result.entities?.length) {
+        console.log(pc.bold('  Entities:'));
+        result.entities.forEach((e: any) => {
+          const roles = e.roles?.join(', ') || 'unknown';
+          console.log(`    ${pc.cyan(roles.padEnd(15))} ${e.handle || 'N/A'}`);
+        });
+      }
+
+      // Handle (for IP lookups)
+      if (result.handle) {
+        console.log(`  ${pc.cyan('Handle')}: ${result.handle}`);
+      }
+      if (result.name) {
+        console.log(`  ${pc.cyan('Name')}: ${result.name}`);
+      }
+      if (result.startAddress && result.endAddress) {
+        console.log(`  ${pc.cyan('Range')}: ${result.startAddress} - ${result.endAddress}`);
+      }
+
+      this.lastResponse = result;
+    } catch (error: any) {
+      console.error(pc.red(`RDAP lookup failed: ${error.message}`));
+      console.log(pc.gray('  Tip: RDAP may not be available for all TLDs. Try "whois" instead.'));
+    }
+    console.log('');
+  }
+
+  private async runPing(host: string) {
+    if (!host) {
+      console.log(pc.yellow('Usage: ping <host>'));
+      return;
+    }
+
+    // Strip protocol if present
+    host = host.replace(/^https?:\/\//, '').split('/')[0];
+
+    console.log(pc.gray(`Pinging ${host}...`));
+
+    try {
+      // Quick TCP connect test to port 443 or 80
+      const { connect } = await import('node:net');
+      const port = 443;
+      const startTime = performance.now();
+
+      await new Promise<void>((resolve, reject) => {
+        const socket = connect(port, host, () => {
+          const duration = Math.round(performance.now() - startTime);
+          console.log(pc.green(`✔ ${host}:${port} is reachable`) + pc.gray(` (${duration}ms)`));
+          socket.end();
+          resolve();
+        });
+        socket.on('error', reject);
+        socket.setTimeout(5000, () => {
+          socket.destroy();
+          reject(new Error('Connection timed out'));
+        });
+      });
+    } catch (error: any) {
+      console.error(pc.red(`✖ ${host} is unreachable: ${error.message}`));
+    }
+    console.log('');
+  }
+
   private printHelp() {
     console.log(`
   ${pc.bold(pc.cyan('Rek Console Help'))}
@@ -449,6 +747,13 @@ export class RekShell {
 
     ${pc.green('ws <url>')}            Start interactive WebSocket session.
     ${pc.green('udp <url>')}           Send UDP packet.
+
+  ${pc.bold('Network Tools:')}
+    ${pc.green('whois <domain>')}      WHOIS lookup (domain or IP).
+    ${pc.green('tls <host> [port]')}   Inspect TLS/SSL certificate.
+    ${pc.green('dns <domain>')}        Full DNS lookup (A, AAAA, MX, NS, SPF, DMARC).
+    ${pc.green('rdap <domain>')}       RDAP lookup (modern WHOIS).
+    ${pc.green('ping <host>')}         Quick TCP connectivity check.
 
   ${pc.bold('Examples:')}
     › url httpbin.org
