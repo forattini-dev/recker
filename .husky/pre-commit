@@ -1,0 +1,17 @@
+echo "🧪 Running tests before commit..."
+pnpm test
+
+if [ $? -ne 0 ]; then
+  echo "❌ Tests failed! Fix them before committing."
+  exit 1
+fi
+
+echo "🔨 Checking TypeScript build..."
+pnpm build
+
+if [ $? -ne 0 ]; then
+  echo "❌ Build failed! Fix compilation errors before committing."
+  exit 1
+fi
+
+echo "✅ All checks passed! Committing..."
