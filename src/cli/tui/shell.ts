@@ -8,7 +8,7 @@ import { inspectTLS } from '../../utils/tls-inspector.js';
 import { getSecurityRecords } from '../../utils/dns-toolkit.js';
 import { rdap } from '../../utils/rdap.js';
 import { ScrapeDocument } from '../../scrape/document.js';
-import pc from '../../utils/colors.js';
+import colors from '../../utils/colors.js';
 
 // Lazy-loaded optional dependency
 let highlight: (code: string, opts?: any) => string;
@@ -67,8 +67,8 @@ export class RekShell {
   }
 
   private getPrompt() {
-    const base = this.baseUrl ? pc.cyan(new URL(this.baseUrl).hostname) : pc.gray('rek');
-    return `${base} ${pc.magenta('›')} `;
+    const base = this.baseUrl ? colors.cyan(new URL(this.baseUrl).hostname) : colors.gray('rek');
+    return `${base} ${colors.magenta('›')} `;
   }
 
   /** Extract domain/hostname from baseUrl */
@@ -97,9 +97,9 @@ export class RekShell {
     await this.ensureInitialized();
 
     console.clear();
-    console.log(pc.bold(pc.cyan('Rek Console')));
-    console.log(pc.gray('Chat with your APIs. Type "help" for magic.'));
-    console.log(pc.gray('--------------------------------------------\n'));
+    console.log(colors.bold(colors.cyan('Rek Console')));
+    console.log(colors.gray('Chat with your APIs. Type "help" for magic.'));
+    console.log(colors.gray('--------------------------------------------\n'));
 
     this.prompt();
 
@@ -118,7 +118,7 @@ export class RekShell {
     });
 
     this.rl.on('close', () => {
-      console.log(pc.gray('\nSee ya.'));
+      console.log(colors.gray('\nSee ya.'));
       process.exit(0);
     });
   }
@@ -226,14 +226,14 @@ export class RekShell {
       url = cmd;
       bodyParts = parts.slice(1);
     } else {
-      console.log(pc.red(`Unknown command: ${cmd}`));
+      console.log(colors.red(`Unknown command: ${cmd}`));
       return;
     }
 
     // Resolve URL
     url = this.resolveUrl(url);
     if (!url) {
-      console.log(pc.yellow('No URL provided and no Base URL set. Use "url <url>" or provide full URL.'));
+      console.log(colors.yellow('No URL provided and no Base URL set. Use "url <url>" or provide full URL.'));
       return;
     }
 
@@ -329,7 +329,7 @@ export class RekShell {
 
     targetUrl = this.resolveUrl(targetUrl);
     if (!targetUrl) {
-        console.log(pc.yellow('Target URL required. usage: load <url> users=10 duration=10s ramp=5'));
+        console.log(colors.yellow('Target URL required. usage: load <url> users=10 duration=10s ramp=5'));
         return;
     }
 
@@ -349,7 +349,7 @@ export class RekShell {
             rampUp
         });
     } catch (e: any) {
-        console.error(pc.red('Load Test Failed: ' + e.message));
+        console.error(colors.red('Load Test Failed: ' + e.message));
     } finally {
         // Restore cursor
         process.stdout.write('\x1B[?25h');
@@ -367,7 +367,7 @@ export class RekShell {
   private setBaseUrl(url: string) {
     if (!url.startsWith('http')) url = `https://${url}`;
     this.baseUrl = url;
-    console.log(pc.gray(`Base URL set to: ${pc.cyan(this.baseUrl)}`));
+    console.log(colors.gray(`Base URL set to: ${colors.cyan(this.baseUrl)}`));
   }
 
   private setVariable(args: string[]) {
@@ -376,7 +376,7 @@ export class RekShell {
     if (!expr || !expr.includes('=')) return;
     const [key, val] = expr.split('=');
     this.variables[key] = val;
-    console.log(pc.gray(`Variable $${key} set.`));
+    console.log(colors.gray(`Variable $${key} set.`));
   }
 
   private resolveVariables(value: string): string {
@@ -434,19 +434,19 @@ export class RekShell {
       const { UDPTransport } = await import('../../transport/udp.js');
       const transport = new UDPTransport(url);
       const msg = Object.keys(body).length ? JSON.stringify(body) : 'ping';
-      console.log(pc.gray(`UDP packet -> ${url}`));
+      console.log(colors.gray(`UDP packet -> ${url}`));
       const res = await transport.dispatch({
         url, method: 'GET', headers: new Headers(),
         body: msg, withHeader: () => ({} as any), withBody: () => ({} as any)
       });
       const text = await res.text();
-      console.log(pc.green('✔ Sent/Received'));
+      console.log(colors.green('✔ Sent/Received'));
       if (text) console.log(text);
       return;
     }
 
     // HTTP Request
-    console.log(pc.gray(`${method} ${url}...`));
+    console.log(colors.gray(`${method} ${url}...`));
 
     try {
       const hasBody = Object.keys(body).length > 0;
@@ -457,11 +457,11 @@ export class RekShell {
       });
 
       const duration = Math.round(performance.now() - startTime);
-      const statusColor = res.ok ? pc.green : pc.red;
+      const statusColor = res.ok ? colors.green : colors.red;
 
       console.log(
-        `${statusColor(pc.bold(res.status))} ${statusColor(res.statusText)} ` +
-        `${pc.gray(`(${duration}ms)`)}`
+        `${statusColor(colors.bold(res.status))} ${statusColor(res.statusText)} ` +
+        `${colors.gray(`(${duration}ms)`)}`
       );
 
       const text = await res.text();
@@ -482,7 +482,7 @@ export class RekShell {
       }
 
     } catch (error: any) {
-      console.error(pc.red(`Error: ${error.message}`));
+      console.error(colors.red(`Error: ${error.message}`));
     }
     console.log(''); // Spacer
   }
@@ -491,22 +491,22 @@ export class RekShell {
     if (!domain) {
       domain = this.getBaseDomain() || '';
       if (!domain) {
-        console.log(pc.yellow('Usage: whois <domain>'));
-        console.log(pc.gray('  Examples: whois google.com | whois 8.8.8.8'));
-        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        console.log(colors.yellow('Usage: whois <domain>'));
+        console.log(colors.gray('  Examples: whois google.com | whois 8.8.8.8'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
         return;
       }
     }
 
-    console.log(pc.gray(`Looking up ${domain}...`));
+    console.log(colors.gray(`Looking up ${domain}...`));
     const startTime = performance.now();
 
     try {
       const result = await whois(domain);
       const duration = Math.round(performance.now() - startTime);
 
-      console.log(pc.green(`✔ WHOIS lookup completed`) + pc.gray(` (${duration}ms)`));
-      console.log(pc.gray(`Server: ${result.server}\n`));
+      console.log(colors.green(`✔ WHOIS lookup completed`) + colors.gray(` (${duration}ms)`));
+      console.log(colors.gray(`Server: ${result.server}\n`));
 
       // Display parsed fields
       const importantFields = [
@@ -520,19 +520,19 @@ export class RekShell {
         const value = result.data[field];
         if (value) {
           const displayValue = Array.isArray(value) ? value.join(', ') : value;
-          console.log(`  ${pc.cyan(field)}: ${displayValue}`);
+          console.log(`  ${colors.cyan(field)}: ${displayValue}`);
         }
       }
 
       // Check availability hint
       const available = await isDomainAvailable(domain);
       if (available) {
-        console.log(pc.green(`\n✓ Domain appears to be available`));
+        console.log(colors.green(`\n✓ Domain appears to be available`));
       }
 
       this.lastResponse = result.data;
     } catch (error: any) {
-      console.error(pc.red(`WHOIS failed: ${error.message}`));
+      console.error(colors.red(`WHOIS failed: ${error.message}`));
     }
     console.log('');
   }
@@ -541,9 +541,9 @@ export class RekShell {
     if (!host) {
       host = this.getBaseDomain() || '';
       if (!host) {
-        console.log(pc.yellow('Usage: tls <host> [port]'));
-        console.log(pc.gray('  Examples: tls google.com | tls api.stripe.com 443'));
-        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        console.log(colors.yellow('Usage: tls <host> [port]'));
+        console.log(colors.gray('  Examples: tls google.com | tls api.stripe.com 443'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
         return;
       }
     } else {
@@ -551,47 +551,47 @@ export class RekShell {
       host = host.replace(/^https?:\/\//, '').split('/')[0];
     }
 
-    console.log(pc.gray(`Inspecting TLS for ${host}:${port}...`));
+    console.log(colors.gray(`Inspecting TLS for ${host}:${port}...`));
     const startTime = performance.now();
 
     try {
       const info = await inspectTLS(host, port);
       const duration = Math.round(performance.now() - startTime);
 
-      const statusIcon = info.valid ? pc.green('✔') : pc.red('✖');
-      const statusText = info.valid ? pc.green('Valid') : pc.red('Invalid/Expired');
+      const statusIcon = info.valid ? colors.green('✔') : colors.red('✖');
+      const statusText = info.valid ? colors.green('Valid') : colors.red('Invalid/Expired');
 
-      console.log(`${statusIcon} Certificate ${statusText}` + pc.gray(` (${duration}ms)\n`));
+      console.log(`${statusIcon} Certificate ${statusText}` + colors.gray(` (${duration}ms)\n`));
 
       // Certificate info
-      console.log(pc.bold('  Certificate:'));
-      console.log(`    ${pc.cyan('Subject')}: ${info.subject?.CN || info.subject?.O || 'N/A'}`);
-      console.log(`    ${pc.cyan('Issuer')}: ${info.issuer?.CN || info.issuer?.O || 'N/A'}`);
-      console.log(`    ${pc.cyan('Valid From')}: ${info.validFrom.toISOString()}`);
-      console.log(`    ${pc.cyan('Valid To')}: ${info.validTo.toISOString()}`);
+      console.log(colors.bold('  Certificate:'));
+      console.log(`    ${colors.cyan('Subject')}: ${info.subject?.CN || info.subject?.O || 'N/A'}`);
+      console.log(`    ${colors.cyan('Issuer')}: ${info.issuer?.CN || info.issuer?.O || 'N/A'}`);
+      console.log(`    ${colors.cyan('Valid From')}: ${info.validFrom.toISOString()}`);
+      console.log(`    ${colors.cyan('Valid To')}: ${info.validTo.toISOString()}`);
 
       // Days remaining with color coding
-      const daysColor = info.daysRemaining < 30 ? pc.red : info.daysRemaining < 90 ? pc.yellow : pc.green;
-      console.log(`    ${pc.cyan('Days Remaining')}: ${daysColor(String(info.daysRemaining))}`);
+      const daysColor = info.daysRemaining < 30 ? colors.red : info.daysRemaining < 90 ? colors.yellow : colors.green;
+      console.log(`    ${colors.cyan('Days Remaining')}: ${daysColor(String(info.daysRemaining))}`);
 
       // Connection info
-      console.log(pc.bold('\n  Connection:'));
-      console.log(`    ${pc.cyan('Protocol')}: ${info.protocol || 'N/A'}`);
-      console.log(`    ${pc.cyan('Cipher')}: ${info.cipher?.name || 'N/A'}`);
-      console.log(`    ${pc.cyan('Authorized')}: ${info.authorized ? pc.green('Yes') : pc.red('No')}`);
+      console.log(colors.bold('\n  Connection:'));
+      console.log(`    ${colors.cyan('Protocol')}: ${info.protocol || 'N/A'}`);
+      console.log(`    ${colors.cyan('Cipher')}: ${info.cipher?.name || 'N/A'}`);
+      console.log(`    ${colors.cyan('Authorized')}: ${info.authorized ? colors.green('Yes') : colors.red('No')}`);
       if (info.authorizationError) {
-        console.log(`    ${pc.cyan('Auth Error')}: ${pc.red(String(info.authorizationError))}`);
+        console.log(`    ${colors.cyan('Auth Error')}: ${colors.red(String(info.authorizationError))}`);
       }
 
       // Fingerprints
-      console.log(pc.bold('\n  Fingerprints:'));
-      console.log(`    ${pc.cyan('SHA1')}: ${info.fingerprint}`);
-      console.log(`    ${pc.cyan('SHA256')}: ${info.fingerprint256}`);
-      console.log(`    ${pc.cyan('Serial')}: ${info.serialNumber}`);
+      console.log(colors.bold('\n  Fingerprints:'));
+      console.log(`    ${colors.cyan('SHA1')}: ${info.fingerprint}`);
+      console.log(`    ${colors.cyan('SHA256')}: ${info.fingerprint256}`);
+      console.log(`    ${colors.cyan('Serial')}: ${info.serialNumber}`);
 
       this.lastResponse = info;
     } catch (error: any) {
-      console.error(pc.red(`TLS inspection failed: ${error.message}`));
+      console.error(colors.red(`TLS inspection failed: ${error.message}`));
     }
     console.log('');
   }
@@ -600,14 +600,14 @@ export class RekShell {
     if (!domain) {
       domain = this.getBaseDomain() || '';
       if (!domain) {
-        console.log(pc.yellow('Usage: dns <domain>'));
-        console.log(pc.gray('  Examples: dns google.com | dns github.com'));
-        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        console.log(colors.yellow('Usage: dns <domain>'));
+        console.log(colors.gray('  Examples: dns google.com | dns github.com'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
         return;
       }
     }
 
-    console.log(pc.gray(`Resolving DNS for ${domain}...`));
+    console.log(colors.gray(`Resolving DNS for ${domain}...`));
     const startTime = performance.now();
 
     try {
@@ -622,51 +622,51 @@ export class RekShell {
       ]);
 
       const duration = Math.round(performance.now() - startTime);
-      console.log(pc.green(`✔ DNS resolved`) + pc.gray(` (${duration}ms)\n`));
+      console.log(colors.green(`✔ DNS resolved`) + colors.gray(` (${duration}ms)\n`));
 
       // A Records
       if (a.length) {
-        console.log(pc.bold('  A Records (IPv4):'));
-        a.forEach(ip => console.log(`    ${pc.cyan('→')} ${ip}`));
+        console.log(colors.bold('  A Records (IPv4):'));
+        a.forEach(ip => console.log(`    ${colors.cyan('→')} ${ip}`));
       }
 
       // AAAA Records
       if (aaaa.length) {
-        console.log(pc.bold('  AAAA Records (IPv6):'));
-        aaaa.forEach(ip => console.log(`    ${pc.cyan('→')} ${ip}`));
+        console.log(colors.bold('  AAAA Records (IPv6):'));
+        aaaa.forEach(ip => console.log(`    ${colors.cyan('→')} ${ip}`));
       }
 
       // NS Records
       if (ns.length) {
-        console.log(pc.bold('  NS Records:'));
-        ns.forEach(n => console.log(`    ${pc.cyan('→')} ${n}`));
+        console.log(colors.bold('  NS Records:'));
+        ns.forEach(n => console.log(`    ${colors.cyan('→')} ${n}`));
       }
 
       // MX Records
       if (mx.length) {
-        console.log(pc.bold('  MX Records:'));
+        console.log(colors.bold('  MX Records:'));
         mx.sort((a, b) => a.priority - b.priority)
-          .forEach(m => console.log(`    ${pc.cyan(String(m.priority).padStart(3))} ${m.exchange}`));
+          .forEach(m => console.log(`    ${colors.cyan(String(m.priority).padStart(3))} ${m.exchange}`));
       }
 
       // Security Records
       const sec = security as any;
       if (sec.spf?.length) {
-        console.log(pc.bold('  SPF:'));
-        console.log(`    ${pc.gray(sec.spf[0].slice(0, 80))}${sec.spf[0].length > 80 ? '...' : ''}`);
+        console.log(colors.bold('  SPF:'));
+        console.log(`    ${colors.gray(sec.spf[0].slice(0, 80))}${sec.spf[0].length > 80 ? '...' : ''}`);
       }
       if (sec.dmarc) {
-        console.log(pc.bold('  DMARC:'));
-        console.log(`    ${pc.gray(sec.dmarc.slice(0, 80))}${sec.dmarc.length > 80 ? '...' : ''}`);
+        console.log(colors.bold('  DMARC:'));
+        console.log(`    ${colors.gray(sec.dmarc.slice(0, 80))}${sec.dmarc.length > 80 ? '...' : ''}`);
       }
       if (sec.caa?.issue?.length) {
-        console.log(pc.bold('  CAA:'));
-        sec.caa.issue.forEach((ca: string) => console.log(`    ${pc.cyan('issue')} ${ca}`));
+        console.log(colors.bold('  CAA:'));
+        sec.caa.issue.forEach((ca: string) => console.log(`    ${colors.cyan('issue')} ${ca}`));
       }
 
       this.lastResponse = { a, aaaa, mx, ns, txt, security };
     } catch (error: any) {
-      console.error(pc.red(`DNS lookup failed: ${error.message}`));
+      console.error(colors.red(`DNS lookup failed: ${error.message}`));
     }
     console.log('');
   }
@@ -675,61 +675,61 @@ export class RekShell {
     if (!domain) {
       domain = this.getBaseDomain() || '';
       if (!domain) {
-        console.log(pc.yellow('Usage: rdap <domain>'));
-        console.log(pc.gray('  Examples: rdap google.com | rdap 8.8.8.8'));
-        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        console.log(colors.yellow('Usage: rdap <domain>'));
+        console.log(colors.gray('  Examples: rdap google.com | rdap 8.8.8.8'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
         return;
       }
     }
 
-    console.log(pc.gray(`RDAP lookup for ${domain}...`));
+    console.log(colors.gray(`RDAP lookup for ${domain}...`));
     const startTime = performance.now();
 
     try {
       const result = await rdap(this.client, domain);
       const duration = Math.round(performance.now() - startTime);
 
-      console.log(pc.green(`✔ RDAP lookup completed`) + pc.gray(` (${duration}ms)\n`));
+      console.log(colors.green(`✔ RDAP lookup completed`) + colors.gray(` (${duration}ms)\n`));
 
       // Status
       if (result.status?.length) {
-        console.log(pc.bold('  Status:'));
-        result.status.forEach((s: string) => console.log(`    ${pc.cyan('→')} ${s}`));
+        console.log(colors.bold('  Status:'));
+        result.status.forEach((s: string) => console.log(`    ${colors.cyan('→')} ${s}`));
       }
 
       // Events (registration, expiration, etc.)
       if (result.events?.length) {
-        console.log(pc.bold('  Events:'));
+        console.log(colors.bold('  Events:'));
         result.events.forEach((e: any) => {
           const date = new Date(e.eventDate).toISOString().split('T')[0];
-          console.log(`    ${pc.cyan(e.eventAction.padEnd(15))} ${date}`);
+          console.log(`    ${colors.cyan(e.eventAction.padEnd(15))} ${date}`);
         });
       }
 
       // Entities
       if (result.entities?.length) {
-        console.log(pc.bold('  Entities:'));
+        console.log(colors.bold('  Entities:'));
         result.entities.forEach((e: any) => {
           const roles = e.roles?.join(', ') || 'unknown';
-          console.log(`    ${pc.cyan(roles.padEnd(15))} ${e.handle || 'N/A'}`);
+          console.log(`    ${colors.cyan(roles.padEnd(15))} ${e.handle || 'N/A'}`);
         });
       }
 
       // Handle (for IP lookups)
       if (result.handle) {
-        console.log(`  ${pc.cyan('Handle')}: ${result.handle}`);
+        console.log(`  ${colors.cyan('Handle')}: ${result.handle}`);
       }
       if (result.name) {
-        console.log(`  ${pc.cyan('Name')}: ${result.name}`);
+        console.log(`  ${colors.cyan('Name')}: ${result.name}`);
       }
       if (result.startAddress && result.endAddress) {
-        console.log(`  ${pc.cyan('Range')}: ${result.startAddress} - ${result.endAddress}`);
+        console.log(`  ${colors.cyan('Range')}: ${result.startAddress} - ${result.endAddress}`);
       }
 
       this.lastResponse = result;
     } catch (error: any) {
-      console.error(pc.red(`RDAP lookup failed: ${error.message}`));
-      console.log(pc.gray('  Tip: RDAP may not be available for all TLDs. Try "whois" instead.'));
+      console.error(colors.red(`RDAP lookup failed: ${error.message}`));
+      console.log(colors.gray('  Tip: RDAP may not be available for all TLDs. Try "whois" instead.'));
     }
     console.log('');
   }
@@ -738,8 +738,8 @@ export class RekShell {
     if (!host) {
       host = this.getBaseDomain() || '';
       if (!host) {
-        console.log(pc.yellow('Usage: ping <host>'));
-        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        console.log(colors.yellow('Usage: ping <host>'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
         return;
       }
     } else {
@@ -747,7 +747,7 @@ export class RekShell {
       host = host.replace(/^https?:\/\//, '').split('/')[0];
     }
 
-    console.log(pc.gray(`Pinging ${host}...`));
+    console.log(colors.gray(`Pinging ${host}...`));
 
     try {
       // Quick TCP connect test to port 443 or 80
@@ -758,7 +758,7 @@ export class RekShell {
       await new Promise<void>((resolve, reject) => {
         const socket = connect(port, host, () => {
           const duration = Math.round(performance.now() - startTime);
-          console.log(pc.green(`✔ ${host}:${port} is reachable`) + pc.gray(` (${duration}ms)`));
+          console.log(colors.green(`✔ ${host}:${port} is reachable`) + colors.gray(` (${duration}ms)`));
           socket.end();
           resolve();
         });
@@ -769,7 +769,7 @@ export class RekShell {
         });
       });
     } catch (error: any) {
-      console.error(pc.red(`✖ ${host} is unreachable: ${error.message}`));
+      console.error(colors.red(`✖ ${host} is unreachable: ${error.message}`));
     }
     console.log('');
   }
@@ -780,9 +780,9 @@ export class RekShell {
     // If no URL provided, use baseUrl
     if (!url) {
       if (!this.baseUrl) {
-        console.log(pc.yellow('Usage: scrap <url>'));
-        console.log(pc.gray('  Examples: scrap https://news.ycombinator.com'));
-        console.log(pc.gray('  Or set a base URL first: url https://example.com'));
+        console.log(colors.yellow('Usage: scrap <url>'));
+        console.log(colors.gray('  Examples: scrap https://news.ycombinator.com'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
         return;
       }
       url = this.baseUrl;
@@ -791,7 +791,7 @@ export class RekShell {
       url = this.baseUrl ? `${this.baseUrl}${url.startsWith('/') ? '' : '/'}${url}` : `https://${url}`;
     }
 
-    console.log(pc.gray(`Fetching ${url}...`));
+    console.log(colors.gray(`Fetching ${url}...`));
     const startTime = performance.now();
 
     try {
@@ -805,62 +805,62 @@ export class RekShell {
       const elementCount = this.currentDoc.select('*').length;
       const title = this.currentDoc.selectFirst('title').text() || 'No title';
 
-      console.log(pc.green(`✔ Loaded`) + pc.gray(` (${duration}ms)`));
-      console.log(`  ${pc.cyan('Title')}: ${title}`);
-      console.log(`  ${pc.cyan('Elements')}: ${elementCount}`);
-      console.log(`  ${pc.cyan('Size')}: ${(html.length / 1024).toFixed(1)}kb`);
-      console.log(pc.gray('\n  Use $ <selector> to query, $text, $attr, $links, $images, $table'));
+      console.log(colors.green(`✔ Loaded`) + colors.gray(` (${duration}ms)`));
+      console.log(`  ${colors.cyan('Title')}: ${title}`);
+      console.log(`  ${colors.cyan('Elements')}: ${elementCount}`);
+      console.log(`  ${colors.cyan('Size')}: ${(html.length / 1024).toFixed(1)}kb`);
+      console.log(colors.gray('\n  Use $ <selector> to query, $text, $attr, $links, $images, $table'));
     } catch (error: any) {
-      console.error(pc.red(`Scrape failed: ${error.message}`));
+      console.error(colors.red(`Scrape failed: ${error.message}`));
     }
     console.log('');
   }
 
   private async runSelect(selector: string) {
     if (!this.currentDoc) {
-      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
       return;
     }
     if (!selector) {
-      console.log(pc.yellow('Usage: $ <selector>'));
-      console.log(pc.gray('  Examples: $ h1 | $ .title | $ a[href*="article"]'));
+      console.log(colors.yellow('Usage: $ <selector>'));
+      console.log(colors.gray('  Examples: $ h1 | $ .title | $ a[href*="article"]'));
       return;
     }
 
     try {
       const elements = this.currentDoc.select(selector);
       const count = elements.length;
-      console.log(pc.cyan(`Found ${count} element(s)`));
+      console.log(colors.cyan(`Found ${count} element(s)`));
 
       if (count > 0 && count <= 10) {
         elements.each((el, i) => {
           const text = el.text().slice(0, 80).replace(/\s+/g, ' ').trim();
-          console.log(`  ${pc.gray(`${i + 1}.`)} ${text}${text.length >= 80 ? '...' : ''}`);
+          console.log(`  ${colors.gray(`${i + 1}.`)} ${text}${text.length >= 80 ? '...' : ''}`);
         });
       } else if (count > 10) {
-        console.log(pc.gray('  (showing first 10)'));
+        console.log(colors.gray('  (showing first 10)'));
         let shown = 0;
         elements.each((el, i) => {
           if (shown >= 10) return;
           const text = el.text().slice(0, 80).replace(/\s+/g, ' ').trim();
-          console.log(`  ${pc.gray(`${i + 1}.`)} ${text}${text.length >= 80 ? '...' : ''}`);
+          console.log(`  ${colors.gray(`${i + 1}.`)} ${text}${text.length >= 80 ? '...' : ''}`);
           shown++;
         });
       }
       this.lastResponse = { count, selector };
     } catch (error: any) {
-      console.error(pc.red(`Query failed: ${error.message}`));
+      console.error(colors.red(`Query failed: ${error.message}`));
     }
     console.log('');
   }
 
   private async runSelectText(selector: string) {
     if (!this.currentDoc) {
-      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
       return;
     }
     if (!selector) {
-      console.log(pc.yellow('Usage: $text <selector>'));
+      console.log(colors.yellow('Usage: $text <selector>'));
       return;
     }
 
@@ -872,26 +872,26 @@ export class RekShell {
         const text = el.text().trim();
         if (text) {
           texts.push(text);
-          console.log(`${pc.gray(`${i + 1}.`)} ${text.slice(0, 200)}${text.length > 200 ? '...' : ''}`);
+          console.log(`${colors.gray(`${i + 1}.`)} ${text.slice(0, 200)}${text.length > 200 ? '...' : ''}`);
         }
       });
 
       this.lastResponse = texts;
-      console.log(pc.gray(`\n  ${texts.length} text item(s) extracted`));
+      console.log(colors.gray(`\n  ${texts.length} text item(s) extracted`));
     } catch (error: any) {
-      console.error(pc.red(`Query failed: ${error.message}`));
+      console.error(colors.red(`Query failed: ${error.message}`));
     }
     console.log('');
   }
 
   private async runSelectAttr(attrName: string, selector: string) {
     if (!this.currentDoc) {
-      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
       return;
     }
     if (!attrName || !selector) {
-      console.log(pc.yellow('Usage: $attr <attribute> <selector>'));
-      console.log(pc.gray('  Examples: $attr href a | $attr src img'));
+      console.log(colors.yellow('Usage: $attr <attribute> <selector>'));
+      console.log(colors.gray('  Examples: $attr href a | $attr src img'));
       return;
     }
 
@@ -903,25 +903,25 @@ export class RekShell {
         const value = el.attr(attrName);
         if (value) {
           attrs.push(value);
-          console.log(`${pc.gray(`${i + 1}.`)} ${value}`);
+          console.log(`${colors.gray(`${i + 1}.`)} ${value}`);
         }
       });
 
       this.lastResponse = attrs;
-      console.log(pc.gray(`\n  ${attrs.length} attribute(s) extracted`));
+      console.log(colors.gray(`\n  ${attrs.length} attribute(s) extracted`));
     } catch (error: any) {
-      console.error(pc.red(`Query failed: ${error.message}`));
+      console.error(colors.red(`Query failed: ${error.message}`));
     }
     console.log('');
   }
 
   private async runSelectHtml(selector: string) {
     if (!this.currentDoc) {
-      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
       return;
     }
     if (!selector) {
-      console.log(pc.yellow('Usage: $html <selector>'));
+      console.log(colors.yellow('Usage: $html <selector>'));
       return;
     }
 
@@ -932,21 +932,21 @@ export class RekShell {
       if (html) {
         console.log(html.slice(0, 1000));
         if (html.length > 1000) {
-          console.log(pc.gray(`\n  ... (${html.length} chars total)`));
+          console.log(colors.gray(`\n  ... (${html.length} chars total)`));
         }
         this.lastResponse = html;
       } else {
-        console.log(pc.gray('No element found'));
+        console.log(colors.gray('No element found'));
       }
     } catch (error: any) {
-      console.error(pc.red(`Query failed: ${error.message}`));
+      console.error(colors.red(`Query failed: ${error.message}`));
     }
     console.log('');
   }
 
   private async runSelectLinks(selector?: string) {
     if (!this.currentDoc) {
-      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
       return;
     }
 
@@ -961,26 +961,26 @@ export class RekShell {
         if (href) {
           links.push({ text, href });
           if (i < 20) {
-            console.log(`${pc.gray(`${i + 1}.`)} ${pc.cyan(text || '(no text)')} ${pc.gray('→')} ${href}`);
+            console.log(`${colors.gray(`${i + 1}.`)} ${colors.cyan(text || '(no text)')} ${colors.gray('→')} ${href}`);
           }
         }
       });
 
       if (links.length > 20) {
-        console.log(pc.gray(`  ... and ${links.length - 20} more links`));
+        console.log(colors.gray(`  ... and ${links.length - 20} more links`));
       }
 
       this.lastResponse = links;
-      console.log(pc.gray(`\n  ${links.length} link(s) found`));
+      console.log(colors.gray(`\n  ${links.length} link(s) found`));
     } catch (error: any) {
-      console.error(pc.red(`Query failed: ${error.message}`));
+      console.error(colors.red(`Query failed: ${error.message}`));
     }
     console.log('');
   }
 
   private async runSelectImages(selector?: string) {
     if (!this.currentDoc) {
-      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
       return;
     }
 
@@ -995,31 +995,31 @@ export class RekShell {
         if (src) {
           images.push({ alt, src });
           if (i < 20) {
-            console.log(`${pc.gray(`${i + 1}.`)} ${pc.cyan(alt.slice(0, 30) || '(no alt)')} ${pc.gray('→')} ${src.slice(0, 60)}`);
+            console.log(`${colors.gray(`${i + 1}.`)} ${colors.cyan(alt.slice(0, 30) || '(no alt)')} ${colors.gray('→')} ${src.slice(0, 60)}`);
           }
         }
       });
 
       if (images.length > 20) {
-        console.log(pc.gray(`  ... and ${images.length - 20} more images`));
+        console.log(colors.gray(`  ... and ${images.length - 20} more images`));
       }
 
       this.lastResponse = images;
-      console.log(pc.gray(`\n  ${images.length} image(s) found`));
+      console.log(colors.gray(`\n  ${images.length} image(s) found`));
     } catch (error: any) {
-      console.error(pc.red(`Query failed: ${error.message}`));
+      console.error(colors.red(`Query failed: ${error.message}`));
     }
     console.log('');
   }
 
   private async runSelectTable(selector: string) {
     if (!this.currentDoc) {
-      console.log(pc.yellow('No document loaded. Use "scrap <url>" first.'));
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
       return;
     }
     if (!selector) {
-      console.log(pc.yellow('Usage: $table <selector>'));
-      console.log(pc.gray('  Examples: $table table | $table .data-table'));
+      console.log(colors.yellow('Usage: $table <selector>'));
+      console.log(colors.gray('  Examples: $table table | $table .data-table'));
       return;
     }
 
@@ -1027,87 +1027,87 @@ export class RekShell {
       const tables = this.currentDoc.tables(selector);
 
       if (tables.length === 0) {
-        console.log(pc.gray('No tables found'));
+        console.log(colors.gray('No tables found'));
         return;
       }
 
       tables.forEach((table, tableIndex) => {
-        console.log(pc.bold(`\nTable ${tableIndex + 1}:`));
+        console.log(colors.bold(`\nTable ${tableIndex + 1}:`));
 
         if (table.headers.length > 0) {
-          console.log(pc.cyan('  Headers: ') + table.headers.join(' | '));
+          console.log(colors.cyan('  Headers: ') + table.headers.join(' | '));
         }
 
-        console.log(pc.cyan(`  Rows: `) + table.rows.length);
+        console.log(colors.cyan(`  Rows: `) + table.rows.length);
 
         // Show first 5 rows
         table.rows.slice(0, 5).forEach((row, i) => {
           const rowStr = row.map(cell => cell.slice(0, 20)).join(' | ');
-          console.log(`  ${pc.gray(`${i + 1}.`)} ${rowStr}`);
+          console.log(`  ${colors.gray(`${i + 1}.`)} ${rowStr}`);
         });
 
         if (table.rows.length > 5) {
-          console.log(pc.gray(`  ... and ${table.rows.length - 5} more rows`));
+          console.log(colors.gray(`  ... and ${table.rows.length - 5} more rows`));
         }
       });
 
       this.lastResponse = tables;
     } catch (error: any) {
-      console.error(pc.red(`Query failed: ${error.message}`));
+      console.error(colors.red(`Query failed: ${error.message}`));
     }
     console.log('');
   }
 
   private printHelp() {
     console.log(`
-  ${pc.bold(pc.cyan('Rek Console Help'))}
+  ${colors.bold(colors.cyan('Rek Console Help'))}
 
-  ${pc.bold('Core Commands:')}
-    ${pc.green('url <url>')}           Set persistent Base URL.
-    ${pc.green('set <key>=<val>')}     Set a session variable.
-    ${pc.green('vars')}                List all session variables.
-    ${pc.green('clear')}               Clear the screen.
-    ${pc.green('exit')}                Exit the console.
+  ${colors.bold('Core Commands:')}
+    ${colors.green('url <url>')}           Set persistent Base URL.
+    ${colors.green('set <key>=<val>')}     Set a session variable.
+    ${colors.green('vars')}                List all session variables.
+    ${colors.green('clear')}               Clear the screen.
+    ${colors.green('exit')}                Exit the console.
 
-  ${pc.bold('HTTP Requests:')}
-    ${pc.green('<method> <path>')}     Execute HTTP request (GET, POST, PUT, DELETE, etc).
-                             ${pc.gray('Params:')} ${pc.white('key=value')} (string) or ${pc.white('key:=value')} (typed).
-                             ${pc.gray('Headers:')} ${pc.white('Key:Value')}
+  ${colors.bold('HTTP Requests:')}
+    ${colors.green('<method> <path>')}     Execute HTTP request (GET, POST, PUT, DELETE, etc).
+                             ${colors.gray('Params:')} ${colors.white('key=value')} (string) or ${colors.white('key:=value')} (typed).
+                             ${colors.gray('Headers:')} ${colors.white('Key:Value')}
 
-  ${pc.bold('Advanced Tools:')}
-    ${pc.green('load <url>')}          Run Load Test.
-                             ${pc.gray('Options:')}
-                             ${pc.white('users=50')}      ${pc.gray('Concurrent users')}
-                             ${pc.white('duration=300')}  ${pc.gray('Duration in seconds')}
-                             ${pc.white('ramp=5')}        ${pc.gray('Ramp-up time in seconds')}
-                             ${pc.white('mode=realistic')} ${pc.gray('realistic | throughput | stress')}
-                             ${pc.white('http2=false')}   ${pc.gray('Force HTTP/2')}
+  ${colors.bold('Advanced Tools:')}
+    ${colors.green('load <url>')}          Run Load Test.
+                             ${colors.gray('Options:')}
+                             ${colors.white('users=50')}      ${colors.gray('Concurrent users')}
+                             ${colors.white('duration=300')}  ${colors.gray('Duration in seconds')}
+                             ${colors.white('ramp=5')}        ${colors.gray('Ramp-up time in seconds')}
+                             ${colors.white('mode=realistic')} ${colors.gray('realistic | throughput | stress')}
+                             ${colors.white('http2=false')}   ${colors.gray('Force HTTP/2')}
 
-    ${pc.green('chat <provider>')}     Start AI Chat.
-                             ${pc.gray('Providers:')} ${pc.white('openai')}, ${pc.white('anthropic')}
-                             ${pc.gray('Arg:')} ${pc.white('model=...')} (optional)
+    ${colors.green('chat <provider>')}     Start AI Chat.
+                             ${colors.gray('Providers:')} ${colors.white('openai')}, ${colors.white('anthropic')}
+                             ${colors.gray('Arg:')} ${colors.white('model=...')} (optional)
 
-    ${pc.green('ws <url>')}            Start interactive WebSocket session.
-    ${pc.green('udp <url>')}           Send UDP packet.
+    ${colors.green('ws <url>')}            Start interactive WebSocket session.
+    ${colors.green('udp <url>')}           Send UDP packet.
 
-  ${pc.bold('Network Tools:')}
-    ${pc.green('whois <domain>')}      WHOIS lookup (domain or IP).
-    ${pc.green('tls <host> [port]')}   Inspect TLS/SSL certificate.
-    ${pc.green('dns <domain>')}        Full DNS lookup (A, AAAA, MX, NS, SPF, DMARC).
-    ${pc.green('rdap <domain>')}       RDAP lookup (modern WHOIS).
-    ${pc.green('ping <host>')}         Quick TCP connectivity check.
+  ${colors.bold('Network Tools:')}
+    ${colors.green('whois <domain>')}      WHOIS lookup (domain or IP).
+    ${colors.green('tls <host> [port]')}   Inspect TLS/SSL certificate.
+    ${colors.green('dns <domain>')}        Full DNS lookup (A, AAAA, MX, NS, SPF, DMARC).
+    ${colors.green('rdap <domain>')}       RDAP lookup (modern WHOIS).
+    ${colors.green('ping <host>')}         Quick TCP connectivity check.
 
-  ${pc.bold('Web Scraping:')}
-    ${pc.green('scrap <url>')}         Fetch and parse HTML document.
-    ${pc.green('$ <selector>')}        Query elements (CSS selector).
-    ${pc.green('$text <selector>')}    Extract text content.
-    ${pc.green('$attr <name> <sel>')}  Extract attribute values.
-    ${pc.green('$html <selector>')}    Get inner HTML.
-    ${pc.green('$links [selector]')}   List all links.
-    ${pc.green('$images [selector]')}  List all images.
-    ${pc.green('$table <selector>')}   Extract table as data.
+  ${colors.bold('Web Scraping:')}
+    ${colors.green('scrap <url>')}         Fetch and parse HTML document.
+    ${colors.green('$ <selector>')}        Query elements (CSS selector).
+    ${colors.green('$text <selector>')}    Extract text content.
+    ${colors.green('$attr <name> <sel>')}  Extract attribute values.
+    ${colors.green('$html <selector>')}    Get inner HTML.
+    ${colors.green('$links [selector]')}   List all links.
+    ${colors.green('$images [selector]')}  List all images.
+    ${colors.green('$table <selector>')}   Extract table as data.
 
-  ${pc.bold('Examples:')}
+  ${colors.bold('Examples:')}
     › url httpbin.org
     › get /json
     › post /post name="Neo" active:=true role:Admin
