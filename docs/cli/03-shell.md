@@ -125,11 +125,37 @@ Navigate deeply nested responses:
 
 ```bash
 › vars
-{
-  "userId": "42",
-  "token": "eyJhbG..."
-}
+
+Session Variables:
+  $userId = 42
+  $token = eyJhbG...
+
+Environment Variables (.env):
+  $API_KEY = ***1234  # Sensitive values are masked
+  $DEBUG = true
 ```
+
+### Loading Environment Files
+
+Load variables from `.env` files:
+
+```bash
+# Load from current directory
+› env
+✓ Loaded 5 variables from /path/to/project/.env
+
+# Load from custom path
+› env /path/to/custom/.env
+✓ Loaded 3 variables from /path/to/custom/.env
+
+# View all loaded variables
+› vars
+```
+
+Environment variables are automatically:
+- Added to `process.env` for use in requests
+- Available via `$VAR_NAME` syntax
+- Masked in output if they contain sensitive names (key, secret, token, password)
 
 ## Commands
 
@@ -153,7 +179,9 @@ All standard HTTP methods are supported:
 |---------|-------------|
 | `help` | Show all available commands |
 | `clear` | Clear the terminal screen |
-| `vars` | Display all session variables |
+| `set key=value` | Set a session variable |
+| `vars` | Display all session and environment variables |
+| `env [path]` | Load `.env` file (default: `./.env`) |
 | `exit` or `quit` | Exit the shell |
 
 ## Interactive Tools
@@ -265,7 +293,15 @@ Table 1:
 | `$html <selector>` | Get inner HTML of first match |
 | `$links [selector]` | List all links (default: `a[href]`) |
 | `$images [selector]` | List all images (default: `img[src]`) |
+| `$scripts` | List all JavaScript files |
+| `$css` | List all CSS files |
 | `$table <selector>` | Extract table data (headers + rows) |
+| `$sourcemaps` | Find sourcemap URLs in page |
+| `$unmap <url>` | Download and parse a sourcemap |
+| `$unmap:view <n>` | View source file by index |
+| `$unmap:save [dir]` | Save all original sources to disk |
+| `$beautify <url>` | Format minified JS/CSS |
+| `$beautify:save [file]` | Save beautified code to file |
 
 #### Scraping Workflow Example
 
@@ -303,6 +339,62 @@ Table 1:
 ```
 
 > **Note:** Web scraping requires the `cheerio` package. Install with: `pnpm add cheerio`
+
+#### Source Code Analysis
+
+Extract and de-minify JavaScript/CSS from websites:
+
+```bash
+# 1. Load a page
+› scrap https://app.example.com
+
+# 2. Find sourcemaps
+› $sourcemaps
+Confirmed sourcemaps (inline references):
+  1. https://app.example.com/main.abc123.js.map
+
+Inferred sourcemaps (external scripts):
+  2. https://app.example.com/vendor.def456.js → .map
+
+# 3. Download and parse a sourcemap
+› $unmap https://app.example.com/main.abc123.js.map
+✔ Sourcemap loaded
+  Sources: 47 files
+  Has sourcesContent: Yes
+
+  Original files:
+  0. webpack://src/index.tsx (2.3kb)
+  1. webpack://src/components/App.tsx (5.1kb)
+  2. webpack://src/utils/api.ts (1.8kb)
+  ...
+
+# 4. View a specific source file
+› $unmap:view 1
+// src/components/App.tsx
+import React from 'react';
+import { useAuth } from '../hooks/useAuth';
+...
+
+# 5. Save all sources to disk
+› $unmap:save ./extracted-sources
+✔ Saved 47 files to ./extracted-sources
+
+# 6. If no sourcemap available, beautify minified code
+› $beautify https://app.example.com/legacy.min.js
+✔ Beautified (45.2kb → formatted)
+
+function initApp() {
+    const config = {
+        apiUrl: "https://api.example.com",
+        timeout: 5000
+    };
+    ...
+}
+
+# 7. Save beautified code
+› $beautify:save ./beautified.js
+✔ Saved to ./beautified.js
+```
 
 ## Request Syntax in Shell
 

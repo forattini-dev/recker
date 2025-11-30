@@ -189,6 +189,61 @@ rek api.com/endpoint \
   data="value"
 ```
 
+## Stdin Pipe
+
+Pipe request body from stdin:
+
+```bash
+# Pipe JSON from file
+cat body.json | rek POST api.com/users
+
+# Pipe from echo
+echo '{"name": "John", "age": 30}' | rek POST api.com/users
+
+# Pipe from another command
+curl -s other-api.com/data | rek POST api.com/import
+
+# Pipe raw text
+echo "Hello World" | rek POST api.com/messages
+```
+
+Content-Type is automatically detected:
+- **JSON content**: Sets `application/json`
+- **Plain text**: Sets `text/plain`
+- **Override manually**: Add `Content-Type:"your/type"` header
+
+```bash
+# Force specific content type
+cat data.xml | rek POST api.com/import Content-Type:"application/xml"
+```
+
+## Environment Variables
+
+Load variables from `.env` files:
+
+```bash
+# Load from current directory (./.env)
+rek -e api.com/users Authorization:"Bearer $API_TOKEN"
+
+# Load from custom path
+rek -e /path/to/.env api.com/secure
+
+# Combined with other options
+rek -e -v api.com/debug
+```
+
+Example `.env` file:
+```env
+API_TOKEN=sk-1234567890
+API_BASE=https://api.example.com
+DEBUG=true
+```
+
+Variables are available in:
+- Headers: `Authorization:"Bearer $API_TOKEN"`
+- URLs: `$API_BASE/users`
+- Any value that supports variable expansion
+
 ## Response Output
 
 ### JSON Responses
