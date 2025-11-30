@@ -677,8 +677,7 @@ await client.batch(requests);
 
 ## Next Steps
 
-- Check out [Examples](/examples.md) for more use cases
-- Read about [Unified Concurrency](/guides/performance/concurrency.md) in detail
-- Learn about [Batch Requests](/guides/performance/batch-requests.md)
+- Check out [Examples](/examples/README.md) for more use cases
+- Read about [Concurrency & Batch Requests](/http/08-concurrency.md) in detail
 - Read about [Performance](/benchmarks.md) improvements
-- Learn about [advanced features](/guides/plugins.md)
+- Learn about [Plugins](/http/10-plugins.md)

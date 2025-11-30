@@ -48,7 +48,7 @@ await client.purge('/cached-resource');
 - **Detailed metrics**: Stream IDs, priorities, window sizes
 - **HTTP/3/QUIC**: Full support with 0-RTT detection
 
-[Learn more →](guides/client-config.md#http2--protocol-hints)
+[Learn more →](http/05-configuration.md)
 
 ## 🔌 Protocol Support
 
@@ -72,7 +72,7 @@ for await (const message of ws) {
 }
 ```
 
-[Learn more →](guides/websocket.md)
+[Learn more →](protocols/01-websocket.md)
 
 ### WHOIS Lookup
 - **Domain information**: Query WHOIS servers for domain data
@@ -87,7 +87,7 @@ console.log(result.data);
 const available = await client.isDomainAvailable('my-startup.com');
 ```
 
-[Learn more →](guides/whois.md)
+[Learn more →](protocols/05-whois-rdap.md)
 
 ## 🛠️ Advanced Configuration
 
@@ -108,7 +108,7 @@ const client = createClient({
 });
 ```
 
-[Learn more →](guides/dns.md)
+[Learn more →](protocols/04-dns.md)
 
 ### Proxy Support
 - **HTTP/HTTPS/SOCKS**: Full proxy support
@@ -125,7 +125,7 @@ const client = createClient({
 });
 ```
 
-[Learn more →](guides/client-config.md#proxy--tls)
+[Learn more →](http/05-configuration.md)
 
 ## 🔄 Request Management
 
@@ -174,7 +174,7 @@ await Promise.all([
 ]);
 ```
 
-[Learn more →](guides/concurrency.md)
+[Learn more →](http/08-concurrency.md)
 
 ### Batch Requests
 - **Parallel execution**: Execute multiple requests concurrently
@@ -196,7 +196,7 @@ const { results, stats } = await client.batch([
 console.log(stats); // { total, successful, failed, duration }
 ```
 
-[Learn more →](guides/batch-requests.md)
+[Learn more →](http/08-concurrency.md)
 
 ## 🔌 Plugins
 
@@ -216,7 +216,7 @@ const result = await client.get('/flaky-endpoint', {
 });
 ```
 
-[Learn more →](guides/plugins.md#retry)
+[Learn more →](http/07-resilience.md)
 
 ### Cache
 - **In-memory**: Fast memory-based cache
@@ -234,7 +234,7 @@ const client = createClient({
 });
 ```
 
-[Learn more →](guides/plugins.md#cache)
+[Learn more →](http/09-cache.md)
 
 ### Request Deduplication
 - **Automatic dedup**: Prevent duplicate in-flight requests
@@ -253,7 +253,7 @@ const [user1, user2] = await Promise.all([
 ]);
 ```
 
-[Learn more →](guides/plugins.md#dedup)
+[Learn more →](http/10-plugins.md)
 
 ### Circuit Breaker
 - **Failure detection**: Automatically detect failing endpoints
@@ -261,14 +261,14 @@ const [user1, user2] = await Promise.all([
 - **Auto-recovery**: Automatic recovery attempts
 - **Configurable thresholds**: Control when to trip
 
-[Learn more →](guides/circuit-breaker.md)
+[Learn more →](http/07-resilience.md)
 
 ### Cookie Jar
 - **Auto-persist cookies**: Automatic cookie handling
 - **Per-domain**: Respects domain boundaries
 - **Secure/HttpOnly**: Proper flag handling
 
-[Learn more →](guides/plugins.md#cookie-jar)
+[Learn more →](http/10-plugins.md)
 
 ### XSRF/CSRF Protection
 - **Token extraction**: Auto-extract from cookies
@@ -284,14 +284,14 @@ const client = createClient({
 });
 ```
 
-[Learn more →](guides/plugins.md#xsrf)
+[Learn more →](http/10-plugins.md)
 
 ### Compression
 - **Request compression**: gzip, br, deflate
 - **Automatic**: Auto-compress based on content-type
 - **Threshold**: Only compress above size threshold
 
-[Learn more →](guides/plugins.md#compression)
+[Learn more →](http/10-plugins.md)
 
 ## 📊 Observability
 
@@ -308,7 +308,7 @@ console.log(response.cloud);      // { provider: 'aws', region: 'us-east-1' }
 console.log(response.rateLimit);  // { limit: 100, remaining: 95 }
 ```
 
-[Learn more →](guides/headers.md)
+[Learn more →](http/03-responses.md)
 
 ### Timing Metrics
 - **DNS lookup**: DNS resolution time
@@ -329,7 +329,7 @@ console.log(response.timings);
 // }
 ```
 
-[Learn more →](guides/observability.md)
+[Learn more →](http/12-observability.md)
 
 ### Connection Info
 - **Protocol**: HTTP/1.1, h2, h3
@@ -338,7 +338,7 @@ console.log(response.timings);
 - **Certificate**: Certificate info
 - **Reused**: Connection reuse detection
 
-[Learn more →](guides/observability.md)
+[Learn more →](http/12-observability.md)
 
 ## 📡 Streaming
 
@@ -355,7 +355,7 @@ for await (const event of response.sse()) {
 }
 ```
 
-[Learn more →](guides/streaming.md#server-sent-events)
+[Learn more →](ai/02-streaming.md)
 
 ### Download Progress
 - **Progress tracking**: Track download progress
@@ -370,7 +370,7 @@ for await (const progress of response.download()) {
 }
 ```
 
-[Learn more →](guides/streaming.md#download-progress)
+[Learn more →](ai/02-streaming.md)
 
 ### Response Streaming
 - **ReadableStream**: Web Streams API
@@ -384,7 +384,7 @@ const response = await client.get('/file.zip');
 await response.pipe(createWriteStream('./file.zip'));
 ```
 
-[Learn more →](guides/streaming.md)
+[Learn more →](ai/02-streaming.md)
 
 ## 🔍 Type Safety
 
@@ -407,7 +407,7 @@ const user = await client
 // user is typed as { id: number; name: string }
 ```
 
-[Learn more →](guides/contract.md)
+[Learn more →](http/04-validation.md)
 
 ## 🪝 Hooks & Middleware
 
@@ -423,14 +423,14 @@ client
   .onError((error) => console.error(error));
 ```
 
-[Learn more →](guides/client-config.md#hooks-and-middleware)
+[Learn more →](http/05-configuration.md)
 
 ### Middleware
 - **Custom logic**: Implement complex request/response processing
 - **Plugin system**: Create reusable plugins
 - **Composable**: Stack multiple middlewares
 
-[Learn more →](guides/client-config.md#hooks-and-middleware)
+[Learn more →](http/05-configuration.md)
 
 ## 🎯 Pagination
 

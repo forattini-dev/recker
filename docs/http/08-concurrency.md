@@ -331,27 +331,13 @@ const { results } = await client.batch(
 ### Chunked Processing
 
 ```typescript
-async function processInChunks<T>(
-  items: string[],
-  chunkSize: number,
-  processor: (item: string) => Promise<T>
-): Promise<T[]> {
-  const results: T[] = [];
-
-  for (let i = 0; i < items.length; i += chunkSize) {
-    const chunk = items.slice(i, i + chunkSize);
-    const chunkResults = await Promise.all(chunk.map(processor));
-    results.push(...chunkResults);
+// batch() handles chunking automatically with concurrency control
+const { results } = await client.batch(
+  urls.map(url => ({ path: url })),
+  {
+    concurrency: 10,  // Process in chunks of 10
+    mapResponse: r => r.json()
   }
-
-  return results;
-}
-
-// Process 100 items in chunks of 10
-const results = await processInChunks(
-  urls,
-  10,
-  (url) => client.get(url).json()
 );
 ```
 

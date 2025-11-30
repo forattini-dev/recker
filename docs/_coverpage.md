@@ -6,12 +6,8 @@
 
 > The HTTP SDK for the AI Era
 
-- **High Performance** - Node.js's fastest HTTP engine
-- **AI-First** - Native SSE streaming for LLM applications
-- **HTML Scraping** - jQuery-like API with Cheerio
-- **Type-Safe** - Contract-first with Zod validation
-- **Observable** - DNS/TCP/TLS/TTFB timings out of the box
-- **Resilient** - Retry, circuit breaker, rate limiting
+Fast as infrastructure demands. AI-ready from the first byte.<br>
+Observable down to the millisecond. Resilient when everything else fails.
 
 [Get Started](#/)
 [GitHub](https://github.com/forattini-dev/recker)

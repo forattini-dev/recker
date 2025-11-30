@@ -6,7 +6,7 @@
 
 ### The HTTP SDK for the AI Era
 
-**Stop fetching. Start orchestrating.**
+**Fast as infrastructure demands. AI-ready from the first byte. Observable down to the millisecond. Resilient when everything else fails.**
 
 [![npm version](https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623)](https://www.npmjs.com/package/recker)
 [![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)
@@ -102,24 +102,24 @@ console.log(timings);
 
 **Getting Started**
 - [Installation](./docs/getting-started/installation.md)
-- [Quick Start](./docs/getting-started/quickstart.md)
-- [Client Configuration](./docs/guides/client-config.md)
+- [Quick Start](./docs/http/01-quickstart.md)
+- [Client Configuration](./docs/http/05-configuration.md)
 
 **Core Features**
-- [HTTP Methods (19)](./docs/guides/http-methods.md)
-- [Streaming & SSE](./docs/guides/streaming.md)
-- [Retry & Backoff](./docs/guides/advanced/retry.md)
-- [Caching](./docs/guides/caching.md)
-- [Pagination](./docs/guides/pagination.md)
+- [HTTP Fundamentals](./docs/http/02-fundamentals.md)
+- [Streaming & SSE](./docs/ai/02-streaming.md)
+- [Retry & Resilience](./docs/http/07-resilience.md)
+- [Caching](./docs/http/09-cache.md)
+- [Concurrency](./docs/http/08-concurrency.md)
 
 **Integrations**
-- [GraphQL](./docs/guides/graphql.md)
-- [Scraping](./docs/guides/scraping.md)
-- [Hooks](./docs/guides/hooks.md)
+- [GraphQL](./docs/http/13-graphql.md)
+- [Scraping](./docs/http/14-scraping.md)
+- [Plugins](./docs/http/10-plugins.md)
 
 **Reference**
-- [API Reference](./docs/api/README.md)
-- [Troubleshooting](./docs/guides/troubleshooting.md)
+- [API Reference](./docs/reference/01-api.md)
+- [Troubleshooting](./docs/reference/05-troubleshooting.md)
 - [Examples](./docs/examples/README.md)
 
 ## ❤️ Acknowledgements

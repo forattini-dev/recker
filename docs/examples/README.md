@@ -146,6 +146,6 @@ const client = createClient({
 ## 📖 Additional Resources
 
 - [Full Documentation](https://recker.js.org)
-- [API Reference](../api/README.md)
-- [Guides](../guides/)
+- [API Reference](../reference/01-api.md)
+- [HTTP Guide](../http/02-fundamentals.md)
 - [Benchmarks](../benchmarks.md)

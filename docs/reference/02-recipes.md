@@ -322,11 +322,14 @@ client.use(cache({
 ### Parallel Requests
 
 ```typescript
-const [users, posts, comments] = await Promise.all([
-  client.get('/users').json(),
-  client.get('/posts').json(),
-  client.get('/comments').json()
-]);
+// Use batch for parallel requests with stats
+const { results } = await client.batch([
+  { path: '/users' },
+  { path: '/posts' },
+  { path: '/comments' }
+], { mapResponse: r => r.json() });
+
+const [users, posts, comments] = results;
 ```
 
 ### Batch with Concurrency Limit
@@ -334,13 +337,15 @@ const [users, posts, comments] = await Promise.all([
 ```typescript
 const ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-const { results } = await client.batch(
+const { results, stats } = await client.batch(
   ids.map(id => ({ path: `/users/${id}` })),
   {
     concurrency: 3,
-    mapResponse: (res) => res.json()
+    mapResponse: res => res.json()
   }
 );
+
+console.log(`Fetched ${stats.successful}/${stats.total} in ${stats.duration}ms`);
 ```
 
 ### Rate-Limited Batch
@@ -355,8 +360,9 @@ const client = createClient({
 });
 
 // Requests automatically rate-limited
-const results = await Promise.all(
-  items.map(item => client.get(`/items/${item.id}`).json())
+const { results } = await client.batch(
+  items.map(item => ({ path: `/items/${item.id}` })),
+  { mapResponse: r => r.json() }
 );
 ```
 
