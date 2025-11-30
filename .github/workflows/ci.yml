@@ -20,22 +20,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
 
       - name: Install Dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Lint & Type Check
         run: |
-          npm run lint
-          npm run build # Type check via TSC
+          pnpm run lint
+          pnpm run build # Type check via TSC
 
       - name: Run Tests
-        run: npm test
+        run: pnpm test
 
   # 2. Alpha Release (Only on Main Push)
   release-alpha:
@@ -53,14 +59,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
 
       - name: Install Dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Bump Version (Alpha)
         id: version
@@ -70,16 +82,16 @@ jobs:
           # If current version already has alpha, strip it to base
           BASE_VERSION=$(echo $CURRENT_VERSION | cut -d'-' -f1)
           NEW_VERSION="$BASE_VERSION-alpha.$SHA"
-          
+
           echo "New version: $NEW_VERSION"
           npm version $NEW_VERSION --no-git-tag-version
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Publish Alpha
-        run: npm publish --tag alpha
+        run: pnpm publish --tag alpha --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -97,20 +109,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
 
       - name: Install Dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Publish Stable
-        run: npm publish
+        run: pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
