@@ -104,7 +104,7 @@ export class RekShell {
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
       'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
-      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$table',
+      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$table',
       'help', 'clear', 'exit', 'set', 'url', 'vars'
     ];
 
@@ -220,7 +220,13 @@ export class RekShell {
         await this.runSelectLinks(parts[1]);
         return;
       case '$images':
-        await this.runSelectImages(parts[1]);
+        await this.runSelectImages();
+        return;
+      case '$scripts':
+        await this.runSelectScripts();
+        return;
+      case '$css':
+        await this.runSelectCSS();
         return;
       case '$table':
         await this.runSelectTable(parts.slice(1).join(' '));
@@ -1085,34 +1091,206 @@ export class RekShell {
     console.log('');
   }
 
-  private async runSelectImages(selector?: string) {
+  private async runSelectImages() {
     if (!this.currentDoc) {
       console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
       return;
     }
 
     try {
-      const imgSelector = selector || 'img[src]';
-      const elements = this.currentDoc.select(imgSelector);
-      const images: Array<{ alt: string; src: string }> = [];
+      const imageExtensions = /\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|tiff|avif)(\?.*)?$/i;
+      const images: Array<{ type: string; src: string; alt?: string }> = [];
 
-      elements.each((el, i) => {
+      // 1. <img> tags
+      this.currentDoc.select('img[src]').each((el) => {
         const src = el.attr('src');
-        const alt = el.attr('alt') || '';
+        if (src) images.push({ type: 'img', src, alt: el.attr('alt') });
+      });
+
+      // 2. <source> tags (picture element)
+      this.currentDoc.select('source[srcset]').each((el) => {
+        const srcset = el.attr('srcset');
+        if (srcset) {
+          // Extract first URL from srcset
+          const src = srcset.split(',')[0].trim().split(' ')[0];
+          if (src) images.push({ type: 'source', src });
+        }
+      });
+
+      // 3. CSS background-image in style attributes
+      this.currentDoc.select('[style*="background"]').each((el) => {
+        const style = el.attr('style') || '';
+        const matches = style.match(/url\(['"]?([^'"()]+)['"]?\)/gi);
+        if (matches) {
+          matches.forEach(m => {
+            const src = m.replace(/url\(['"]?|['"]?\)/gi, '');
+            if (imageExtensions.test(src)) images.push({ type: 'bg', src });
+          });
+        }
+      });
+
+      // 4. <link> with image extensions (favicons, apple-touch-icon, etc)
+      this.currentDoc.select('link[href]').each((el) => {
+        const href = el.attr('href');
+        if (href && imageExtensions.test(href)) {
+          images.push({ type: 'link', src: href });
+        }
+      });
+
+      // 5. meta og:image, twitter:image
+      this.currentDoc.select('meta[property="og:image"], meta[name="twitter:image"]').each((el) => {
+        const content = el.attr('content');
+        if (content) images.push({ type: 'meta', src: content });
+      });
+
+      // Deduplicate by src
+      const uniqueImages = [...new Map(images.map(img => [img.src, img])).values()];
+
+      // Display
+      uniqueImages.slice(0, 25).forEach((img, i) => {
+        const typeLabel = colors.gray(`[${img.type}]`);
+        const altText = img.alt ? colors.cyan(img.alt.slice(0, 25)) : '';
+        console.log(`${colors.gray(`${i + 1}.`)} ${typeLabel} ${altText} ${img.src.slice(0, 60)}`);
+      });
+
+      if (uniqueImages.length > 25) {
+        console.log(colors.gray(`  ... and ${uniqueImages.length - 25} more images`));
+      }
+
+      this.lastResponse = uniqueImages;
+      console.log(colors.gray(`\n  ${uniqueImages.length} image(s) found`));
+    } catch (error: any) {
+      console.error(colors.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runSelectScripts() {
+    if (!this.currentDoc) {
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+
+    try {
+      const scripts: Array<{ type: 'external' | 'inline'; src?: string; size?: number; async?: boolean; defer?: boolean }> = [];
+
+      // External scripts
+      this.currentDoc.select('script[src]').each((el) => {
+        const src = el.attr('src');
         if (src) {
-          images.push({ alt, src });
+          scripts.push({
+            type: 'external',
+            src,
+            async: el.attr('async') !== undefined,
+            defer: el.attr('defer') !== undefined
+          });
+        }
+      });
+
+      // Inline scripts
+      this.currentDoc.select('script:not([src])').each((el) => {
+        const content = el.text();
+        if (content.trim()) {
+          scripts.push({
+            type: 'inline',
+            size: content.length
+          });
+        }
+      });
+
+      // Display
+      let extCount = 0, inlineCount = 0, totalInlineSize = 0;
+
+      scripts.forEach((script, i) => {
+        if (script.type === 'external') {
+          extCount++;
+          const flags = [
+            script.async ? colors.cyan('async') : '',
+            script.defer ? colors.cyan('defer') : ''
+          ].filter(Boolean).join(' ');
           if (i < 20) {
-            console.log(`${colors.gray(`${i + 1}.`)} ${colors.cyan(alt.slice(0, 30) || '(no alt)')} ${colors.gray('→')} ${src.slice(0, 60)}`);
+            console.log(`${colors.gray(`${i + 1}.`)} ${colors.green('[ext]')} ${script.src?.slice(0, 70)} ${flags}`);
+          }
+        } else {
+          inlineCount++;
+          totalInlineSize += script.size || 0;
+          if (i < 20) {
+            console.log(`${colors.gray(`${i + 1}.`)} ${colors.yellow('[inline]')} ${((script.size || 0) / 1024).toFixed(1)}kb`);
           }
         }
       });
 
-      if (images.length > 20) {
-        console.log(colors.gray(`  ... and ${images.length - 20} more images`));
+      if (scripts.length > 20) {
+        console.log(colors.gray(`  ... and ${scripts.length - 20} more scripts`));
       }
 
-      this.lastResponse = images;
-      console.log(colors.gray(`\n  ${images.length} image(s) found`));
+      this.lastResponse = scripts;
+      console.log(colors.gray(`\n  ${extCount} external, ${inlineCount} inline (${(totalInlineSize / 1024).toFixed(1)}kb total)`));
+    } catch (error: any) {
+      console.error(colors.red(`Query failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
+  private async runSelectCSS() {
+    if (!this.currentDoc) {
+      console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
+      return;
+    }
+
+    try {
+      const styles: Array<{ type: 'external' | 'inline'; href?: string; size?: number; media?: string }> = [];
+
+      // External stylesheets
+      this.currentDoc.select('link[rel="stylesheet"]').each((el) => {
+        const href = el.attr('href');
+        if (href) {
+          styles.push({
+            type: 'external',
+            href,
+            media: el.attr('media')
+          });
+        }
+      });
+
+      // Inline styles
+      this.currentDoc.select('style').each((el) => {
+        const content = el.text();
+        if (content.trim()) {
+          styles.push({
+            type: 'inline',
+            size: content.length,
+            media: el.attr('media')
+          });
+        }
+      });
+
+      // Display
+      let extCount = 0, inlineCount = 0, totalInlineSize = 0;
+
+      styles.forEach((style, i) => {
+        if (style.type === 'external') {
+          extCount++;
+          const media = style.media ? colors.cyan(`[${style.media}]`) : '';
+          if (i < 20) {
+            console.log(`${colors.gray(`${i + 1}.`)} ${colors.green('[ext]')} ${style.href?.slice(0, 70)} ${media}`);
+          }
+        } else {
+          inlineCount++;
+          totalInlineSize += style.size || 0;
+          const media = style.media ? colors.cyan(`[${style.media}]`) : '';
+          if (i < 20) {
+            console.log(`${colors.gray(`${i + 1}.`)} ${colors.yellow('[inline]')} ${((style.size || 0) / 1024).toFixed(1)}kb ${media}`);
+          }
+        }
+      });
+
+      if (styles.length > 20) {
+        console.log(colors.gray(`  ... and ${styles.length - 20} more stylesheets`));
+      }
+
+      this.lastResponse = styles;
+      console.log(colors.gray(`\n  ${extCount} external, ${inlineCount} inline (${(totalInlineSize / 1024).toFixed(1)}kb total)`));
     } catch (error: any) {
       console.error(colors.red(`Query failed: ${error.message}`));
     }
@@ -1211,7 +1389,9 @@ export class RekShell {
     ${colors.green('$attr <name> <sel>')}  Extract attribute values.
     ${colors.green('$html <selector>')}    Get inner HTML.
     ${colors.green('$links [selector]')}   List all links.
-    ${colors.green('$images [selector]')}  List all images.
+    ${colors.green('$images')}             List all images (img, bg, og:image, favicon).
+    ${colors.green('$scripts')}            List all scripts (external + inline).
+    ${colors.green('$css')}                List all stylesheets (external + inline).
     ${colors.green('$table <selector>')}   Extract table as data.
 
   ${colors.bold('Examples:')}

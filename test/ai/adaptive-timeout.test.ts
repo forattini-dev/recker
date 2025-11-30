@@ -144,7 +144,8 @@ describe('StreamTimeoutController', () => {
       controller.start();
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(controller.elapsed).toBeGreaterThanOrEqual(50);
+      // Allow 5ms tolerance for timer imprecision
+      expect(controller.elapsed).toBeGreaterThanOrEqual(45);
       controller.complete();
     });
 
