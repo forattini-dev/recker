@@ -18,6 +18,7 @@ export * from './cookies/memory-cookie-jar.js';
 export * from './runner/request-runner.js';
 export * from './contract/index.js';
 export * from './cache/memory-storage.js';
+export * from './cache/memory-limits.js';
 export * from './cache/file-storage.js';
 export * from './utils/body.js';
 export * from './plugins/xsrf.js';
