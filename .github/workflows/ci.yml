@@ -8,7 +8,6 @@ on:
     branches: ['main']
 
 jobs:
-  # 1. Quality Gate (Lint, Types, Tests)
   quality:
     name: Quality Check
     runs-on: ubuntu-latest
@@ -38,12 +37,11 @@ jobs:
       - name: Lint & Type Check
         run: |
           pnpm run lint
-          pnpm run build # Type check via TSC
+          pnpm run build
 
       - name: Run Tests
         run: pnpm test
 
-  # 2. Next Release (Only on Main Push, skip version bump commits)
   release-next:
     name: Release Next
     needs: quality
@@ -107,7 +105,6 @@ jobs:
 
       - name: Publish to GitHub Packages (Next)
         run: |
-          # Update package name for GitHub Packages scope
           node -e "
             const pkg = require('./package.json');
             pkg.name = '@forattini-dev/recker';
@@ -118,7 +115,35 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # 3. Stable Release (Only on Tag Push v*)
+      - name: Job Summary
+        run: |
+          echo "## 🚀 Next Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Tag** | \`next\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | [\`${GITHUB_SHA::7}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Installation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# NPM" >> $GITHUB_STEP_SUMMARY
+          echo "npm install recker@next" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# PNPM" >> $GITHUB_STEP_SUMMARY
+          echo "pnpm add recker@next" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Specific version" >> $GITHUB_STEP_SUMMARY
+          echo "npm install recker@${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [NPM Package](https://www.npmjs.com/package/recker?activeTab=versions)" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Packages](https://github.com/${{ github.repository }}/pkgs/npm/recker)" >> $GITHUB_STEP_SUMMARY
+
   release-stable:
     name: Release Stable
     needs: quality
@@ -179,7 +204,6 @@ jobs:
       - name: Generate Changelog
         id: changelog
         run: |
-          # Get previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           CURRENT_TAG=${GITHUB_REF#refs/tags/}
 
@@ -190,7 +214,6 @@ jobs:
             echo "Changes since $PREV_TAG:" >> CHANGELOG_BODY.md
             echo "" >> CHANGELOG_BODY.md
 
-            # Features
             FEATURES=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^feat" 2>/dev/null || true)
             if [ -n "$FEATURES" ]; then
               echo "### 🚀 Features" >> CHANGELOG_BODY.md
@@ -198,7 +221,6 @@ jobs:
               echo "" >> CHANGELOG_BODY.md
             fi
 
-            # Fixes
             FIXES=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^fix" 2>/dev/null || true)
             if [ -n "$FIXES" ]; then
               echo "### 🐛 Bug Fixes" >> CHANGELOG_BODY.md
@@ -206,7 +228,6 @@ jobs:
               echo "" >> CHANGELOG_BODY.md
             fi
 
-            # Docs
             DOCS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^docs" 2>/dev/null || true)
             if [ -n "$DOCS" ]; then
               echo "### 📚 Documentation" >> CHANGELOG_BODY.md
@@ -214,7 +235,6 @@ jobs:
               echo "" >> CHANGELOG_BODY.md
             fi
 
-            # Tests
             TESTS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^test" 2>/dev/null || true)
             if [ -n "$TESTS" ]; then
               echo "### ✅ Tests" >> CHANGELOG_BODY.md
@@ -222,7 +242,6 @@ jobs:
               echo "" >> CHANGELOG_BODY.md
             fi
 
-            # CI/Chore
             CHORE=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^ci\|^chore" 2>/dev/null || true)
             if [ -n "$CHORE" ]; then
               echo "### 🔧 Maintenance" >> CHANGELOG_BODY.md
@@ -230,7 +249,6 @@ jobs:
               echo "" >> CHANGELOG_BODY.md
             fi
 
-            # Contributors (using GitHub API to get correct usernames)
             echo "### 👥 Contributors" >> CHANGELOG_BODY.md
             CONTRIBUTORS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/compare/$PREV_TAG...$CURRENT_TAG" \
@@ -240,7 +258,6 @@ jobs:
                 echo "- @$user" >> CHANGELOG_BODY.md
               done
             else
-              # Fallback to commit author names without @
               git log $PREV_TAG..HEAD --pretty=format:"- %an" | sort -u >> CHANGELOG_BODY.md
             fi
             echo "" >> CHANGELOG_BODY.md
@@ -275,3 +292,33 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Job Summary
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "## 🎉 Stable Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`$VERSION\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Tag** | \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Git Tag** | [\`v$VERSION\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/v$VERSION) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Installation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# NPM (latest)" >> $GITHUB_STEP_SUMMARY
+          echo "npm install recker" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# PNPM" >> $GITHUB_STEP_SUMMARY
+          echo "pnpm add recker" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Specific version" >> $GITHUB_STEP_SUMMARY
+          echo "npm install recker@$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Release](${{ github.server_url }}/${{ github.repository }}/releases/tag/v$VERSION)" >> $GITHUB_STEP_SUMMARY
+          echo "- [NPM Package](https://www.npmjs.com/package/recker)" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Packages](https://github.com/${{ github.repository }}/pkgs/npm/recker)" >> $GITHUB_STEP_SUMMARY
