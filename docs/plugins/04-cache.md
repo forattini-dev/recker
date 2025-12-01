@@ -1,6 +1,6 @@
 # Cache Plugin
 
-O plugin de **Cache** implementa caching HTTP com suporte a múltiplas estratégias, storage backends, e compliance RFC 7234.
+The **Cache** plugin implements HTTP caching with support for multiple strategies, storage backends, and RFC 7234 compliance.
 
 ## Quick Start
 
@@ -13,97 +13,97 @@ const client = createClient({
 
 client.use(cache({
   storage: new MemoryStorage({ maxMemoryBytes: 100 * 1024 * 1024 }),
-  ttl: 60000, // 1 minuto
+  ttl: 60000, // 1 minute
 }));
 
-// Primeira chamada - busca da API
+// First call - fetches from API
 const users1 = await client.get('/users').json();
 
-// Segunda chamada - retorna do cache
+// Second call - returns from cache
 const users2 = await client.get('/users').json();
 ```
 
-## Configuração
+## Configuration
 
 ```typescript
 interface CacheOptions {
-  // Backend de armazenamento
+  // Storage backend
   storage?: CacheStorage;
 
-  // Estratégia de cache
+  // Cache strategy
   strategy?: CacheStrategy;
 
-  // TTL padrão em ms (fallback quando não há Cache-Control)
+  // Default TTL in ms (fallback when no Cache-Control)
   ttl?: number;
 
-  // Métodos HTTP a cachear (default: ['GET'])
+  // HTTP methods to cache (default: ['GET'])
   methods?: string[];
 
-  // Gerador de chave customizado
+  // Custom key generator
   keyGenerator?: (req: ReckerRequest) => string;
 
-  // Respeitar Cache-Control headers (default: true)
+  // Respect Cache-Control headers (default: true)
   respectCacheControl?: boolean;
 
-  // Incluir Vary header na chave do cache (default: true)
+  // Include Vary header in cache key (default: true)
   respectVary?: boolean;
 
-  // Tempo máximo para servir conteúdo stale (default: 0)
+  // Maximum time to serve stale content (default: 0)
   maxStale?: number;
 
-  // Forçar revalidação em cada request (default: false)
+  // Force revalidation on each request (default: false)
   forceRevalidate?: boolean;
 }
 ```
 
-## Estratégias
+## Strategies
 
 ### cache-first (Default)
 
-Retorna do cache se disponível, senão busca da rede:
+Returns from cache if available, otherwise fetches from network:
 
 ```typescript
 client.use(cache({
   strategy: 'cache-first',
-  ttl: 300000, // 5 minutos
+  ttl: 300000, // 5 minutes
 }));
 
-// 1. Verifica cache
-// 2. Se encontrou e não expirou → retorna cache
-// 3. Se não encontrou → busca da rede, salva no cache
+// 1. Check cache
+// 2. If found and not expired → return cache
+// 3. If not found → fetch from network, save to cache
 ```
 
 ### stale-while-revalidate
 
-Retorna cache imediatamente (mesmo stale), atualiza em background:
+Returns cache immediately (even if stale), updates in background:
 
 ```typescript
 client.use(cache({
   strategy: 'stale-while-revalidate',
   ttl: 60000,
-  maxStale: 300000, // Aceita até 5 min de stale
+  maxStale: 300000, // Accept up to 5 min stale
 }));
 
-// 1. Retorna cache imediatamente (mesmo expirado)
-// 2. Busca atualização em background
-// 3. Próximo request terá dados frescos
+// 1. Return cache immediately (even if expired)
+// 2. Fetch update in background
+// 3. Next request will have fresh data
 ```
 
 ### network-only
 
-Sempre busca da rede, ignora cache:
+Always fetches from network, ignores cache:
 
 ```typescript
 client.use(cache({
   strategy: 'network-only',
 }));
 
-// Útil para forçar refresh em requests específicos
+// Useful to force refresh on specific requests
 ```
 
 ### rfc-compliant
 
-Implementação completa do RFC 7234:
+Full RFC 7234 implementation:
 
 ```typescript
 client.use(cache({
@@ -112,24 +112,24 @@ client.use(cache({
   respectVary: true,
 }));
 
-// Respeita:
+// Respects:
 // - Cache-Control: max-age, no-cache, no-store, private, public
 // - Expires header
-// - ETag e Last-Modified para revalidação
-// - Vary header para variantes
+// - ETag and Last-Modified for revalidation
+// - Vary header for variants
 ```
 
 ### revalidate
 
-Sempre revalida com servidor antes de usar cache:
+Always revalidates with server before using cache:
 
 ```typescript
 client.use(cache({
   strategy: 'revalidate',
 }));
 
-// Sempre envia If-None-Match ou If-Modified-Since
-// Servidor retorna 304 Not Modified se não mudou
+// Always sends If-None-Match or If-Modified-Since
+// Server returns 304 Not Modified if unchanged
 ```
 
 ## Storage Backends
@@ -148,7 +148,7 @@ client.use(cache({
 }));
 ```
 
-Ver [Memory Cache](./01-memory-cache.md) para documentação completa.
+See [Memory Cache](./01-memory-cache.md) for complete documentation.
 
 ### FileStorage
 
@@ -179,7 +179,7 @@ client.use(cache({
 
 ### Custom Storage
 
-Implemente a interface `CacheStorage`:
+Implement the `CacheStorage` interface:
 
 ```typescript
 interface CacheStorage {
@@ -201,43 +201,43 @@ client.use(cache({ storage: new MyStorage() }));
 
 ## Cache-Control
 
-O plugin respeita headers Cache-Control do servidor:
+The plugin respects Cache-Control headers from the server:
 
 ```typescript
 client.use(cache({
   respectCacheControl: true, // default
 }));
 
-// Resposta com Cache-Control: max-age=3600
-// → Cacheado por 1 hora
+// Response with Cache-Control: max-age=3600
+// → Cached for 1 hour
 
-// Resposta com Cache-Control: no-store
-// → Não cacheado
+// Response with Cache-Control: no-store
+// → Not cached
 
-// Resposta com Cache-Control: no-cache
-// → Cacheado, mas sempre revalida
+// Response with Cache-Control: no-cache
+// → Cached, but always revalidates
 
-// Resposta com Cache-Control: private
-// → Não cacheado (dados específicos do usuário)
+// Response with Cache-Control: private
+// → Not cached (user-specific data)
 ```
 
 ## Vary Header
 
-O plugin considera o header Vary para criar variantes do cache:
+The plugin considers the Vary header to create cache variants:
 
 ```typescript
 client.use(cache({
   respectVary: true, // default
 }));
 
-// Resposta com Vary: Accept-Language
-// → Cache separado para cada idioma
+// Response with Vary: Accept-Language
+// → Separate cache for each language
 
-// Request com Accept-Language: en
-// → Cache key inclui "en"
+// Request with Accept-Language: en
+// → Cache key includes "en"
 
-// Request com Accept-Language: pt-BR
-// → Cache key inclui "pt-BR"
+// Request with Accept-Language: pt-BR
+// → Cache key includes "pt-BR"
 ```
 
 ## Custom Key Generator
@@ -245,7 +245,7 @@ client.use(cache({
 ```typescript
 client.use(cache({
   keyGenerator: (req) => {
-    // Incluir usuário na chave
+    // Include user in key
     const userId = req.headers.get('X-User-Id') || 'anonymous';
     return `${userId}:${req.method}:${req.url}`;
   },
@@ -254,35 +254,35 @@ client.use(cache({
 
 ## Bypass Cache
 
-### Por Request
+### Per Request
 
 ```typescript
-// Força refresh
+// Force refresh
 const fresh = await client.get('/users', {
   headers: { 'Cache-Control': 'no-cache' },
 }).json();
 
-// Sem cache neste request
+// No cache for this request
 const noStore = await client.get('/users', {
   headers: { 'Cache-Control': 'no-store' },
 }).json();
 ```
 
-### Invalidação Manual
+### Manual Invalidation
 
 ```typescript
 const storage = new MemoryStorage();
 
 client.use(cache({ storage }));
 
-// Após um POST/PUT/DELETE, invalidar
+// After a POST/PUT/DELETE, invalidate
 await client.post('/users', { body: newUser });
 storage.clearByPrefix('GET:https://api.example.com/users');
 ```
 
-## Exemplos
+## Examples
 
-### API com Rate Limit
+### Rate Limited API
 
 ```typescript
 client.use(cache({
@@ -291,20 +291,20 @@ client.use(cache({
   ttl: 300000, // 5 min
 }));
 
-// Reduz chamadas à API, evita rate limiting
+// Reduces API calls, avoids rate limiting
 ```
 
-### Real-time com Fallback
+### Real-time with Fallback
 
 ```typescript
 client.use(cache({
   strategy: 'stale-while-revalidate',
-  ttl: 5000, // 5 segundos
-  maxStale: 60000, // Aceita até 1 min stale
+  ttl: 5000, // 5 seconds
+  maxStale: 60000, // Accept up to 1 min stale
 }));
 
-// Sempre responde rápido com dados "recentes o suficiente"
-// Atualiza em background
+// Always responds fast with "recent enough" data
+// Updates in background
 ```
 
 ### Static Assets
@@ -317,7 +317,7 @@ const assetClient = createClient({
 assetClient.use(cache({
   storage: new FileStorage({ directory: './asset-cache' }),
   strategy: 'cache-first',
-  ttl: 86400000, // 24 horas
+  ttl: 86400000, // 24 hours
 }));
 ```
 
@@ -333,25 +333,25 @@ client.use(cache({
 }));
 ```
 
-## Métricas
+## Metrics
 
 ```typescript
 const storage = new MemoryStorage({ trackStats: true });
 
 client.use(cache({ storage }));
 
-// Após algum uso...
+// After some usage...
 const stats = storage.getStats();
 console.log(`Hit rate: ${stats.hitRate}%`);
 console.log(`Cache size: ${storage.size()} items`);
 ```
 
-## Dicas
+## Tips
 
-1. **Use MemoryStorage** para baixa latência
-2. **Use FileStorage** para persistência entre restarts
-3. **Use RedisStorage** para cache compartilhado entre instâncias
-4. **Ajuste TTL** baseado na natureza dos dados
-5. **Use stale-while-revalidate** para UX melhor
-6. **Monitore hit rate** para ajustar configuração
-7. **Combine com retry** para resiliência completa
+1. **Use MemoryStorage** for low latency
+2. **Use FileStorage** for persistence between restarts
+3. **Use RedisStorage** for shared cache between instances
+4. **Adjust TTL** based on data nature
+5. **Use stale-while-revalidate** for better UX
+6. **Monitor hit rate** to adjust configuration
+7. **Combine with retry** for complete resilience

@@ -1,6 +1,6 @@
 # Logger Plugin
 
-O plugin de **Logger** fornece logging detalhado de requests e responses HTTP, útil para debugging e observabilidade.
+The **Logger** plugin provides detailed logging of HTTP requests and responses, useful for debugging and observability.
 
 ## Quick Start
 
@@ -18,42 +18,42 @@ await client.get('/users').json();
 // [16:30:45] 200 OK (145ms)
 ```
 
-## Configuração
+## Configuration
 
 ```typescript
 interface LoggerOptions {
-  // Função de log customizada (default: console.log)
+  // Custom log function (default: console.log)
   log?: (...args: any[]) => void;
 
-  // Logar request (default: true)
+  // Log request (default: true)
   logRequest?: boolean;
 
-  // Logar response (default: true)
+  // Log response (default: true)
   logResponse?: boolean;
 
-  // Logar headers (default: false)
+  // Log headers (default: false)
   logHeaders?: boolean;
 
-  // Logar body (default: false)
+  // Log body (default: false)
   logBody?: boolean;
 
-  // Logar timings (default: true)
+  // Log timings (default: true)
   logTimings?: boolean;
 
-  // Logar erros (default: true)
+  // Log errors (default: true)
   logErrors?: boolean;
 
-  // Filtrar requests por URL
+  // Filter requests by URL
   filter?: (req: ReckerRequest) => boolean;
 
-  // Formatar output
+  // Format output
   formatter?: (entry: LogEntry) => string;
 }
 ```
 
-## Níveis de Detalhe
+## Detail Levels
 
-### Básico (Default)
+### Basic (Default)
 
 ```typescript
 client.use(logger());
@@ -62,7 +62,7 @@ client.use(logger());
 // 200 OK (145ms)
 ```
 
-### Com Headers
+### With Headers
 
 ```typescript
 client.use(logger({
@@ -75,7 +75,7 @@ client.use(logger({
 // Response Headers: { "Content-Type": "application/json", ... }
 ```
 
-### Com Body
+### With Body
 
 ```typescript
 client.use(logger({
@@ -88,7 +88,7 @@ client.use(logger({
 // Response: { "id": 123, "name": "John", ... }
 ```
 
-### Completo
+### Full
 
 ```typescript
 client.use(logger({
@@ -124,7 +124,7 @@ client.use(logger({
 }));
 ```
 
-### Estruturado
+### Structured
 
 ```typescript
 client.use(logger({
@@ -140,29 +140,29 @@ client.use(logger({
 }));
 ```
 
-## Filtros
+## Filters
 
-### Por URL
+### By URL
 
 ```typescript
 client.use(logger({
   filter: (req) => !req.url.includes('/health'),
 }));
 
-// Não loga requests para /health
+// Doesn't log requests to /health
 ```
 
-### Por Método
+### By Method
 
 ```typescript
 client.use(logger({
   filter: (req) => req.method !== 'OPTIONS',
 }));
 
-// Não loga preflight requests
+// Doesn't log preflight requests
 ```
 
-### Apenas Erros
+### Errors Only
 
 ```typescript
 client.use(logger({
@@ -171,10 +171,10 @@ client.use(logger({
   logErrors: true,
 }));
 
-// Só loga quando há erro
+// Only logs when there's an error
 ```
 
-## Formatter Customizado
+## Custom Formatter
 
 ```typescript
 client.use(logger({
@@ -188,7 +188,7 @@ client.use(logger({
 // ❌ POST https://api.example.com/users → 400 (89ms)
 ```
 
-## Integração com Observabilidade
+## Observability Integration
 
 ### OpenTelemetry
 
@@ -226,19 +226,19 @@ client.use(logger({
 
 ## Debug Mode
 
-Para debugging rápido, use o modo debug integrado:
+For quick debugging, use the built-in debug mode:
 
 ```typescript
 const client = createClient({
   baseUrl: 'https://api.example.com',
-  debug: true, // Ativa logging automático
+  debug: true, // Enables automatic logging
 });
 
-// Ou via env var
+// Or via env var
 // DEBUG=recker node app.js
 ```
 
-## Exemplos
+## Examples
 
 ### Development
 
@@ -271,7 +271,7 @@ client.use(logger({
   },
 }));
 
-// Expor métricas
+// Expose metrics
 app.get('/metrics', (req, res) => {
   res.json({
     ...metrics,
@@ -297,10 +297,10 @@ client.use(logger({
 }));
 ```
 
-## Dicas
+## Tips
 
-1. **Desabilite em produção** para requests de alta frequência
-2. **Use filtros** para evitar logs excessivos
-3. **Logs estruturados** para análise posterior
-4. **Não logue tokens** - sanitize headers sensíveis
-5. **Combine com tracing** para observabilidade completa
+1. **Disable in production** for high-frequency requests
+2. **Use filters** to avoid excessive logs
+3. **Structured logs** for later analysis
+4. **Don't log tokens** - sanitize sensitive headers
+5. **Combine with tracing** for complete observability
