@@ -18,6 +18,10 @@ export interface IndexedDoc {
   category: string;
   /** Extracted keywords for boosted matching */
   keywords: string[];
+  /** Section heading if this is a chunk */
+  section?: string;
+  /** Parent document path if this is a chunk */
+  parentPath?: string;
 }
 
 /**
@@ -71,6 +75,10 @@ export interface EmbeddingEntry {
   category: string;
   /** Keywords */
   keywords: string[];
+  /** Section heading if this is a chunk */
+  section?: string;
+  /** Parent document path if this is a chunk */
+  parentPath?: string;
   /** The embedding vector */
   vector: number[];
 }

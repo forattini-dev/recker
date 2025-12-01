@@ -18,6 +18,9 @@
   - [Observability](/http/12-observability.md)
   - [GraphQL](/http/13-graphql.md)
   - [Web Scraping](/http/14-scraping.md)
+  - [SOAP & XML-RPC](/http/15-soap.md)
+  - [JSON-RPC](/http/16-jsonrpc.md)
+  - [OData](/http/17-odata.md)
 
 - **Plugins**
   - [Overview](/plugins/00-overview.md)
