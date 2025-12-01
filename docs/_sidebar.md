@@ -24,7 +24,8 @@
   - [Streaming](/ai/02-streaming.md)
   - [Providers](/ai/03-providers.md)
   - [Patterns](/ai/04-patterns.md)
-  - [MCP](/ai/05-mcp.md)
+  - [MCP Client](/ai/05-mcp-client.md)
+  - [MCP Server](/ai/06-mcp-server.md)
 
 - **💻 CLI Tool**
   - [Overview](/cli/01-overview.md)
