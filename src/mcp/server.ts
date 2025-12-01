@@ -1,22 +1,25 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative } from 'path';
+import { createInterface } from 'readline';
 import type {
   JsonRpcRequest,
   JsonRpcResponse,
+  JsonRpcNotification,
   MCPTool,
   MCPToolResult,
-  MCPServerInfo,
-  MCPCapabilities,
   MCPInitializeResponse,
   MCPToolsListResponse,
 } from './types.js';
+
+export type MCPTransportMode = 'stdio' | 'http' | 'sse';
 
 export interface MCPServerOptions {
   name?: string;
   version?: string;
   docsPath?: string;
   port?: number;
+  transport?: MCPTransportMode;
   debug?: boolean;
 }
 
@@ -31,6 +34,11 @@ interface DocIndex {
 /**
  * MCP Server for serving Recker documentation to AI agents.
  *
+ * Supports multiple transports:
+ * - **stdio**: For CLI integration (Claude Code, etc.)
+ * - **http**: Simple HTTP POST endpoint
+ * - **sse**: HTTP with Server-Sent Events for notifications
+ *
  * Provides 2 focused tools:
  * - `search_docs`: Search documentation by keyword
  * - `get_doc`: Get full content of a specific doc file
@@ -39,6 +47,8 @@ export class MCPServer {
   private options: Required<MCPServerOptions>;
   private server?: ReturnType<typeof createServer>;
   private docsIndex: DocIndex[] = [];
+  private sseClients: Set<ServerResponse> = new Set();
+  private initialized = false;
 
   constructor(options: MCPServerOptions = {}) {
     this.options = {
@@ -46,20 +56,37 @@ export class MCPServer {
       version: options.version || '1.0.0',
       docsPath: options.docsPath || this.findDocsPath(),
       port: options.port || 3100,
+      transport: options.transport || 'stdio',
       debug: options.debug || false,
     };
 
     this.buildIndex();
   }
 
+  private log(message: string, data?: unknown): void {
+    if (this.options.debug) {
+      if (this.options.transport === 'stdio') {
+        // In stdio mode, debug goes to stderr to not interfere with protocol
+        console.error(`[MCP] ${message}`, data ? JSON.stringify(data) : '');
+      } else {
+        console.log(`[MCP] ${message}`, data ? JSON.stringify(data) : '');
+      }
+    }
+  }
+
   private findDocsPath(): string {
-    // Try to find docs folder relative to common locations
     const possiblePaths = [
       join(process.cwd(), 'docs'),
       join(process.cwd(), '..', 'docs'),
-      join(__dirname, '..', '..', 'docs'),
-      join(__dirname, '..', '..', '..', 'docs'),
     ];
+
+    // Handle both compiled and source paths
+    if (typeof __dirname !== 'undefined') {
+      possiblePaths.push(
+        join(__dirname, '..', '..', 'docs'),
+        join(__dirname, '..', '..', '..', 'docs'),
+      );
+    }
 
     for (const p of possiblePaths) {
       if (existsSync(p)) {
@@ -72,9 +99,7 @@ export class MCPServer {
 
   private buildIndex(): void {
     if (!existsSync(this.options.docsPath)) {
-      if (this.options.debug) {
-        console.log(`[MCP] Docs path not found: ${this.options.docsPath}`);
-      }
+      this.log(`Docs path not found: ${this.options.docsPath}`);
       return;
     }
 
@@ -98,15 +123,11 @@ export class MCPServer {
           keywords,
         });
       } catch (err) {
-        if (this.options.debug) {
-          console.log(`[MCP] Failed to index ${file}:`, err);
-        }
+        this.log(`Failed to index ${file}:`, err);
       }
     }
 
-    if (this.options.debug) {
-      console.log(`[MCP] Indexed ${this.docsIndex.length} documentation files`);
-    }
+    this.log(`Indexed ${this.docsIndex.length} documentation files`);
   }
 
   private walkDir(dir: string): string[] {
@@ -140,22 +161,18 @@ export class MCPServer {
   }
 
   private extractKeywords(content: string): string[] {
-    // Extract headings, code identifiers, and important terms
     const keywords = new Set<string>();
 
-    // Headings
     const headings = content.match(/^#{1,3}\s+(.+)$/gm) || [];
     for (const h of headings) {
       keywords.add(h.replace(/^#+\s+/, '').toLowerCase());
     }
 
-    // Code blocks with function/class names
     const codePatterns = content.match(/`([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?)`/g) || [];
     for (const c of codePatterns) {
       keywords.add(c.replace(/`/g, '').toLowerCase());
     }
 
-    // Important terms (capitalized words, likely API names)
     const terms = content.match(/\b[A-Z][a-zA-Z]+(?:Client|Server|Error|Response|Request|Plugin|Transport)\b/g) || [];
     for (const t of terms) {
       keywords.add(t.toLowerCase());
@@ -241,7 +258,6 @@ export class MCPServer {
       let score = 0;
       const queryTerms = query.split(/\s+/);
 
-      // Score based on matches
       for (const term of queryTerms) {
         if (doc.title.toLowerCase().includes(term)) score += 10;
         if (doc.path.toLowerCase().includes(term)) score += 5;
@@ -284,7 +300,6 @@ export class MCPServer {
     const index = lowerContent.indexOf(query.split(/\s+/)[0]);
 
     if (index === -1) {
-      // Return first paragraph
       const firstPara = content.split('\n\n')[1] || content.substring(0, 200);
       return firstPara.substring(0, 150).trim() + '...';
     }
@@ -334,12 +349,15 @@ export class MCPServer {
     };
   }
 
-  private handleRequest(req: JsonRpcRequest): JsonRpcResponse {
+  handleRequest(req: JsonRpcRequest): JsonRpcResponse {
     const { method, params, id } = req;
+
+    this.log(`Request: ${method}`, params);
 
     try {
       switch (method) {
         case 'initialize': {
+          this.initialized = true;
           const response: MCPInitializeResponse = {
             protocolVersion: '2024-11-05',
             capabilities: {
@@ -351,6 +369,11 @@ export class MCPServer {
             },
           };
           return { jsonrpc: '2.0', id: id!, result: response };
+        }
+
+        case 'notifications/initialized': {
+          // Client acknowledged initialization
+          return { jsonrpc: '2.0', id: id!, result: {} };
         }
 
         case 'ping':
@@ -366,6 +389,12 @@ export class MCPServer {
           const result = this.handleToolCall(name, args || {});
           return { jsonrpc: '2.0', id: id!, result };
         }
+
+        case 'resources/list':
+          return { jsonrpc: '2.0', id: id!, result: { resources: [] } };
+
+        case 'prompts/list':
+          return { jsonrpc: '2.0', id: id!, result: { prompts: [] } };
 
         default:
           return {
@@ -383,12 +412,62 @@ export class MCPServer {
     }
   }
 
-  async start(): Promise<void> {
+  /**
+   * Send a notification to all SSE clients
+   */
+  private sendNotification(notification: JsonRpcNotification): void {
+    const data = JSON.stringify(notification);
+    for (const client of this.sseClients) {
+      client.write(`data: ${data}\n\n`);
+    }
+  }
+
+  /**
+   * Start the server in stdio mode (for CLI integration)
+   */
+  private async startStdio(): Promise<void> {
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: false,
+    });
+
+    this.log('Starting in stdio mode');
+
+    rl.on('line', (line) => {
+      if (!line.trim()) return;
+
+      try {
+        const request = JSON.parse(line) as JsonRpcRequest;
+        const response = this.handleRequest(request);
+
+        // Write response to stdout
+        process.stdout.write(JSON.stringify(response) + '\n');
+      } catch (err) {
+        const errorResponse: JsonRpcResponse = {
+          jsonrpc: '2.0',
+          id: 0,
+          error: { code: -32700, message: 'Parse error' },
+        };
+        process.stdout.write(JSON.stringify(errorResponse) + '\n');
+      }
+    });
+
+    rl.on('close', () => {
+      this.log('stdin closed, exiting');
+      process.exit(0);
+    });
+  }
+
+  /**
+   * Start the server in HTTP mode (simple POST endpoint)
+   */
+  private async startHttp(): Promise<void> {
     return new Promise((resolve) => {
       this.server = createServer((req: IncomingMessage, res: ServerResponse) => {
         // CORS headers
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
         if (req.method === 'OPTIONS') {
@@ -408,16 +487,7 @@ export class MCPServer {
         req.on('end', () => {
           try {
             const request = JSON.parse(body) as JsonRpcRequest;
-
-            if (this.options.debug) {
-              console.log('[MCP] Request:', JSON.stringify(request, null, 2));
-            }
-
             const response = this.handleRequest(request);
-
-            if (this.options.debug) {
-              console.log('[MCP] Response:', JSON.stringify(response, null, 2));
-            }
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(response));
@@ -433,17 +503,126 @@ export class MCPServer {
       });
 
       this.server.listen(this.options.port, () => {
-        if (this.options.debug) {
-          console.log(`[MCP] Server listening on http://localhost:${this.options.port}`);
-          console.log(`[MCP] Docs path: ${this.options.docsPath}`);
-          console.log(`[MCP] Indexed ${this.docsIndex.length} files`);
-        }
+        this.log(`HTTP server listening on http://localhost:${this.options.port}`);
         resolve();
       });
     });
   }
 
+  /**
+   * Start the server in SSE mode (HTTP + Server-Sent Events)
+   */
+  private async startSSE(): Promise<void> {
+    return new Promise((resolve) => {
+      this.server = createServer((req: IncomingMessage, res: ServerResponse) => {
+        // CORS headers
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+        const url = req.url || '/';
+
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+
+        // SSE endpoint for real-time notifications
+        if (req.method === 'GET' && url === '/sse') {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          });
+
+          // Send initial connection event
+          res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+
+          this.sseClients.add(res);
+          this.log(`SSE client connected (${this.sseClients.size} total)`);
+
+          req.on('close', () => {
+            this.sseClients.delete(res);
+            this.log(`SSE client disconnected (${this.sseClients.size} total)`);
+          });
+
+          return;
+        }
+
+        // JSON-RPC endpoint
+        if (req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => body += chunk);
+          req.on('end', () => {
+            try {
+              const request = JSON.parse(body) as JsonRpcRequest;
+              const response = this.handleRequest(request);
+
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(response));
+            } catch (err) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                jsonrpc: '2.0',
+                id: null,
+                error: { code: -32700, message: 'Parse error' },
+              }));
+            }
+          });
+          return;
+        }
+
+        // Health check
+        if (req.method === 'GET' && url === '/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: 'ok',
+            name: this.options.name,
+            version: this.options.version,
+            docsCount: this.docsIndex.length,
+            sseClients: this.sseClients.size,
+          }));
+          return;
+        }
+
+        res.writeHead(404);
+        res.end('Not found');
+      });
+
+      this.server.listen(this.options.port, () => {
+        this.log(`SSE server listening on http://localhost:${this.options.port}`);
+        this.log(`  POST /        - JSON-RPC endpoint`);
+        this.log(`  GET  /sse     - Server-Sent Events`);
+        this.log(`  GET  /health  - Health check`);
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * Start the MCP server with the configured transport
+   */
+  async start(): Promise<void> {
+    switch (this.options.transport) {
+      case 'stdio':
+        return this.startStdio();
+      case 'http':
+        return this.startHttp();
+      case 'sse':
+        return this.startSSE();
+      default:
+        throw new Error(`Unknown transport: ${this.options.transport}`);
+    }
+  }
+
   async stop(): Promise<void> {
+    // Close all SSE clients
+    for (const client of this.sseClients) {
+      client.end();
+    }
+    this.sseClients.clear();
+
     return new Promise((resolve) => {
       if (this.server) {
         this.server.close(() => resolve());
@@ -460,10 +639,29 @@ export class MCPServer {
   getDocsCount(): number {
     return this.docsIndex.length;
   }
+
+  getTransport(): MCPTransportMode {
+    return this.options.transport;
+  }
 }
 
 /**
- * Creates and starts an MCP server for Recker documentation.
+ * Creates an MCP server for Recker documentation.
+ *
+ * @example
+ * ```typescript
+ * // stdio mode (for Claude Code)
+ * const server = createMCPServer({ transport: 'stdio' });
+ * await server.start();
+ *
+ * // HTTP mode
+ * const server = createMCPServer({ transport: 'http', port: 3100 });
+ * await server.start();
+ *
+ * // SSE mode (HTTP + Server-Sent Events)
+ * const server = createMCPServer({ transport: 'sse', port: 3100 });
+ * await server.start();
+ * ```
  */
 export function createMCPServer(options?: MCPServerOptions): MCPServer {
   return new MCPServer(options);
