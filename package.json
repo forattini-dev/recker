@@ -109,7 +109,7 @@
     "recker": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/mcp/data && cp src/mcp/data/embeddings.json dist/mcp/data/",
     "build:embeddings": "tsx scripts/build-embeddings.ts",
     "prepare": "husky",
     "prepublishOnly": "pnpm build && pnpm build:embeddings",

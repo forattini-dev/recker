@@ -48,7 +48,7 @@ export class HybridSearch {
 
   constructor(config: HybridSearchConfig = {}) {
     this.config = {
-      fuzzyThreshold: config.fuzzyThreshold ?? 0.4,
+      fuzzyThreshold: config.fuzzyThreshold ?? 0.6,  // Higher = more permissive matching
       fuzzyWeight: config.fuzzyWeight ?? 0.5,
       semanticWeight: config.semanticWeight ?? 0.5,
       debug: config.debug ?? false,
@@ -64,16 +64,18 @@ export class HybridSearch {
     // 1. Initialize Fuse.js for fuzzy search
     this.fuse = new Fuse(docs, {
       keys: [
-        { name: 'title', weight: 3 },
-        { name: 'keywords', weight: 2 },
-        { name: 'path', weight: 1.5 },
-        { name: 'content', weight: 1 },
+        { name: 'keywords', weight: 6 },   // Keywords get highest priority (exact domain terms)
+        { name: 'title', weight: 4 },      // Title matches are important
+        { name: 'section', weight: 3 },    // Section headings matter
+        { name: 'path', weight: 1 },
+        { name: 'content', weight: 0.3 },  // Content is a fallback
       ],
       includeScore: true,
       threshold: this.config.fuzzyThreshold,
       ignoreLocation: true,
       useExtendedSearch: true,
       findAllMatches: true,
+      minMatchCharLength: 2,
     });
 
     // 2. Load pre-computed embeddings (if available)
@@ -149,11 +151,18 @@ export class HybridSearch {
       throw new Error('HybridSearch not initialized. Call initialize() first.');
     }
 
+    // Clean query by removing stop words
+    const cleanedQuery = this.cleanQuery(query);
+    this.log(`Original query: "${query}" → Cleaned: "${cleanedQuery}"`);
+
+    // Use cleaned query if it has content, otherwise fall back to original
+    const searchQuery = cleanedQuery.length > 0 ? cleanedQuery : query;
+
     const results = new Map<string, SearchResult>();
 
     // Fuzzy search (always available)
     if (mode === 'hybrid' || mode === 'fuzzy') {
-      const fuzzyResults = this.fuzzySearch(query, limit * 2, category);
+      const fuzzyResults = this.fuzzySearch(searchQuery, limit * 2, category);
       for (const result of fuzzyResults) {
         results.set(result.id, result);
       }
@@ -162,7 +171,7 @@ export class HybridSearch {
 
     // Semantic search (if embeddings available)
     if ((mode === 'hybrid' || mode === 'semantic') && this.vectors.size > 0) {
-      const semanticResults = this.semanticSearch(query, limit * 2, category);
+      const semanticResults = this.semanticSearch(searchQuery, limit * 2, category);
       for (const result of semanticResults) {
         const existing = results.get(result.id);
         if (existing) {
@@ -379,13 +388,66 @@ export class HybridSearch {
   }
 
   /**
+   * Stop words to filter out from queries (EN + PT).
+   */
+  private static STOP_WORDS = new Set([
+    // English
+    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
+    'may', 'might', 'must', 'shall', 'can', 'need', 'dare', 'ought', 'used',
+    'and', 'but', 'or', 'nor', 'for', 'yet', 'so', 'both', 'either', 'neither',
+    'not', 'only', 'own', 'same', 'than', 'too', 'very', 'just', 'also',
+    'how', 'what', 'when', 'where', 'who', 'which', 'why', 'whom', 'whose',
+    'this', 'that', 'these', 'those', 'here', 'there', 'all', 'each', 'every',
+    'any', 'some', 'no', 'none', 'one', 'two', 'other', 'another', 'such',
+    'to', 'of', 'in', 'on', 'at', 'by', 'with', 'from', 'as', 'into', 'through',
+    'about', 'above', 'below', 'between', 'under', 'over', 'out', 'up', 'down',
+    'if', 'then', 'else', 'because', 'while', 'although', 'though', 'unless',
+    'my', 'your', 'his', 'her', 'its', 'our', 'their', 'me', 'you', 'him', 'us', 'them',
+    // Portuguese
+    'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas', 'de', 'do', 'da', 'dos', 'das',
+    'em', 'no', 'na', 'nos', 'nas', 'por', 'para', 'com', 'sem', 'sob', 'sobre',
+    'e', 'ou', 'mas', 'porem', 'todavia', 'contudo', 'entretanto',
+    'que', 'qual', 'quais', 'quanto', 'quem', 'como', 'onde', 'quando', 'porque',
+    'eu', 'tu', 'ele', 'ela', 'nos', 'vos', 'eles', 'elas', 'voce', 'voces',
+    'meu', 'minha', 'meus', 'minhas', 'seu', 'sua', 'seus', 'suas',
+    'este', 'esta', 'estes', 'estas', 'esse', 'essa', 'esses', 'essas',
+    'isso', 'isto', 'aquilo', 'aquele', 'aquela', 'aqueles', 'aquelas',
+    'ser', 'estar', 'ter', 'haver', 'fazer', 'ir', 'vir', 'poder', 'dever',
+    'sim', 'nao', 'ja', 'ainda', 'sempre', 'nunca', 'tambem', 'so', 'apenas',
+    'muito', 'pouco', 'mais', 'menos', 'bem', 'mal', 'assim', 'entao', 'logo',
+    'yo', 'hey', 'oi', 'ola', 'bom', 'boa', 'obrigado', 'por favor',
+    // Generic verbs that don't add search value
+    'configure', 'configuro', 'configurar', 'configurando',
+    'use', 'usar', 'using', 'usar',
+    'create', 'criar', 'creating', 'criando',
+    'setup', 'setar', 'setting', 'setando',
+    'add', 'adicionar', 'adding', 'adicionando',
+    'get', 'getting', 'pegar', 'pegando',
+    'set', 'setting', 'definir', 'definindo',
+    'make', 'making', 'fazer', 'fazendo',
+  ]);
+
+  /**
+   * Clean query by removing stop words and normalizing.
+   */
+  private cleanQuery(query: string): string {
+    const words = query
+      .toLowerCase()
+      .split(/[\s\-_.,;:!?()[\]{}'"]+/)
+      .filter((w) => w.length > 1 && !HybridSearch.STOP_WORDS.has(w));
+
+    return words.join(' ');
+  }
+
+  /**
    * Tokenize text into searchable terms.
    */
   private tokenize(text: string): string[] {
     return text
       .toLowerCase()
       .split(/[\s\-_.,;:!?()[\]{}'"]+/)
-      .filter((t) => t.length > 2);
+      .filter((t) => t.length > 2 && !HybridSearch.STOP_WORDS.has(t));
   }
 
   /**

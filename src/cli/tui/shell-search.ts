@@ -322,12 +322,55 @@ const { results, stats } = await client.batch([
   // ============ Indexing ============
 
   private buildIndex(): void {
-    this.indexDocs();
+    this.indexDocsFromEmbeddings();
     this.indexExamples();
     this.indexTypes();
   }
 
-  private indexDocs(): void {
+  /**
+   * Load docs from pre-computed embeddings (includes chunking).
+   * Falls back to filesystem if embeddings not available.
+   */
+  private indexDocsFromEmbeddings(): void {
+    try {
+      // Try to load embeddings.json which has chunked documents
+      const embeddingsPath = join(dirname(fileURLToPath(import.meta.url)), '../../mcp/data/embeddings.json');
+
+      if (existsSync(embeddingsPath)) {
+        const data = JSON.parse(readFileSync(embeddingsPath, 'utf-8'));
+
+        for (const doc of data.documents) {
+          // Load full content for non-chunked docs
+          let content = '';
+          if (!doc.section) {
+            const fullPath = join(this.docsPath, doc.path);
+            if (existsSync(fullPath)) {
+              content = readFileSync(fullPath, 'utf-8');
+            }
+          }
+
+          this.docsIndex.push({
+            id: doc.id,
+            path: doc.path,
+            title: doc.title,
+            content,
+            category: doc.category,
+            keywords: doc.keywords || [],
+            section: doc.section,
+            parentPath: doc.parentPath,
+          });
+        }
+        return;
+      }
+    } catch {
+      // Fall through to filesystem indexing
+    }
+
+    // Fallback: index from filesystem
+    this.indexDocsFromFilesystem();
+  }
+
+  private indexDocsFromFilesystem(): void {
     if (!existsSync(this.docsPath)) return;
 
     const walkDir = (dir: string) => {

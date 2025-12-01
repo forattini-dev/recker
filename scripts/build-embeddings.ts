@@ -94,9 +94,47 @@ function extractTitle(content: string): string {
   return '';
 }
 
+// Important domain terms to always capture
+const DOMAIN_TERMS = [
+  'retry', 'cache', 'timeout', 'backoff', 'jitter', 'exponential', 'linear',
+  'stream', 'streaming', 'sse', 'websocket', 'ws',
+  'middleware', 'plugin', 'hook', 'interceptor',
+  'batch', 'parallel', 'concurrent', 'rate', 'limit', 'throttle',
+  'pagination', 'cursor', 'offset', 'page',
+  'auth', 'authentication', 'bearer', 'token', 'oauth', 'jwt',
+  'proxy', 'cors', 'header', 'headers',
+  'error', 'exception', 'circuit', 'breaker',
+  'request', 'response', 'http', 'https', 'api',
+  'json', 'xml', 'soap', 'grpc', 'graphql',
+  'upload', 'download', 'progress', 'file',
+  'dns', 'tls', 'ssl', 'certificate',
+  'scrape', 'scraping', 'html', 'selector',
+  'mcp', 'ai', 'llm', 'openai', 'anthropic',
+  'configuration', 'configure', 'config', 'options', 'settings',
+];
+
 // Extract keywords from markdown content
-function extractKeywords(content: string): string[] {
+function extractKeywords(content: string, title?: string): string[] {
   const keywords = new Set<string>();
+  const textLower = content.toLowerCase();
+
+  // Add domain terms that appear in content
+  for (const term of DOMAIN_TERMS) {
+    if (textLower.includes(term)) {
+      keywords.add(term);
+    }
+  }
+
+  // Extract keywords from title
+  if (title) {
+    const titleWords = title.toLowerCase().split(/[\s\-_]+/);
+    for (const word of titleWords) {
+      const cleaned = word.replace(/[^a-z0-9]/g, '');
+      if (cleaned.length > 2) {
+        keywords.add(cleaned);
+      }
+    }
+  }
 
   // Code block language identifiers
   const codeBlockMatches = content.matchAll(/```(\w+)/g);
@@ -118,12 +156,12 @@ function extractKeywords(content: string): string[] {
     }
   }
 
-  // Inline code
+  // Inline code (important API names)
   const inlineCodeMatches = content.matchAll(/`([^`]+)`/g);
   for (const match of inlineCodeMatches) {
     const code = match[1].toLowerCase();
     // Skip long code snippets
-    if (code.length > 3 && code.length < 30 && !code.includes(' ')) {
+    if (code.length > 2 && code.length < 30 && !code.includes(' ')) {
       keywords.add(code.replace(/[()[\]{}]/g, ''));
     }
   }
@@ -134,7 +172,7 @@ function extractKeywords(content: string): string[] {
     keywords.add(match[1].toLowerCase());
   }
 
-  return Array.from(keywords).slice(0, 20); // Limit to 20 keywords
+  return Array.from(keywords).slice(0, 30); // Limit to 30 keywords
 }
 
 // Remove code blocks and excessive whitespace for better embeddings
@@ -171,31 +209,137 @@ interface IndexedDoc {
   category: string;
   keywords: string[];
   content: string;
+  /** Section heading if this is a chunk */
+  section?: string;
+  /** Parent document path if this is a chunk */
+  parentPath?: string;
 }
 
-// Index documents from markdown files
+interface DocumentSection {
+  heading: string;
+  level: number;
+  content: string;
+  startLine: number;
+}
+
+// Split document into sections based on headings
+function splitIntoSections(content: string): DocumentSection[] {
+  const lines = content.split('\n');
+  const sections: DocumentSection[] = [];
+  let currentSection: DocumentSection | null = null;
+  let currentContent: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+
+    if (headingMatch) {
+      // Save previous section
+      if (currentSection) {
+        currentSection.content = currentContent.join('\n').trim();
+        if (currentSection.content.length > 50) {
+          sections.push(currentSection);
+        }
+      }
+
+      // Start new section
+      currentSection = {
+        heading: headingMatch[2].trim(),
+        level: headingMatch[1].length,
+        content: '',
+        startLine: i,
+      };
+      currentContent = [];
+    } else if (currentSection) {
+      currentContent.push(line);
+    } else {
+      // Content before first heading - create intro section
+      if (line.trim()) {
+        if (!currentSection) {
+          currentSection = {
+            heading: 'Introduction',
+            level: 1,
+            content: '',
+            startLine: 0,
+          };
+          currentContent = [];
+        }
+        currentContent.push(line);
+      }
+    }
+  }
+
+  // Save last section
+  if (currentSection) {
+    currentSection.content = currentContent.join('\n').trim();
+    if (currentSection.content.length > 50) {
+      sections.push(currentSection);
+    }
+  }
+
+  return sections;
+}
+
+// Index documents from markdown files with chunking
 function indexDocs(docsPath: string): IndexedDoc[] {
   const files = walkDir(docsPath);
   const docs: IndexedDoc[] = [];
+  let docIndex = 0;
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
+  for (const file of files) {
     const content = readFileSync(file, 'utf-8');
     const relativePath = relative(docsPath, file);
-    const title = extractTitle(content) || basename(file, '.md');
+    const docTitle = extractTitle(content) || basename(file, '.md');
 
     // Category is the first directory in the path, or 'root'
     const pathParts = relativePath.split('/');
     const category = pathParts.length > 1 ? pathParts[0] : 'root';
 
-    docs.push({
-      id: `doc-${i}`,
-      path: relativePath,
-      title,
-      category,
-      keywords: extractKeywords(content),
-      content: cleanContentForEmbedding(content),
-    });
+    // Split into sections
+    const sections = splitIntoSections(content);
+
+    if (sections.length <= 1) {
+      // Small document - keep as single doc
+      docs.push({
+        id: `doc-${docIndex++}`,
+        path: relativePath,
+        title: docTitle,
+        category,
+        keywords: extractKeywords(content, docTitle),
+        content: cleanContentForEmbedding(content),
+      });
+    } else {
+      // Large document - create chunks for each major section
+      // First, add the document itself with just title + intro for overview queries
+      const introSection = sections.find(s => s.level === 1) || sections[0];
+      docs.push({
+        id: `doc-${docIndex++}`,
+        path: relativePath,
+        title: docTitle,
+        category,
+        keywords: extractKeywords(content, docTitle),
+        content: cleanContentForEmbedding(`${docTitle}. ${introSection?.content || ''}`).slice(0, 500),
+      });
+
+      // Then add each H2 section as a separate chunk
+      for (const section of sections) {
+        if (section.level === 2 && section.content.length > 100) {
+          const chunkTitle = `${docTitle} - ${section.heading}`;
+          const sectionKeywords = extractKeywords(section.content, chunkTitle);
+
+          docs.push({
+            id: `doc-${docIndex++}`,
+            path: relativePath,
+            title: chunkTitle,
+            category,
+            keywords: sectionKeywords,
+            content: cleanContentForEmbedding(section.content),
+            section: section.heading,
+            parentPath: relativePath,
+          });
+        }
+      }
+    }
   }
 
   return docs;
@@ -275,6 +419,8 @@ async function main() {
         title: doc.title,
         category: doc.category,
         keywords: doc.keywords,
+        section: doc.section,
+        parentPath: doc.parentPath,
         vector: [], // Empty vector - fuzzy search only
       })),
     };
@@ -330,6 +476,8 @@ async function main() {
       title: doc.title,
       category: doc.category,
       keywords: doc.keywords,
+      section: doc.section,
+      parentPath: doc.parentPath,
       // Round vectors to 4 decimal places to reduce file size
       vector: vectors[i]?.map((v) => Math.round(v * 10000) / 10000) || [],
     })),
