@@ -230,9 +230,19 @@ jobs:
               echo "" >> CHANGELOG_BODY.md
             fi
 
-            # Contributors
+            # Contributors (using GitHub API to get correct usernames)
             echo "### 👥 Contributors" >> CHANGELOG_BODY.md
-            git log $PREV_TAG..HEAD --pretty=format:"- @%an" | sort -u >> CHANGELOG_BODY.md
+            CONTRIBUTORS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/compare/$PREV_TAG...$CURRENT_TAG" \
+              | jq -r '.commits[].author.login // empty' | sort -u | grep -v '^$' || true)
+            if [ -n "$CONTRIBUTORS" ]; then
+              echo "$CONTRIBUTORS" | while read -r user; do
+                echo "- @$user" >> CHANGELOG_BODY.md
+              done
+            else
+              # Fallback to commit author names without @
+              git log $PREV_TAG..HEAD --pretty=format:"- %an" | sort -u >> CHANGELOG_BODY.md
+            fi
             echo "" >> CHANGELOG_BODY.md
           else
             echo "Initial release! 🎉" >> CHANGELOG_BODY.md
