@@ -1,10 +1,22 @@
-# Plugins
+# Plugin System
 
-Plugin architecture, built-in plugins, and creating custom plugins.
+Este documento cobre a arquitetura de plugins do Recker e como criar plugins customizados.
 
-## Plugin System
+> **Documentação Detalhada de Plugins**
+>
+> Para documentação completa de cada plugin built-in, veja a seção [Plugins](/plugins/00-overview.md):
+> - [Memory Cache](/plugins/01-memory-cache.md) - Cache em memória de alta performance
+> - [Retry](/plugins/02-retry.md) - Retentativas com backoff exponencial
+> - [Circuit Breaker](/plugins/03-circuit-breaker.md) - Proteção contra falhas em cascata
+> - [Cache](/plugins/04-cache.md) - Caching HTTP com múltiplas estratégias
+> - [Dedup](/plugins/05-dedup.md) - Deduplicação de requests simultâneos
+> - [Auth](/plugins/06-auth.md) - Autenticação (Bearer, Basic, API Key)
+> - [Logger](/plugins/07-logger.md) - Logging de requests
+> - [Cookie Jar](/plugins/08-cookie-jar.md) - Gerenciamento de cookies
 
-Plugins are functions that configure the client with middleware, hooks, or other behavior.
+## Arquitetura
+
+Plugins são funções que configuram o client com middleware, hooks ou outros comportamentos.
 
 ### Plugin Interface
 
@@ -14,27 +26,27 @@ type Plugin = (client: Client) => void;
 
 ### Middleware vs Hooks
 
-There are two mechanisms to extend Recker:
+Existem dois mecanismos para estender o Recker:
 
-| Mechanism | Use Case | Execution Model |
+| Mecanismo | Use Case | Modelo de Execução |
 |-----------|----------|-----------------|
-| **Middleware** | Control request flow, wrap execution, retry, short-circuit | Onion model (wraps `next()`) |
-| **Hooks** | React to events, lightweight mutations | Sequential callbacks |
+| **Middleware** | Controlar fluxo, retry, short-circuit | Modelo Onion (wraps `next()`) |
+| **Hooks** | Reagir a eventos, mutations leves | Callbacks sequenciais |
 
-**Use Middleware when you need to:**
-- Modify request before dispatch
-- Modify response after receipt
-- Retry requests
-- Short-circuit (return response without network)
-- Wrap the entire execution
+**Use Middleware quando precisar:**
+- Modificar request antes do dispatch
+- Modificar response após recebimento
+- Retry de requests
+- Short-circuit (retornar response sem rede)
+- Wrap da execução inteira
 
-**Use Hooks when you need to:**
-- React to specific lifecycle events
-- Perform lightweight mutations
-- Log or collect metrics
-- Not wrap the entire stack
+**Use Hooks quando precisar:**
+- Reagir a eventos de lifecycle
+- Mutations leves
+- Logging ou métricas
+- Não precisar wrap do stack inteiro
 
-### Using Plugins
+### Usando Plugins
 
 ```typescript
 import { createClient } from 'recker';
@@ -46,31 +58,22 @@ const client = createClient({
 });
 ```
 
-## Built-in Plugins
+## Quick Reference
 
-### Retry Plugin
-
-Automatic retry with exponential backoff:
+### Retry
 
 ```typescript
 const client = createClient({
   baseUrl: 'https://api.example.com',
   retry: {
     maxAttempts: 3,
-    delay: 1000,
     backoff: 'exponential',
     jitter: true,
-    statusCodes: [429, 500, 502, 503, 504],
-    onRetry: (attempt, error, delay) => {
-      console.log(`Retry ${attempt} in ${delay}ms`);
-    }
   }
 });
 ```
 
-### Cache Plugin
-
-Response caching with multiple strategies:
+### Cache
 
 ```typescript
 const client = createClient({
@@ -78,24 +81,19 @@ const client = createClient({
   cache: {
     strategy: 'cache-first',
     ttl: 60000,
-    driver: 'memory'
   }
 });
 ```
 
-### Dedup Plugin
-
-Deduplicate concurrent identical requests:
+### Dedup
 
 ```typescript
 const client = createClient({
   baseUrl: 'https://api.example.com',
-  dedup: {
-    enabled: true
-  }
+  dedup: { enabled: true }
 });
 
-// These share one HTTP request
+// Estas compartilham um único request HTTP
 const [a, b, c] = await Promise.all([
   client.get('/users').json(),
   client.get('/users').json(),

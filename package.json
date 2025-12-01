@@ -110,15 +110,18 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:embeddings": "tsx scripts/build-embeddings.ts",
     "prepare": "husky",
-    "prepublishOnly": "pnpm build",
+    "prepublishOnly": "pnpm build && pnpm build:embeddings",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "bench": "tsx benchmark/index.ts",
     "bench:all": "tsx benchmark/run-all.ts",
     "docs": "npx docsify-cli serve docs -p 3000 -o",
     "lint": "echo \"No linting configured for this project.\" && exit 0",
-    "cli": "tsx src/cli/index.ts"
+    "cli": "tsx src/cli/index.ts",
+    "mcp:start": "tsx src/mcp/cli.ts",
+    "mcp:reindex": "tsx scripts/build-embeddings.ts"
   },
   "engines": {
     "node": ">=18"
@@ -129,6 +132,7 @@
   "dependencies": {
     "cheerio": "^1.0.0",
     "commander": "^12.0.0",
+    "fuse.js": "^7.1.0",
     "ora": "^8.0.0",
     "undici": "^7.16.0",
     "zod": "^3.24.0"
@@ -160,6 +164,7 @@
     "cheerio": "^1.0.0",
     "commander": "^14.0.0",
     "domhandler": "^5.0.3",
+    "fastembed": "^2.0.0",
     "got": "^14.6.5",
     "husky": "^9.1.7",
     "ky": "^1.14.0",

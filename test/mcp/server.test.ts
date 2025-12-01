@@ -75,11 +75,14 @@ describe('MCP Server', () => {
         const result = await sendRequest('tools/list');
 
         expect(result.result.tools).toBeDefined();
-        expect(result.result.tools).toHaveLength(2);
+        expect(result.result.tools).toHaveLength(5);
 
         const toolNames = result.result.tools.map((t: any) => t.name);
         expect(toolNames).toContain('search_docs');
         expect(toolNames).toContain('get_doc');
+        expect(toolNames).toContain('code_examples');
+        expect(toolNames).toContain('api_schema');
+        expect(toolNames).toContain('suggest');
       });
 
       it('should handle resources/list', async () => {
@@ -300,7 +303,7 @@ describe('MCP Server', () => {
       });
 
       const result = await response.json();
-      expect(result.result.tools).toHaveLength(2);
+      expect(result.result.tools).toHaveLength(5);
     });
 
     it('should establish SSE connection', async () => {
