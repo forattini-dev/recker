@@ -47,7 +47,13 @@ await server.start();
 
 ### Claude Code
 
-Add to `~/.claude.json`:
+**One-liner installation:**
+
+```bash
+claude mcp add recker-docs npx recker@latest mcp
+```
+
+Or add manually to `~/.claude.json`:
 
 ```json
 {
