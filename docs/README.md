@@ -37,6 +37,7 @@ for await (const event of client.post('/chat/completions', {
 |:--------|:------------|
 | **High Performance** | Built on Node.js's fastest HTTP engine with optimized connection pooling. |
 | **AI-First Streaming** | Native SSE parsing, async iteration, progress tracking for LLM apps. |
+| **MCP Server** | Built-in documentation server for Claude Code, Cursor, and AI assistants. |
 | **HTML Scraping** | jQuery-like API with Cheerio. Extract links, images, meta, OpenGraph, JSON-LD. |
 | **Type-Safe Contracts** | Define your API with Zod schemas. Get autocomplete and validation for free. |
 | **Full Observability** | DNS/TCP/TLS/TTFB timings, connection info, HAR recording, Server-Timing. |
@@ -67,6 +68,10 @@ for await (const event of client.post('/chat/completions', {
   - [Observability](http/12-observability.md)
   - [Testing](reference/03-testing.md)
   - [Plugin Development](http/10-plugins.md)
+
+- **AI Integration**
+  - [MCP Server](ai/06-mcp-server.md) - Docs for AI assistants
+  - [MCP Client](ai/05-mcp-client.md) - Connect to MCP servers
 
 </div>
 
