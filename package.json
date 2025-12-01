@@ -105,7 +105,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "rek": "./dist/cli/index.js"
+    "rek": "./dist/cli/index.js",
+    "recker": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -115,7 +116,7 @@
     "test:coverage": "vitest run --coverage",
     "bench": "tsx benchmark/index.ts",
     "bench:all": "tsx benchmark/run-all.ts",
-    "docs": "serve docs -p 3000 -o",
+    "docs": "npx docsify-cli serve docs -p 3000 -o",
     "lint": "echo \"No linting configured for this project.\" && exit 0",
     "cli": "tsx src/cli/index.ts"
   },
