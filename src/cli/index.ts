@@ -406,13 +406,20 @@ ${pc.bold(pc.yellow('Examples:'))}
   program
     .command('mcp')
     .description('Start MCP server for AI agents to access Recker documentation')
-    .option('-p, --port <number>', 'Server port', '3100')
+    .option('-t, --transport <mode>', 'Transport mode: stdio, http, sse', 'stdio')
+    .option('-p, --port <number>', 'Server port (for http/sse modes)', '3100')
     .option('-d, --docs <path>', 'Path to documentation folder')
     .option('--debug', 'Enable debug logging')
     .addHelpText('after', `
+${pc.bold(pc.yellow('Transport Modes:'))}
+  ${pc.cyan('stdio')}  ${pc.gray('(default)')} For Claude Code and other CLI tools
+  ${pc.cyan('http')}   Simple HTTP POST endpoint
+  ${pc.cyan('sse')}    HTTP + Server-Sent Events for real-time notifications
+
 ${pc.bold(pc.yellow('Usage:'))}
-  ${pc.green('$ rek mcp')}                    ${pc.gray('Start server on port 3100')}
-  ${pc.green('$ rek mcp -p 8080')}            ${pc.gray('Start on custom port')}
+  ${pc.green('$ rek mcp')}                    ${pc.gray('Start in stdio mode (for Claude Code)')}
+  ${pc.green('$ rek mcp -t http')}            ${pc.gray('Start HTTP server on port 3100')}
+  ${pc.green('$ rek mcp -t sse -p 8080')}     ${pc.gray('Start SSE server on custom port')}
   ${pc.green('$ rek mcp --debug')}            ${pc.gray('Enable debug logging')}
 
 ${pc.bold(pc.yellow('Tools provided:'))}
@@ -429,24 +436,44 @@ ${pc.bold(pc.yellow('Claude Code config (~/.claude.json):'))}
     }
   }`)}
 `)
-    .action(async (options: { port: string; docs?: string; debug?: boolean }) => {
+    .action(async (options: { transport: string; port: string; docs?: string; debug?: boolean }) => {
       const { MCPServer } = await import('../mcp/server.js');
+      const transport = options.transport as 'stdio' | 'http' | 'sse';
 
       const server = new MCPServer({
+        transport,
         port: parseInt(options.port),
         docsPath: options.docs,
         debug: options.debug,
       });
 
+      // For stdio mode, start silently (output goes to stderr if debug)
+      if (transport === 'stdio') {
+        await server.start();
+        // Server runs until stdin closes
+        return;
+      }
+
+      // For http/sse modes, show the UI
       await server.start();
+
+      const endpoints = transport === 'sse'
+        ? `
+│  POST /        - JSON-RPC endpoint          │
+│  GET  /sse     - Server-Sent Events         │
+│  GET  /health  - Health check               │`
+        : `
+│  POST /        - JSON-RPC endpoint          │`;
 
       console.log(pc.green(`
 ┌─────────────────────────────────────────────┐
 │  ${pc.bold('Recker MCP Server')}                         │
 ├─────────────────────────────────────────────┤
-│  Endpoint: ${pc.cyan(`http://localhost:${options.port}`)}         │
+│  Transport: ${pc.cyan(transport.padEnd(31))}│
+│  Endpoint: ${pc.cyan(`http://localhost:${options.port}`.padEnd(32))}│
 │  Docs indexed: ${pc.yellow(String(server.getDocsCount()).padEnd(28))}│
-│                                             │
+├─────────────────────────────────────────────┤${endpoints}
+├─────────────────────────────────────────────┤
 │  Tools:                                     │
 │    • ${pc.cyan('search_docs')} - Search documentation     │
 │    • ${pc.cyan('get_doc')}     - Get full doc content     │
