@@ -43,9 +43,9 @@ jobs:
       - name: Run Tests
         run: pnpm test
 
-  # 2. Alpha Release (Only on Main Push, skip version bump commits)
-  release-alpha:
-    name: Release Alpha
+  # 2. Next Release (Only on Main Push, skip version bump commits)
+  release-next:
+    name: Release Next
     needs: quality
     if: |
       github.event_name == 'push' &&
@@ -78,13 +78,13 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Bump Version (Alpha)
+      - name: Bump Version (Next)
         id: version
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           SHA=$(git rev-parse --short HEAD)
           BASE_VERSION=$(echo $CURRENT_VERSION | cut -d'-' -f1)
-          NEW_VERSION="$BASE_VERSION-alpha.$SHA"
+          NEW_VERSION="$BASE_VERSION-next.$SHA"
 
           echo "New version: $NEW_VERSION"
           npm version $NEW_VERSION --no-git-tag-version
@@ -93,8 +93,8 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Publish to NPM (Alpha)
-        run: pnpm publish --tag alpha --no-git-checks
+      - name: Publish to NPM (Next)
+        run: pnpm publish --tag next --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -105,7 +105,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@forattini-dev'
 
-      - name: Publish to GitHub Packages (Alpha)
+      - name: Publish to GitHub Packages (Next)
         run: |
           # Update package name for GitHub Packages scope
           node -e "
@@ -114,7 +114,7 @@ jobs:
             pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
           "
-          pnpm publish --tag alpha --no-git-checks
+          pnpm publish --tag next --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
