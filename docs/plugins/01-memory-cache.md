@@ -1,83 +1,83 @@
 # Memory Cache
 
-O **MemoryStorage** é um sistema de cache em memória de alta performance para o Recker, projetado para ser seguro, eficiente e container-aware.
+**MemoryStorage** is a high-performance in-memory cache system for Recker, designed to be safe, efficient, and container-aware.
 
 ## Features
 
-- **Eviction Policies**: LRU (Least Recently Used) e FIFO (First In, First Out)
-- **Memory Limits**: Por bytes, porcentagem do sistema, ou auto-calculado
-- **Container-Aware**: Detecta limites de memória em Docker/Kubernetes (cgroup v1/v2)
-- **Heap Pressure Monitoring**: Monitora pressão de heap do V8 e faz evição preventiva
-- **Compression**: Compressão gzip automática para entradas grandes
-- **Statistics**: Métricas detalhadas de hits, misses, evictions e memória
-- **TTL Support**: Time-to-live por entrada com limpeza automática
-- **Callbacks**: Hooks para eventos de evição e pressão de memória
+- **Eviction Policies**: LRU (Least Recently Used) and FIFO (First In, First Out)
+- **Memory Limits**: By bytes, system percentage, or auto-calculated
+- **Container-Aware**: Detects memory limits in Docker/Kubernetes (cgroup v1/v2)
+- **Heap Pressure Monitoring**: Monitors V8 heap pressure and performs preventive eviction
+- **Compression**: Automatic gzip compression for large entries
+- **Statistics**: Detailed metrics for hits, misses, evictions, and memory
+- **TTL Support**: Per-entry time-to-live with automatic cleanup
+- **Callbacks**: Hooks for eviction and memory pressure events
 
 ## Quick Start
 
 ```typescript
 import { MemoryStorage, createClient } from 'recker';
 
-// Uso básico com o cliente
+// Basic usage with client
 const client = createClient({
   baseUrl: 'https://api.example.com',
   cache: {
     storage: new MemoryStorage({
       maxMemoryBytes: 100 * 1024 * 1024, // 100MB
     }),
-    ttl: 60000, // 1 minuto
+    ttl: 60000, // 1 minute
   },
 });
 
-// Requests GET são cacheados automaticamente
+// GET requests are cached automatically
 const data = await client.get('/users').json();
 ```
 
-## Configuração
+## Configuration
 
-### Opções Básicas
+### Basic Options
 
 ```typescript
 import { MemoryStorage } from 'recker';
 
 const cache = new MemoryStorage({
-  // Limite por número de itens
+  // Limit by number of items
   maxSize: 1000,
 
-  // Limite por bytes (recomendado)
+  // Limit by bytes (recommended)
   maxMemoryBytes: 50 * 1024 * 1024, // 50MB
 
-  // OU limite por porcentagem da memória do sistema
-  maxMemoryPercent: 0.1, // 10% da memória disponível
+  // OR limit by percentage of system memory
+  maxMemoryPercent: 0.1, // 10% of available memory
 
-  // TTL padrão em ms (0 = sem expiração)
-  defaultTTL: 300000, // 5 minutos
+  // Default TTL in ms (0 = no expiration)
+  defaultTTL: 300000, // 5 minutes
 
-  // Política de evição
+  // Eviction policy
   evictionPolicy: 'lru', // 'lru' | 'fifo'
 });
 ```
 
-### Opções Avançadas
+### Advanced Options
 
 ```typescript
 const cache = new MemoryStorage({
   maxMemoryBytes: 100 * 1024 * 1024,
 
-  // Compressão automática
+  // Automatic compression
   compression: {
     enabled: true,
-    threshold: 1024, // Comprimir entradas > 1KB
+    threshold: 1024, // Compress entries > 1KB
   },
 
-  // Monitoramento de heap (evição preventiva)
-  heapUsageThreshold: 0.85, // Evicta quando heap > 85%
-  monitorInterval: 5000, // Verifica a cada 5s
+  // Heap monitoring (preventive eviction)
+  heapUsageThreshold: 0.85, // Evict when heap > 85%
+  monitorInterval: 5000, // Check every 5s
 
-  // Limpeza de itens expirados
-  cleanupInterval: 60000, // A cada 1 minuto
+  // Expired items cleanup
+  cleanupInterval: 60000, // Every 1 minute
 
-  // Estatísticas
+  // Statistics
   trackStats: true,
 
   // Callbacks
@@ -90,11 +90,11 @@ const cache = new MemoryStorage({
 });
 ```
 
-## Políticas de Evição
+## Eviction Policies
 
 ### LRU (Least Recently Used)
 
-Evicta os itens menos acessados recentemente. Ideal para a maioria dos casos.
+Evicts the least recently accessed items. Ideal for most use cases.
 
 ```typescript
 const cache = new MemoryStorage({
@@ -102,20 +102,20 @@ const cache = new MemoryStorage({
   evictionPolicy: 'lru',
 });
 
-// Item 'a' é o mais antigo
+// Item 'a' is the oldest
 await cache.set('a', entry, 60000);
 await cache.set('b', entry, 60000);
 await cache.set('c', entry, 60000);
 
-// Acessar 'a' o move para o fim da fila
+// Accessing 'a' moves it to the end of the queue
 await cache.get('a');
 
-// Quando o cache estiver cheio, 'b' será evictado primeiro (menos recente)
+// When cache is full, 'b' will be evicted first (least recent)
 ```
 
 ### FIFO (First In, First Out)
 
-Evicta os itens mais antigos, independente de acesso. Útil para dados time-sensitive.
+Evicts the oldest items regardless of access. Useful for time-sensitive data.
 
 ```typescript
 const cache = new MemoryStorage({
@@ -123,18 +123,18 @@ const cache = new MemoryStorage({
   evictionPolicy: 'fifo',
 });
 
-// Ordem de inserção é mantida
-await cache.set('a', entry, 60000); // Primeiro a entrar
+// Insertion order is maintained
+await cache.set('a', entry, 60000); // First in
 await cache.set('b', entry, 60000);
 await cache.set('c', entry, 60000);
 
-// Mesmo acessando 'a', ele será o primeiro a sair
+// Even when accessing 'a', it will be the first to go
 await cache.get('a');
 ```
 
-## Limites de Memória
+## Memory Limits
 
-### Por Bytes (Recomendado)
+### By Bytes (Recommended)
 
 ```typescript
 const cache = new MemoryStorage({
@@ -142,67 +142,67 @@ const cache = new MemoryStorage({
 });
 ```
 
-### Por Porcentagem do Sistema
+### By System Percentage
 
 ```typescript
 const cache = new MemoryStorage({
-  maxMemoryPercent: 0.1, // 10% da memória disponível
+  maxMemoryPercent: 0.1, // 10% of available memory
 });
 ```
 
-> **Nota**: Não use `maxMemoryBytes` e `maxMemoryPercent` juntos - vai lançar erro.
+> **Note**: Don't use `maxMemoryBytes` and `maxMemoryPercent` together - it will throw an error.
 
-### Auto-Calculado (Padrão Seguro)
+### Auto-Calculated (Safe Default)
 
-Se você não especificar limites, o cache calcula automaticamente um limite seguro:
+If you don't specify limits, the cache automatically calculates a safe limit:
 
 ```typescript
 const cache = new MemoryStorage({
-  // Sem limites explícitos
+  // No explicit limits
 });
 
-// O cache considera:
-// 1. Memória total do sistema (ou cgroup limit em containers)
-// 2. Limite de heap do V8 (--max-old-space-size)
-// 3. Aplica caps de segurança (50% do sistema, 60% do heap)
+// The cache considers:
+// 1. Total system memory (or cgroup limit in containers)
+// 2. V8 heap limit (--max-old-space-size)
+// 3. Applies safety caps (50% of system, 60% of heap)
 ```
 
 ### Container-Aware
 
-O cache detecta automaticamente limites de memória em containers:
+The cache automatically detects memory limits in containers:
 
 ```typescript
-// Em um container Docker com 512MB:
+// In a Docker container with 512MB:
 const cache = new MemoryStorage({
-  maxMemoryPercent: 0.2, // 20% de 512MB = ~100MB
+  maxMemoryPercent: 0.2, // 20% of 512MB = ~100MB
 });
 ```
 
-Arquivos verificados:
+Files checked:
 - `/sys/fs/cgroup/memory.max` (cgroup v2)
 - `/sys/fs/cgroup/memory/memory.limit_in_bytes` (cgroup v1)
 
-## Compressão
+## Compression
 
-A compressão gzip reduz o uso de memória para dados compressíveis:
+Gzip compression reduces memory usage for compressible data:
 
 ```typescript
 const cache = new MemoryStorage({
   maxMemoryBytes: 50 * 1024 * 1024,
   compression: {
     enabled: true,
-    threshold: 1024, // Só comprimir entradas > 1KB
+    threshold: 1024, // Only compress entries > 1KB
   },
 });
 
-// Dados repetitivos comprimem muito bem
+// Repetitive data compresses very well
 await cache.set('logs', {
   status: 200,
   body: 'ERROR: Connection refused\n'.repeat(10000),
   // ...
 }, 60000);
 
-// Verificar economia
+// Check savings
 const stats = cache.getCompressionStats();
 console.log(stats);
 // {
@@ -214,21 +214,21 @@ console.log(stats);
 // }
 ```
 
-## Monitoramento de Heap
+## Heap Monitoring
 
-O cache pode monitorar a pressão de heap do V8 e fazer evição preventiva:
+The cache can monitor V8 heap pressure and perform preventive eviction:
 
 ```typescript
 const cache = new MemoryStorage({
   maxMemoryBytes: 100 * 1024 * 1024,
 
-  // Começar a evictar quando heap > 85%
+  // Start evicting when heap > 85%
   heapUsageThreshold: 0.85,
 
-  // Verificar a cada 5 segundos
+  // Check every 5 seconds
   monitorInterval: 5000,
 
-  // Callback quando há pressão
+  // Callback when there's pressure
   onPressure: (info) => {
     console.warn(`Heap pressure: ${info.heapUsedPercent.toFixed(1)}%`);
     console.warn(`Evicted ${info.itemsEvicted} items`);
@@ -236,7 +236,7 @@ const cache = new MemoryStorage({
 });
 ```
 
-## Estatísticas
+## Statistics
 
 ### Cache Stats
 
@@ -288,40 +288,40 @@ console.log(compStats);
 // }
 ```
 
-## API Completa
+## Complete API
 
-### Métodos Principais
+### Main Methods
 
 ```typescript
-// Armazenar entrada
+// Store entry
 await cache.set(key: string, entry: CacheEntry, ttl?: number): Promise<void>
 
-// Recuperar entrada
+// Retrieve entry
 await cache.get(key: string): Promise<CacheEntry | undefined>
 
-// Deletar entrada
+// Delete entry
 await cache.delete(key: string): Promise<void>
 
-// Verificar existência
+// Check existence
 cache.has(key: string): boolean
 
-// Limpar tudo
+// Clear all
 cache.clear(): void
 
-// Limpar por prefixo
+// Clear by prefix
 cache.clearByPrefix(prefix: string): void
 
-// Listar chaves
+// List keys
 cache.keys(): string[]
 
-// Tamanho atual
+// Current size
 cache.size(): number
 
-// Desligar (limpa intervals)
+// Shutdown (clears intervals)
 cache.shutdown(): void
 ```
 
-### Tipos
+### Types
 
 ```typescript
 interface CacheEntry {
@@ -346,9 +346,9 @@ interface PressureInfo {
 }
 ```
 
-## Integração com Cache Plugin
+## Integration with Cache Plugin
 
-O `MemoryStorage` é usado pelo plugin de cache:
+`MemoryStorage` is used by the cache plugin:
 
 ```typescript
 import { createClient, MemoryStorage, cachePlugin } from 'recker';
@@ -357,18 +357,18 @@ const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-// Adicionar plugin de cache
+// Add cache plugin
 client.use(cachePlugin({
   storage: new MemoryStorage({
     maxMemoryBytes: 100 * 1024 * 1024,
     compression: { enabled: true },
   }),
-  ttl: 300000, // 5 minutos
-  methods: ['GET'], // Só cachear GETs
-  strategy: 'cache-first', // ou 'stale-while-revalidate', 'network-only'
+  ttl: 300000, // 5 minutes
+  methods: ['GET'], // Only cache GETs
+  strategy: 'cache-first', // or 'stale-while-revalidate', 'network-only'
 }));
 
-// Agora requests GET são cacheados
+// Now GET requests are cached
 const users = await client.get('/users').json();
 ```
 
@@ -390,8 +390,8 @@ formatBytes(1073741824);  // '1.00 GB'
 import { getEffectiveTotalMemoryBytes } from 'recker';
 
 const totalMem = getEffectiveTotalMemoryBytes();
-// Em container Docker 512MB: 536870912
-// Em bare metal 16GB: 17179869184
+// In Docker container 512MB: 536870912
+// On bare metal 16GB: 17179869184
 ```
 
 ### getHeapStats
@@ -422,62 +422,62 @@ const limits = resolveCacheMemoryLimit({
 
 ## Performance
 
-Benchmarks em hardware típico:
+Benchmarks on typical hardware:
 
-| Operação | Throughput |
-|----------|------------|
-| Inserções | ~38,000 ops/sec |
-| Leituras | ~1,000,000 ops/sec |
-| Misto (80/20) | ~900,000 ops/sec |
+| Operation | Throughput |
+|-----------|------------|
+| Inserts | ~38,000 ops/sec |
+| Reads | ~1,000,000 ops/sec |
+| Mixed (80/20) | ~900,000 ops/sec |
 
-### Dicas de Performance
+### Performance Tips
 
-1. **Use compressão** para dados repetitivos (logs, HTML, JSON com arrays)
-2. **Defina TTL apropriado** para evitar cache stale
-3. **Monitore estatísticas** para ajustar limites
-4. **Use LRU** para workloads com hot spots
-5. **Use FIFO** para dados time-sensitive
+1. **Use compression** for repetitive data (logs, HTML, JSON with arrays)
+2. **Set appropriate TTL** to avoid stale cache
+3. **Monitor statistics** to adjust limits
+4. **Use LRU** for workloads with hot spots
+5. **Use FIFO** for time-sensitive data
 
 ## Troubleshooting
 
-### Cache não está cacheando
+### Cache is not caching
 
 ```typescript
-// Verifique se o método é GET
-client.get('/users'); // ✅ Cacheado
-client.post('/users'); // ❌ Não cacheado por padrão
+// Check if method is GET
+client.get('/users'); // ✅ Cached
+client.post('/users'); // ❌ Not cached by default
 
-// Verifique se o TTL não é 0
-const cache = new MemoryStorage({ defaultTTL: 0 }); // ❌ Sem TTL = sem cache
+// Check if TTL is not 0
+const cache = new MemoryStorage({ defaultTTL: 0 }); // ❌ No TTL = no cache
 ```
 
-### Memória crescendo indefinidamente
+### Memory growing indefinitely
 
 ```typescript
-// Defina limites explícitos
+// Set explicit limits
 const cache = new MemoryStorage({
-  maxMemoryBytes: 100 * 1024 * 1024, // ✅ Limite definido
-  maxSize: 10000, // ✅ Limite de itens
+  maxMemoryBytes: 100 * 1024 * 1024, // ✅ Limit defined
+  maxSize: 10000, // ✅ Item limit
 });
 ```
 
-### OOM em containers
+### OOM in containers
 
 ```typescript
-// Use porcentagem em vez de bytes fixos
+// Use percentage instead of fixed bytes
 const cache = new MemoryStorage({
-  maxMemoryPercent: 0.15, // 15% do container
-  heapUsageThreshold: 0.7, // Evição agressiva
+  maxMemoryPercent: 0.15, // 15% of container
+  heapUsageThreshold: 0.7, // Aggressive eviction
 });
 ```
 
-### Hit rate baixo
+### Low hit rate
 
 ```typescript
 const stats = cache.getStats();
 if (parseFloat(stats.hitRate) < 50) {
-  // Aumente o TTL
-  // Aumente maxSize/maxMemoryBytes
-  // Verifique se as keys são consistentes
+  // Increase TTL
+  // Increase maxSize/maxMemoryBytes
+  // Check if keys are consistent
 }
 ```

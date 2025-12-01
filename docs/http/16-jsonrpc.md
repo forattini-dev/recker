@@ -1,6 +1,6 @@
 # JSON-RPC 2.0
 
-Cliente JSON-RPC 2.0 completo com suporte a batch requests, notificações e tratamento de erros tipado.
+Complete JSON-RPC 2.0 client with support for batch requests, notifications, and typed error handling.
 
 ## Quick Start
 
@@ -11,35 +11,35 @@ const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-// Criar cliente JSON-RPC
+// Create JSON-RPC client
 const rpc = client.jsonrpc('/rpc');
 
-// Chamar método
+// Call method
 const result = await rpc.call('add', [1, 2]);
 console.log(result); // 3
 ```
 
-## Configuração
+## Configuration
 
 ```typescript
 interface JsonRpcOptions {
-  // Endpoint do serviço
+  // Service endpoint
   endpoint?: string;
 
-  // Gerador de IDs (default: auto-increment)
+  // ID generator (default: auto-increment)
   idGenerator?: () => string | number;
 
-  // Lançar exceção em erros JSON-RPC (default: true)
+  // Throw exception on JSON-RPC errors (default: true)
   throwOnError?: boolean;
 }
 ```
 
-## Chamadas Básicas
+## Basic Calls
 
-### Com Array de Parâmetros
+### With Array Parameters
 
 ```typescript
-// Parâmetros posicionais
+// Positional parameters
 const sum = await rpc.call('math.add', [1, 2, 3]);
 console.log(sum); // 6
 
@@ -47,10 +47,10 @@ const result = await rpc.call('string.concat', ['Hello', ' ', 'World']);
 console.log(result); // 'Hello World'
 ```
 
-### Com Objeto de Parâmetros
+### With Object Parameters
 
 ```typescript
-// Parâmetros nomeados
+// Named parameters
 const user = await rpc.call('user.create', {
   name: 'John Doe',
   email: 'john@example.com',
@@ -64,36 +64,36 @@ const found = await rpc.call('user.find', {
 });
 ```
 
-### Sem Parâmetros
+### Without Parameters
 
 ```typescript
 const version = await rpc.call('system.version');
 const methods = await rpc.call('system.listMethods');
 ```
 
-## Notificações
+## Notifications
 
-Notificações não esperam resposta (fire-and-forget):
+Notifications don't wait for a response (fire-and-forget):
 
 ```typescript
-// Enviar notificação (não retorna valor)
+// Send notification (returns no value)
 await rpc.notify('log.event', {
   level: 'info',
   message: 'User logged in',
   timestamp: Date.now(),
 });
 
-// Múltiplas notificações
+// Multiple notifications
 await rpc.notify('metrics.increment', { counter: 'page_views' });
 await rpc.notify('metrics.increment', { counter: 'api_calls' });
 ```
 
 ## Batch Requests
 
-Envie múltiplas chamadas em uma única requisição HTTP:
+Send multiple calls in a single HTTP request:
 
 ```typescript
-// Batch de chamadas
+// Batch of calls
 const results = await rpc.batch([
   { method: 'user.get', params: { id: 1 } },
   { method: 'user.get', params: { id: 2 } },
@@ -108,7 +108,7 @@ console.log(results);
 // ]
 ```
 
-### Batch com Notificações
+### Batch with Notifications
 
 ```typescript
 const results = await rpc.batch([
@@ -117,34 +117,34 @@ const results = await rpc.batch([
   { method: 'user.get', params: { id: 2 } },           // Request
 ]);
 
-// Notificações não retornam resposta
+// Notifications don't return a response
 console.log(results.length); // 2
 ```
 
-### Verificar Erros em Batch
+### Check Errors in Batch
 
 ```typescript
 const batch = await rpc.batch([
   { method: 'user.get', params: { id: 1 } },
-  { method: 'user.get', params: { id: 999 } }, // Não existe
+  { method: 'user.get', params: { id: 999 } }, // Doesn't exist
   { method: 'user.get', params: { id: 2 } },
 ]);
 
 if (batch.hasErrors) {
-  console.log('Erros:', batch.errors);
+  console.log('Errors:', batch.errors);
 }
 
-// Processar resultados individualmente
+// Process results individually
 for (const response of batch.responses) {
   if (response.error) {
-    console.log('Erro:', response.error.message);
+    console.log('Error:', response.error.message);
   } else {
-    console.log('Resultado:', response.result);
+    console.log('Result:', response.result);
   }
 }
 ```
 
-## Tratamento de Erros
+## Error Handling
 
 ### JsonRpcException
 
@@ -159,53 +159,53 @@ try {
     console.log('Message:', error.message);
     console.log('Data:', error.data);
 
-    // Verificar tipo de erro
+    // Check error type
     if (JsonRpcException.isMethodNotFound(error)) {
-      console.log('Método não existe');
+      console.log('Method does not exist');
     }
 
     if (JsonRpcException.isInvalidParams(error)) {
-      console.log('Parâmetros inválidos');
+      console.log('Invalid parameters');
     }
 
     if (JsonRpcException.isServerError(error)) {
-      console.log('Erro no servidor');
+      console.log('Server error');
     }
   }
 }
 ```
 
-### Códigos de Erro Padrão
+### Standard Error Codes
 
-| Código | Nome | Descrição |
-|--------|------|-----------|
-| -32700 | Parse error | JSON inválido |
-| -32600 | Invalid Request | Estrutura de request inválida |
-| -32601 | Method not found | Método não existe |
-| -32602 | Invalid params | Parâmetros inválidos |
-| -32603 | Internal error | Erro interno do servidor |
-| -32000 a -32099 | Server error | Erros específicos do servidor |
+| Code | Name | Description |
+|------|------|-------------|
+| -32700 | Parse error | Invalid JSON |
+| -32600 | Invalid Request | Invalid request structure |
+| -32601 | Method not found | Method does not exist |
+| -32602 | Invalid params | Invalid parameters |
+| -32603 | Internal error | Internal server error |
+| -32000 to -32099 | Server error | Server-specific errors |
 
-### Desabilitar Throw
+### Disable Throw
 
 ```typescript
 const rpc = client.jsonrpc('/rpc', {
   throwOnError: false,
 });
 
-// Retorna response completa em vez de lançar exceção
+// Returns complete response instead of throwing exception
 const response = await rpc.callRaw('method.that.fails');
 
 if (response.error) {
-  console.log('Erro:', response.error);
+  console.log('Error:', response.error);
 } else {
-  console.log('Resultado:', response.result);
+  console.log('Result:', response.result);
 }
 ```
 
-## Tipagem
+## Typing
 
-### Resultado Tipado
+### Typed Result
 
 ```typescript
 interface User {
@@ -214,12 +214,12 @@ interface User {
   email: string;
 }
 
-// Tipar o resultado
+// Type the result
 const user = await rpc.call<User>('user.get', { id: 1 });
-console.log(user.name); // TypeScript sabe que é string
+console.log(user.name); // TypeScript knows it's a string
 ```
 
-### Parâmetros Tipados
+### Typed Parameters
 
 ```typescript
 interface CreateUserParams {
@@ -242,7 +242,7 @@ const user = await rpc.call<User, CreateUserParams>('user.create', {
 });
 ```
 
-## Exemplos
+## Examples
 
 ### Ethereum JSON-RPC
 
@@ -253,18 +253,18 @@ const client = createClient({
 
 const eth = client.jsonrpc('/');
 
-// Obter número do bloco atual
+// Get current block number
 const blockNumber = await eth.call('eth_blockNumber');
 console.log('Block:', parseInt(blockNumber, 16));
 
-// Obter saldo
+// Get balance
 const balance = await eth.call('eth_getBalance', [
   '0x742d35Cc6634C0532925a3b844Bc9e7595f25aC7',
   'latest',
 ]);
 console.log('Balance:', parseInt(balance, 16) / 1e18, 'ETH');
 
-// Batch de chamadas
+// Batch of calls
 const results = await eth.batch([
   { method: 'eth_blockNumber', params: [] },
   { method: 'eth_gasPrice', params: [] },
@@ -284,11 +284,11 @@ const client = createClient({
 
 const btc = client.jsonrpc('/');
 
-// Obter informações da blockchain
+// Get blockchain info
 const info = await btc.call('getblockchaininfo');
 console.log('Blocks:', info.blocks);
 
-// Obter saldo da carteira
+// Get wallet balance
 const balance = await btc.call('getbalance');
 console.log('Balance:', balance, 'BTC');
 ```
@@ -298,14 +298,14 @@ console.log('Balance:', balance, 'BTC');
 ```typescript
 const lsp = client.jsonrpc('/lsp');
 
-// Inicializar
+// Initialize
 const capabilities = await lsp.call('initialize', {
   processId: process.pid,
   capabilities: {},
   rootUri: 'file:///project',
 });
 
-// Notificação de arquivo aberto
+// File open notification
 await lsp.notify('textDocument/didOpen', {
   textDocument: {
     uri: 'file:///project/main.ts',
@@ -315,7 +315,7 @@ await lsp.notify('textDocument/didOpen', {
   },
 });
 
-// Solicitar completions
+// Request completions
 const completions = await lsp.call('textDocument/completion', {
   textDocument: { uri: 'file:///project/main.ts' },
   position: { line: 0, character: 10 },
@@ -327,10 +327,10 @@ const completions = await lsp.call('textDocument/completion', {
 ```typescript
 const mcp = client.jsonrpc('/mcp');
 
-// Listar ferramentas disponíveis
+// List available tools
 const tools = await mcp.call('tools/list');
 
-// Chamar uma ferramenta
+// Call a tool
 const result = await mcp.call('tools/call', {
   name: 'read_file',
   arguments: {
@@ -339,25 +339,25 @@ const result = await mcp.call('tools/call', {
 });
 ```
 
-## ID Customizado
+## Custom ID
 
 ```typescript
 import { randomUUID } from 'node:crypto';
 
 const rpc = client.jsonrpc('/rpc', {
-  // Usar UUID como ID
+  // Use UUID as ID
   idGenerator: () => randomUUID(),
 });
 
-// Ou usar timestamp
+// Or use timestamp
 const rpc2 = client.jsonrpc('/rpc', {
   idGenerator: () => Date.now(),
 });
 ```
 
-## Combinando com Plugins
+## Combining with Plugins
 
-### Com Retry
+### With Retry
 
 ```typescript
 const client = createClient({
@@ -370,11 +370,11 @@ const client = createClient({
 
 const rpc = client.jsonrpc('/rpc');
 
-// Retentativas automáticas em erros de servidor HTTP
+// Automatic retries on HTTP server errors
 const result = await rpc.call('unstable.method');
 ```
 
-### Com Cache
+### With Cache
 
 ```typescript
 const client = createClient({
@@ -382,20 +382,20 @@ const client = createClient({
   cache: {
     strategy: 'cache-first',
     ttl: 60000,
-    methods: ['POST'], // JSON-RPC usa POST
+    methods: ['POST'], // JSON-RPC uses POST
   },
 });
 
 const rpc = client.jsonrpc('/rpc');
 
-// Cacheia resultados de chamadas idempotentes
+// Cache results of idempotent calls
 const result = await rpc.call('config.get', { key: 'version' });
 ```
 
-## Dicas
+## Tips
 
-1. **Use batch** para múltiplas chamadas independentes
-2. **Notificações** são fire-and-forget - não espere resposta
-3. **Type seus resultados** para melhor DX
-4. **Trate erros** específicos com `JsonRpcException`
-5. **Combine com retry** para resiliência
+1. **Use batch** for multiple independent calls
+2. **Notifications** are fire-and-forget - don't expect a response
+3. **Type your results** for better DX
+4. **Handle errors** specifically with `JsonRpcException`
+5. **Combine with retry** for resilience

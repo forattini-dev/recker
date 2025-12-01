@@ -1,10 +1,10 @@
 # Circuit Breaker Plugin
 
-O plugin de **Circuit Breaker** implementa o padrão circuit breaker para proteger sua aplicação contra falhas em cascata, isolando serviços com problemas.
+The **Circuit Breaker** plugin implements the circuit breaker pattern to protect your application against cascading failures by isolating problematic services.
 
-## Como Funciona
+## How It Works
 
-O circuit breaker tem três estados:
+The circuit breaker has three states:
 
 ```
     ┌─────────────────────────────────────────────────┐
@@ -21,9 +21,9 @@ O circuit breaker tem três estados:
               success             └───────────┘  failure
 ```
 
-- **CLOSED**: Funcionando normalmente, requests passam
-- **OPEN**: Circuito aberto, requests falham imediatamente
-- **HALF_OPEN**: Permite um request de teste para verificar se o serviço voltou
+- **CLOSED**: Operating normally, requests pass through
+- **OPEN**: Circuit is open, requests fail immediately
+- **HALF_OPEN**: Allows one test request to check if service recovered
 
 ## Quick Start
 
@@ -35,8 +35,8 @@ const client = createClient({
 });
 
 client.use(circuitBreaker({
-  threshold: 5,      // Abre após 5 falhas
-  resetTimeout: 30000, // Tenta novamente após 30s
+  threshold: 5,      // Open after 5 failures
+  resetTimeout: 30000, // Try again after 30s
 }));
 
 try {
@@ -48,20 +48,20 @@ try {
 }
 ```
 
-## Configuração
+## Configuration
 
 ```typescript
 interface CircuitBreakerOptions {
-  // Número de falhas antes de abrir o circuito (default: 5)
+  // Number of failures before opening the circuit (default: 5)
   threshold?: number;
 
-  // Tempo em ms para tentar novamente (Half-Open) (default: 30000)
+  // Time in ms to try again (Half-Open) (default: 30000)
   resetTimeout?: number;
 
-  // Função para determinar quais erros contam como falha
+  // Function to determine which errors count as failures
   shouldTrip?: (error: any, response?: ReckerResponse) => boolean;
 
-  // Callback quando o estado muda
+  // Callback when state changes
   onStateChange?: (state: CircuitState, service: string) => void;
 }
 
@@ -70,42 +70,42 @@ type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 ## Per-Domain Isolation
 
-O circuit breaker isola falhas por domínio automaticamente:
+The circuit breaker isolates failures per domain automatically:
 
 ```typescript
 const client = createClient({
-  // Sem baseUrl - multi-domain
+  // No baseUrl - multi-domain
 });
 
 client.use(circuitBreaker({ threshold: 3 }));
 
-// Falhas em api1.com não afetam api2.com
-await client.get('https://api1.example.com/users'); // Falha 1
-await client.get('https://api2.example.com/users'); // Funciona!
-await client.get('https://api1.example.com/users'); // Falha 2
-await client.get('https://api1.example.com/users'); // Falha 3 - OPEN!
-await client.get('https://api2.example.com/users'); // Ainda funciona!
+// Failures on api1.com don't affect api2.com
+await client.get('https://api1.example.com/users'); // Failure 1
+await client.get('https://api2.example.com/users'); // Works!
+await client.get('https://api1.example.com/users'); // Failure 2
+await client.get('https://api1.example.com/users'); // Failure 3 - OPEN!
+await client.get('https://api2.example.com/users'); // Still works!
 ```
 
 ## Custom Trip Logic
 
-Por padrão, apenas erros 5xx e erros de rede abrem o circuito. Você pode customizar:
+By default, only 5xx errors and network errors open the circuit. You can customize:
 
 ```typescript
 client.use(circuitBreaker({
   shouldTrip: (error, response) => {
-    // Só abrir para erros de servidor
+    // Only open for server errors
     if (response) {
       return response.status >= 500;
     }
 
-    // Erros de rede sempre abrem
+    // Network errors always open
     return true;
   },
 }));
 ```
 
-### Incluir 429 (Rate Limit)
+### Include 429 (Rate Limit)
 
 ```typescript
 client.use(circuitBreaker({
@@ -118,14 +118,14 @@ client.use(circuitBreaker({
 }));
 ```
 
-### Ignorar Timeouts
+### Ignore Timeouts
 
 ```typescript
 import { TimeoutError } from 'recker';
 
 client.use(circuitBreaker({
   shouldTrip: (error, response) => {
-    // Timeouts não abrem o circuito
+    // Timeouts don't open the circuit
     if (error instanceof TimeoutError) return false;
 
     if (response) return response.status >= 500;
@@ -134,7 +134,7 @@ client.use(circuitBreaker({
 }));
 ```
 
-## Monitoramento
+## Monitoring
 
 ```typescript
 client.use(circuitBreaker({
@@ -143,12 +143,12 @@ client.use(circuitBreaker({
   onStateChange: (state, service) => {
     console.log(`Circuit for ${service} is now ${state}`);
 
-    // Alertar quando abrir
+    // Alert when it opens
     if (state === 'OPEN') {
       sendAlert(`Service ${service} is failing!`);
     }
 
-    // Log quando recuperar
+    // Log when it recovers
     if (state === 'CLOSED') {
       console.log(`Service ${service} recovered`);
     }
@@ -156,7 +156,7 @@ client.use(circuitBreaker({
 }));
 ```
 
-## Tratando CircuitBreakerError
+## Handling CircuitBreakerError
 
 ```typescript
 import { CircuitBreakerError } from 'recker';
@@ -165,33 +165,33 @@ try {
   const data = await client.get('/users').json();
 } catch (error) {
   if (error instanceof CircuitBreakerError) {
-    // Circuito aberto - serviço indisponível
+    // Circuit is open - service unavailable
     console.log(`Service ${error.service} is unavailable`);
 
-    // Usar fallback
+    // Use fallback
     return getCachedUsers();
   }
   throw error;
 }
 ```
 
-## Combinando com Retry
+## Combining with Retry
 
-A ordem dos plugins importa! Circuit breaker deve vir **antes** do retry:
+Plugin order matters! Circuit breaker should come **before** retry:
 
 ```typescript
-// ✅ Correto
+// ✅ Correct
 client.use(circuitBreaker({ threshold: 5 }));
 client.use(retry({ maxAttempts: 3 }));
 
-// ❌ Errado - retry vai tentar mesmo com circuito aberto
+// ❌ Wrong - retry will try even with circuit open
 client.use(retry({ maxAttempts: 3 }));
 client.use(circuitBreaker({ threshold: 5 }));
 ```
 
-## Exemplos
+## Examples
 
-### Microservices Resilient
+### Resilient Microservices
 
 ```typescript
 const client = createClient({
@@ -199,7 +199,7 @@ const client = createClient({
   timeout: 5000,
 });
 
-// Proteção completa
+// Complete protection
 client.use(circuitBreaker({
   threshold: 5,
   resetTimeout: 30000,
@@ -231,7 +231,7 @@ client.use(circuitBreaker({
   },
 }));
 
-// Dashboard mostra status de cada serviço
+// Dashboard shows status of each service
 function updateDashboard(circuits: Map<string, CircuitState>) {
   circuits.forEach((state, service) => {
     console.log(`${service}: ${state}`);
@@ -247,7 +247,7 @@ async function getUsersWithFallback() {
     return await client.get('/users').json();
   } catch (error) {
     if (error instanceof CircuitBreakerError) {
-      // Serviço indisponível - usar cache
+      // Service unavailable - use cache
       return cache.get('users') || [];
     }
     throw error;
@@ -255,11 +255,11 @@ async function getUsersWithFallback() {
 }
 ```
 
-## Dicas
+## Tips
 
-1. **Ajuste o threshold** baseado no volume de requests
-2. **Use resetTimeout** suficiente para o serviço se recuperar
-3. **Monitore state changes** para alertas
-4. **Combine com retry** (circuit breaker primeiro!)
-5. **Implemente fallbacks** para quando o circuito abrir
-6. **Por domínio é automático** - cada host tem seu próprio circuito
+1. **Adjust threshold** based on request volume
+2. **Use resetTimeout** sufficient for service recovery
+3. **Monitor state changes** for alerts
+4. **Combine with retry** (circuit breaker first!)
+5. **Implement fallbacks** for when circuit opens
+6. **Per-domain is automatic** - each host has its own circuit

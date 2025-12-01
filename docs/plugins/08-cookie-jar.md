@@ -1,6 +1,6 @@
 # Cookie Jar Plugin
 
-O plugin de **Cookie Jar** gerencia cookies automaticamente entre requests, simulando o comportamento de um browser.
+The **Cookie Jar** plugin automatically manages cookies between requests, simulating browser behavior.
 
 ## Quick Start
 
@@ -15,41 +15,41 @@ client.use(cookieJar({
   jar: new MemoryCookieJar(),
 }));
 
-// Login - servidor seta cookies
+// Login - server sets cookies
 await client.post('/auth/login', {
   body: { username: 'user', password: 'pass' },
 });
 
-// Próximos requests incluem os cookies automaticamente
+// Next requests automatically include cookies
 const data = await client.get('/protected').json();
 ```
 
-## Como Funciona
+## How It Works
 
 ```
 Request 1 (POST /login)
     │
-    └──► Servidor retorna: Set-Cookie: session=abc123
+    └──► Server returns: Set-Cookie: session=abc123
                           │
                           ▼
-                    Cookie Jar armazena
+                    Cookie Jar stores
                           │
 Request 2 (GET /protected)
     │
-    └──► Cookie Jar adiciona: Cookie: session=abc123
+    └──► Cookie Jar adds: Cookie: session=abc123
                           │
                           ▼
-                    Servidor valida sessão
+                    Server validates session
 ```
 
-## Configuração
+## Configuration
 
 ```typescript
 interface CookieJarOptions {
-  // Storage de cookies
+  // Cookie storage
   jar: CookieJar;
 
-  // Ignorar erros de parsing (default: false)
+  // Ignore parsing errors (default: false)
   ignoreParseErrors?: boolean;
 }
 ```
@@ -58,7 +58,7 @@ interface CookieJarOptions {
 
 ### MemoryCookieJar
 
-Armazena cookies em memória (perde ao reiniciar):
+Stores cookies in memory (lost on restart):
 
 ```typescript
 import { MemoryCookieJar } from 'recker';
@@ -70,7 +70,7 @@ client.use(cookieJar({ jar }));
 
 ### FileCookieJar
 
-Persiste cookies em arquivo:
+Persists cookies to a file:
 
 ```typescript
 import { FileCookieJar } from 'recker';
@@ -82,7 +82,7 @@ client.use(cookieJar({ jar }));
 
 ### Custom Cookie Jar
 
-Implemente a interface `CookieJar`:
+Implement the `CookieJar` interface:
 
 ```typescript
 interface CookieJar {
@@ -95,72 +95,72 @@ class RedisCookieJar implements CookieJar {
   constructor(private redis: RedisClient) {}
 
   setCookie(cookie: string, url: string) {
-    // Salvar no Redis
+    // Save to Redis
   }
 
   getCookies(url: string): string[] {
-    // Buscar do Redis
+    // Fetch from Redis
   }
 
   clear() {
-    // Limpar Redis
+    // Clear Redis
   }
 }
 ```
 
-## Funcionalidades
+## Features
 
 ### Domain Matching
 
-Cookies são enviados apenas para o domínio correto:
+Cookies are only sent to the correct domain:
 
 ```typescript
-// Cookie setado para .example.com
+// Cookie set for .example.com
 // Set-Cookie: session=abc; Domain=.example.com
 
-await client.get('https://api.example.com/users');  // ✅ Envia cookie
-await client.get('https://www.example.com/page');   // ✅ Envia cookie
-await client.get('https://other.com/page');         // ❌ Não envia
+await client.get('https://api.example.com/users');  // ✅ Sends cookie
+await client.get('https://www.example.com/page');   // ✅ Sends cookie
+await client.get('https://other.com/page');         // ❌ Doesn't send
 ```
 
 ### Path Matching
 
-Cookies respeitam o path:
+Cookies respect the path:
 
 ```typescript
 // Set-Cookie: token=xyz; Path=/api
 
-await client.get('https://example.com/api/users');  // ✅ Envia cookie
-await client.get('https://example.com/api/orders'); // ✅ Envia cookie
-await client.get('https://example.com/web/page');   // ❌ Não envia
+await client.get('https://example.com/api/users');  // ✅ Sends cookie
+await client.get('https://example.com/api/orders'); // ✅ Sends cookie
+await client.get('https://example.com/web/page');   // ❌ Doesn't send
 ```
 
 ### Secure Cookies
 
-Cookies `Secure` só são enviados via HTTPS:
+`Secure` cookies are only sent over HTTPS:
 
 ```typescript
 // Set-Cookie: session=abc; Secure
 
-await client.get('https://example.com/page');  // ✅ Envia cookie
-await client.get('http://example.com/page');   // ❌ Não envia
+await client.get('https://example.com/page');  // ✅ Sends cookie
+await client.get('http://example.com/page');   // ❌ Doesn't send
 ```
 
 ### HttpOnly
 
-O cookie jar respeita `HttpOnly` - são enviados normalmente em requests HTTP.
+The cookie jar respects `HttpOnly` - they are sent normally in HTTP requests.
 
 ### Expiration
 
-Cookies expirados são automaticamente removidos:
+Expired cookies are automatically removed:
 
 ```typescript
 // Set-Cookie: temp=value; Max-Age=3600
 
-// Após 1 hora, o cookie é removido automaticamente
+// After 1 hour, the cookie is automatically removed
 ```
 
-## Exemplos
+## Examples
 
 ### Session-based Auth
 
@@ -178,13 +178,13 @@ await client.post('/auth/login', {
   body: { email: 'user@example.com', password: 'secret' },
 });
 
-// Sessão mantida automaticamente
+// Session maintained automatically
 const profile = await client.get('/me').json();
 const orders = await client.get('/orders').json();
 
 // Logout
 await client.post('/auth/logout');
-jar.clear(); // Limpa cookies locais
+jar.clear(); // Clear local cookies
 ```
 
 ### Multi-site Scraping
@@ -195,20 +195,20 @@ const jar = new MemoryCookieJar();
 const client = createClient();
 client.use(cookieJar({ jar }));
 
-// Site 1 - cookies separados
+// Site 1 - separate cookies
 await client.get('https://site1.com/login');
 await client.post('https://site1.com/auth', { body: creds1 });
 
-// Site 2 - cookies separados
+// Site 2 - separate cookies
 await client.get('https://site2.com/login');
 await client.post('https://site2.com/auth', { body: creds2 });
 
-// Cookies são enviados para o domínio correto automaticamente
-await client.get('https://site1.com/data'); // Usa cookies de site1
-await client.get('https://site2.com/data'); // Usa cookies de site2
+// Cookies are sent to the correct domain automatically
+await client.get('https://site1.com/data'); // Uses site1 cookies
+await client.get('https://site2.com/data'); // Uses site2 cookies
 ```
 
-### Persistência entre Execuções
+### Persistence Between Runs
 
 ```typescript
 const jar = new FileCookieJar('./session-cookies.json');
@@ -219,7 +219,7 @@ const client = createClient({
 
 client.use(cookieJar({ jar }));
 
-// Se já existe sessão salva, continua logado
+// If session already exists, continues logged in
 const isLoggedIn = await client.get('/me')
   .then(() => true)
   .catch(() => false);
@@ -228,12 +228,12 @@ if (!isLoggedIn) {
   await client.post('/auth/login', { body: credentials });
 }
 
-// Cookies são salvos automaticamente
+// Cookies are saved automatically
 ```
 
 ### CSRF Protection
 
-Muitos sites usam cookies para CSRF:
+Many sites use cookies for CSRF:
 
 ```typescript
 import { cookieJar, xsrf } from 'recker';
@@ -246,16 +246,16 @@ client.use(xsrf({
   headerName: 'X-XSRF-TOKEN',
 }));
 
-// 1. GET request recebe cookie XSRF-TOKEN
+// 1. GET request receives XSRF-TOKEN cookie
 await client.get('/page');
 
-// 2. POST requests automaticamente incluem o header X-XSRF-TOKEN
+// 2. POST requests automatically include X-XSRF-TOKEN header
 await client.post('/action', { body: data });
 ```
 
 ## Debugging
 
-### Ver Cookies Atuais
+### View Current Cookies
 
 ```typescript
 const jar = new MemoryCookieJar();
@@ -264,42 +264,42 @@ client.use(cookieJar({ jar }));
 
 await client.get('https://example.com/page');
 
-// Ver todos os cookies
+// View all cookies
 console.log(jar.getAllCookies());
 
-// Ver cookies para uma URL específica
+// View cookies for a specific URL
 console.log(jar.getCookies('https://example.com/page'));
 ```
 
-### Logging de Cookies
+### Cookie Logging
 
 ```typescript
 client.use(logger({
-  logHeaders: true, // Mostra Cookie header nos requests
+  logHeaders: true, // Shows Cookie header in requests
 }));
 
 client.use(cookieJar({ jar }));
 ```
 
-## Segurança
+## Security
 
-1. **FileCookieJar** armazena cookies em texto plano - proteja o arquivo
-2. **Cookies de sessão** devem ser tratados como credenciais
-3. **Não compartilhe jars** entre usuários diferentes
-4. **Limpe cookies** após logout
+1. **FileCookieJar** stores cookies in plain text - protect the file
+2. **Session cookies** should be treated as credentials
+3. **Don't share jars** between different users
+4. **Clear cookies** after logout
 
 ```typescript
-// Após logout
+// After logout
 jar.clear();
 
-// Ou remover cookies específicos
+// Or remove specific cookies
 jar.removeCookie('session', 'https://example.com');
 ```
 
-## Dicas
+## Tips
 
-1. **Use MemoryCookieJar** para scripts simples
-2. **Use FileCookieJar** para sessões persistentes
-3. **Combine com XSRF** para formulários
-4. **Limpe cookies** periodicamente para evitar problemas
-5. **Cookies expirados** são removidos automaticamente
+1. **Use MemoryCookieJar** for simple scripts
+2. **Use FileCookieJar** for persistent sessions
+3. **Combine with XSRF** for forms
+4. **Clear cookies** periodically to avoid issues
+5. **Expired cookies** are removed automatically
