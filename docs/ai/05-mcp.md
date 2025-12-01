@@ -1,5 +1,14 @@
 # MCP (Model Context Protocol)
 
+Recker provides both MCP Client and Server implementations.
+
+- **MCP Client**: Connect to MCP servers to access tools, resources, and prompts
+- **MCP Server**: Expose your documentation to AI agents like Claude Code
+
+---
+
+# MCP Client
+
 Connect to MCP servers to access tools, resources, and prompts.
 
 ## What is MCP?
@@ -644,6 +653,294 @@ process.on('SIGTERM', async () => {
   await mcp.disconnect();
   process.exit(0);
 });
+```
+
+---
+
+# MCP Server
+
+Recker includes a built-in MCP Server that exposes documentation to AI agents like Claude Code.
+
+## Quick Start
+
+### CLI Usage
+
+```bash
+# Start in stdio mode (for Claude Code)
+rek mcp
+
+# Start HTTP server
+rek mcp -t http
+
+# Start with SSE support
+rek mcp -t sse -p 8080
+
+# Enable debug logging
+rek mcp --debug
+```
+
+### Programmatic Usage
+
+```typescript
+import { createMCPServer } from 'recker/mcp';
+
+// stdio mode (for CLI tools)
+const server = createMCPServer({ transport: 'stdio' });
+await server.start();
+
+// HTTP mode
+const server = createMCPServer({
+  transport: 'http',
+  port: 3100
+});
+await server.start();
+
+// SSE mode (with real-time notifications)
+const server = createMCPServer({
+  transport: 'sse',
+  port: 3100
+});
+await server.start();
+```
+
+## Transport Modes
+
+| Mode | Use Case | Endpoints |
+|------|----------|-----------|
+| **stdio** | Claude Code, CLI tools | stdin/stdout |
+| **http** | Simple integrations | POST / |
+| **sse** | Real-time applications | POST /, GET /sse, GET /health |
+
+### stdio (Default)
+
+Best for Claude Code and other CLI-based AI tools:
+
+```bash
+rek mcp
+```
+
+Communication happens via stdin (requests) and stdout (responses). Debug logs go to stderr.
+
+### HTTP
+
+Simple HTTP POST endpoint for web integrations:
+
+```bash
+rek mcp -t http -p 3100
+```
+
+```bash
+# Example request
+curl -X POST http://localhost:3100 \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+### SSE (Server-Sent Events)
+
+HTTP with real-time notifications:
+
+```bash
+rek mcp -t sse -p 3100
+```
+
+**Endpoints:**
+- `POST /` - JSON-RPC requests
+- `GET /sse` - Server-Sent Events stream
+- `GET /health` - Health check
+
+```typescript
+// Connect to SSE for real-time updates
+const events = new EventSource('http://localhost:3100/sse');
+
+events.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Notification:', data);
+};
+```
+
+## Available Tools
+
+The MCP Server provides 2 focused tools:
+
+### search_docs
+
+Search documentation by keyword:
+
+```json
+{
+  "name": "search_docs",
+  "arguments": {
+    "query": "retry",
+    "category": "http",
+    "limit": 5
+  }
+}
+```
+
+**Parameters:**
+- `query` (required): Search keywords
+- `category` (optional): Filter by category (http, cli, ai, protocols, reference, guides)
+- `limit` (optional): Max results (default: 5, max: 10)
+
+### get_doc
+
+Get full content of a documentation file:
+
+```json
+{
+  "name": "get_doc",
+  "arguments": {
+    "path": "http/07-resilience.md"
+  }
+}
+```
+
+**Parameters:**
+- `path` (required): Documentation file path from search results
+
+## Claude Code Integration
+
+Add to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "recker-docs": {
+      "command": "npx",
+      "args": ["recker", "mcp"]
+    }
+  }
+}
+```
+
+Or with a local installation:
+
+```json
+{
+  "mcpServers": {
+    "recker-docs": {
+      "command": "rek",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Now Claude Code can search and read Recker documentation:
+
+```
+User: How do I implement retry logic with recker?
+
+Claude: Let me search the documentation...
+[Uses search_docs tool with query "retry"]
+
+I found relevant documentation. Let me read the full content...
+[Uses get_doc tool with path "http/07-resilience.md"]
+
+Based on the documentation, here's how to implement retry logic...
+```
+
+## Configuration Options
+
+```typescript
+interface MCPServerOptions {
+  // Server identification
+  name?: string;        // Default: 'recker-docs'
+  version?: string;     // Default: '1.0.0'
+
+  // Transport
+  transport?: 'stdio' | 'http' | 'sse';  // Default: 'stdio'
+  port?: number;        // Default: 3100 (for http/sse)
+
+  // Documentation
+  docsPath?: string;    // Default: auto-detected
+
+  // Debugging
+  debug?: boolean;      // Default: false
+}
+```
+
+## Custom Documentation Path
+
+Serve your own documentation:
+
+```bash
+rek mcp -d /path/to/your/docs
+```
+
+```typescript
+const server = createMCPServer({
+  docsPath: '/path/to/your/docs',
+  name: 'my-project-docs'
+});
+```
+
+## Health Check (SSE Mode)
+
+```bash
+curl http://localhost:3100/health
+```
+
+Response:
+
+```json
+{
+  "status": "ok",
+  "name": "recker-docs",
+  "version": "1.0.0",
+  "docsCount": 58,
+  "sseClients": 2
+}
+```
+
+## JSON-RPC Methods
+
+The server implements standard MCP methods:
+
+| Method | Description |
+|--------|-------------|
+| `initialize` | Initialize connection |
+| `ping` | Health check |
+| `tools/list` | List available tools |
+| `tools/call` | Execute a tool |
+| `resources/list` | List resources (empty) |
+| `prompts/list` | List prompts (empty) |
+
+## Example: Full Integration
+
+```typescript
+import { createMCPClient, createMCPServer } from 'recker/mcp';
+
+// Start server
+const server = createMCPServer({
+  transport: 'http',
+  port: 3100,
+  debug: true
+});
+await server.start();
+
+// Connect client
+const client = createMCPClient({
+  endpoint: 'http://localhost:3100'
+});
+await client.connect();
+
+// Search documentation
+const searchResult = await client.tools.call('search_docs', {
+  query: 'streaming'
+});
+console.log(searchResult.content[0].text);
+
+// Get full doc
+const docResult = await client.tools.call('get_doc', {
+  path: 'ai/02-streaming.md'
+});
+console.log(docResult.content[0].text);
+
+// Cleanup
+await client.disconnect();
+await server.stop();
 ```
 
 ## Next Steps
