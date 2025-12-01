@@ -1,6 +1,6 @@
 # Retry Plugin
 
-O plugin de **Retry** implementa retentativas automáticas com backoff exponencial, linear ou decorrelated, incluindo jitter para evitar thundering herd.
+The **Retry** plugin implements automatic retries with exponential, linear, or decorrelated backoff, including jitter to prevent thundering herd.
 
 ## Quick Start
 
@@ -16,48 +16,48 @@ client.use(retry({
   backoff: 'exponential',
 }));
 
-// Retenta automaticamente em caso de falha
+// Automatically retries on failure
 const data = await client.get('/unstable-endpoint').json();
 ```
 
-## Configuração
+## Configuration
 
 ```typescript
 interface RetryOptions {
-  // Número máximo de tentativas (default: 3)
+  // Maximum number of attempts (default: 3)
   maxAttempts?: number;
 
-  // Delay inicial em ms (default: 1000)
+  // Initial delay in ms (default: 1000)
   delay?: number;
 
-  // Delay máximo em ms (default: 30000)
+  // Maximum delay in ms (default: 30000)
   maxDelay?: number;
 
-  // Estratégia de backoff (default: 'exponential')
+  // Backoff strategy (default: 'exponential')
   backoff?: 'linear' | 'exponential' | 'decorrelated';
 
-  // Adicionar jitter para evitar thundering herd (default: true)
+  // Add jitter to prevent thundering herd (default: true)
   jitter?: boolean;
 
-  // Status codes que devem ser retentados
+  // Status codes that should be retried
   statusCodes?: number[];
 
-  // Função customizada para decidir se deve retentar
+  // Custom function to decide whether to retry
   shouldRetry?: (error: unknown) => boolean;
 
-  // Callback chamado a cada retentativa
+  // Callback called on each retry
   onRetry?: (attempt: number, error: unknown, delay: number) => void;
 
-  // Respeitar header Retry-After (default: true)
+  // Respect Retry-After header (default: true)
   respectRetryAfter?: boolean;
 }
 ```
 
-## Estratégias de Backoff
+## Backoff Strategies
 
-### Exponential (Recomendado)
+### Exponential (Recommended)
 
-Delay cresce exponencialmente: 1s → 2s → 4s → 8s...
+Delay grows exponentially: 1s → 2s → 4s → 8s...
 
 ```typescript
 client.use(retry({
@@ -66,15 +66,15 @@ client.use(retry({
   maxDelay: 30000,
 }));
 
-// Attempt 1: falha, espera ~1s
-// Attempt 2: falha, espera ~2s
-// Attempt 3: falha, espera ~4s
-// Attempt 4: sucesso!
+// Attempt 1: fails, waits ~1s
+// Attempt 2: fails, waits ~2s
+// Attempt 3: fails, waits ~4s
+// Attempt 4: success!
 ```
 
 ### Linear
 
-Delay cresce linearmente: 1s → 2s → 3s → 4s...
+Delay grows linearly: 1s → 2s → 3s → 4s...
 
 ```typescript
 client.use(retry({
@@ -85,7 +85,7 @@ client.use(retry({
 
 ### Decorrelated (AWS Style)
 
-Delay aleatório entre `delay` e `previousDelay * 3`. Usado pela AWS.
+Random delay between `delay` and `previousDelay * 3`. Used by AWS.
 
 ```typescript
 client.use(retry({
@@ -96,25 +96,25 @@ client.use(retry({
 
 ## Jitter
 
-Jitter adiciona ±25% de aleatoriedade ao delay para evitar que múltiplos clientes retentem simultaneamente (thundering herd):
+Jitter adds ±25% randomness to the delay to prevent multiple clients from retrying simultaneously (thundering herd):
 
 ```typescript
-// Com jitter (default)
+// With jitter (default)
 client.use(retry({
   delay: 1000,
-  jitter: true, // delay será entre 750ms e 1250ms
+  jitter: true, // delay will be between 750ms and 1250ms
 }));
 
-// Sem jitter
+// Without jitter
 client.use(retry({
   delay: 1000,
-  jitter: false, // delay será exatamente 1000ms
+  jitter: false, // delay will be exactly 1000ms
 }));
 ```
 
 ## Status Codes
 
-Por padrão, o plugin retenta em erros de rede e timeouts. Você pode especificar status codes:
+By default, the plugin retries on network errors and timeouts. You can specify status codes:
 
 ```typescript
 client.use(retry({
@@ -124,22 +124,22 @@ client.use(retry({
 
 ## Retry-After Header
 
-O plugin respeita o header `Retry-After` de respostas 429 (Too Many Requests) e 503 (Service Unavailable):
+The plugin respects the `Retry-After` header from 429 (Too Many Requests) and 503 (Service Unavailable) responses:
 
 ```typescript
 client.use(retry({
   respectRetryAfter: true, // default
 }));
 
-// Se o servidor responder:
+// If the server responds with:
 // HTTP/1.1 429 Too Many Requests
 // Retry-After: 60
 //
-// O plugin esperará 60 segundos antes de retentar
+// The plugin will wait 60 seconds before retrying
 ```
 
-Formatos suportados:
-- Segundos: `Retry-After: 120`
+Supported formats:
+- Seconds: `Retry-After: 120`
 - HTTP-date: `Retry-After: Wed, 21 Oct 2025 07:28:00 GMT`
 
 ## Custom Retry Logic
@@ -147,10 +147,10 @@ Formatos suportados:
 ```typescript
 client.use(retry({
   shouldRetry: (error) => {
-    // Retentar apenas erros de rede
+    // Only retry network errors
     if (error instanceof NetworkError) return true;
 
-    // Retentar apenas alguns status codes
+    // Only retry certain status codes
     if (error instanceof HttpError) {
       return [429, 503].includes(error.status);
     }
@@ -160,7 +160,7 @@ client.use(retry({
 }));
 ```
 
-## Logging de Retentativas
+## Retry Logging
 
 ```typescript
 client.use(retry({
@@ -171,9 +171,9 @@ client.use(retry({
 }));
 ```
 
-## Exemplos
+## Examples
 
-### API Rate Limited
+### Rate Limited API
 
 ```typescript
 const client = createClient({
@@ -191,7 +191,7 @@ client.use(retry({
 }));
 ```
 
-### Microservices Resilient
+### Resilient Microservices
 
 ```typescript
 client.use(retry({
@@ -203,7 +203,7 @@ client.use(retry({
 }));
 ```
 
-### Retry Apenas Timeouts
+### Retry Only Timeouts
 
 ```typescript
 import { TimeoutError } from 'recker';
@@ -215,9 +215,9 @@ client.use(retry({
 }));
 ```
 
-## Combinando com Outros Plugins
+## Combining with Other Plugins
 
-O retry funciona bem com outros plugins:
+Retry works well with other plugins:
 
 ```typescript
 import { createClient, retry, circuitBreaker, cache } from 'recker';
@@ -226,16 +226,16 @@ const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-// Ordem importa! Circuit breaker deve vir antes do retry
+// Order matters! Circuit breaker should come before retry
 client.use(circuitBreaker({ threshold: 5 }));
 client.use(retry({ maxAttempts: 3 }));
 client.use(cache({ ttl: 60000 }));
 ```
 
-## Dicas
+## Tips
 
-1. **Use jitter** em ambientes com múltiplos clientes
-2. **Respeite Retry-After** para APIs bem comportadas
-3. **Limite maxAttempts** para evitar loops infinitos
-4. **Use backoff exponential** para falhas persistentes
-5. **Combine com Circuit Breaker** para proteção completa
+1. **Use jitter** in environments with multiple clients
+2. **Respect Retry-After** for well-behaved APIs
+3. **Limit maxAttempts** to avoid infinite loops
+4. **Use exponential backoff** for persistent failures
+5. **Combine with Circuit Breaker** for complete protection

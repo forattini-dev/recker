@@ -1,10 +1,10 @@
 # Plugins
 
-O Recker usa uma arquitetura de plugins baseada em middleware, permitindo estender funcionalidades de forma modular e composável.
+Recker uses a middleware-based plugin architecture, allowing you to extend functionality in a modular and composable way.
 
-## Arquitetura
+## Architecture
 
-Plugins são funções que recebem uma instância do `Client` e registram middlewares:
+Plugins are functions that receive a `Client` instance and register middlewares:
 
 ```typescript
 type Plugin = (client: Client) => void;
@@ -15,9 +15,9 @@ type Middleware = (
 ) => Promise<ReckerResponse>;
 ```
 
-### Modelo Onion
+### Onion Model
 
-Requests passam por uma pilha de middlewares:
+Requests pass through a stack of middlewares:
 
 ```
 Request →  Plugin 1  →  Plugin 2  →  Plugin 3  →  Transport  → Network
@@ -25,63 +25,63 @@ Request →  Plugin 1  →  Plugin 2  →  Plugin 3  →  Transport  → Network
 Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 ```
 
-## Plugins Disponíveis
+## Available Plugins
 
-### Resiliência
+### Resilience
 
-| Plugin | Descrição |
-|--------|-----------|
-| [Retry](./02-retry.md) | Retentativas com backoff exponencial |
-| [Circuit Breaker](./03-circuit-breaker.md) | Proteção contra falhas em cascata |
-| [Dedup](./05-dedup.md) | Deduplicação de requests simultâneos |
+| Plugin | Description |
+|--------|-------------|
+| [Retry](./02-retry.md) | Automatic retries with exponential backoff |
+| [Circuit Breaker](./03-circuit-breaker.md) | Protection against cascading failures |
+| [Dedup](./05-dedup.md) | Deduplication of simultaneous requests |
 
 ### Performance
 
-| Plugin | Descrição |
-|--------|-----------|
-| [Cache](./04-cache.md) | Caching HTTP com múltiplas estratégias |
-| [Memory Cache](./01-memory-cache.md) | Storage de cache em memória de alta performance |
-| Compression | Compressão automática de requests |
+| Plugin | Description |
+|--------|-------------|
+| [Cache](./04-cache.md) | HTTP caching with multiple strategies |
+| [Memory Cache](./01-memory-cache.md) | High-performance in-memory cache storage |
+| Compression | Automatic request compression |
 
-### Segurança
+### Security
 
-| Plugin | Descrição |
-|--------|-----------|
-| [Auth](./06-auth.md) | Autenticação (Bearer, Basic, API Key) |
-| [Cookie Jar](./08-cookie-jar.md) | Gerenciamento automático de cookies |
-| XSRF | Proteção contra CSRF |
+| Plugin | Description |
+|--------|-------------|
+| [Auth](./06-auth.md) | Authentication (Bearer, Basic, API Key) |
+| [Cookie Jar](./08-cookie-jar.md) | Automatic cookie management |
+| XSRF | CSRF protection |
 
-### Observabilidade
+### Observability
 
-| Plugin | Descrição |
-|--------|-----------|
-| [Logger](./07-logger.md) | Logging de requests e responses |
-| Server Timing | Parse de headers Server-Timing |
-| HAR Recorder | Gravação de requests em formato HAR |
+| Plugin | Description |
+|--------|-------------|
+| [Logger](./07-logger.md) | Request and response logging |
+| Server Timing | Server-Timing header parsing |
+| HAR Recorder | Request recording in HAR format |
 
-### Protocolos
+### Protocols
 
-| Plugin | Descrição |
-|--------|-----------|
-| GraphQL | Cliente GraphQL integrado |
-| SOAP | Cliente SOAP/XML |
-| JSON-RPC | Cliente JSON-RPC 2.0 |
-| gRPC-Web | Cliente gRPC-Web |
-| OData | Cliente OData |
+| Plugin | Description |
+|--------|-------------|
+| GraphQL | Integrated GraphQL client |
+| SOAP | SOAP/XML client |
+| JSON-RPC | JSON-RPC 2.0 client |
+| gRPC-Web | gRPC-Web client |
+| OData | OData client |
 
-### Especialidades
+### Specialties
 
-| Plugin | Descrição |
-|--------|-----------|
-| Pagination | Paginação automática |
-| Scrape | Web scraping com seletores CSS |
-| HLS | Streaming HLS |
-| Proxy Rotator | Rotação de proxies |
-| Interface Rotator | Rotação de interfaces de rede |
+| Plugin | Description |
+|--------|-------------|
+| Pagination | Automatic pagination |
+| Scrape | Web scraping with CSS selectors |
+| HLS | HLS streaming |
+| Proxy Rotator | Proxy rotation |
+| Interface Rotator | Network interface rotation |
 
-## Usando Plugins
+## Using Plugins
 
-### Instalação Básica
+### Basic Installation
 
 ```typescript
 import { createClient, retry, cache, dedup } from 'recker';
@@ -90,13 +90,13 @@ const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-// Adicionar plugins
+// Add plugins
 client.use(retry({ maxAttempts: 3 }));
 client.use(cache({ ttl: 60000 }));
 client.use(dedup());
 ```
 
-### Via Configuração
+### Via Configuration
 
 ```typescript
 const client = createClient({
@@ -106,40 +106,40 @@ const client = createClient({
 });
 ```
 
-### Ordem dos Plugins
+### Plugin Order
 
-A ordem importa! Plugins são executados na ordem em que são adicionados:
+Order matters! Plugins are executed in the order they are added:
 
 ```typescript
-// ✅ Ordem recomendada
-client.use(circuitBreaker()); // 1. Falha rápido se circuito aberto
-client.use(retry());          // 2. Retenta falhas
-client.use(dedup());          // 3. Deduplica requests
-client.use(cache());          // 4. Verifica cache
-client.use(auth());           // 5. Adiciona autenticação
-client.use(logger());         // 6. Loga tudo
+// ✅ Recommended order
+client.use(circuitBreaker()); // 1. Fail fast if circuit is open
+client.use(retry());          // 2. Retry failures
+client.use(dedup());          // 3. Deduplicate requests
+client.use(cache());          // 4. Check cache
+client.use(auth());           // 5. Add authentication
+client.use(logger());         // 6. Log everything
 
-// ❌ Ordem problemática
-client.use(retry());          // Vai retentar mesmo com circuito aberto!
+// ❌ Problematic order
+client.use(retry());          // Will retry even with circuit open!
 client.use(circuitBreaker());
 ```
 
-## Criando Plugins
+## Creating Plugins
 
-### Plugin Simples
+### Simple Plugin
 
 ```typescript
 import { Plugin, Middleware } from 'recker';
 
 function myPlugin(options = {}): Plugin {
   const middleware: Middleware = async (request, next) => {
-    // Antes do request
+    // Before request
     console.log(`Starting: ${request.method} ${request.url}`);
 
-    // Passar para o próximo middleware
+    // Pass to next middleware
     const response = await next(request);
 
-    // Depois do response
+    // After response
     console.log(`Completed: ${response.status}`);
 
     return response;
@@ -150,35 +150,35 @@ function myPlugin(options = {}): Plugin {
   };
 }
 
-// Usar
+// Use it
 client.use(myPlugin());
 ```
 
-### Plugin com Hooks
+### Plugin with Hooks
 
 ```typescript
 function myPlugin(): Plugin {
   return (client) => {
-    // Hook antes do request
+    // Hook before request
     client.beforeRequest((request) => {
       return request.withHeader('X-Custom', 'value');
     });
 
-    // Hook depois do response
+    // Hook after response
     client.afterResponse((request, response) => {
       console.log(`${request.url}: ${response.status}`);
     });
 
-    // Hook de erro
+    // Error hook
     client.onError((request, error) => {
       console.error(`Error on ${request.url}:`, error);
-      // Pode retornar um response de fallback
+      // Can return a fallback response
     });
   };
 }
 ```
 
-### Plugin com Estado
+### Plugin with State
 
 ```typescript
 function rateLimiter(options: { maxRequests: number; window: number }): Plugin {
@@ -195,7 +195,7 @@ function rateLimiter(options: { maxRequests: number; window: number }): Plugin {
 
       requests.set(now, count + 1);
 
-      // Limpar entradas antigas
+      // Clean old entries
       for (const [time] of requests) {
         if (time < now) requests.delete(time);
       }
@@ -206,11 +206,11 @@ function rateLimiter(options: { maxRequests: number; window: number }): Plugin {
 }
 ```
 
-## Composição
+## Composition
 
-Combine plugins para cenários complexos:
+Combine plugins for complex scenarios:
 
-### API Resiliente
+### Resilient API
 
 ```typescript
 client.use(circuitBreaker({ threshold: 5 }));
@@ -236,12 +236,12 @@ client.use(retry({ statusCodes: [502, 503, 504] }));
 client.use(logger({ log: structuredLog }));
 ```
 
-## Melhores Práticas
+## Best Practices
 
-1. **Ordem correta** - Circuit breaker antes de retry
-2. **Dedup com cache** - Dedup antes de cache
-3. **Auth antes de tudo** - Exceto circuit breaker
-4. **Logger no final** - Para capturar tudo
-5. **Não bloqueie** - Use async/await corretamente
-6. **Trate erros** - Não engula exceções
-7. **Documente opções** - Use TypeScript para tipagem
+1. **Correct order** - Circuit breaker before retry
+2. **Dedup with cache** - Dedup before cache
+3. **Auth first** - Except for circuit breaker
+4. **Logger last** - To capture everything
+5. **Don't block** - Use async/await correctly
+6. **Handle errors** - Don't swallow exceptions
+7. **Document options** - Use TypeScript for typing

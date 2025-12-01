@@ -1,13 +1,13 @@
 # Dedup Plugin
 
-O plugin de **Dedup** (Deduplication) evita requests duplicados em voo, compartilhando a mesma resposta entre chamadores simultâneos.
+The **Dedup** (Deduplication) plugin prevents duplicate in-flight requests by sharing the same response among simultaneous callers.
 
-## O Problema
+## The Problem
 
-Sem deduplicação, requests simultâneos para o mesmo endpoint geram múltiplas chamadas:
+Without deduplication, simultaneous requests to the same endpoint generate multiple calls:
 
 ```typescript
-// Sem dedup - 3 requests para a API
+// Without dedup - 3 requests to API
 const [users1, users2, users3] = await Promise.all([
   client.get('/users').json(),
   client.get('/users').json(),
@@ -15,9 +15,9 @@ const [users1, users2, users3] = await Promise.all([
 ]);
 ```
 
-## A Solução
+## The Solution
 
-Com deduplicação, apenas um request é feito e o resultado é compartilhado:
+With deduplication, only one request is made and the result is shared:
 
 ```typescript
 import { createClient, dedup } from 'recker';
@@ -28,7 +28,7 @@ const client = createClient({
 
 client.use(dedup());
 
-// Com dedup - apenas 1 request para a API!
+// With dedup - only 1 request to API!
 const [users1, users2, users3] = await Promise.all([
   client.get('/users').json(),
   client.get('/users').json(),
@@ -36,12 +36,12 @@ const [users1, users2, users3] = await Promise.all([
 ]);
 ```
 
-## Como Funciona
+## How It Works
 
 ```
 Request 1 ──┐
             │
-Request 2 ──┼──► Primeiro inicia o request ──► API
+Request 2 ──┼──► First initiates the request ──► API
             │              │
 Request 3 ──┘              ▼
                       Response
@@ -51,32 +51,32 @@ Request 3 ──┘              ▼
         Clone 1       Clone 2       Clone 3
 ```
 
-1. O primeiro request inicia a chamada
-2. Requests subsequentes encontram o request pendente
-3. Todos aguardam a mesma Promise
-4. Quando resolve, cada um recebe um clone da resposta
+1. The first request initiates the call
+2. Subsequent requests find the pending request
+3. All await the same Promise
+4. When resolved, each receives a cloned response
 
-## Configuração
+## Configuration
 
 ```typescript
 interface DedupOptions {
-  // Gerador de chave customizado
+  // Custom key generator
   keyGenerator?: (req: ReckerRequest) => string;
 }
 ```
 
-### Key Generator Padrão
+### Default Key Generator
 
-Por padrão, a chave é `method:url`:
+By default, the key is `method:url`:
 
 ```typescript
 client.use(dedup());
 
-// Estas são deduplicadas (mesma chave)
+// These are deduplicated (same key)
 client.get('/users');
 client.get('/users');
 
-// Estas NÃO são deduplicadas (chaves diferentes)
+// These are NOT deduplicated (different keys)
 client.get('/users');
 client.get('/users?page=2');
 ```
@@ -86,85 +86,85 @@ client.get('/users?page=2');
 ```typescript
 client.use(dedup({
   keyGenerator: (req) => {
-    // Ignorar query params
+    // Ignore query params
     const url = new URL(req.url);
     return `${req.method}:${url.pathname}`;
   },
 }));
 
-// Agora estas são deduplicadas!
+// Now these are deduplicated!
 client.get('/users');
 client.get('/users?page=1');
 client.get('/users?page=2');
 ```
 
-## Métodos Suportados
+## Supported Methods
 
-Por padrão, apenas GET e HEAD são deduplicados:
+By default, only GET and HEAD are deduplicated:
 
 ```typescript
 client.use(dedup());
 
-// ✅ Deduplicado
+// ✅ Deduplicated
 client.get('/users');
 client.head('/users');
 
-// ❌ Não deduplicado (métodos não-safe)
+// ❌ Not deduplicated (non-safe methods)
 client.post('/users', { body: data });
 client.put('/users/1', { body: data });
 client.delete('/users/1');
 ```
 
-## Exemplos
+## Examples
 
 ### React/Frontend
 
 ```typescript
-// Hook de dados que pode ser chamado múltiplas vezes
+// Data hook that may be called multiple times
 function useUsers() {
   const [users, setUsers] = useState([]);
 
   useEffect(() => {
-    // Mesmo se múltiplos componentes chamarem isso simultaneamente,
-    // apenas 1 request será feito
+    // Even if multiple components call this simultaneously,
+    // only 1 request will be made
     client.get('/users').json().then(setUsers);
   }, []);
 
   return users;
 }
 
-// Em múltiplos componentes
+// In multiple components
 function UserList() {
-  const users = useUsers(); // Request 1 (ou compartilhado)
+  const users = useUsers(); // Request 1 (or shared)
 }
 
 function UserCount() {
-  const users = useUsers(); // Compartilha com Request 1
+  const users = useUsers(); // Shares with Request 1
 }
 ```
 
 ### SSR/Initial Load
 
 ```typescript
-// Server-side rendering com múltiplos dados
+// Server-side rendering with multiple data needs
 async function getPageData() {
-  // Pode haver duplicação acidental em código complexo
+  // There may be accidental duplication in complex code
   const [header, sidebar, main] = await Promise.all([
-    getHeaderData(),   // Chama /users
-    getSidebarData(),  // Também chama /users
-    getMainData(),     // Também chama /users
+    getHeaderData(),   // Calls /users
+    getSidebarData(),  // Also calls /users
+    getMainData(),     // Also calls /users
   ]);
 
   return { header, sidebar, main };
 }
 
-// Com dedup, /users é chamado apenas 1 vez
+// With dedup, /users is called only once
 ```
 
 ### Microservices
 
 ```typescript
-// Agregador que consulta múltiplos serviços
+// Aggregator that queries multiple services
 async function aggregate() {
   const [users, orders, inventory] = await Promise.all([
     client.get('/users').json(),
@@ -172,49 +172,49 @@ async function aggregate() {
     client.get('/inventory').json(),
   ]);
 
-  // Se algum serviço consultar /users internamente,
-  // compartilha o resultado
+  // If any service internally queries /users,
+  // shares the result
 }
 ```
 
-## Diferença entre Dedup e Cache
+## Difference Between Dedup and Cache
 
-| Aspecto | Dedup | Cache |
-|---------|-------|-------|
-| Duração | Apenas durante o request | Após o request (TTL) |
-| Uso | Requests simultâneos | Requests subsequentes |
-| Storage | Memória (Map) | Configurável |
-| Overhead | Mínimo | Serialização/deserialização |
+| Aspect | Dedup | Cache |
+|--------|-------|-------|
+| Duration | Only during the request | After the request (TTL) |
+| Use Case | Simultaneous requests | Subsequent requests |
+| Storage | Memory (Map) | Configurable |
+| Overhead | Minimal | Serialization/deserialization |
 
-**Use ambos juntos para máxima eficiência:**
+**Use both together for maximum efficiency:**
 
 ```typescript
-client.use(dedup());  // Evita duplicados simultâneos
-client.use(cache({ ttl: 60000 }));  // Cacheia por 1 minuto
+client.use(dedup());  // Avoids simultaneous duplicates
+client.use(cache({ ttl: 60000 }));  // Caches for 1 minute
 ```
 
-## Ordem dos Plugins
+## Plugin Order
 
-Dedup deve vir **antes** do cache:
+Dedup should come **before** cache:
 
 ```typescript
-// ✅ Correto
+// ✅ Correct
 client.use(dedup());
 client.use(cache());
 
-// ❌ Errado - dedup não vai funcionar corretamente
+// ❌ Wrong - dedup won't work correctly
 client.use(cache());
 client.use(dedup());
 ```
 
-## Comportamento com Erros
+## Error Behavior
 
-Se o request falhar, todos os callers recebem o mesmo erro:
+If the request fails, all callers receive the same error:
 
 ```typescript
 client.use(dedup());
 
-// Se /users falhar, ambos recebem o erro
+// If /users fails, both receive the error
 const results = await Promise.allSettled([
   client.get('/users').json(),
   client.get('/users').json(),
@@ -225,10 +225,10 @@ const results = await Promise.allSettled([
 // results[0].reason === results[1].reason
 ```
 
-## Dicas
+## Tips
 
-1. **Sempre use com cache** para eficiência máxima
-2. **Métodos não-safe não são deduplicados** (POST, PUT, DELETE)
-3. **Custom key generator** para casos especiais
-4. **Overhead mínimo** - pode usar em todos os clientes
-5. **Funciona com streaming** - cada caller recebe seu próprio stream
+1. **Always use with cache** for maximum efficiency
+2. **Non-safe methods are not deduplicated** (POST, PUT, DELETE)
+3. **Custom key generator** for special cases
+4. **Minimal overhead** - can use on all clients
+5. **Works with streaming** - each caller receives their own stream

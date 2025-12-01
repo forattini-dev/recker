@@ -1,6 +1,6 @@
 # SOAP & XML-RPC
 
-Suporte completo para SOAP 1.1/1.2 e XML-RPC, com parsing automático de respostas e tratamento de faults.
+Complete support for SOAP 1.1/1.2 and XML-RPC, with automatic response parsing and fault handling.
 
 ## SOAP
 
@@ -13,14 +13,14 @@ const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-// Criar cliente SOAP
+// Create SOAP client
 const soapClient = client.soap({
   endpoint: '/soap',
   namespace: 'http://example.com/service',
   version: '1.2',
 });
 
-// Chamar método
+// Call method
 const result = await soapClient.call('GetUser', { userId: 123 });
 
 if (result.success) {
@@ -30,23 +30,23 @@ if (result.success) {
 }
 ```
 
-### Configuração
+### Configuration
 
 ```typescript
 interface SoapOptions {
-  // Endpoint do serviço SOAP
+  // SOAP service endpoint
   endpoint: string;
 
-  // Namespace XML do serviço
+  // Service XML namespace
   namespace: string;
 
-  // Versão SOAP (default: '1.2')
+  // SOAP version (default: '1.2')
   version?: '1.1' | '1.2';
 
-  // URL do WSDL (opcional)
+  // WSDL URL (optional)
   wsdl?: string;
 
-  // Headers SOAP padrão
+  // Default SOAP headers
   soapHeaders?: Record<string, string>;
 
   // Encoding (default: 'utf-8')
@@ -57,7 +57,7 @@ interface SoapOptions {
 ### SOAP 1.1 vs 1.2
 
 ```typescript
-// SOAP 1.1 (sistemas legados)
+// SOAP 1.1 (legacy systems)
 const soap11 = client.soap({
   endpoint: '/soap',
   namespace: 'http://example.com/service',
@@ -65,7 +65,7 @@ const soap11 = client.soap({
 });
 // Content-Type: text/xml; charset=utf-8
 
-// SOAP 1.2 (recomendado)
+// SOAP 1.2 (recommended)
 const soap12 = client.soap({
   endpoint: '/soap',
   namespace: 'http://example.com/service',
@@ -74,15 +74,15 @@ const soap12 = client.soap({
 // Content-Type: application/soap+xml; charset=utf-8
 ```
 
-### Métodos com Parâmetros
+### Methods with Parameters
 
 ```typescript
-// Parâmetros simples
+// Simple parameters
 const result = await soapClient.call('GetUser', {
   userId: 123,
 });
 
-// Parâmetros complexos
+// Complex parameters
 const result = await soapClient.call('CreateUser', {
   user: {
     name: 'John Doe',
@@ -101,10 +101,10 @@ const result = await soapClient.call('GetUsers', {
 });
 ```
 
-### Headers SOAP
+### SOAP Headers
 
 ```typescript
-// Headers por chamada
+// Headers per call
 const result = await soapClient.call(
   'SecureMethod',
   { data: 'sensitive' },
@@ -119,7 +119,7 @@ const result = await soapClient.call(
 );
 ```
 
-### Exemplo de Envelope Gerado
+### Generated Envelope Example
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -137,7 +137,7 @@ const result = await soapClient.call(
 </soap:Envelope>
 ```
 
-### Tratamento de Faults
+### Fault Handling
 
 ```typescript
 const result = await soapClient.call('RiskyMethod', { data: 'test' });
@@ -146,31 +146,31 @@ if (!result.success) {
   const { fault } = result;
 
   console.log('Code:', fault.code);
-  // 'soap:Server' ou 'soap:Client'
+  // 'soap:Server' or 'soap:Client'
 
   console.log('Message:', fault.string);
   // 'User not found'
 
   console.log('Detail:', fault.detail);
-  // Informações adicionais do servidor
+  // Additional server information
 }
 ```
 
 ### WSDL
 
 ```typescript
-// Configurar com WSDL
+// Configure with WSDL
 const soapClient = client.soap({
   endpoint: '/soap',
   namespace: 'http://example.com/service',
   wsdl: '/soap?wsdl',
 });
 
-// Buscar e parsear WSDL
+// Fetch and parse WSDL
 const wsdl = await soapClient.getWsdl();
-console.log(wsdl); // XML raw do WSDL
+console.log(wsdl); // Raw WSDL XML
 
-// Listar operações disponíveis
+// List available operations
 const operations = await soapClient.getOperations();
 console.log(operations);
 // ['GetUser', 'CreateUser', 'DeleteUser', ...]
@@ -189,27 +189,27 @@ const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-// Criar cliente XML-RPC
+// Create XML-RPC client
 const rpc = client.xmlrpc('/xmlrpc');
 
-// Chamar método
+// Call method
 const result = await rpc.call('system.listMethods');
 console.log(result.result);
 // ['add', 'subtract', 'multiply', ...]
 ```
 
-### Chamadas com Parâmetros
+### Calls with Parameters
 
 ```typescript
-// Parâmetros simples
+// Simple parameters
 const sum = await rpc.call('math.add', [1, 2, 3]);
 console.log(sum.result); // 6
 
-// Múltiplos parâmetros
+// Multiple parameters
 const result = await rpc.call('string.concat', ['Hello', ' ', 'World']);
 console.log(result.result); // 'Hello World'
 
-// Parâmetros complexos
+// Complex parameters
 const result = await rpc.call('user.create', [{
   name: 'John',
   age: 30,
@@ -221,13 +221,13 @@ const result = await rpc.call('user.create', [{
 }]);
 ```
 
-### Tipos de Dados
+### Data Types
 
-Conversão automática de tipos:
+Automatic type conversion:
 
-| JavaScript | XML-RPC | Exemplo |
+| JavaScript | XML-RPC | Example |
 |------------|---------|---------|
-| `number` (inteiro) | `<int>` | `42` |
+| `number` (integer) | `<int>` | `42` |
 | `number` (decimal) | `<double>` | `3.14` |
 | `boolean` | `<boolean>` | `true` |
 | `string` | `<string>` | `"hello"` |
@@ -237,21 +237,21 @@ Conversão automática de tipos:
 | `Object` | `<struct>` | `{ key: 'value' }` |
 | `null` | `<nil/>` | `null` |
 
-### Tratamento de Faults
+### Fault Handling
 
 ```typescript
 const result = await rpc.call('method.that.fails');
 
 if (!result.success) {
   console.log('Fault code:', result.fault.faultCode);
-  // Código numérico do erro
+  // Numeric error code
 
   console.log('Fault string:', result.fault.faultString);
-  // Mensagem de erro
+  // Error message
 }
 ```
 
-### Exemplo de Request XML-RPC
+### XML-RPC Request Example
 
 ```xml
 <?xml version="1.0"?>
@@ -282,9 +282,9 @@ if (!result.success) {
 
 ---
 
-## Combinando com Outros Plugins
+## Combining with Other Plugins
 
-### Com Retry
+### With Retry
 
 ```typescript
 const client = createClient({
@@ -300,11 +300,11 @@ const soapClient = client.soap({
   namespace: 'http://example.com/service',
 });
 
-// Retentativas automáticas em caso de erro de servidor
+// Automatic retries on server errors
 const result = await soapClient.call('UnstableMethod', { data: 'test' });
 ```
 
-### Com Auth
+### With Auth
 
 ```typescript
 const client = createClient({
@@ -320,12 +320,12 @@ const soapClient = client.soap({
 });
 ```
 
-### Com Timeout
+### With Timeout
 
 ```typescript
 const client = createClient({
   baseUrl: 'https://api.example.com',
-  timeout: 30000, // 30 segundos
+  timeout: 30000, // 30 seconds
 });
 
 const soapClient = client.soap({
@@ -336,9 +336,9 @@ const soapClient = client.soap({
 
 ---
 
-## Exemplos Reais
+## Real-World Examples
 
-### Consulta de CEP (Correios)
+### Brazilian Postal Service (Correios) ZIP Code Lookup
 
 ```typescript
 const client = createClient({
@@ -370,10 +370,10 @@ const client = createClient({
 
 const wp = client.xmlrpc('/xmlrpc.php');
 
-// Listar métodos disponíveis
+// List available methods
 const methods = await wp.call('system.listMethods');
 
-// Buscar posts recentes
+// Get recent posts
 const posts = await wp.call('wp.getPosts', [
   1,           // blog_id
   'username',  // username
@@ -382,7 +382,7 @@ const posts = await wp.call('wp.getPosts', [
 ]);
 ```
 
-### Serviço de Nota Fiscal
+### Invoice Service
 
 ```typescript
 const client = createClient({
@@ -404,12 +404,12 @@ const result = await nfe.call('nfeConsultaNF2', {
 
 ## Debugging
 
-### Ver XML Gerado
+### View Generated XML
 
 ```typescript
 const client = createClient({
   baseUrl: 'https://api.example.com',
-  debug: true, // Ativa logging
+  debug: true, // Enable logging
 });
 
 const soapClient = client.soap({
@@ -417,11 +417,11 @@ const soapClient = client.soap({
   namespace: 'http://example.com/service',
 });
 
-// Logs mostrarão o XML enviado e recebido
+// Logs will show sent and received XML
 const result = await soapClient.call('GetUser', { userId: 123 });
 ```
 
-### Logging Customizado
+### Custom Logging
 
 ```typescript
 import { createClient, logger } from 'recker';
@@ -431,16 +431,16 @@ const client = createClient({
 });
 
 client.use(logger({
-  logBody: true, // Mostra XML no log
+  logBody: true, // Shows XML in log
 }));
 ```
 
 ---
 
-## Dicas
+## Tips
 
-1. **Use SOAP 1.2** quando possível - é mais moderno e tem melhor suporte
-2. **Trate faults** - SOAP retorna HTTP 200 mesmo em erros
-3. **Valide WSDL** - use `getOperations()` para verificar métodos disponíveis
-4. **Combine com retry** - serviços SOAP são frequentemente instáveis
-5. **Timeout adequado** - operações SOAP podem ser lentas
+1. **Use SOAP 1.2** when possible - it's more modern and has better support
+2. **Handle faults** - SOAP returns HTTP 200 even on errors
+3. **Validate WSDL** - use `getOperations()` to check available methods
+4. **Combine with retry** - SOAP services are often unstable
+5. **Appropriate timeout** - SOAP operations can be slow

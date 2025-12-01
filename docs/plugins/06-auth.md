@@ -1,13 +1,13 @@
 # Auth Plugin
 
-O plugin de **Auth** fornece autenticação automática para requests HTTP, suportando múltiplos esquemas de autenticação.
+The **Auth** plugin provides automatic authentication for HTTP requests, supporting multiple authentication schemes.
 
-## Esquemas Suportados
+## Supported Schemes
 
 - **Bearer Token** (JWT, OAuth)
 - **Basic Auth** (username:password)
-- **API Key** (header ou query param)
-- **Custom** (função personalizada)
+- **API Key** (header or query param)
+- **Custom** (custom function)
 
 ## Quick Start
 
@@ -25,7 +25,7 @@ client.use(auth({
   token: 'your-jwt-token',
 }));
 
-// Adiciona: Authorization: Bearer your-jwt-token
+// Adds: Authorization: Bearer your-jwt-token
 const data = await client.get('/protected').json();
 ```
 
@@ -38,13 +38,13 @@ client.use(auth({
   password: 'pass',
 }));
 
-// Adiciona: Authorization: Basic dXNlcjpwYXNz
+// Adds: Authorization: Basic dXNlcjpwYXNz
 ```
 
 ### API Key
 
 ```typescript
-// No header
+// In header
 client.use(auth({
   type: 'apikey',
   key: 'X-API-Key',
@@ -52,7 +52,7 @@ client.use(auth({
   in: 'header',
 }));
 
-// Na query string
+// In query string
 client.use(auth({
   type: 'apikey',
   key: 'api_key',
@@ -61,17 +61,17 @@ client.use(auth({
 }));
 ```
 
-## Token Dinâmico
+## Dynamic Token
 
-Para tokens que mudam (refresh tokens):
+For tokens that change (refresh tokens):
 
 ```typescript
 client.use(auth({
   type: 'bearer',
-  token: () => getAccessToken(), // Função que retorna o token atual
+  token: () => getAccessToken(), // Function that returns current token
 }));
 
-// Ou async
+// Or async
 client.use(auth({
   type: 'bearer',
   token: async () => {
@@ -101,40 +101,40 @@ client.use(auth({
 }));
 ```
 
-## Configuração Completa
+## Complete Configuration
 
 ```typescript
 interface AuthOptions {
-  // Tipo de autenticação
+  // Authentication type
   type: 'bearer' | 'basic' | 'apikey' | 'custom';
 
-  // Para bearer
+  // For bearer
   token?: string | (() => string) | (() => Promise<string>);
 
-  // Para basic
+  // For basic
   username?: string;
   password?: string;
 
-  // Para apikey
+  // For apikey
   key?: string;
   value?: string;
   in?: 'header' | 'query';
 
-  // Para custom
+  // For custom
   apply?: (req: ReckerRequest) => ReckerRequest | Promise<ReckerRequest>;
 
   // Auto refresh
   refreshToken?: () => Promise<string>;
   shouldRefresh?: (response: ReckerResponse) => boolean;
 
-  // Retry após refresh
+  // Retry after refresh
   retryOnRefresh?: boolean;
 }
 ```
 
-## Exemplos
+## Examples
 
-### OAuth2 com Refresh
+### OAuth2 with Refresh
 
 ```typescript
 const tokenManager = {
@@ -220,46 +220,46 @@ client.use(auth({
   token: 'default-token',
 }));
 
-// Usar token diferente para um request específico
+// Use different token for a specific request
 const data = await client.get('/admin', {
   headers: { Authorization: 'Bearer admin-token' },
 }).json();
 ```
 
-## Combinando com Outros Plugins
+## Combining with Other Plugins
 
 ```typescript
-// Auth deve vir antes de plugins que precisam da autenticação
+// Auth should come before plugins that need authentication
 client.use(auth({ type: 'bearer', token: getToken }));
 client.use(retry({ maxAttempts: 3 }));
 client.use(cache({ ttl: 60000 }));
 ```
 
-## Segurança
+## Security
 
-1. **Nunca hardcode tokens** em código fonte
-2. **Use variáveis de ambiente** ou secret managers
-3. **Tokens em memória** são seguros para SPAs
-4. **Refresh tokens** devem ser armazenados de forma segura
+1. **Never hardcode tokens** in source code
+2. **Use environment variables** or secret managers
+3. **Tokens in memory** are safe for SPAs
+4. **Refresh tokens** should be stored securely
 
 ```typescript
-// ✅ Bom
+// ✅ Good
 client.use(auth({
   type: 'bearer',
   token: process.env.API_TOKEN,
 }));
 
-// ❌ Ruim
+// ❌ Bad
 client.use(auth({
   type: 'bearer',
-  token: 'eyJhbGciOiJIUzI1NiIs...', // Token hardcoded!
+  token: 'eyJhbGciOiJIUzI1NiIs...', // Hardcoded token!
 }));
 ```
 
-## Dicas
+## Tips
 
-1. **Use token functions** para tokens dinâmicos
-2. **Implemente refresh** para sessões longas
-3. **API keys em header** são mais seguros que query params
-4. **Custom auth** para esquemas não suportados
-5. **Combine com retry** para retry automático após refresh
+1. **Use token functions** for dynamic tokens
+2. **Implement refresh** for long sessions
+3. **API keys in header** are more secure than query params
+4. **Custom auth** for unsupported schemes
+5. **Combine with retry** for automatic retry after refresh
