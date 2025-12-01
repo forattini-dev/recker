@@ -47,26 +47,38 @@ jobs:
     needs: quality
     if: |
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      !startsWith(github.event.head_commit.message, 'v') &&
-      !contains(github.event.head_commit.message, 'version bump')
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
 
     steps:
+      - name: Check if version bump commit
+        id: check
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if [[ "$COMMIT_MSG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Skipping: commit message '$COMMIT_MSG' is a version bump"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout
+        if: steps.check.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup pnpm
+        if: steps.check.outputs.skip != 'true'
         uses: pnpm/action-setup@v4
         with:
           version: 9
 
       - name: Setup Node.js (NPM Registry)
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -74,9 +86,11 @@ jobs:
           cache: 'pnpm'
 
       - name: Install Dependencies
+        if: steps.check.outputs.skip != 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Bump Version (Next)
+        if: steps.check.outputs.skip != 'true'
         id: version
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
@@ -89,14 +103,17 @@ jobs:
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build
+        if: steps.check.outputs.skip != 'true'
         run: pnpm run build
 
       - name: Publish to NPM (Next)
+        if: steps.check.outputs.skip != 'true'
         run: pnpm publish --tag next --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Setup Node.js (GitHub Packages)
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -104,6 +121,7 @@ jobs:
           scope: '@forattini-dev'
 
       - name: Publish to GitHub Packages (Next)
+        if: steps.check.outputs.skip != 'true'
         run: |
           node -e "
             const pkg = require('./package.json');
@@ -116,6 +134,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Job Summary
+        if: steps.check.outputs.skip != 'true'
         run: |
           echo "## 🚀 Next Release Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -143,6 +162,15 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- [NPM Package](https://www.npmjs.com/package/recker?activeTab=versions)" >> $GITHUB_STEP_SUMMARY
           echo "- [GitHub Packages](https://github.com/${{ github.repository }}/pkgs/npm/recker)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Skip Summary
+        if: steps.check.outputs.skip == 'true'
+        run: |
+          echo "## ⏭️ Release Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version bump commit detected. Skipping @next release." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The stable release will be published via the tag workflow." >> $GITHUB_STEP_SUMMARY
 
   release-stable:
     name: Release Stable
