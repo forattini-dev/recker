@@ -217,6 +217,27 @@ Content-Type is automatically detected:
 cat data.xml | rek POST api.com/import Content-Type:"application/xml"
 ```
 
+### Chaining Requests (Read-Modify-Write)
+
+Use pipes to fetch data, transform it, and send it back:
+
+```bash
+# Get user, change nickname, update via PATCH
+rek api.com/users/123 | jq '.nickname = "newname"' | rek PATCH api.com/users/123
+
+# Get user, modify multiple fields, replace via PUT
+rek api.com/users/123 | jq '.nickname = "john_doe" | .status = "active"' | rek PUT api.com/users/123
+
+# Clone a resource to another endpoint
+rek api.com/templates/default | jq '.name = "My Copy"' | rek POST api.com/templates
+
+# Migrate data between APIs
+rek old-api.com/users/1 | jq '{name, email}' | rek POST new-api.com/users
+
+# Batch update: get list, modify each, send updates
+rek api.com/users | jq '.users[] | select(.active) | .role = "premium"' | rek PATCH api.com/users/bulk
+```
+
 ## Environment Variables
 
 Load variables from `.env` files:
