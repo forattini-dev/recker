@@ -11,6 +11,7 @@ import { getSecurityRecords } from '../../utils/dns-toolkit.js';
 import { rdap } from '../../utils/rdap.js';
 import { ScrapeDocument } from '../../scrape/document.js';
 import colors from '../../utils/colors.js';
+import { getShellSearch } from './shell-search.js';
 
 // Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
@@ -109,6 +110,7 @@ export class RekShell {
       'ws', 'udp', 'load', 'chat', 'ai',
       'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
       'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
+      '?', 'search', 'suggest', 'example',
       'help', 'clear', 'exit', 'set', 'url', 'vars', 'env'
     ];
 
@@ -256,9 +258,30 @@ export class RekShell {
       case '$table':
         await this.runSelectTable(parts.slice(1).join(' '));
         return;
+      case '?':
+      case 'search':
+        await this.runSearch(parts.slice(1).join(' '));
+        return;
+      case 'suggest':
+        await this.runSuggest(parts.slice(1).join(' '));
+        return;
+      case 'example':
+        await this.runExample(parts.slice(1).join(' '));
+        return;
     }
 
-    // 3. Request Handling
+    // 3. Natural language question detection
+    // If input ends with "?" treat it as a search query
+    if (input.endsWith('?') && !input.startsWith('http')) {
+      // Remove the trailing ? and search
+      const query = input.slice(0, -1).trim();
+      if (query) {
+        await this.runSearch(query);
+        return;
+      }
+    }
+
+    // 4. Request Handling
     // Heuristic: Is it a Method? Or a URL?
     const methods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
     let method = 'GET';
@@ -1963,6 +1986,137 @@ export class RekShell {
     console.log('');
   }
 
+  // ============ Documentation Search Commands ============
+
+  private async runSearch(query: string) {
+    if (!query.trim()) {
+      console.log(colors.yellow('Usage: ? <query> or search <query>'));
+      console.log(colors.gray('  Examples:'));
+      console.log(colors.gray('    ? retry exponential backoff'));
+      console.log(colors.gray('    search cache configuration'));
+      return;
+    }
+
+    console.log(colors.gray('Searching documentation...'));
+
+    try {
+      const search = getShellSearch();
+      const results = await search.search(query, { limit: 5 });
+
+      if (results.length === 0) {
+        console.log(colors.yellow(`No results for: "${query}"`));
+        console.log(colors.gray('Try different keywords like: retry, cache, streaming, websocket, pagination'));
+        return;
+      }
+
+      console.log(colors.bold(colors.cyan(`\nFound ${results.length} results for "${query}":\n`)));
+
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const score = Math.round(result.score * 100);
+
+        console.log(`  ${colors.green(`${i + 1}.`)} ${colors.bold(result.title)} ${colors.gray(`(${score}%)`)}`);
+        console.log(`     ${colors.gray(result.path)}`);
+
+        if (result.snippet) {
+          const snippet = result.snippet.slice(0, 120).replace(/\n/g, ' ');
+          console.log(`     ${colors.gray(snippet)}${result.snippet.length > 120 ? '...' : ''}`);
+        }
+        console.log('');
+      }
+
+      console.log(colors.gray('  Tip: Use "get_doc <path>" to read full documentation'));
+    } catch (error: any) {
+      console.error(colors.red(`Search failed: ${error.message}`));
+    }
+  }
+
+  private async runSuggest(useCase: string) {
+    if (!useCase.trim()) {
+      console.log(colors.yellow('Usage: suggest <use-case>'));
+      console.log(colors.gray('  Examples:'));
+      console.log(colors.gray('    suggest implement retry with exponential backoff'));
+      console.log(colors.gray('    suggest cache API responses'));
+      console.log(colors.gray('    suggest stream AI responses from OpenAI'));
+      return;
+    }
+
+    console.log(colors.gray('Getting suggestions...'));
+
+    try {
+      const search = getShellSearch();
+      const suggestion = await search.suggest(useCase);
+
+      console.log('');
+      this.printMarkdown(suggestion);
+    } catch (error: any) {
+      console.error(colors.red(`Suggest failed: ${error.message}`));
+    }
+  }
+
+  private async runExample(feature: string) {
+    if (!feature.trim()) {
+      console.log(colors.yellow('Usage: example <feature>'));
+      console.log(colors.gray('  Examples:'));
+      console.log(colors.gray('    example retry'));
+      console.log(colors.gray('    example streaming'));
+      console.log(colors.gray('    example cache'));
+      console.log(colors.gray('    example websocket'));
+      return;
+    }
+
+    console.log(colors.gray('Finding examples...'));
+
+    try {
+      const search = getShellSearch();
+      const examples = await search.getExamples(feature, { limit: 3 });
+
+      console.log('');
+      this.printMarkdown(examples);
+    } catch (error: any) {
+      console.error(colors.red(`Example lookup failed: ${error.message}`));
+    }
+  }
+
+  private printMarkdown(text: string) {
+    // Simple markdown rendering for terminal
+    const lines = text.split('\n');
+
+    for (const line of lines) {
+      if (line.startsWith('**') && line.endsWith('**')) {
+        // Bold text
+        console.log(colors.bold(line.replace(/\*\*/g, '')));
+      } else if (line.startsWith('### ')) {
+        // H3
+        console.log(colors.bold(colors.cyan(line.slice(4))));
+      } else if (line.startsWith('## ')) {
+        // H2
+        console.log(colors.bold(colors.cyan(line.slice(3))));
+      } else if (line.startsWith('# ')) {
+        // H1
+        console.log(colors.bold(colors.cyan(line.slice(2))));
+      } else if (line.startsWith('```')) {
+        // Code block delimiter - just skip the marker
+        if (line.length > 3) {
+          // Opening with language
+          console.log(colors.gray('─'.repeat(40)));
+        } else {
+          // Closing
+          console.log(colors.gray('─'.repeat(40)));
+        }
+      } else if (line.startsWith('  - ') || line.startsWith('- ')) {
+        // List item
+        const content = line.replace(/^\s*-\s*/, '');
+        console.log(`  ${colors.green('•')} ${content}`);
+      } else if (line.match(/^\s+/)) {
+        // Indented (likely code)
+        console.log(colors.yellow(line));
+      } else {
+        console.log(line);
+      }
+    }
+  }
+
   private printHelp() {
     console.log(`
   ${colors.bold(colors.cyan('Rek Console Help'))}
@@ -2020,6 +2174,12 @@ export class RekShell {
     ${colors.green('$beautify <url>')}     Format minified JS/CSS code.
     ${colors.green('$beautify:save [f]')}  Save beautified code to file.
     ${colors.green('$table <selector>')}   Extract table as data.
+
+  ${colors.bold('Documentation:')}
+    ${colors.green('? <query>')}           Search Recker documentation.
+    ${colors.green('search <query>')}      Alias for ? (hybrid fuzzy+semantic search).
+    ${colors.green('suggest <use-case>')}  Get implementation suggestions.
+    ${colors.green('example <feature>')}   Get code examples for a feature.
 
   ${colors.bold('Examples:')}
     › url httpbin.org
