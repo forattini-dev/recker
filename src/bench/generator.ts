@@ -38,7 +38,7 @@ export class LoadGenerator {
         agent: {
           connections: this.config.users,
           pipelining: this.config.mode === 'throughput' ? 2 : 1,
-          keepAlive: false // Force close connections to avoid hanging
+          keepAlive: true // Keep connections alive for better performance
         }
       },
       retry: {
@@ -64,6 +64,10 @@ export class LoadGenerator {
 
           // Use the controller's signal for the request
           const res = await client.get(path, { signal: controller.signal });
+          
+          // Critical: Consume response body to release the connection back to the pool
+          await res.text();
+
           const duration = performance.now() - start;
           const bytes = Number(res.headers.get('content-length') || 0);
           

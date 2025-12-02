@@ -96,17 +96,17 @@ export function createContract<T extends ContractDefinition>(
           if (endpoint.errors && err instanceof HttpError && err.response) {
               const schema = endpoint.errors[err.status];
               if (schema) {
-                  // Parse error body against schema
+                  let parsedError;
                   try {
                       const errorBody = await err.response.json();
-                      const parsedError = schema.parse(errorBody);
-                      throw new ContractError(err.status, parsedError, err);
+                      parsedError = schema.parse(errorBody);
                   } catch (parseErr) {
-                      // If parsing fails, throw original or parse error?
-                      // Throw original HttpError if body doesn't match schema?
-                      // Or wrap? Let's rethrow original if validation fails implies it's not the expected error format.
+                      // If parsing fails, throw original HttpError
                       throw err;
                   }
+                  
+                  // Throw typed ContractError if parsing succeeded
+                  throw new ContractError(err.status, parsedError, err);
               }
           }
           throw err;
