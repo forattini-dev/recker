@@ -1,5 +1,5 @@
 import { request } from 'undici';
-import { ReckerError } from '../core/errors.js';
+import { ProtocolError, NotFoundError } from '../core/errors.js';
 
 export type DoHProvider = 'cloudflare' | 'google' | 'quad9' | string;
 
@@ -42,15 +42,14 @@ export function createDoHLookup(provider: DoHProvider = 'cloudflare') {
       });
 
       if (statusCode !== 200) {
-        throw new ReckerError(
+        throw new ProtocolError(
           `DoH request failed with status ${statusCode}`,
-          undefined,
-          undefined,
-          [
-            'Verify the DNS-over-HTTPS endpoint URL.',
-            'Check network connectivity and TLS settings for the DoH provider.',
-            'Retry the request; some providers throttle bursts.'
-          ]
+          {
+            protocol: 'dns',
+            code: statusCode,
+            phase: 'doh-request',
+            retriable: statusCode >= 500 || statusCode === 429,
+          }
         );
       }
 
@@ -58,15 +57,11 @@ export function createDoHLookup(provider: DoHProvider = 'cloudflare') {
 
       if (data.Status !== 0 || !data.Answer || data.Answer.length === 0) {
         return callback(
-          new ReckerError(
+          new NotFoundError(
             `DNS lookup failed for ${hostname}`,
-            undefined,
-            undefined,
-            [
-              'Confirm the hostname is correct.',
-              'Check that the DoH provider is reachable.',
-              'Retry or fall back to system DNS if the provider is down.'
-            ]
+            {
+              resource: hostname,
+            }
           ),
           '',
           4
@@ -80,15 +75,11 @@ export function createDoHLookup(provider: DoHProvider = 'cloudflare') {
       }
 
       callback(
-        new ReckerError(
+        new NotFoundError(
           `No A record found for ${hostname}`,
-          undefined,
-          undefined,
-          [
-            'Verify the domain has an A record (or use AAAA for IPv6).',
-            'Check DNS propagation if the record was recently added.',
-            'Try an alternate resolver to rule out stale caches.'
-          ]
+          {
+            resource: `A:${hostname}`,
+          }
         ),
         '',
         4

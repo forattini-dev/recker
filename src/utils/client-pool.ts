@@ -1,5 +1,6 @@
 import { Client } from '../core/client.js';
 import type { ExtendedClientOptions } from '../core/client.js';
+import { UnsupportedError } from '../core/errors.js';
 
 /**
  * ClientPool - Reuse clients across multiple domains for better performance.
@@ -105,7 +106,9 @@ export class ClientPool {
       const methodFn = (client as any)[method.toLowerCase()];
 
       if (typeof methodFn !== 'function') {
-        throw new Error(`Unknown HTTP method: ${method}`);
+        throw new UnsupportedError(`Unknown HTTP method: ${method}`, {
+          feature: method,
+        });
       }
 
       return methodFn.call(client, path, options).json() as Promise<T>;

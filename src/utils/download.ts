@@ -2,7 +2,7 @@ import { createWriteStream, existsSync, statSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Client } from '../core/client.js';
 import type { ProgressCallback, RequestOptions } from '../types/index.js';
-import { ReckerError } from '../core/errors.js';
+import { DownloadError, StreamError } from '../core/errors.js';
 
 export interface DownloadToFileOptions {
   /**
@@ -59,15 +59,13 @@ export async function downloadToFile(
 
   const shouldAppend = resumeEnabled && existingSize > 0 && response.status === 206;
   if (resumeEnabled && existingSize > 0 && response.status === 416) {
-    throw new ReckerError(
+    throw new DownloadError(
       'Requested range not satisfiable for resume download.',
-      undefined,
-      response as any,
-      [
-        'Verify the destination file size matches the server content.',
-        'Delete the local file and retry without resume.',
-        'Ensure the server supports Range requests for this resource.'
-      ]
+      {
+        url,
+        statusCode: response.status,
+        retriable: false,
+      }
     );
   }
 
@@ -88,15 +86,12 @@ export async function downloadToFile(
 async function streamToFile(response: any, destination: string, append: boolean): Promise<number> {
   const nodeStream = response.toNodeStream();
   if (!nodeStream) {
-    throw new ReckerError(
+    throw new StreamError(
       'Response has no body to write',
-      undefined,
-      response as any,
-      [
-        'Ensure the request returned a body (avoid HEAD/204).',
-        'Check upstream for empty responses or errors.',
-        'Retry the download if the connection was interrupted.'
-      ]
+      {
+        streamType: 'download',
+        retriable: true,
+      }
     );
   }
 
