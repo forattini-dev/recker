@@ -3,6 +3,8 @@
  * These are reimplemented to avoid external dependencies.
  */
 
+import { ValidationError } from '../../core/errors.js';
+
 /**
  * Calculates cosine similarity between two vectors.
  * Returns a value between -1 and 1 (1 = identical).
@@ -20,7 +22,10 @@
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) {
-    throw new Error(`Vector length mismatch: ${a.length} vs ${b.length}`);
+    throw new ValidationError(`Vector length mismatch: ${a.length} vs ${b.length}`, {
+      field: 'vectorLength',
+      value: { a: a.length, b: b.length },
+    });
   }
 
   if (a.length === 0) {

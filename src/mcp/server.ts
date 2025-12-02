@@ -14,6 +14,7 @@ import type {
   MCPInitializeResponse,
   MCPToolsListResponse,
 } from './types.js';
+import { UnsupportedError } from '../core/errors.js';
 
 export type MCPTransportMode = 'stdio' | 'http' | 'sse';
 
@@ -1421,7 +1422,9 @@ const client = createClient({
       case 'sse':
         return this.startSSE();
       default:
-        throw new Error(`Unknown transport: ${this.options.transport}`);
+        throw new UnsupportedError(`Unknown transport: ${this.options.transport}`, {
+          feature: this.options.transport,
+        });
     }
   }
 

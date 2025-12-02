@@ -15,6 +15,7 @@
 import Fuse from 'fuse.js';
 import { cosineSimilarity, combineScores, levenshtein } from './math.js';
 import { loadEmbeddings, type LoadEmbeddingsOptions } from '../embeddings-loader.js';
+import { StateError } from '../../core/errors.js';
 import type {
   IndexedDoc,
   SearchResult,
@@ -135,7 +136,10 @@ export class HybridSearch {
     const { limit = 10, category, mode = 'hybrid', minScore = 0 } = options;
 
     if (!this.initialized) {
-      throw new Error('HybridSearch not initialized. Call initialize() first.');
+      throw new StateError('HybridSearch not initialized. Call initialize() first.', {
+        expectedState: 'initialized',
+        actualState: 'not-initialized',
+      });
     }
 
     // Clean query by removing stop words
