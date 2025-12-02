@@ -43,6 +43,7 @@ export const DEFAULT_UDP_OPTIONS: Required<BaseUDPTransportOptions> = {
   retransmissions: 3,
   maxPacketSize: 65507, // Max UDP payload size
   observability: true,
+  debug: false,
   localAddress: '',
   localPort: 0,
 };

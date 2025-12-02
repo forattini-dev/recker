@@ -18,9 +18,9 @@ export interface UDPResponseOptions {
 }
 
 /**
- * UDP Response implementation
+ * UDP Response wrapper
  */
-export class UDPResponseImpl implements UDPResponse {
+export class UDPResponseWrapper implements UDPResponse {
   private _buffer: Buffer;
   private _timings: UDPTimings;
   private _connection: UDPConnection;
@@ -148,8 +148,8 @@ export class UDPResponseImpl implements UDPResponse {
   /**
    * Clone the response
    */
-  clone(): UDPResponseImpl {
-    return new UDPResponseImpl(Buffer.from(this._buffer), {
+  clone(): UDPResponseWrapper {
+    return new UDPResponseWrapper(Buffer.from(this._buffer), {
       timings: { ...this._timings },
       connection: { ...this._connection },
       url: this._url,

@@ -130,6 +130,12 @@ export interface BaseUDPTransportOptions {
   observability?: boolean;
 
   /**
+   * Enable debug logging
+   * @default false
+   */
+  debug?: boolean;
+
+  /**
    * Bind to specific local address
    */
   localAddress?: string;

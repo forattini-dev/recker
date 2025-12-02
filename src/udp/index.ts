@@ -33,10 +33,10 @@
  */
 
 // Transport
-export { UDPTransport, UDPTransportImpl, createUDPClient, udp } from '../transport/udp.js';
+export { UDPClient, UDPTransport, createUDP, udp } from '../transport/udp.js';
 
 // Response
-export { UDPResponseImpl, StreamingUDPResponse } from '../transport/udp-response.js';
+export { UDPResponseWrapper, StreamingUDPResponse } from '../transport/udp-response.js';
 
 // Base classes
 export { BaseUDPTransport, udpRequestStorage } from '../transport/base-udp.js';

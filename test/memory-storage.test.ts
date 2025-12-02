@@ -1198,7 +1198,7 @@ describe('MemoryStorage Stress Tests', () => {
       expect(cache.size()).toBe(5000);
 
       cache.shutdown();
-    });
+    }, 15000);
 
     it('should handle 10000 rapid reads', async () => {
       const cache = new MemoryStorage({

@@ -7,9 +7,17 @@
  *
  * @example
  * ```typescript
- * import { ai, createAIClient } from 'recker/ai';
+ * import { createAI } from 'recker/ai';
  *
- * // Simple usage with default client
+ * // Create AI client
+ * const ai = createAI({
+ *   defaultProvider: 'openai',
+ *   providers: {
+ *     openai: { apiKey: process.env.OPENAI_API_KEY }
+ *   }
+ * });
+ *
+ * // Simple chat
  * const response = await ai.chat('Hello, how are you?');
  * console.log(response.content);
  *
@@ -23,7 +31,7 @@
  *
  * // Streaming
  * const stream = await ai.stream({
- *   model: 'gpt-5.1',
+ *   model: 'gpt-4o',
  *   messages: [{ role: 'user', content: 'Write a poem' }],
  * });
  *
@@ -41,23 +49,15 @@
  *
  * // Create specialized client
  * const codeClient = ai.extend({
- *   model: 'gpt-5.1',
+ *   model: 'gpt-4o',
  *   systemPrompt: 'You are a coding assistant.',
  *   temperature: 0,
- * });
- *
- * // Custom client with config
- * const myClient = createAIClient({
- *   defaultProvider: 'anthropic',
- *   timeout: { firstToken: 30000, total: 120000 },
- *   retry: { maxAttempts: 3, fallback: { 'claude-opus-4': 'claude-sonnet-4' } },
- *   debug: true,
  * });
  * ```
  */
 
 // Main client
-export { AIClientImpl, createAIClient, ai } from './client.js';
+export { UnifiedAIClient, createAI } from './client.js';
 
 // Providers
 export { BaseAIProvider, AIError, RateLimitError, ContextLengthError, OverloadedError, AuthenticationError } from './providers/base.js';

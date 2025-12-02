@@ -1,13 +1,13 @@
 import readline from 'node:readline';
 import pc from '../../utils/colors.js';
-import { createAIClient } from '../../ai/client.js';
+import { createAI } from '../../ai/client.js';
 import { ChatMessage } from '../../types/ai.js';
 
 export async function startAIChat(rl: readline.Interface, provider: string = 'openai', apiKey?: string, model?: string) {
   console.clear();
   console.log(pc.bold(pc.magenta(`🤖 Rek AI Chat (${provider})`)));
   console.log(pc.gray('Type your message. Ctrl+C to exit.'));
-  
+
   // Resolve API Key
   const envKey = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
   const key = apiKey || process.env[envKey];
@@ -21,7 +21,7 @@ Warning: No API Key found for ${provider}.`));
   }
 
   // Initialize Client
-  const client = createAIClient({
+  const client = createAI({
     defaultProvider: provider as any,
     providers: {
       [provider]: { apiKey: key }
