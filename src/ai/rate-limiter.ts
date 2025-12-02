@@ -10,6 +10,7 @@
  */
 
 import type { TokenRateLimitConfig, ChatOptions } from '../types/ai.js';
+import { QueueCancelledError } from '../core/errors.js';
 
 /**
  * Queued request
@@ -199,7 +200,9 @@ export class TokenRateLimiter {
    */
   clearQueue(): void {
     for (const req of this.queue) {
-      req.reject(new Error('Queue cleared'));
+      req.reject(new QueueCancelledError('Queue cleared', {
+        queueName: 'ai-rate-limiter',
+      }));
     }
     this.queue = [];
   }

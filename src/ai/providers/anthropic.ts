@@ -26,6 +26,7 @@ import {
   OverloadedError,
   AuthenticationError,
 } from './base.js';
+import { StreamError } from '../../core/errors.js';
 
 /**
  * Anthropic-specific configuration
@@ -401,7 +402,9 @@ export class AnthropicProvider extends BaseAIProvider {
   ): AIStream {
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('Response body is not readable');
+      throw new StreamError('Response body is not readable', {
+        streamType: 'anthropic-sse',
+      });
     }
 
     const decoder = new TextDecoder();
