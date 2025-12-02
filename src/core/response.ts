@@ -7,7 +7,7 @@ import { webToNodeStream } from '../utils/streaming.js';
 import { parseHeaders, type HeaderInfo, type CacheInfo, type RateLimitInfo } from '../utils/header-parser.js';
 import { parseLinkHeader, type LinkHeaderParser } from '../utils/link-header.js';
 import type { Readable } from 'node:stream';
-import { ReckerError } from './errors.js';
+import { StreamError } from './errors.js';
 
 export class HttpResponse<T = unknown> implements ReckerResponse<T> {
   public readonly timings?: Timings;
@@ -156,15 +156,12 @@ export class HttpResponse<T = unknown> implements ReckerResponse<T> {
   async pipe(destination: NodeJS.WritableStream): Promise<void> {
     const nodeStream = this.toNodeStream();
     if (!nodeStream) {
-      throw new ReckerError(
+      throw new StreamError(
         'Response has no body to pipe',
-        undefined,
-        this,
-        [
-          'Ensure the request method returns a body (e.g., not HEAD).',
-          'Check the upstream response status and headers.',
-          'Verify the request was not aborted before receiving a body.'
-        ]
+        {
+          streamType: 'response',
+          retriable: true,
+        }
       );
     }
 

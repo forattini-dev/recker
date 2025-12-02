@@ -4,7 +4,7 @@ import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { tryFn } from '../utils/try-fn.js';
-import { ReckerError } from './errors.js';
+import { StreamError } from './errors.js';
 
 export class RequestPromise<T = unknown> implements Promise<ReckerResponse<T>> {
   private promise: Promise<ReckerResponse<T>>;
@@ -72,15 +72,12 @@ export class RequestPromise<T = unknown> implements Promise<ReckerResponse<T>> {
     const response = await this.promise;
     const body = response.read();
     if (!body) {
-      throw new ReckerError(
+      throw new StreamError(
         'Response has no body to write',
-        undefined,
-        response,
-        [
-          'Ensure the request returned a body (avoid HEAD/204).',
-          'Check if the request was aborted before the body streamed.',
-          'Verify upstream is not sending an empty response.'
-        ]
+        {
+          streamType: 'response',
+          retriable: true,
+        }
       );
     }
     
