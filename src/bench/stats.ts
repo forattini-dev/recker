@@ -1,19 +1,39 @@
+/**
+ * Error entry with status code and count
+ */
+export interface ErrorEntry {
+  status: number;      // HTTP status code (0 for network errors)
+  message: string;     // Error message
+  count: number;       // How many times this error occurred
+  lastSeen: number;    // Timestamp of last occurrence
+}
+
 export class LoadStats {
   totalRequests = 0;
   successful = 0;
   failed = 0;
   bytesTransferred = 0;
-  
+
   statusCodes: Record<number, number> = {};
-  errors: Record<string, number> = {};
-  
+
+  /**
+   * Errors indexed by "status:message" key for deduplication
+   */
+  private errorMap = new Map<string, ErrorEntry>();
+
+  /**
+   * Recent errors for real-time display (last N unique errors)
+   */
+  private recentErrors: ErrorEntry[] = [];
+  private readonly maxRecentErrors = 10;
+
   // Latency tracking (ms)
   latencies: number[] = [];
-  
+
   // Snapshot for RPS calculation
   private lastSnapshotTime = Date.now();
   private lastSnapshotRequests = 0;
-  
+
   // Real-time metric
   activeUsers = 0;
 
@@ -24,10 +44,7 @@ export class LoadStats {
 
     if (error || status >= 400) {
       this.failed++;
-      if (error) {
-        const msg = error.message || 'Unknown Error';
-        this.errors[msg] = (this.errors[msg] || 0) + 1;
-      }
+      this.trackError(status, error);
     } else {
       this.successful++;
     }
@@ -35,6 +52,111 @@ export class LoadStats {
     if (status) {
       this.statusCodes[status] = (this.statusCodes[status] || 0) + 1;
     }
+  }
+
+  /**
+   * Track an error with its status code
+   */
+  private trackError(status: number, error?: Error) {
+    const message = this.formatErrorMessage(status, error);
+    const key = `${status}:${message}`;
+    const now = Date.now();
+
+    const existing = this.errorMap.get(key);
+    if (existing) {
+      existing.count++;
+      existing.lastSeen = now;
+    } else {
+      const entry: ErrorEntry = { status, message, count: 1, lastSeen: now };
+      this.errorMap.set(key, entry);
+
+      // Add to recent errors (keep most recent at the end)
+      this.recentErrors.push(entry);
+      if (this.recentErrors.length > this.maxRecentErrors) {
+        this.recentErrors.shift();
+      }
+    }
+  }
+
+  /**
+   * Format error message with status code context
+   */
+  private formatErrorMessage(status: number, error?: Error): string {
+    if (error) {
+      // Clean up common error messages
+      let msg = error.message || 'Unknown Error';
+
+      // Extract useful info from common errors
+      if (msg.includes('ECONNREFUSED')) return 'Connection refused';
+      if (msg.includes('ECONNRESET')) return 'Connection reset';
+      if (msg.includes('ETIMEDOUT')) return 'Connection timeout';
+      if (msg.includes('ENOTFOUND')) return 'DNS lookup failed';
+      if (msg.includes('UND_ERR_SOCKET')) return 'Socket error';
+      if (msg.includes('UND_ERR_HEADERS_TIMEOUT')) return 'Headers timeout';
+      if (msg.includes('UND_ERR_BODY_TIMEOUT')) return 'Body timeout';
+      if (msg.includes('UND_ERR_CONNECT_TIMEOUT')) return 'Connect timeout';
+      if (msg.includes('AbortError') || msg.includes('aborted')) return 'Request aborted';
+
+      // Truncate long messages
+      if (msg.length > 50) {
+        msg = msg.substring(0, 47) + '...';
+      }
+      return msg;
+    }
+
+    // HTTP status code without explicit error
+    if (status >= 400) {
+      return this.getStatusText(status);
+    }
+
+    return 'Unknown Error';
+  }
+
+  /**
+   * Get human-readable status text
+   */
+  private getStatusText(status: number): string {
+    const texts: Record<number, string> = {
+      400: 'Bad Request',
+      401: 'Unauthorized',
+      403: 'Forbidden',
+      404: 'Not Found',
+      405: 'Method Not Allowed',
+      408: 'Request Timeout',
+      429: 'Too Many Requests',
+      500: 'Internal Server Error',
+      502: 'Bad Gateway',
+      503: 'Service Unavailable',
+      504: 'Gateway Timeout',
+    };
+    return texts[status] || `HTTP ${status}`;
+  }
+
+  /**
+   * Get all errors sorted by count (descending)
+   */
+  getErrors(): ErrorEntry[] {
+    return Array.from(this.errorMap.values())
+      .sort((a, b) => b.count - a.count);
+  }
+
+  /**
+   * Get recent errors for real-time display
+   */
+  getRecentErrors(): ErrorEntry[] {
+    return [...this.recentErrors];
+  }
+
+  /**
+   * Legacy errors property for backwards compatibility
+   */
+  get errors(): Record<string, number> {
+    const result: Record<string, number> = {};
+    for (const entry of this.errorMap.values()) {
+      const key = entry.status > 0 ? `[${entry.status}] ${entry.message}` : entry.message;
+      result[key] = entry.count;
+    }
+    return result;
   }
 
   getSnapshot() {

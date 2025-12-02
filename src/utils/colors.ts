@@ -57,6 +57,16 @@ export const cyan = code(36, 39);
 export const white = code(37, 39);
 export const gray = code(90, 39);
 
+// Background colors
+export const bgBlack = code(40, 49);
+export const bgRed = code(41, 49);
+export const bgGreen = code(42, 49);
+export const bgYellow = code(43, 49);
+export const bgBlue = code(44, 49);
+export const bgMagenta = code(45, 49);
+export const bgCyan = code(46, 49);
+export const bgWhite = code(47, 49);
+
 // Default export matching picocolors API
 const colors = {
   reset,
@@ -70,6 +80,15 @@ const colors = {
   cyan,
   white,
   gray,
+  // Background
+  bgBlack,
+  bgRed,
+  bgGreen,
+  bgYellow,
+  bgBlue,
+  bgMagenta,
+  bgCyan,
+  bgWhite,
   // Aliases
   grey: gray,
 };

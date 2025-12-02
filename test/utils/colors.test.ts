@@ -11,6 +11,14 @@ import colors, {
   cyan,
   white,
   gray,
+  bgBlack,
+  bgRed,
+  bgGreen,
+  bgYellow,
+  bgBlue,
+  bgMagenta,
+  bgCyan,
+  bgWhite,
 } from '../../src/utils/colors.js';
 
 describe('Colors Utility', () => {
@@ -54,6 +62,34 @@ describe('Colors Utility', () => {
       expect(colors.white).toBe(white);
       expect(colors.gray).toBe(gray);
       expect(colors.grey).toBe(gray); // alias
+    });
+
+    it('should export all background color functions', () => {
+      expect(typeof bgBlack).toBe('function');
+      expect(typeof bgRed).toBe('function');
+      expect(typeof bgGreen).toBe('function');
+      expect(typeof bgYellow).toBe('function');
+      expect(typeof bgBlue).toBe('function');
+      expect(typeof bgMagenta).toBe('function');
+      expect(typeof bgCyan).toBe('function');
+      expect(typeof bgWhite).toBe('function');
+    });
+
+    it('should have background colors in default export', () => {
+      expect(colors.bgBlack).toBe(bgBlack);
+      expect(colors.bgRed).toBe(bgRed);
+      expect(colors.bgGreen).toBe(bgGreen);
+      expect(colors.bgYellow).toBe(bgYellow);
+      expect(colors.bgBlue).toBe(bgBlue);
+      expect(colors.bgMagenta).toBe(bgMagenta);
+      expect(colors.bgCyan).toBe(bgCyan);
+      expect(colors.bgWhite).toBe(bgWhite);
+    });
+
+    it('should support combining foreground and background', () => {
+      const result = bgRed(white('error'));
+      expect(typeof result).toBe('string');
+      expect(result).toContain('error');
     });
 
     it('should return strings from color functions', () => {
