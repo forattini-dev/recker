@@ -99,11 +99,12 @@ describe('LoadStats', () => {
       const errors = stats.getErrors();
       const messages = errors.map(e => e.message);
 
+      // Compact CamelCase format for cleaner CLI output
       expect(messages).toContain('Unauthorized');
       expect(messages).toContain('Forbidden');
-      expect(messages).toContain('Too Many Requests');
-      expect(messages).toContain('Bad Gateway');
-      expect(messages).toContain('Service Unavailable');
+      expect(messages).toContain('TooManyRequests');
+      expect(messages).toContain('BadGateway');
+      expect(messages).toContain('ServiceUnavailable');
     });
 
     it('should sort errors by count (descending)', () => {

@@ -129,7 +129,10 @@ describe('DNS Toolkit', () => {
 
       const result = await getSecurityRecords('example.com');
 
-      expect(result.mx).toEqual(['mail1.example.com', 'mail2.example.com']);
+      expect(result.mx).toEqual([
+        { priority: 10, exchange: 'mail1.example.com' },
+        { priority: 20, exchange: 'mail2.example.com' }
+      ]);
     });
 
     it('should return all security records combined', async () => {
@@ -152,7 +155,7 @@ describe('DNS Toolkit', () => {
       expect(result.dmarc).toBe('v=DMARC1; p=quarantine');
       expect(result.caa?.issue).toEqual(['letsencrypt.org']);
       expect(result.caa?.iodef).toBe('mailto:caa@example.com');
-      expect(result.mx).toEqual(['aspmx.l.google.com']);
+      expect(result.mx).toEqual([{ priority: 10, exchange: 'aspmx.l.google.com' }]);
       expect(result.txt).toHaveLength(2);
     });
 

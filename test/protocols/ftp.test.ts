@@ -207,7 +207,7 @@ describe('FTP Protocol Utility', () => {
       const result = await client.connect();
 
       expect(result.success).toBe(false);
-      expect(result.message).toContain('timeout');
+      expect(result.message.toLowerCase()).toContain('timed out');
     });
   });
 
