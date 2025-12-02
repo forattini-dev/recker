@@ -6,14 +6,17 @@ import { requireOptional } from '../../utils/optional-require.js';
 import { createClient } from '../../core/client.js';
 import { startInteractiveWebSocket } from './websocket.js';
 import { whois, isDomainAvailable } from '../../utils/whois.js';
-import { inspectTLS } from '../../utils/tls-inspector.js';
-import { getSecurityRecords } from '../../utils/dns-toolkit.js';
-import { rdap } from '../../utils/rdap.js';
+import { inspectTLS, TLSInfo } from '../../utils/tls-inspector.js'; // Import TLSInfo
+import { getSecurityRecords, DnsSecurityRecords } from '../../utils/dns-toolkit.js';
+import { rdap } from '../../utils/rdap.js'; // Import RDAPResult
 import { ScrapeDocument } from '../../scrape/document.js';
 import colors from '../../utils/colors.js';
 import { getShellSearch } from './shell-search.js';
 import { openSearchPanel } from './search-panel.js';
 import { ScrollBuffer, parseScrollKey, parseMouseScroll, enableMouseReporting, disableMouseReporting } from './scroll-buffer.js';
+import { analyzeSecurityHeaders, SecurityReport } from '../../utils/security-grader.js'; // Import security grader
+import { getIpInfo, IpInfo } from '../../utils/ip-intel.js'; // Import IP Intel
+import { checkPropagation, formatPropagationReport, PropagationResult } from '../../dns/propagation.js'; // Import DNS Propagation
 
 // Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
@@ -118,7 +121,7 @@ export class RekShell {
     const commands = [
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
-      'whois', 'tls', 'ssl', 'dns', 'dns:propagate', 'rdap', 'ping',
+      'whois', 'tls', 'ssl', 'security', 'ip', 'dns', 'dns:propagate', 'dns:email', 'rdap', 'ping',
       'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
       '?', 'search', 'suggest', 'example',
       'help', 'clear', 'exit', 'set', 'url', 'vars', 'env'
@@ -485,11 +488,20 @@ export class RekShell {
       case 'ssl':
         await this.runTLS(parts[1], parts[2] ? parseInt(parts[2]) : 443);
         return;
+      case 'security':
+        await this.runSecurityGrader(parts[1]);
+        return;
+      case 'ip':
+        await this.runIpIntelligence(parts[1]);
+        return;
       case 'dns':
         await this.runDNS(parts[1]);
         return;
       case 'dns:propagate':
         await this.runDNSPropagation(parts[1], parts[2]);
+        return;
+      case 'dns:email':
+        await this.runDnsEmailCheck(parts[1], parts[2]);
         return;
       case 'rdap':
         await this.runRDAP(parts[1]);
@@ -1131,6 +1143,102 @@ export class RekShell {
     console.log('');
   }
 
+  private async runSecurityGrader(url?: string) {
+    if (!url) {
+      url = this.baseUrl || '';
+      if (!url) {
+        console.log(colors.yellow('Usage: security <url>'));
+        console.log(colors.gray('  Examples: security google.com | security https://example.com'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
+    } else if (!url.startsWith('http')) {
+      url = `https://${url}`;
+    }
+
+    console.log(colors.gray(`Analyzing security headers for ${url}...`));
+    
+    try {
+      const { analyzeSecurityHeaders } = await import('../../utils/security-grader.js');
+      // Use client from constructor
+      const res = await this.client.get(url); 
+      
+      const report = analyzeSecurityHeaders(res.headers);
+      
+      // Color grade
+      let gradeColor = colors.red;
+      if (report.grade.startsWith('A')) gradeColor = colors.green;
+      else if (report.grade.startsWith('B')) gradeColor = colors.blue;
+      else if (report.grade.startsWith('C')) gradeColor = colors.yellow;
+      
+      console.log(`
+${colors.bold(colors.cyan('🛡️  Security Headers Report'))}
+Grade: ${gradeColor(colors.bold(report.grade))}  (${report.score}/100)
+
+${colors.bold('Details:')}`);
+
+      report.details.forEach(item => {
+        const icon = item.status === 'pass' ? colors.green('✔') : item.status === 'warn' ? colors.yellow('⚠') : colors.red('✖');
+        const headerName = colors.bold(item.header);
+        const value = item.value ? colors.gray(`= ${item.value.length > 50 ? item.value.slice(0, 47) + '...' : item.value}`) : colors.gray('(missing)');
+        
+        console.log(`  ${icon} ${headerName} ${value}`);
+        if (item.status !== 'pass') {
+           console.log(`      ${colors.red('→')} ${item.message}`);
+        }
+      });
+      console.log('');
+      this.lastResponse = report;
+
+    } catch (error: any) {
+      console.error(colors.red(`Analysis failed: ${error.message}`));
+    }
+    console.log(''); // Spacer
+  }
+
+  private async runIpIntelligence(address?: string) {
+    if (!address) {
+      console.log(colors.yellow('Usage: ip <address>'));
+      console.log(colors.gray('  Examples: ip 8.8.8.8 | ip 192.168.1.1'));
+      return;
+    }
+
+    console.log(colors.gray(`Fetching intelligence for ${address}...`));
+    
+    try {
+      const { getIpInfo } = await import('../../utils/ip-intel.js');
+      const info = await getIpInfo(address);
+      
+      if (info.bogon) {
+          console.log(colors.yellow(`\n⚠  ${address} is a Bogon/Private IP.`));
+          this.lastResponse = info;
+          return;
+      }
+
+      console.log(`
+${colors.bold(colors.cyan('🌍 IP Intelligence Report'))}
+
+${colors.bold('Location:')}
+  ${colors.gray('City:')}      ${info.city || 'N/A'}
+  ${colors.gray('Region:')}    ${info.region || 'N/A'}
+  ${colors.gray('Country:')}   ${info.country || 'N/A'}
+  ${colors.gray('Timezone:')}  ${info.timezone || 'N/A'}
+  ${colors.gray('Coords:')}    ${info.loc ? colors.cyan(info.loc) : 'N/A'}
+
+${colors.bold('Network:')}
+  ${colors.gray('IP:')}        ${info.ip}
+  ${colors.gray('Hostname:')}  ${info.hostname || 'N/A'}
+  ${colors.gray('ASN/Org:')}   ${info.org || 'N/A'}
+  ${colors.gray('Anycast:')}   ${info.anycast ? colors.green('Yes') : colors.gray('No')}
+`);
+      this.lastResponse = info;
+
+    } catch (error: any) {
+      console.error(colors.red(`IP Lookup Failed: ${error.message}`));
+    }
+    console.log(''); // Spacer
+  }
+
   private async runDNS(domain?: string) {
     if (!domain) {
       domain = this.getBaseDomain() || '';
@@ -1221,11 +1329,83 @@ export class RekShell {
     
     try {
       const { checkPropagation, formatPropagationReport } = await import('../../dns/propagation.js');
-      const results = await checkPropagation(domain, type);
+      const results = await checkPropagation(domain, type); // Pass original domain, checkPropagation sanitizes internally
       console.log(formatPropagationReport(results, domain, type));
       this.lastResponse = results;
     } catch (error: any) {
       console.error(colors.red(`Propagation check failed: ${error.message}`));
+    }
+  }
+
+  private async runDnsEmailCheck(domain?: string, selector?: string) {
+    if (!domain) {
+      domain = this.getBaseDomain() || '';
+      if (!domain) {
+        console.log(colors.yellow('Usage: dns:email <domain> [dkim-selector]'));
+        console.log(colors.gray('  Examples: dns:email google.com | dns:email github.com google'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
+    }
+
+    console.log(colors.gray(`Checking email security for ${domain}...`));
+    const startTime = performance.now();
+
+    try {
+      const { validateSpf, validateDmarc, checkDkim } = await import('../../utils/dns-toolkit.js');
+
+      // Run all checks in parallel
+      const [spf, dmarc, dkim] = await Promise.all([
+        validateSpf(domain),
+        validateDmarc(domain),
+        checkDkim(domain, selector || 'default')
+      ]);
+
+      const duration = Math.round(performance.now() - startTime);
+      console.log(colors.green(`✔ Email security check completed`) + colors.gray(` (${duration}ms)\n`));
+
+      // SPF Results
+      console.log(colors.bold('SPF:'));
+      if (spf.valid) {
+        console.log(`  ${colors.green('✔')} ${spf.record || 'No record'}`);
+      } else {
+        console.log(`  ${colors.red('✖')} ${spf.errors?.join(', ') || 'Invalid'}`);
+      }
+      if (spf.warnings?.length) {
+        spf.warnings.forEach((w: string) => console.log(`  ${colors.yellow('⚠')} ${w}`));
+      }
+
+      // DMARC Results
+      console.log(colors.bold('\nDMARC:'));
+      if (dmarc.valid) {
+        console.log(`  ${colors.green('✔')} Policy: ${dmarc.policy || 'none'}`);
+        if (dmarc.percentage !== undefined && dmarc.percentage < 100) {
+          console.log(`  ${colors.yellow('⚠')} Only ${dmarc.percentage}% of emails affected`);
+        }
+      } else {
+        console.log(`  ${colors.red('✖')} No DMARC record found`);
+      }
+      if (dmarc.warnings?.length) {
+        dmarc.warnings.forEach((w: string) => console.log(`  ${colors.yellow('⚠')} ${w}`));
+      }
+
+      // DKIM Results
+      console.log(colors.bold(`\nDKIM (${selector || 'default'}):`));
+      if (dkim.found) {
+        console.log(`  ${colors.green('✔')} Record found`);
+        if (dkim.publicKey) {
+          const keyPreview = dkim.publicKey.substring(0, 40) + '...';
+          console.log(`  ${colors.gray('Key:')} ${keyPreview}`);
+        }
+      } else {
+        console.log(`  ${colors.yellow('⚠')} No DKIM record for selector "${selector || 'default'}"`);
+        console.log(`  ${colors.gray('Try: dns:email ' + domain + ' <selector>')}`);
+      }
+
+      console.log('');
+      this.lastResponse = { spf, dmarc, dkim };
+    } catch (error: any) {
+      console.error(colors.red(`Email security check failed: ${error.message}`));
     }
   }
 

@@ -1,5 +1,5 @@
 import * as presets from '../presets/index.js';
-import pc from '../utils/colors.js';
+import colors from '../utils/colors.js';
 
 // Map preset names to required environment variables
 const ENV_MAPPING: Record<string, string[]> = {
@@ -19,7 +19,7 @@ export function resolvePreset(name: string) {
   const presetFn = (presets as any)[name];
   
   if (!presetFn) {
-    console.error(pc.red(`Error: Unknown preset '@${name}'`));
+    console.error(colors.red(`Error: Unknown preset '@${name}'`));
     process.exit(1);
   }
 
@@ -31,7 +31,7 @@ export function resolvePreset(name: string) {
     for (const envVar of requiredEnvs) {
       const value = process.env[envVar];
       if (!value) {
-        console.error(pc.yellow(`Warning: Missing env variable ${envVar} for preset @${name}`));
+        console.error(colors.yellow(`Warning: Missing env variable ${envVar} for preset @${name}`));
         missing = true;
       } else {
         // Heuristic: map env var to option name
@@ -43,14 +43,14 @@ export function resolvePreset(name: string) {
     }
     
     if (missing) {
-       console.log(pc.gray(`Tip: export ${requiredEnvs.join('=... ')}=...`));
+       console.log(colors.gray(`Tip: export ${requiredEnvs.join('=... ')}=...`));
     }
   }
 
   try {
     return presetFn(options);
   } catch (error: any) {
-    console.error(pc.red(`Error initializing preset @${name}: ${error.message}`));
+    console.error(colors.red(`Error initializing preset @${name}: ${error.message}`));
     process.exit(1);
   }
 }
