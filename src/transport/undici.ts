@@ -1,7 +1,7 @@
 import { request as undiciRequest, errors as undiciErrors, ProxyAgent, Agent, Client } from 'undici';
 import { ConnectionInfo, ReckerRequest, ReckerResponse, Timings, Transport, ProxyOptions, HTTP2Options, DNSOptions, AgentOptions, TLSOptions, ProgressCallback, RedirectInfo, TimeoutOptions } from '../types/index.js';
 import { HttpResponse } from '../core/response.js';
-import { NetworkError, TimeoutError, ReckerError } from '../core/errors.js';
+import { NetworkError, TimeoutError, MaxSizeExceededError } from '../core/errors.js';
 import { performance } from 'perf_hooks';
 import { AsyncLocalStorage } from 'async_hooks';
 import { channel } from 'node:diagnostics_channel';
@@ -726,16 +726,10 @@ export class UndiciTransport implements Transport {
         const code = error.code || error?.cause?.code;
 
         if (code === 'UND_ERR_HEADERS_OVERFLOW') {
-          throw new ReckerError(
-            'Response headers exceeded the maximum allowed size',
-            req,
+          throw new MaxSizeExceededError(
+            16 * 1024, // default max header size
             undefined,
-            [
-              'Reduce response header size or adjust maxHeaderSize in agent configuration.',
-              'Check for runaway set-cookie or debug headers.',
-              'Verify upstream is not sending excessive headers.'
-            ],
-            false
+            req
           );
         }
 
@@ -999,16 +993,10 @@ export class UndiciTransport implements Transport {
       const code = error.code || error?.cause?.code;
 
       if (code === 'UND_ERR_HEADERS_OVERFLOW') {
-        throw new ReckerError(
-          'Response headers exceeded the maximum allowed size',
-          req,
+        throw new MaxSizeExceededError(
+          16 * 1024, // default max header size
           undefined,
-          [
-            'Reduce response header size or adjust maxHeaderSize in agent configuration.',
-            'Check for runaway set-cookie or debug headers.',
-            'Verify upstream is not sending excessive headers.'
-          ],
-          false
+          req
         );
       }
 

@@ -10,7 +10,7 @@ import type { Dispatcher } from 'undici';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { nodeToWebStream, webToNodeStream } from '../utils/streaming.js';
-import { ReckerError } from '../core/errors.js';
+import { StateError, StreamError, ConnectionError } from '../core/errors.js';
 
 export interface WebSocketOptions {
   /**
@@ -188,15 +188,12 @@ export class ReckerWebSocket extends EventEmitter {
         this.ws.addEventListener('error', (event) => {
           const err = event.error instanceof Error
             ? event.error
-            : new ReckerError(
+            : new ConnectionError(
                 'WebSocket connection error',
-                undefined,
-                undefined,
-                [
-                  'Verify the WebSocket endpoint URL and protocol (ws/wss).',
-                  'Check proxy/TLS settings if connecting through a proxy.',
-                  'Inspect server logs for handshake failures.'
-                ]
+                {
+                  host: this.url,
+                  retriable: true,
+                }
               );
           this.emit('error', err);
           reject(err);
@@ -213,15 +210,12 @@ export class ReckerWebSocket extends EventEmitter {
    */
   async send(data: string | Buffer | ArrayBuffer | ArrayBufferView, options?: { awaitDrain?: boolean; highWaterMark?: number }): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      throw new ReckerError(
+      throw new StateError(
         'WebSocket is not connected',
-        undefined,
-        undefined,
-        [
-          'Call connect() before sending messages.',
-          'Listen to the open event to ensure the socket is ready.',
-          'Check for prior connection errors or closed states.'
-        ]
+        {
+          expectedState: 'open',
+          actualState: this.ws ? 'closed' : 'not-created',
+        }
       );
     }
 
@@ -333,15 +327,12 @@ export class ReckerWebSocket extends EventEmitter {
   async pipeTo(destination: NodeJS.WritableStream): Promise<void> {
     const readable = this.toReadable();
     if (!readable) {
-      throw new ReckerError(
+      throw new StreamError(
         'WebSocket has no readable stream',
-        undefined,
-        undefined,
-        [
-          'Ensure the WebSocket is connected before piping.',
-          'Verify the runtime supports readable streams on WebSocket.',
-          'Fallback to event-based message handling if streaming is unavailable.'
-        ]
+        {
+          streamType: 'websocket',
+          retriable: false,
+        }
       );
     }
     await pipeline(readable, destination);

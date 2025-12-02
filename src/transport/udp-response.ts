@@ -7,6 +7,7 @@
 
 import type { ReckerResponse, SSEEvent, ProgressEvent } from '../types/index.js';
 import type { UDPTimings, UDPConnection, UDPResponse } from '../types/udp.js';
+import { UnsupportedError, StreamError } from '../core/errors.js';
 
 /**
  * Options for creating a UDP response
@@ -160,7 +161,9 @@ export class UDPResponseWrapper implements UDPResponse {
    * SSE is not applicable to UDP
    */
   async *sse(): AsyncGenerator<SSEEvent> {
-    throw new Error('SSE is not supported for UDP responses');
+    throw new UnsupportedError('SSE is not supported for UDP responses', {
+      feature: 'SSE',
+    });
   }
 
   /**
@@ -259,7 +262,9 @@ export class StreamingUDPResponse implements UDPResponse {
    */
   pushPacket(packet: Buffer): void {
     if (this._complete) {
-      throw new Error('Cannot push to completed stream');
+      throw new StreamError('Cannot push to completed stream', {
+        streamType: 'udp',
+      });
     }
 
     // If someone is waiting, give them the packet
@@ -343,7 +348,9 @@ export class StreamingUDPResponse implements UDPResponse {
   }
 
   async *sse(): AsyncGenerator<SSEEvent> {
-    throw new Error('SSE is not supported for UDP responses');
+    throw new UnsupportedError('SSE is not supported for UDP responses', {
+      feature: 'SSE',
+    });
   }
 
   async *download(): AsyncGenerator<ProgressEvent> {
