@@ -50,7 +50,8 @@ export type TimeoutPhase =
   | 'socket'        // Socket assignment from pool
   | 'send'          // Request body upload
   | 'response'      // First byte (TTFB)
-  | 'request';      // Total request time
+  | 'request'       // Total request time
+  | 'webrtc-connect'; // WebRTC peer connection
 
 /**
  * Rich timeout error with phase information
@@ -96,7 +97,8 @@ export class TimeoutError extends ReckerError {
       socket: 'Socket assignment timed out (connection pool exhausted)',
       send: 'Request body upload timed out',
       response: 'Waiting for response timed out (TTFB)',
-      request: 'Request timed out (total time exceeded)'
+      request: 'Request timed out (total time exceeded)',
+      'webrtc-connect': 'WebRTC peer connection timed out'
     };
 
     let message = phaseMessages[phase];
@@ -164,4 +166,439 @@ export class MaxSizeExceededError extends ReckerError {
 
 function isRetryableStatus(status: number): boolean {
   return [408, 425, 429, 500, 502, 503, 504].includes(status);
+}
+
+/**
+ * Error thrown when a request is aborted (via AbortController or timeout)
+ */
+export class AbortError extends ReckerError {
+  reason?: string;
+
+  constructor(reason?: string, request?: ReckerRequest) {
+    super(
+      reason || 'Request was aborted',
+      request,
+      undefined,
+      [
+        'Check if the abort was intentional (user-triggered or timeout).',
+        'Increase timeout if the request needs more time to complete.',
+        'Ensure AbortController is not being triggered prematurely.'
+      ],
+      true
+    );
+    this.name = 'AbortError';
+    this.reason = reason;
+  }
+}
+
+/**
+ * Error thrown when connection to a service fails
+ */
+export class ConnectionError extends ReckerError {
+  host?: string;
+  port?: number;
+  code?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      host?: string;
+      port?: number;
+      code?: string;
+      retriable?: boolean;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Verify the host and port are correct and the service is running.',
+        'Check network connectivity and firewall rules.',
+        'Ensure the service is accepting connections on the specified port.'
+      ],
+      options?.retriable ?? true
+    );
+    this.name = 'ConnectionError';
+    this.host = options?.host;
+    this.port = options?.port;
+    this.code = options?.code;
+  }
+}
+
+/**
+ * Error thrown when authentication fails
+ */
+export class AuthenticationError extends ReckerError {
+  authType?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      authType?: string;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Verify credentials (username/password, API key, or certificate).',
+        'Check if the account is active and has proper permissions.',
+        'Ensure the authentication method matches what the server expects.'
+      ],
+      false
+    );
+    this.name = 'AuthenticationError';
+    this.authType = options?.authType;
+  }
+}
+
+/**
+ * Error thrown when a protocol-specific operation fails
+ */
+export class ProtocolError extends ReckerError {
+  protocol: string;
+  code?: string | number;
+  phase?: string;
+
+  constructor(
+    message: string,
+    options: {
+      protocol: string;
+      code?: string | number;
+      phase?: string;
+      retriable?: boolean;
+      request?: ReckerRequest;
+    }
+  ) {
+    const protocolSuggestions: Record<string, string[]> = {
+      ftp: [
+        'Ensure the FTP server is running and accessible.',
+        'Check file/directory permissions on the server.',
+        'Verify the path exists and is correct.'
+      ],
+      sftp: [
+        'Verify SSH credentials and key permissions.',
+        'Check that the SFTP subsystem is enabled on the server.',
+        'Ensure the target path exists and is accessible.'
+      ],
+      telnet: [
+        'Verify the Telnet service is running on the target host.',
+        'Check login credentials and terminal settings.',
+        'Ensure the expected prompts match the server output.'
+      ],
+      udp: [
+        'UDP is connectionless - verify the target is listening.',
+        'Check firewall rules for UDP traffic.',
+        'Ensure the message format matches what the server expects.'
+      ],
+      webrtc: [
+        'Verify the signaling server is reachable.',
+        'Check ICE server configuration (STUN/TURN).',
+        'Ensure both peers have compatible codecs and capabilities.'
+      ],
+      dns: [
+        'Verify the DNS server is reachable.',
+        'Check if the domain exists and has the requested record type.',
+        'Try an alternative DNS resolver.'
+      ],
+      tls: [
+        'Verify the certificate is valid and not expired.',
+        'Check that the hostname matches the certificate.',
+        'Ensure TLS version and cipher suites are compatible.'
+      ]
+    };
+
+    const suggestions = protocolSuggestions[options.protocol.toLowerCase()] || [
+      'Check the protocol-specific documentation.',
+      'Verify the server supports the requested operation.',
+      'Review the error code for specific guidance.'
+    ];
+
+    super(message, options.request, undefined, suggestions, options.retriable ?? false);
+    this.name = 'ProtocolError';
+    this.protocol = options.protocol;
+    this.code = options.code;
+    this.phase = options.phase;
+  }
+}
+
+/**
+ * Error thrown when a resource is not found
+ */
+export class NotFoundError extends ReckerError {
+  resource?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      resource?: string;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Verify the resource path or identifier is correct.',
+        'Check if the resource was deleted or moved.',
+        'Ensure you have permission to access this resource.'
+      ],
+      false
+    );
+    this.name = 'NotFoundError';
+    this.resource = options?.resource;
+  }
+}
+
+/**
+ * Error thrown when a state precondition is not met
+ */
+export class StateError extends ReckerError {
+  expectedState?: string;
+  actualState?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      expectedState?: string;
+      actualState?: string;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Ensure the required setup/initialization step was performed.',
+        'Check that operations are called in the correct order.',
+        'Verify the connection or resource is still valid.'
+      ],
+      false
+    );
+    this.name = 'StateError';
+    this.expectedState = options?.expectedState;
+    this.actualState = options?.actualState;
+  }
+}
+
+/**
+ * Error thrown when input validation fails
+ */
+export class ValidationError extends ReckerError {
+  field?: string;
+  value?: unknown;
+
+  constructor(
+    message: string,
+    options?: {
+      field?: string;
+      value?: unknown;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Check the input format and constraints.',
+        'Refer to the API documentation for valid values.',
+        'Ensure required fields are provided.'
+      ],
+      false
+    );
+    this.name = 'ValidationError';
+    this.field = options?.field;
+    this.value = options?.value;
+  }
+}
+
+/**
+ * Error thrown when configuration is invalid or missing
+ */
+export class ConfigurationError extends ReckerError {
+  configKey?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      configKey?: string;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Check the configuration file or environment variables.',
+        'Ensure all required configuration keys are set.',
+        'Verify the configuration values are in the correct format.'
+      ],
+      false
+    );
+    this.name = 'ConfigurationError';
+    this.configKey = options?.configKey;
+  }
+}
+
+/**
+ * Error thrown when an unsupported operation is attempted
+ */
+export class UnsupportedError extends ReckerError {
+  feature?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      feature?: string;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Check if this feature is supported in the current context.',
+        'Refer to the documentation for supported operations.',
+        'Consider using an alternative approach.'
+      ],
+      false
+    );
+    this.name = 'UnsupportedError';
+    this.feature = options?.feature;
+  }
+}
+
+/**
+ * Error thrown when a parse operation fails
+ */
+export class ParseError extends ReckerError {
+  format?: string;
+  position?: number;
+
+  constructor(
+    message: string,
+    options?: {
+      format?: string;
+      position?: number;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Verify the input is in the expected format.',
+        'Check for malformed or corrupted data.',
+        'Ensure the encoding is correct (UTF-8, etc.).'
+      ],
+      false
+    );
+    this.name = 'ParseError';
+    this.format = options?.format;
+    this.position = options?.position;
+  }
+}
+
+/**
+ * Error thrown when a queue operation is cancelled
+ */
+export class QueueCancelledError extends ReckerError {
+  queueName?: string;
+
+  constructor(
+    message?: string,
+    options?: {
+      queueName?: string;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message || 'Queue operation was cancelled',
+      options?.request,
+      undefined,
+      [
+        'This is typically expected during shutdown.',
+        'Check if the queue was manually cleared.',
+        'Retry the operation if the queue is still active.'
+      ],
+      true
+    );
+    this.name = 'QueueCancelledError';
+    this.queueName = options?.queueName;
+  }
+}
+
+/**
+ * Error thrown when a stream operation fails
+ */
+export class StreamError extends ReckerError {
+  streamType?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      streamType?: string;
+      retriable?: boolean;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Check if the stream was prematurely closed.',
+        'Verify the data source is still available.',
+        'Ensure proper error handling for stream events.'
+      ],
+      options?.retriable ?? false
+    );
+    this.name = 'StreamError';
+    this.streamType = options?.streamType;
+  }
+}
+
+/**
+ * Error thrown when a download operation fails
+ */
+export class DownloadError extends ReckerError {
+  url?: string;
+  statusCode?: number;
+
+  constructor(
+    message: string,
+    options?: {
+      url?: string;
+      statusCode?: number;
+      retriable?: boolean;
+      request?: ReckerRequest;
+    }
+  ) {
+    super(
+      message,
+      options?.request,
+      undefined,
+      [
+        'Verify the URL is correct and accessible.',
+        'Check network connectivity.',
+        options?.statusCode
+          ? `HTTP ${options.statusCode} - check server response.`
+          : 'Retry the download if the error is transient.'
+      ],
+      options?.retriable ?? true
+    );
+    this.name = 'DownloadError';
+    this.url = options?.url;
+    this.statusCode = options?.statusCode;
+  }
 }
