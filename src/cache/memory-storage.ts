@@ -8,6 +8,11 @@
  * - V8 heap pressure monitoring
  * - Optional gzip compression
  * - Comprehensive statistics
+ */
+
+import { ConfigurationError } from '../core/errors.js';
+
+/**
  *
  * @example Basic usage
  * ```typescript
@@ -311,8 +316,9 @@ export class MemoryStorage implements CacheStorage {
       options.maxMemoryPercent &&
       options.maxMemoryPercent > 0
     ) {
-      throw new Error(
-        '[MemoryStorage] Cannot use both maxMemoryBytes and maxMemoryPercent'
+      throw new ConfigurationError(
+        '[MemoryStorage] Cannot use both maxMemoryBytes and maxMemoryPercent',
+        { configKey: 'maxMemoryBytes|maxMemoryPercent' }
       );
     }
 
@@ -321,8 +327,9 @@ export class MemoryStorage implements CacheStorage {
       options.maxMemoryPercent !== undefined &&
       (options.maxMemoryPercent < 0 || options.maxMemoryPercent > 1)
     ) {
-      throw new Error(
-        '[MemoryStorage] maxMemoryPercent must be between 0 and 1'
+      throw new ConfigurationError(
+        '[MemoryStorage] maxMemoryPercent must be between 0 and 1',
+        { configKey: 'maxMemoryPercent' }
       );
     }
 

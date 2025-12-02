@@ -113,23 +113,52 @@ export class LoadStats {
   }
 
   /**
-   * Get human-readable status text
+   * Get compact status text (CamelCase, no spaces)
    */
   private getStatusText(status: number): string {
     const texts: Record<number, string> = {
-      400: 'Bad Request',
+      400: 'BadRequest',
       401: 'Unauthorized',
+      402: 'PaymentRequired',
       403: 'Forbidden',
-      404: 'Not Found',
-      405: 'Method Not Allowed',
-      408: 'Request Timeout',
-      429: 'Too Many Requests',
-      500: 'Internal Server Error',
-      502: 'Bad Gateway',
-      503: 'Service Unavailable',
-      504: 'Gateway Timeout',
+      404: 'NotFound',
+      405: 'MethodNotAllowed',
+      406: 'NotAcceptable',
+      407: 'ProxyAuthRequired',
+      408: 'RequestTimeout',
+      409: 'Conflict',
+      410: 'Gone',
+      411: 'LengthRequired',
+      412: 'PreconditionFailed',
+      413: 'PayloadTooLarge',
+      414: 'URITooLong',
+      415: 'UnsupportedMediaType',
+      416: 'RangeNotSatisfiable',
+      417: 'ExpectationFailed',
+      418: 'Teapot',
+      421: 'MisdirectedRequest',
+      422: 'UnprocessableEntity',
+      423: 'Locked',
+      424: 'FailedDependency',
+      425: 'TooEarly',
+      426: 'UpgradeRequired',
+      428: 'PreconditionRequired',
+      429: 'TooManyRequests',
+      431: 'HeaderFieldsTooLarge',
+      451: 'UnavailableForLegalReasons',
+      500: 'InternalServerError',
+      501: 'NotImplemented',
+      502: 'BadGateway',
+      503: 'ServiceUnavailable',
+      504: 'GatewayTimeout',
+      505: 'HTTPVersionNotSupported',
+      506: 'VariantAlsoNegotiates',
+      507: 'InsufficientStorage',
+      508: 'LoopDetected',
+      510: 'NotExtended',
+      511: 'NetworkAuthRequired',
     };
-    return texts[status] || `HTTP ${status}`;
+    return texts[status] || `HTTP${status}`;
   }
 
   /**

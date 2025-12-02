@@ -20,6 +20,7 @@ import type {
   AILatency,
   ToolCall,
 } from '../../types/ai.js';
+import { ConfigurationError, StreamError } from '../../core/errors.js';
 
 /**
  * Provider request context
@@ -76,7 +77,9 @@ export abstract class BaseAIProvider {
   protected getApiKey(): string {
     const key = this.config.apiKey || this.getEnvApiKey();
     if (!key) {
-      throw new Error(`API key not configured for provider: ${this.config.name}`);
+      throw new ConfigurationError(`API key not configured for provider: ${this.config.name}`, {
+        configKey: `${this.config.name}.apiKey`,
+      });
     }
     return key;
   }
@@ -152,7 +155,9 @@ export abstract class BaseAIProvider {
   ): AIStream {
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('Response body is not readable');
+      throw new StreamError('Response body is not readable', {
+        streamType: 'sse',
+      });
     }
 
     const decoder = new TextDecoder();
