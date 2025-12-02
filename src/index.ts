@@ -58,6 +58,7 @@ export * from './constants/http-status.js';
 export * from './utils/env-proxy.js';
 export * from './utils/charset.js';
 export * from './utils/client-pool.js';
+export * from './utils/security-grader.js';
 export * as presets from './presets/index.js';
 export * as testing from './testing/index.js';
 export * as protocols from './protocols/index.js';
