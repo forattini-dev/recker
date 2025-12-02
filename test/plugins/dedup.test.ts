@@ -32,4 +32,66 @@ describe('Dedup Plugin', () => {
     // Dedup plugin should have made only 1 actual request
     expect(mockTransport.getCallCount('GET', '/dedup')).toBe(1);
   });
+
+  it('should not deduplicate POST requests', async () => {
+    const mockTransport = new MockTransport();
+
+    // Each POST should go through
+    mockTransport.setMockResponse('POST', '/data', 201, { id: 1 }, undefined, { delay: 50, times: 3 });
+
+    const client = createClient({
+      baseUrl,
+      transport: mockTransport,
+      plugins: [dedup()]
+    });
+
+    // Launch 3 POST requests at once
+    const results = await Promise.all([
+      client.post('/data', { json: { name: 'a' } }).json(),
+      client.post('/data', { json: { name: 'b' } }).json(),
+      client.post('/data', { json: { name: 'c' } }).json()
+    ]);
+
+    expect(results.length).toBe(3);
+    // All 3 requests should have been made
+    expect(mockTransport.getCallCount('POST', '/data')).toBe(3);
+  });
+
+  it('should propagate errors correctly', async () => {
+    const mockTransport = new MockTransport();
+
+    // Make the request fail
+    mockTransport.setMockResponse('GET', '/error', 500, { error: 'Server Error' });
+
+    const client = createClient({
+      baseUrl,
+      transport: mockTransport,
+      plugins: [dedup()],
+      throwHttpErrors: true
+    });
+
+    // Should throw error
+    await expect(client.get('/error').json()).rejects.toThrow();
+  });
+
+  it('should deduplicate HEAD requests', async () => {
+    const mockTransport = new MockTransport();
+
+    mockTransport.setMockResponse('HEAD', '/check', 200, null, undefined, { delay: 30 });
+
+    const client = createClient({
+      baseUrl,
+      transport: mockTransport,
+      plugins: [dedup()]
+    });
+
+    // Launch 2 HEAD requests at once
+    await Promise.all([
+      client.head('/check'),
+      client.head('/check')
+    ]);
+
+    // Should be deduplicated
+    expect(mockTransport.getCallCount('HEAD', '/check')).toBe(1);
+  });
 });

@@ -2,155 +2,135 @@
 
 # ⚡ Recker
 
-### The HTTP SDK for the AI Era
+### The Network SDK for the AI Era
 
-**Fast as infrastructure demands. AI-ready from the first byte. Observable down to the millisecond. Resilient when everything else fails.**
+**Zero-config HTTP. Multi-protocol support. AI-native streaming. Observable to the millisecond.**
 
 [![npm version](https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623)](https://www.npmjs.com/package/recker)
 [![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Coverage](https://img.shields.io/badge/coverage-85%25-F5A623?style=flat-square)](https://github.com/forattini-dev/recker)
+[![Coverage](https://img.shields.io/badge/coverage-90%25-34C759?style=flat-square)](https://github.com/forattini-dev/recker)
 [![License](https://img.shields.io/npm/l/recker.svg?style=flat-square&color=007AFF)](https://github.com/forattini-dev/recker/blob/main/LICENSE)
 
-[Documentation](https://forattini-dev.github.io/recker) · [Examples](./docs/examples/README.md) · [Migration](./docs/migration.md)
+[Documentation](https://forattini-dev.github.io/recker) · [API Reference](./docs/reference/01-api.md) · [Examples](./docs/examples/README.md)
 
 </div>
 
 ---
 
-## 📦 Install
+## Install
 
 ```bash
 npm install recker
 ```
 
-## 🚀 Quick Start
+## Quick Start
+
+```typescript
+import { get, post, whois, dns } from 'recker';
+
+// HTTP - zero config
+const users = await get('https://api.example.com/users').json();
+await post('https://api.example.com/users', { json: { name: 'John' } });
+
+// WHOIS
+const info = await whois('github.com');
+
+// DNS
+const ips = await dns('google.com');
+```
+
+### Unified Namespace
+
+```typescript
+import { recker } from 'recker';
+
+// Everything in one place
+await recker.get('https://api.example.com/users').json();
+await recker.whois('github.com');
+await recker.dns('google.com');
+await recker.ai.chat('Hello!');
+
+const socket = recker.ws('wss://api.example.com/ws');
+```
+
+### With Configuration
 
 ```typescript
 import { createClient } from 'recker';
 
-const client = createClient({ baseUrl: 'https://api.example.com' });
+const api = createClient({
+  baseUrl: 'https://api.example.com',
+  headers: { 'Authorization': 'Bearer token' },
+  timeout: 10000,
+  retry: { maxAttempts: 3 }
+});
 
-// GET with JSON
-const users = await client.get('/users').json();
-
-// POST with body
-await client.post('/users', { json: { name: 'John' } });
-
-// Path params + query
-await client.get('/users/:id', { params: { id: '123', expand: 'profile' } });
+const user = await api.get('/users/:id', { params: { id: '123' } }).json();
 ```
 
-## ✨ Why Recker?
-
-Recker isn't just another HTTP client. It's a **complete orchestration layer** designed for modern, data-intensive applications.
+## Features
 
 | Feature | Description |
 |:---|:---|
-| 🔮 **19 HTTP Methods** | Beyond CRUD: WebDAV, CDN Purging, and specialized verbs. |
-| 🤖 **AI-First** | Native Server-Sent Events (SSE) parsing optimized for LLMs. |
-| 🕷️ **Scraping Ready** | jQuery-like HTML parsing, HLS downloading, and proxy rotation. |
-| 🛡️ **Security Suite** | Built-in SSL inspection, WHOIS/RDAP, and DNS analysis. |
-| ⚡ **Performance** | Connection pooling, deduplication, and deep network metrics. |
-| 🛡️ **Resilience** | Circuit breakers, smart retries, and rate limit awareness. |
+| **Zero Config** | Direct functions work out of the box. No setup required. |
+| **Multi-Protocol** | HTTP, WebSocket, DNS, WHOIS, FTP, SFTP, Telnet in one SDK. |
+| **AI-Native** | SSE streaming, token counting, provider abstraction. |
+| **Type-Safe** | Full TypeScript with Zod schema validation. |
+| **Observable** | DNS/TCP/TLS/TTFB timing breakdown per request. |
+| **Resilient** | Retry, circuit breaker, rate limiting, deduplication. |
 
-## 💡 Feature Highlights
+## Highlights
 
-### Stream AI Responses
-Handle LLM streams effortlessly with the `.sse()` iterator.
+### AI Streaming
 
 ```typescript
-for await (const event of client.post('/v1/chat/completions', {
-  json: { model: 'gpt-5', messages, stream: true }
-}).sse()) {
-  process.stdout.write(event.data);
+for await (const event of recker.ai.stream({
+  model: 'gpt-4',
+  messages: [{ role: 'user', content: 'Hello!' }]
+})) {
+  process.stdout.write(event.choices[0]?.delta?.content || '');
 }
 ```
 
-### Scrape & Extract
-Turn any webpage into structured data with the `.scrape()` method.
+### Request Timing
+
+```typescript
+const response = await get('https://api.example.com/data');
+console.log(response.timings);
+// { dns: 12, tcp: 8, tls: 45, firstByte: 23, total: 156 }
+```
+
+### Scraping
 
 ```typescript
 const doc = await client.scrape('https://example.com');
 const titles = doc.selectAll('h1').map(el => el.text());
 ```
 
-### Reliability Built-in
-Configure advanced retry policies in declarative style.
+### Circuit Breaker
 
 ```typescript
+import { createClient, circuitBreaker } from 'recker';
+
 const client = createClient({
+  baseUrl: 'https://api.example.com',
   plugins: [
-    retry({ maxAttempts: 3, backoff: 'exponential', jitter: true })
+    circuitBreaker({ threshold: 5, resetTimeout: 30000 })
   ]
 });
 ```
 
-### Deep Observability
-Know exactly where your latency comes from.
+## Documentation
 
-```typescript
-const { timings } = await client.get('/api/data');
-console.log(timings);
-// { dns: 12ms, tcp: 8ms, tls: 45ms, firstByte: 23ms, total: 156ms }
-```
+- **[Quick Start](./docs/http/01-quickstart.md)** - Get running in 2 minutes
+- **[API Reference](./docs/reference/01-api.md)** - Complete API documentation
+- **[Configuration](./docs/http/05-configuration.md)** - Client options
+- **[Plugins](./docs/http/10-plugins.md)** - Extend functionality
+- **[AI Integration](./docs/ai/01-overview.md)** - OpenAI, Anthropic, and more
+- **[Protocols](./docs/protocols/01-websocket.md)** - WebSocket, DNS, WHOIS
 
-## 📚 Documentation
-
-**Getting Started**
-- [Installation](./docs/getting-started/installation.md)
-- [Quick Start](./docs/http/01-quickstart.md)
-- [Client Configuration](./docs/http/05-configuration.md)
-
-**Core Features**
-- [HTTP Fundamentals](./docs/http/02-fundamentals.md)
-- [Streaming & SSE](./docs/ai/02-streaming.md)
-- [Retry & Resilience](./docs/http/07-resilience.md)
-- [Caching](./docs/http/09-cache.md)
-- [Concurrency](./docs/http/08-concurrency.md)
-
-**Integrations**
-- [GraphQL](./docs/http/13-graphql.md)
-- [Scraping](./docs/http/14-scraping.md)
-- [Plugins](./docs/http/10-plugins.md)
-
-**Reference**
-- [API Reference](./docs/reference/01-api.md)
-- [Troubleshooting](./docs/reference/05-troubleshooting.md)
-- [Examples](./docs/examples/README.md)
-
-## ❤️ Acknowledgements
-
-At Recker, we are passionate about these incredible open-source technologies. We are here to celebrate the past achievements that shaped the internet as we know it today, and to prepare ourselves for the future of web development.
-
-Recker stands on the shoulders of giants. We extend our deepest gratitude to these projects:
-
-<div align="center">
-
-| | | |
-|:---|:---|:---|
-| **[Apollo Client](https://github.com/apollographql/apollo-client)** | **[Axios](https://github.com/axios/axios)** | **[Cheerio](https://github.com/cheeriojs/cheerio)** |
-| **[Cookie](https://github.com/jshttp/cookie)** | **[Got](https://github.com/sindresorhus/got)** | **[GraphQL.js](https://github.com/graphql/graphql-js)** |
-| **[Ky](https://github.com/sindresorhus/ky)** | **[Needle](https://github.com/tomas/needle)** | **[Node-libcurl](https://github.com/JCMais/node-libcurl)** |
-| **[SuperAgent](https://github.com/ladjs/superagent)** | **[Undici](https://github.com/nodejs/undici)** | **[WS](https://github.com/websockets/ws)** |
-
-</div>
-
-## 🤝 Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
-
-## 📄 License
+## License
 
 MIT © [Forattini](https://github.com/forattini-dev)
-
----
-
-<div align="center">
-
-**Built for the AI era.**
-
-[Documentation](https://forattini-dev.github.io/recker) · [GitHub](https://github.com/forattini-dev/recker) · [npm](https://www.npmjs.com/package/recker)
-
-</div>

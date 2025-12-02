@@ -1,140 +1,149 @@
 # Quick Start
 
-Get up and running with Recker in under 5 minutes.
+Get up and running with Recker in 2 minutes.
 
 ## Installation
 
 ```bash
-# npm
 npm install recker
-
-# pnpm
-pnpm add recker
-
-# yarn
-yarn add recker
 ```
 
 **Requirements:** Node.js 18+
 
-## Your First Request
+## Usage Styles
+
+Recker offers three ways to make requests:
+
+### 1. Direct Functions (Zero Config)
+
+```typescript
+import { get, post, put, patch, del, head, options } from 'recker';
+
+// GET
+const users = await get('https://api.example.com/users').json();
+
+// POST with JSON
+const created = await post('https://api.example.com/users', {
+  json: { name: 'John', email: 'john@example.com' }
+}).json();
+
+// PUT
+await put('https://api.example.com/users/1', {
+  json: { name: 'Jane' }
+});
+
+// DELETE
+await del('https://api.example.com/users/1');
+```
+
+### 2. Unified Namespace
+
+```typescript
+import { recker } from 'recker';
+
+// HTTP
+const users = await recker.get('https://api.example.com/users').json();
+
+// WHOIS
+const whois = await recker.whois('github.com');
+
+// DNS
+const ips = await recker.dns('google.com');
+
+// WebSocket
+const ws = recker.ws('wss://api.example.com/ws');
+
+// AI
+const response = await recker.ai.chat('Hello!');
+```
+
+### 3. Configured Client
 
 ```typescript
 import { createClient } from 'recker';
 
-// Create a client
-const client = createClient({
-  baseUrl: 'https://api.example.com'
-});
-
-// Make a GET request
-const data = await client.get('/users').json();
-console.log(data);
-```
-
-That's it! Let's break down what happened:
-
-1. **`createClient()`** - Creates a configured HTTP client
-2. **`.get('/users')`** - Makes a GET request to `/users`
-3. **`.json()`** - Parses the response as JSON
-
-## Common Operations
-
-### GET Request
-
-```typescript
-// Simple GET
-const users = await client.get('/users').json();
-
-// With query parameters
-const user = await client.get('/users/:id', {
-  params: { id: '123' }
-}).json();
-
-// With query string
-const results = await client.get('/search', {
-  query: { q: 'recker', limit: 10 }
-}).json();
-```
-
-### POST Request
-
-```typescript
-// POST with JSON body
-const newUser = await client.post('/users', {
-  json: {
-    name: 'John Doe',
-    email: 'john@example.com'
-  }
-}).json();
-```
-
-### PUT & PATCH
-
-```typescript
-// Full update
-await client.put('/users/123', {
-  json: { name: 'Jane Doe', email: 'jane@example.com' }
-});
-
-// Partial update
-await client.patch('/users/123', {
-  json: { name: 'Jane Doe' }
-});
-```
-
-### DELETE
-
-```typescript
-await client.delete('/users/123');
-```
-
-## Headers
-
-```typescript
-// Set headers per request
-const data = await client.get('/protected', {
-  headers: {
-    'Authorization': 'Bearer token123'
-  }
-}).json();
-
-// Set default headers for all requests
-const client = createClient({
+const api = createClient({
   baseUrl: 'https://api.example.com',
-  headers: {
-    'Authorization': 'Bearer token123',
-    'X-Custom-Header': 'value'
-  }
+  headers: { 'Authorization': 'Bearer token123' },
+  timeout: 10000
 });
+
+// Relative paths
+const users = await api.get('/users').json();
+const user = await api.get('/users/:id', { params: { id: '123' } }).json();
 ```
 
-## Error Handling
+## Request Options
 
 ```typescript
-import { createClient, HttpError } from 'recker';
+interface RequestOptions {
+  // URL path parameters (replaces :param in path)
+  params?: Record<string, string | number>;
 
-try {
-  const data = await client.get('/users/999').json();
-} catch (error) {
-  if (error instanceof HttpError) {
-    console.log('Status:', error.status);      // 404
-    console.log('Message:', error.statusText); // "Not Found"
+  // Query string parameters
+  query?: Record<string, string | number | boolean>;
 
-    // Access response body
-    const body = await error.response.json();
-    console.log('Error:', body.message);
-  }
+  // Request headers
+  headers?: Record<string, string>;
+
+  // JSON body (auto-serialized, sets Content-Type)
+  json?: unknown;
+
+  // Form data (URL encoded)
+  form?: Record<string, string>;
+
+  // Raw body
+  body?: BodyInit;
+
+  // Timeout in ms
+  timeout?: number;
+
+  // Abort signal
+  signal?: AbortSignal;
+
+  // Throw on non-2xx (default: true)
+  throwHttpErrors?: boolean;
 }
 ```
 
-## Response Methods
+### Examples
 
 ```typescript
-const response = client.get('/endpoint');
+// Path params
+await api.get('/users/:id/posts/:postId', {
+  params: { id: '123', postId: '456' }
+});
+// → GET /users/123/posts/456
+
+// Query string
+await api.get('/search', {
+  query: { q: 'recker', limit: 10, active: true }
+});
+// → GET /search?q=recker&limit=10&active=true
+
+// Headers
+await api.get('/protected', {
+  headers: { 'X-Custom': 'value' }
+});
+
+// JSON body
+await api.post('/users', {
+  json: { name: 'John', roles: ['admin'] }
+});
+
+// Form data
+await api.post('/login', {
+  form: { username: 'john', password: 'secret' }
+});
+```
+
+## Response Handling
+
+```typescript
+const response = api.get('/users');
 
 // Parse as JSON
-const json = await response.json();
+const data = await response.json<User[]>();
 
 // Parse as text
 const text = await response.text();
@@ -142,54 +151,39 @@ const text = await response.text();
 // Get raw buffer
 const buffer = await response.buffer();
 
-// Get blob (browser)
-const blob = await response.blob();
-
-// Access headers
-const headers = (await response).headers;
-console.log(headers.get('content-type'));
+// Access response metadata
+const res = await response;
+console.log(res.status);      // 200
+console.log(res.ok);          // true
+console.log(res.headers);     // Headers object
+console.log(res.timings);     // { dns, tcp, tls, firstByte, total }
 ```
 
-## Timeouts
+## Error Handling
 
 ```typescript
-// Per-request timeout
-const data = await client.get('/slow-endpoint', {
-  timeout: 5000 // 5 seconds
-}).json();
-
-// Default timeout for all requests
-const client = createClient({
-  baseUrl: 'https://api.example.com',
-  timeout: 10000 // 10 seconds
-});
-```
-
-## Abort Requests
-
-```typescript
-const controller = new AbortController();
-
-// Start request
-const promise = client.get('/large-file', {
-  signal: controller.signal
-}).json();
-
-// Cancel it
-setTimeout(() => controller.abort(), 1000);
+import { HttpError, TimeoutError, NetworkError } from 'recker';
 
 try {
-  await promise;
+  await api.get('/users/999').json();
 } catch (error) {
-  if (error.name === 'AbortError') {
-    console.log('Request was cancelled');
+  if (error instanceof HttpError) {
+    console.log(error.status);      // 404
+    console.log(error.statusText);  // "Not Found"
+    const body = await error.response.json();
+  }
+
+  if (error instanceof TimeoutError) {
+    console.log('Request timed out');
+  }
+
+  if (error instanceof NetworkError) {
+    console.log(error.code);  // 'ECONNREFUSED', 'ENOTFOUND', etc.
   }
 }
 ```
 
-## TypeScript Support
-
-Recker is written in TypeScript and provides full type inference:
+## Type Safety
 
 ```typescript
 interface User {
@@ -198,54 +192,39 @@ interface User {
   email: string;
 }
 
-// Type-safe response
-const user = await client.get<User>('/users/1').json();
-console.log(user.name); // TypeScript knows this is a string
+// Typed response
+const user = await api.get<User>('/users/1').json();
+console.log(user.name);  // TypeScript knows this is string
 
-// Type-safe array
-const users = await client.get<User[]>('/users').json();
-users.forEach(u => console.log(u.email));
-```
+// With Zod validation
+import { z } from 'zod';
 
-## What's Next?
-
-Now that you've made your first requests, explore more features:
-
-- **[Fundamentals](02-fundamentals.md)** - HTTP methods, parameters, headers
-- **[Responses](03-responses.md)** - Streaming, downloads, parsing
-- **[Configuration](05-configuration.md)** - Client options, hooks
-- **[Resilience](07-resilience.md)** - Retry, circuit breaker
-
-## Quick Reference
-
-```typescript
-import { createClient } from 'recker';
-
-const client = createClient({
-  baseUrl: 'https://api.example.com',
-  timeout: 10000,
-  headers: { 'Authorization': 'Bearer token' }
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email()
 });
 
-// GET
-await client.get('/path').json();
-await client.get('/path', { query: { key: 'value' } }).json();
-
-// POST
-await client.post('/path', { json: { data: 'value' } }).json();
-
-// PUT
-await client.put('/path', { json: { data: 'value' } });
-
-// PATCH
-await client.patch('/path', { json: { data: 'value' } });
-
-// DELETE
-await client.delete('/path');
-
-// HEAD
-await client.head('/path');
-
-// OPTIONS
-await client.options('/path');
+const validated = await api.get('/users/1').parse(UserSchema);
 ```
+
+## Cancel Requests
+
+```typescript
+// Using AbortController
+const controller = new AbortController();
+const promise = api.get('/slow', { signal: controller.signal });
+
+setTimeout(() => controller.abort(), 1000);
+
+// Using .cancel()
+const request = api.get('/slow');
+setTimeout(() => request.cancel(), 1000);
+```
+
+## Next Steps
+
+- **[Fundamentals](./02-fundamentals.md)** - HTTP methods, headers, body types
+- **[Responses](./03-responses.md)** - Streaming, downloads, SSE
+- **[Configuration](./05-configuration.md)** - Client options, plugins
+- **[Resilience](./07-resilience.md)** - Retry, circuit breaker, timeouts

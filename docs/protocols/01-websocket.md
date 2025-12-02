@@ -2,23 +2,41 @@
 
 Real-time bidirectional communication with automatic reconnection and heartbeat.
 
-## Quick Start
+## Usage Styles
+
+### 1. Direct Function (Zero Config)
 
 ```typescript
-import { websocket, ReckerWebSocket } from 'recker/websocket';
+import { ws } from 'recker';
+// or
+import { recker } from 'recker';
 
 // Quick connection
-const ws = websocket('wss://api.example.com/ws');
+const socket = ws('wss://api.example.com/ws');
+// or
+const socket = recker.ws('wss://api.example.com/ws');
 
-ws.on('open', () => {
-  ws.send('Hello!');
-});
-
-ws.on('message', (msg) => {
+socket.on('message', (msg) => {
   console.log('Received:', msg.data);
 });
+```
 
-ws.on('close', (code, reason) => {
+### 2. Configured Client
+
+```typescript
+import { createWebSocket } from 'recker';
+
+const socket = createWebSocket('wss://api.example.com/ws', {
+  reconnect: true,
+  reconnectInterval: 1000,
+  maxReconnects: 5
+});
+
+socket.on('open', () => {
+  socket.send('Hello!');
+});
+
+socket.on('close', (code, reason) => {
   console.log('Closed:', code, reason);
 });
 ```
@@ -28,9 +46,9 @@ ws.on('close', (code, reason) => {
 ### Basic Connection
 
 ```typescript
-import { ReckerWebSocket } from 'recker/websocket';
+import { createWebSocket } from 'recker';
 
-const ws = new ReckerWebSocket('wss://api.example.com/ws', {
+const ws = createWebSocket('wss://api.example.com/ws', {
   // Subprotocols
   protocols: ['graphql-ws', 'json'],
 
@@ -41,13 +59,18 @@ const ws = new ReckerWebSocket('wss://api.example.com/ws', {
   }
 });
 
-await ws.connect();
+// Already connected, but you can wait for open event
+ws.on('open', () => {
+  console.log('Ready!');
+});
 ```
 
 ### Auto-Reconnect
 
 ```typescript
-const ws = new ReckerWebSocket('wss://api.example.com/ws', {
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/ws', {
   reconnect: true,
   reconnectDelay: 1000,      // Initial delay (ms)
   maxReconnectAttempts: 5    // 0 = infinite
@@ -65,14 +88,14 @@ ws.on('max-reconnect-attempts', () => {
 ws.on('reconnect-error', (error) => {
   console.error('Reconnection failed:', error);
 });
-
-await ws.connect();
 ```
 
 ### Heartbeat
 
 ```typescript
-const ws = new ReckerWebSocket('wss://api.example.com/ws', {
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/ws', {
   heartbeatInterval: 30000,  // Send ping every 30s
   heartbeatTimeout: 10000    // Wait 10s for pong
 });
@@ -80,32 +103,32 @@ const ws = new ReckerWebSocket('wss://api.example.com/ws', {
 ws.on('heartbeat-timeout', () => {
   console.log('Connection appears dead');
 });
-
-await ws.connect();
 ```
 
 ### With Proxy
 
 ```typescript
-const ws = new ReckerWebSocket('wss://api.example.com/ws', {
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/ws', {
   proxy: 'http://proxy.example.com:8080'
 });
 
 // Or with proxy auth
-const ws = new ReckerWebSocket('wss://api.example.com/ws', {
+const ws = createWebSocket('wss://api.example.com/ws', {
   proxy: {
     url: 'http://proxy.example.com:8080',
     auth: 'user:password'
   }
 });
-
-await ws.connect();
 ```
 
 ### TLS Options
 
 ```typescript
-const ws = new ReckerWebSocket('wss://api.example.com/ws', {
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/ws', {
   tls: {
     rejectUnauthorized: false,  // Skip cert validation (dev only!)
     ca: customCA,
@@ -113,8 +136,6 @@ const ws = new ReckerWebSocket('wss://api.example.com/ws', {
     key: clientKey
   }
 });
-
-await ws.connect();
 ```
 
 ## Sending Data
@@ -321,7 +342,9 @@ class JSONWebSocket {
 ### Pub/Sub Pattern
 
 ```typescript
-const ws = websocket('wss://api.example.com/ws');
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/ws');
 
 ws.on('open', () => {
   // Subscribe to channels
@@ -394,22 +417,24 @@ const result = await rpc.call('getUser', { id: 123 });
 ### GraphQL Subscriptions
 
 ```typescript
-const ws = new ReckerWebSocket('wss://api.example.com/graphql', {
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/graphql', {
   protocols: ['graphql-ws']
 });
 
-await ws.connect();
+ws.on('open', () => {
+  // Initialize
+  ws.sendJSON({ type: 'connection_init' });
 
-// Initialize
-ws.sendJSON({ type: 'connection_init' });
-
-// Subscribe
-ws.sendJSON({
-  id: '1',
-  type: 'subscribe',
-  payload: {
-    query: `subscription { onMessage { id content } }`
-  }
+  // Subscribe
+  ws.sendJSON({
+    id: '1',
+    type: 'subscribe',
+    payload: {
+      query: `subscription { onMessage { id content } }`
+    }
+  });
 });
 
 ws.on('message', (msg) => {
@@ -425,8 +450,9 @@ ws.on('message', (msg) => {
 
 ```typescript
 import { createReadStream, createWriteStream } from 'fs';
+import { createWebSocket } from 'recker';
 
-const ws = websocket('wss://api.example.com/upload');
+const ws = createWebSocket('wss://api.example.com/upload');
 
 ws.on('open', async () => {
   // Send file as binary frames
@@ -439,7 +465,9 @@ ws.on('open', async () => {
 ## Error Handling
 
 ```typescript
-const ws = new ReckerWebSocket('wss://api.example.com/ws', {
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/ws', {
   reconnect: true,
   maxReconnectAttempts: 3
 });
@@ -453,12 +481,6 @@ ws.on('close', (code, reason) => {
     console.error(`Abnormal close: ${code} - ${reason}`);
   }
 });
-
-try {
-  await ws.connect();
-} catch (error) {
-  console.error('Failed to connect:', error);
-}
 ```
 
 ## Best Practices
@@ -466,6 +488,10 @@ try {
 ### 1. Always Handle Errors
 
 ```typescript
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/ws');
+
 ws.on('error', (error) => {
   logger.error('WebSocket error', { error });
 });
@@ -480,7 +506,9 @@ ws.on('close', (code, reason) => {
 ### 2. Use Heartbeat for Long-Lived Connections
 
 ```typescript
-const ws = new ReckerWebSocket('wss://api.example.com/ws', {
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/ws', {
   heartbeatInterval: 30000,
   heartbeatTimeout: 10000,
   reconnect: true
@@ -498,7 +526,9 @@ process.on('SIGTERM', () => {
 ### 4. Exponential Backoff
 
 ```typescript
-const ws = new ReckerWebSocket('wss://api.example.com/ws', {
+import { createWebSocket } from 'recker';
+
+const ws = createWebSocket('wss://api.example.com/ws', {
   reconnect: true,
   reconnectDelay: 1000,      // Starts at 1s
   maxReconnectAttempts: 10   // Max ~30s delay with jitter
