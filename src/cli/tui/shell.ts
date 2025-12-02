@@ -1020,34 +1020,67 @@ export class RekShell {
 
       const statusIcon = info.valid ? colors.green('✔') : colors.red('✖');
       const statusText = info.valid ? colors.green('Valid') : colors.red('Invalid/Expired');
+      const daysColor = info.daysRemaining < 30 ? colors.red : info.daysRemaining < 90 ? colors.yellow : colors.green;
 
+      console.log(`\n${colors.bold(colors.cyan('🔒 TLS/SSL Report'))}`);
       console.log(`${statusIcon} Certificate ${statusText}` + colors.gray(` (${duration}ms)\n`));
 
-      // Certificate info
-      console.log(colors.bold('  Certificate:'));
-      console.log(`    ${colors.cyan('Subject')}: ${info.subject?.CN || info.subject?.O || 'N/A'}`);
-      console.log(`    ${colors.cyan('Issuer')}: ${info.issuer?.CN || info.issuer?.O || 'N/A'}`);
-      console.log(`    ${colors.cyan('Valid From')}: ${info.validFrom.toISOString()}`);
-      console.log(`    ${colors.cyan('Valid To')}: ${info.validTo.toISOString()}`);
+      // Certificate info - full subject
+      console.log(colors.bold('Certificate:'));
+      console.log(`  ${colors.gray('Subject:')}`);
+      for (const key of Object.keys(info.subject || {})) {
+        console.log(`    ${colors.gray(key.padEnd(10))}: ${(info.subject as any)[key]}`);
+      }
+      console.log(`  ${colors.gray('Issuer:')}`);
+      for (const key of Object.keys(info.issuer || {})) {
+        console.log(`    ${colors.gray(key.padEnd(10))}: ${(info.issuer as any)[key]}`);
+      }
+      console.log(`  ${colors.gray('Expires:')}   ${daysColor(info.daysRemaining + ' days')} (${info.validTo.toISOString().split('T')[0]})`);
+      console.log(`  ${colors.gray('Valid From:')} ${info.validFrom.toISOString().split('T')[0]}`);
+      console.log(`  ${colors.gray('Valid To:')}   ${info.validTo.toISOString().split('T')[0]}`);
+      console.log(`  ${colors.gray('Valid:')}     ${info.valid ? colors.green('Yes') : colors.red('No')}`);
 
-      // Days remaining with color coding
-      const daysColor = info.daysRemaining < 30 ? colors.red : info.daysRemaining < 90 ? colors.yellow : colors.green;
-      console.log(`    ${colors.cyan('Days Remaining')}: ${daysColor(String(info.daysRemaining))}`);
+      // Subject Alternative Names (SANs)
+      if (info.altNames && info.altNames.length > 0) {
+        console.log(colors.bold('\nSubject Alternative Names (SANs):'));
+        for (const name of info.altNames) {
+          console.log(`   ${colors.cyan('→')} ${name}`);
+        }
+      }
+
+      // Public Key
+      console.log(colors.bold('\nPublic Key:'));
+      if (info.pubkey) {
+        console.log(`  ${colors.gray('Algorithm:')} ${info.pubkey.algo}`);
+        console.log(`  ${colors.gray('Size:')}      ${info.pubkey.size} bits`);
+      } else {
+        console.log('  Not available');
+      }
+
+      // Extended Key Usage
+      console.log(colors.bold('\nExtended Key Usage:'));
+      if (info.extKeyUsage && info.extKeyUsage.length > 0) {
+        for (const oid of info.extKeyUsage) {
+          console.log(`   ${colors.cyan('→')} ${oid}`);
+        }
+      } else {
+        console.log('  None');
+      }
 
       // Connection info
-      console.log(colors.bold('\n  Connection:'));
-      console.log(`    ${colors.cyan('Protocol')}: ${info.protocol || 'N/A'}`);
-      console.log(`    ${colors.cyan('Cipher')}: ${info.cipher?.name || 'N/A'}`);
-      console.log(`    ${colors.cyan('Authorized')}: ${info.authorized ? colors.green('Yes') : colors.red('No')}`);
+      console.log(colors.bold('\nConnection:'));
+      console.log(`  ${colors.gray('Protocol:')}  ${info.protocol || 'N/A'}`);
+      console.log(`  ${colors.gray('Cipher:')}    ${info.cipher?.name || 'N/A'}`);
+      console.log(`  ${colors.gray('Auth:')}      ${info.authorized ? colors.green('Trusted') : colors.red('Untrusted')}`);
       if (info.authorizationError) {
-        console.log(`    ${colors.cyan('Auth Error')}: ${colors.red(String(info.authorizationError))}`);
+        console.log(`  ${colors.gray('Auth Error:')} ${colors.red(String(info.authorizationError))}`);
       }
 
       // Fingerprints
-      console.log(colors.bold('\n  Fingerprints:'));
-      console.log(`    ${colors.cyan('SHA1')}: ${info.fingerprint}`);
-      console.log(`    ${colors.cyan('SHA256')}: ${info.fingerprint256}`);
-      console.log(`    ${colors.cyan('Serial')}: ${info.serialNumber}`);
+      console.log(colors.bold('\nFingerprints:'));
+      console.log(`  ${colors.gray('SHA1:')}     ${info.fingerprint}`);
+      console.log(`  ${colors.gray('SHA256:')}    ${info.fingerprint256}`);
+      console.log(`  ${colors.gray('Serial:')}    ${info.serialNumber}`);
 
       this.lastResponse = info;
     } catch (error: any) {
