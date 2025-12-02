@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { createClient, Client } from '../core/client.js';
-import { ReckerError } from '../core/errors.js';
+import { StateError, ProtocolError } from '../core/errors.js';
 import { Logger, consoleLogger } from '../types/logger.js';
 import type {
   JsonRpcRequest,
@@ -223,15 +223,12 @@ export class MCPClient extends EventEmitter {
 
   private async request<T = unknown>(method: string, params?: unknown): Promise<T> {
     if (!this.initialized && method !== 'initialize') {
-      throw new ReckerError(
+      throw new StateError(
         'MCP client not initialized. Call connect() first.',
-        undefined,
-        undefined,
-        [
-          'Call connect() before invoking MCP methods.',
-          'Check for initialization errors in serverInfo.',
-          'Ensure the MCP server URL and credentials are correct.'
-        ]
+        {
+          expectedState: 'connected',
+          actualState: 'disconnected',
+        }
       );
     }
 
@@ -251,15 +248,13 @@ export class MCPClient extends EventEmitter {
     this.emit('response', response);
 
     if (response.error) {
-      const error = new ReckerError(
+      const error = new ProtocolError(
         response.error.message,
-        undefined,
-        undefined,
-        [
-          'Inspect MCP server logs for the reported error.',
-          'Validate request params against the tool schema.',
-          'Retry if the error is transient.'
-        ]
+        {
+          protocol: 'mcp',
+          code: response.error.code,
+          retriable: false,
+        }
       );
       (error as any).code = response.error.code;
       (error as any).data = response.error.data;

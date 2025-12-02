@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type { EmbeddingsData } from './search/types.js';
+import { DownloadError } from '../core/errors.js';
 
 // Get package version dynamically
 function getPackageVersionFromPkg(): string {
@@ -126,7 +127,11 @@ export async function downloadEmbeddings(version?: string): Promise<EmbeddingsDa
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error(`Failed to download embeddings: ${response.status} ${response.statusText}`);
+      throw new DownloadError(`Failed to download embeddings: ${response.status} ${response.statusText}`, {
+        url,
+        statusCode: response.status,
+        retriable: response.status >= 500,
+      });
     }
 
     const data = await response.json() as EmbeddingsData;
@@ -136,7 +141,11 @@ export async function downloadEmbeddings(version?: string): Promise<EmbeddingsDa
 
     return data;
   } catch (error) {
-    throw new Error(`Failed to download embeddings from ${url}: ${error}`);
+    if (error instanceof DownloadError) throw error;
+    throw new DownloadError(`Failed to download embeddings from ${url}: ${error}`, {
+      url,
+      retriable: true,
+    });
   }
 }
 
