@@ -1,4 +1,5 @@
 import { Client } from '../core/client.js';
+import { NotFoundError } from '../core/errors.js';
 
 // Common RDAP servers
 const RDAP_SERVERS: Record<string, string> = {
@@ -48,7 +49,9 @@ export async function rdap(client: Client, query: string): Promise<RDAPResult> {
     return await client.get(url, { followRedirects: true }).json<RDAPResult>();
   } catch (error: any) {
     if (error.status === 404) {
-      throw new Error(`RDAP entry not found for ${query}`);
+      throw new NotFoundError(`RDAP entry not found for ${query}`, {
+        resource: query,
+      });
     }
     throw error;
   }
