@@ -5,6 +5,7 @@
 
 import type { Client } from '../core/client.js';
 import type { RequestOptions, ReckerResponse } from '../types/index.js';
+import { UnsupportedError, HttpError } from '../core/errors.js';
 
 // ============================================================================
 // OData Types
@@ -716,7 +717,9 @@ export class ODataClient {
         response = await this.client.delete(url, options);
         break;
       default:
-        throw new Error(`Unsupported method: ${method}`);
+        throw new UnsupportedError(`Unsupported HTTP method: ${method}`, {
+          feature: method,
+        });
     }
 
     return this.handleResponse<T>(response);
@@ -734,7 +737,7 @@ export class ODataClient {
       if (error.error) {
         throw new ODataException(error.error);
       }
-      throw new Error(`OData request failed: ${response.status}`);
+      throw new HttpError(response);
     }
 
     return data as T;
