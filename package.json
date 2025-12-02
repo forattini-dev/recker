@@ -109,10 +109,10 @@
     "recker": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc && mkdir -p dist/mcp/data && cp src/mcp/data/embeddings.json dist/mcp/data/",
+    "build": "tsc",
     "build:embeddings": "tsx scripts/build-embeddings.ts",
     "prepare": "husky",
-    "prepublishOnly": "pnpm build && pnpm build:embeddings",
+    "prepublishOnly": "pnpm build",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "bench": "tsx benchmark/index.ts",

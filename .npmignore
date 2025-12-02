@@ -57,6 +57,9 @@ AGENTS.md
 GEMINI.md
 VISION.md
 
+# MCP Embeddings (downloaded at runtime from GitHub Releases)
+**/embeddings.json
+
 # Misc
 .DS_Store
 Thumbs.db
