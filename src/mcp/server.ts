@@ -94,7 +94,24 @@ export class MCPServer {
     };
 
     this.hybridSearch = createHybridSearch({ debug: this.options.debug });
-    this.buildIndex();
+    // Note: buildIndex is async but constructor can't await.
+    // Index is built lazily - guaranteed ready before handling requests via start() or ensureIndexReady()
+  }
+
+  /**
+   * Promise that resolves when the index is ready.
+   * Used to ensure index is built before handling search requests.
+   */
+  private indexReady: Promise<void> | null = null;
+
+  /**
+   * Ensure the index is built before proceeding.
+   */
+  private async ensureIndexReady(): Promise<void> {
+    if (!this.indexReady) {
+      this.indexReady = this.buildIndex();
+    }
+    await this.indexReady;
   }
 
   private log(message: string, data?: unknown): void {
@@ -1393,6 +1410,9 @@ const client = createClient({
   }
 
   async start(): Promise<void> {
+    // Ensure index is built before accepting requests
+    await this.ensureIndexReady();
+
     switch (this.options.transport) {
       case 'stdio':
         return this.startStdio();
