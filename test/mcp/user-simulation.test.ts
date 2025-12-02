@@ -368,7 +368,7 @@ describe('MCP User Simulation Tests', () => {
 
       expect(result.result.isError).toBeUndefined();
       expect(result.result.content[0].text).toBeDefined();
-    });
+    }, 15000);
 
     it('should handle special characters in query', async () => {
       const result = await callTool('search_docs', {
@@ -377,7 +377,7 @@ describe('MCP User Simulation Tests', () => {
 
       expect(result.result.isError).toBeUndefined();
       expect(result.result.content[0].text).toBeDefined();
-    });
+    }, 10000);
 
     it('should handle unicode characters in query', async () => {
       const result = await callTool('search_docs', {

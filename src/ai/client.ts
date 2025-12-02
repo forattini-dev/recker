@@ -38,9 +38,9 @@ interface MetricsData {
 }
 
 /**
- * AI Metrics implementation
+ * AI Metrics tracker
  */
-class AIMetricsImpl implements AIMetrics {
+class AIMetricsTracker implements AIMetrics {
   private data: MetricsData = {
     totalRequests: 0,
     totalTokens: 0,
@@ -143,12 +143,27 @@ class AIMetricsImpl implements AIMetrics {
 }
 
 /**
- * Unified AI Client implementation
+ * Unified AI Client
+ *
+ * @example
+ * ```typescript
+ * import { createAI } from 'recker/ai';
+ *
+ * const ai = createAI({
+ *   defaultProvider: 'openai',
+ *   providers: {
+ *     openai: { apiKey: process.env.OPENAI_API_KEY }
+ *   }
+ * });
+ *
+ * const response = await ai.chat('Hello!');
+ * console.log(response.content);
+ * ```
  */
-export class AIClientImpl implements AIClient {
+export class UnifiedAIClient implements AIClient {
   private config: AIClientConfig;
   private providers: Map<AIProvider, BaseAIProvider> = new Map();
-  private _metrics: AIMetricsImpl = new AIMetricsImpl();
+  private _metrics: AIMetricsTracker = new AIMetricsTracker();
 
   constructor(config: AIClientConfig = {}) {
     this.config = {
@@ -454,12 +469,19 @@ export class AIClientImpl implements AIClient {
 
 /**
  * Create an AI client
+ *
+ * @example
+ * ```typescript
+ * import { createAI } from 'recker/ai';
+ *
+ * const ai = createAI({
+ *   defaultProvider: 'openai',
+ *   debug: true
+ * });
+ *
+ * const response = await ai.chat('Hello!');
+ * ```
  */
-export function createAIClient(config?: AIClientConfig): AIClient {
-  return new AIClientImpl(config);
+export function createAI(config?: AIClientConfig): AIClient {
+  return new UnifiedAIClient(config);
 }
-
-/**
- * Default AI client instance
- */
-export const ai = createAIClient();

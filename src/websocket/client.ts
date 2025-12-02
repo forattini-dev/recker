@@ -495,8 +495,26 @@ export class ReckerWebSocket extends EventEmitter {
 
 /**
  * Create a WebSocket connection
+ *
+ * @example
+ * ```typescript
+ * import { createWebSocket } from 'recker';
+ *
+ * const ws = createWebSocket('wss://api.example.com/ws', {
+ *   reconnect: true,
+ *   heartbeatInterval: 30000,
+ *   debug: true
+ * });
+ *
+ * ws.on('message', (msg) => console.log(msg.data));
+ *
+ * // Or use async iterator
+ * for await (const message of ws) {
+ *   console.log(message.data);
+ * }
+ * ```
  */
-export function websocket(url: string, options?: WebSocketOptions): ReckerWebSocket {
+export function createWebSocket(url: string, options?: WebSocketOptions): ReckerWebSocket {
   const ws = new ReckerWebSocket(url, options);
   ws.connect().catch(() => {
     // Error will be emitted via 'error' event

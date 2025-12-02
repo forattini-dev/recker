@@ -6,9 +6,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  createAIClient,
-  ai,
-  AIClientImpl,
+  createAI,
+  UnifiedAIClient,
   OpenAIProvider,
   AnthropicProvider,
   AIError,
@@ -31,28 +30,18 @@ describe('AI Client', () => {
     delete process.env.ANTHROPIC_API_KEY;
   });
 
-  describe('createAIClient', () => {
+  describe('createAI', () => {
     it('should create a default AI client', () => {
-      const client = createAIClient();
-      expect(client).toBeInstanceOf(AIClientImpl);
+      const client = createAI();
+      expect(client).toBeInstanceOf(UnifiedAIClient);
     });
 
     it('should create client with custom config', () => {
-      const client = createAIClient({
+      const client = createAI({
         defaultProvider: 'anthropic',
         debug: true,
       });
-      expect(client).toBeInstanceOf(AIClientImpl);
-    });
-  });
-
-  describe('Default ai instance', () => {
-    it('should export a default ai instance', () => {
-      expect(ai).toBeDefined();
-      expect(typeof ai.chat).toBe('function');
-      expect(typeof ai.stream).toBe('function');
-      expect(typeof ai.embed).toBe('function');
-      expect(typeof ai.extend).toBe('function');
+      expect(client).toBeInstanceOf(UnifiedAIClient);
     });
   });
 
@@ -80,7 +69,7 @@ describe('AI Client', () => {
         }),
       });
 
-      const client = createAIClient();
+      const client = createAI();
       const response = await client.chat({
         messages: [{ role: 'user', content: 'Hi' }],
       });
@@ -102,7 +91,7 @@ describe('AI Client', () => {
         }),
       });
 
-      const client = createAIClient();
+      const client = createAI();
       const response = await client.chat('Hello');
 
       expect(response.content).toBe('Hello!');
@@ -122,7 +111,7 @@ describe('AI Client', () => {
         }),
       });
 
-      const client = createAIClient();
+      const client = createAI();
       const response = await client.chat({
         provider: 'anthropic',
         messages: [{ role: 'user', content: 'Hi' }],
@@ -145,7 +134,7 @@ describe('AI Client', () => {
         }),
       });
 
-      const client = createAIClient();
+      const client = createAI();
       const codeClient = client.extend({
         model: 'gpt-5.1',
         systemPrompt: 'You are a coding assistant',
@@ -172,7 +161,7 @@ describe('AI Client', () => {
         }),
       });
 
-      const client = createAIClient({ observability: true });
+      const client = createAI({ observability: true });
 
       // Make a few requests
       await client.chat('Hi');
@@ -194,7 +183,7 @@ describe('AI Client', () => {
         }),
       });
 
-      const client = createAIClient();
+      const client = createAI();
       await client.chat('Hi');
 
       const summary = client.metrics.summary();
@@ -213,7 +202,7 @@ describe('AI Client', () => {
         }),
       });
 
-      const client = createAIClient();
+      const client = createAI();
       await client.chat('Hi');
       expect(client.metrics.totalRequests).toBe(1);
 
@@ -234,7 +223,7 @@ describe('AI Client', () => {
         }),
       });
 
-      const client = createAIClient({ retry: undefined });
+      const client = createAI({ retry: undefined });
 
       await expect(client.chat('Hi')).rejects.toThrow('Rate limit exceeded');
     });
@@ -249,7 +238,7 @@ describe('AI Client', () => {
         }),
       });
 
-      const client = createAIClient();
+      const client = createAI();
 
       await expect(client.chat('Hi')).rejects.toThrow('Authentication failed');
     });
@@ -632,7 +621,7 @@ describe('Anthropic Provider Extended Tests', () => {
   });
 });
 
-describe('AIClientImpl', () => {
+describe('UnifiedAIClient', () => {
   beforeEach(() => {
     mockFetch.mockReset();
     process.env.OPENAI_API_KEY = 'test-key';
@@ -640,7 +629,7 @@ describe('AIClientImpl', () => {
   });
 
   it('should create client with default config', () => {
-    const client = createAIClient();
+    const client = createAI();
     expect(client).toBeDefined();
     expect(client.metrics).toBeDefined();
   });
@@ -656,7 +645,7 @@ describe('AIClientImpl', () => {
       }),
     });
 
-    const client = createAIClient();
+    const client = createAI();
     const response = await client.chat('Hello');
 
     expect(response.content).toBe('Hello!');
@@ -673,7 +662,7 @@ describe('AIClientImpl', () => {
       }),
     });
 
-    const client = createAIClient({ observability: true });
+    const client = createAI({ observability: true });
     await client.chat('Test');
 
     expect(client.metrics.totalRequests).toBe(1);
@@ -691,7 +680,7 @@ describe('AIClientImpl', () => {
       }),
     });
 
-    const client = createAIClient();
+    const client = createAI();
     const extended = client.extend({ systemPrompt: 'You are helpful' });
     const response = await extended.chat({ messages: [{ role: 'user', content: 'Hi' }] });
 
@@ -699,7 +688,7 @@ describe('AIClientImpl', () => {
   });
 
   it('should throw error for unknown provider', async () => {
-    const client = createAIClient();
+    const client = createAI();
     await expect(client.chat({
       messages: [{ role: 'user', content: 'Hi' }],
       provider: 'unknown' as any,
@@ -713,7 +702,7 @@ describe('AIClientImpl', () => {
       json: () => Promise.resolve({ error: { message: 'Unauthorized' } }),
     });
 
-    const client = createAIClient({ observability: true });
+    const client = createAI({ observability: true });
 
     try {
       await client.chat('Test');
@@ -745,7 +734,7 @@ describe('AIClientImpl', () => {
       body: stream,
     });
 
-    const client = createAIClient();
+    const client = createAI();
     const result = await client.stream({
       messages: [{ role: 'user', content: 'Hi' }],
     });
@@ -769,7 +758,7 @@ describe('AIClientImpl', () => {
       }),
     });
 
-    const client = createAIClient();
+    const client = createAI();
     const response = await client.embed({ input: 'Hello' });
 
     expect(response.embeddings).toHaveLength(1);
@@ -790,7 +779,7 @@ describe('AIClientImpl', () => {
       }),
     });
 
-    const client = createAIClient();
+    const client = createAI();
     const response = await client.chat({
       messages: [{ role: 'user', content: 'Hi' }],
       provider: 'anthropic',
@@ -812,7 +801,7 @@ describe('AIClientImpl', () => {
       }),
     });
 
-    const client = createAIClient({ debug: true });
+    const client = createAI({ debug: true });
     await client.chat('Test');
 
     expect(consoleSpy).toHaveBeenCalled();
@@ -837,7 +826,7 @@ describe('AIMetrics', () => {
       }),
     });
 
-    const client = createAIClient({ observability: true });
+    const client = createAI({ observability: true });
     await client.chat('Test 1');
     await client.chat('Test 2');
 
@@ -857,7 +846,7 @@ describe('AIMetrics', () => {
       }),
     });
 
-    const client = createAIClient({ observability: true });
+    const client = createAI({ observability: true });
     // First call
     await client.chat('Test');
 
@@ -876,7 +865,7 @@ describe('AIMetrics', () => {
       }),
     });
 
-    const client = createAIClient({ observability: true });
+    const client = createAI({ observability: true });
     await client.chat('Test');
 
     const summary = client.metrics.summary();
@@ -898,7 +887,7 @@ describe('AIMetrics', () => {
       }),
     });
 
-    const client = createAIClient({ observability: true });
+    const client = createAI({ observability: true });
     await client.chat('Test');
     expect(client.metrics.totalRequests).toBe(1);
 
@@ -917,7 +906,7 @@ describe('AIMetrics', () => {
       }),
     });
 
-    const client = createAIClient({ observability: true });
+    const client = createAI({ observability: true });
     await client.chat('Test');
 
     // Cost tracking depends on provider implementation
@@ -942,7 +931,7 @@ describe('AI Client Extended Features', () => {
       }),
     });
 
-    const client = createAIClient();
+    const client = createAI();
     const level1 = client.extend({ systemPrompt: 'Level 1' });
     const level2 = level1.extend({ temperature: 0.5 });
 
@@ -962,7 +951,7 @@ describe('AI Client Extended Features', () => {
 
     mockFetch.mockResolvedValueOnce({ ok: true, body: stream });
 
-    const client = createAIClient();
+    const client = createAI();
     const extended = client.extend({ temperature: 0.7 });
     const result = await extended.stream({ messages: [{ role: 'user', content: 'Hi' }] });
 
@@ -984,7 +973,7 @@ describe('AI Client Extended Features', () => {
       }),
     });
 
-    const client = createAIClient();
+    const client = createAI();
     const extended = client.extend({ provider: 'openai' });
     const result = await extended.embed({ input: 'test' });
 
@@ -1021,7 +1010,7 @@ describe('AI Client Retry Logic', () => {
       });
     });
 
-    const client = createAIClient({
+    const client = createAI({
       retry: { maxAttempts: 3, on: ['rate_limit'] }
     });
     const response = await client.chat('Test');
@@ -1054,7 +1043,7 @@ describe('AI Client Retry Logic', () => {
       });
     });
 
-    const client = createAIClient({
+    const client = createAI({
       retry: {
         maxAttempts: 3,
         on: ['overloaded'],
@@ -1088,7 +1077,7 @@ describe('AI Client Retry Logic', () => {
       });
     });
 
-    const client = createAIClient({
+    const client = createAI({
       retry: { maxAttempts: 3, on: ['overloaded'], backoff: 'linear' }
     });
     const response = await client.chat('Test');
@@ -1119,7 +1108,7 @@ describe('AI Client Retry Logic', () => {
       });
     });
 
-    const client = createAIClient({
+    const client = createAI({
       retry: { maxAttempts: 3, on: ['overloaded'], backoff: 'decorrelated' }
     });
     const response = await client.chat('Test');
@@ -1134,7 +1123,7 @@ describe('AI Client Retry Logic', () => {
       json: () => Promise.resolve({ error: { message: 'Overloaded' } }),
     });
 
-    const client = createAIClient({
+    const client = createAI({
       retry: { maxAttempts: 2, on: ['overloaded'] }
     });
 
@@ -1152,7 +1141,7 @@ describe('AI Client Retry Logic', () => {
       });
     });
 
-    const client = createAIClient({
+    const client = createAI({
       retry: { maxAttempts: 3, on: ['rate_limit'] }
     });
 
@@ -1189,7 +1178,7 @@ describe('AI Client Retry Logic', () => {
       });
     });
 
-    const client = createAIClient({
+    const client = createAI({
       debug: true,
       retry: { maxAttempts: 3, on: ['overloaded'] }
     });

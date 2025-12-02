@@ -403,3 +403,143 @@ describe('createMCPServer factory', () => {
     expect(server.getTransport()).toBe('sse');
   });
 });
+
+describe('Additional Tool Tests', () => {
+  let server: MCPServer;
+  const testPort = 3195;
+  const docsPath = join(process.cwd(), 'docs');
+
+  beforeAll(async () => {
+    server = new MCPServer({
+      transport: 'http',
+      port: testPort,
+      docsPath,
+      debug: false,
+    });
+    await server.start();
+  });
+
+  afterAll(async () => {
+    await server.stop();
+  });
+
+  const callTool = async (name: string, args: Record<string, unknown>) => {
+    const response = await fetch(`http://localhost:${testPort}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name, arguments: args },
+      }),
+    });
+    return response.json();
+  };
+
+  describe('code_examples Tool', () => {
+    it('should get code examples for a feature', async () => {
+      const result = await callTool('code_examples', { feature: 'retry' });
+      expect(result.result.isError).toBeUndefined();
+      expect(result.result.content[0].text).toBeDefined();
+    });
+
+    it('should get examples with complexity filter', async () => {
+      const result = await callTool('code_examples', { feature: 'cache', complexity: 'basic' });
+      expect(result.result.isError).toBeUndefined();
+      expect(result.result.content[0].text).toBeDefined();
+    });
+
+    it('should return error without feature', async () => {
+      const result = await callTool('code_examples', {});
+      expect(result.result.isError).toBe(true);
+      expect(result.result.content[0].text).toContain('feature is required');
+    });
+
+    it('should return message when no examples found', async () => {
+      const result = await callTool('code_examples', { feature: 'xyznonexistent123' });
+      expect(result.result.content[0].text).toContain('No examples found');
+    });
+  });
+
+  describe('api_schema Tool', () => {
+    it('should get schema for Client type', async () => {
+      const result = await callTool('api_schema', { type: 'Client' });
+      expect(result.result.isError).toBeUndefined();
+      expect(result.result.content[0].text).toBeDefined();
+    });
+
+    it('should get schema for RequestOptions', async () => {
+      const result = await callTool('api_schema', { type: 'RequestOptions' });
+      expect(result.result.content[0].text).toBeDefined();
+    });
+
+    it('should get schema for Response', async () => {
+      const result = await callTool('api_schema', { type: 'Response' });
+      expect(result.result.content[0].text).toBeDefined();
+    });
+
+    it('should return error without type', async () => {
+      const result = await callTool('api_schema', {});
+      expect(result.result.isError).toBe(true);
+      expect(result.result.content[0].text).toContain('type is required');
+    });
+
+    it('should return message for unknown type', async () => {
+      const result = await callTool('api_schema', { type: 'UnknownType' });
+      expect(result.result.content[0].text).toContain('not found');
+    });
+  });
+
+  describe('suggest Tool', () => {
+    it('should suggest implementation for retry', async () => {
+      const result = await callTool('suggest', { useCase: 'retry' });
+      expect(result.result.isError).toBeUndefined();
+      expect(result.result.content[0].text).toBeDefined();
+    });
+
+    it('should suggest implementation for caching', async () => {
+      const result = await callTool('suggest', { useCase: 'cache' });
+      expect(result.result.content[0].text).toBeDefined();
+    });
+
+    it('should suggest implementation for streaming', async () => {
+      const result = await callTool('suggest', { useCase: 'streaming' });
+      expect(result.result.content[0].text).toBeDefined();
+    });
+
+    it('should return error without useCase', async () => {
+      const result = await callTool('suggest', {});
+      expect(result.result.isError).toBe(true);
+      expect(result.result.content[0].text).toContain('useCase is required');
+    });
+
+    it('should handle generic use case', async () => {
+      const result = await callTool('suggest', { useCase: 'authentication' });
+      expect(result.result.content[0].text).toBeDefined();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle concurrent requests', async () => {
+      const requests = [
+        callTool('search_docs', { query: 'http' }),
+        callTool('search_docs', { query: 'cache' }),
+        callTool('search_docs', { query: 'retry' }),
+      ];
+      const results = await Promise.all(requests);
+      expect(results.every(r => r.result && !r.result.isError)).toBe(true);
+    });
+
+    it('should handle empty string arguments', async () => {
+      const result = await callTool('search_docs', { query: '' });
+      expect(result.result.isError).toBe(true);
+    });
+
+    it('should handle very long search query', async () => {
+      const longQuery = 'http client retry cache timeout headers '.repeat(10);
+      const result = await callTool('search_docs', { query: longQuery });
+      expect(result.result).toBeDefined();
+    }, 30000);
+  });
+});

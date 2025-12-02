@@ -316,4 +316,171 @@ describe('HybridSearch', () => {
       }
     });
   });
+
+  describe('semantic search', () => {
+    it('uses semantic mode when specified', async () => {
+      const results = await search.search('retry', { mode: 'semantic' });
+      // Without embeddings loaded, semantic search may return empty
+      expect(Array.isArray(results)).toBe(true);
+    });
+
+    it('falls back to empty when no embeddings in semantic mode', async () => {
+      const noEmbedSearch = new HybridSearch();
+      await noEmbedSearch.initialize([]);
+      const results = await noEmbedSearch.search('test', { mode: 'semantic' });
+      expect(results).toEqual([]);
+    });
+  });
+
+  describe('snippet extraction', () => {
+    it('extracts snippet for content with match', async () => {
+      const results = await search.search('exponential');
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].snippet).toContain('...');
+    });
+
+    it('returns truncated content when no match found', async () => {
+      // Search for something that exists in keywords but not content body
+      const results = await search.search('quickstart');
+      expect(results.length).toBeGreaterThan(0);
+      expect(typeof results[0].snippet).toBe('string');
+    });
+
+    it('handles empty content gracefully', async () => {
+      const emptyDocs: IndexedDoc[] = [
+        { id: 'empty-1', path: 'test.md', title: 'Test', content: '', category: 'test', keywords: ['test'] }
+      ];
+      const emptySearch = new HybridSearch();
+      await emptySearch.initialize(emptyDocs);
+      const results = await emptySearch.search('test', { mode: 'fuzzy' });
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].snippet).toBe('');
+    });
+  });
+
+  describe('debug mode', () => {
+    it('logs debug messages when debug is true', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args) => logs.push(args.join(' '));
+
+      const debugSearch = new HybridSearch({ debug: true });
+      await debugSearch.initialize(sampleDocs);
+      await debugSearch.search('retry');
+
+      console.log = originalLog;
+      expect(logs.some(l => l.includes('[HybridSearch]'))).toBe(true);
+    });
+  });
+
+  describe('query cleaning', () => {
+    it('removes stop words from queries', async () => {
+      // Query with many stop words should still find results
+      const results = await search.search('how to configure the retry plugin');
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].title).toBe('Retry Plugin');
+    });
+
+    it('handles queries with only stop words', async () => {
+      const results = await search.search('the a an is are');
+      // Should fall back to original query or return empty
+      expect(Array.isArray(results)).toBe(true);
+    });
+
+    it('removes Portuguese stop words', async () => {
+      const results = await search.search('como usar o cache');
+      expect(Array.isArray(results)).toBe(true);
+    });
+  });
+
+  describe('hasEmbeddings method', () => {
+    it('returns false when no embeddings loaded', async () => {
+      const noEmbedSearch = new HybridSearch();
+      await noEmbedSearch.initialize([]);
+      expect(noEmbedSearch.hasEmbeddings()).toBe(false);
+    });
+  });
+
+  describe('getStats method', () => {
+    it('returns complete stats object', () => {
+      const stats = search.getStats();
+      expect(stats).toHaveProperty('documents');
+      expect(stats).toHaveProperty('embeddings');
+      expect(typeof stats.documents).toBe('number');
+      expect(typeof stats.embeddings).toBe('number');
+    });
+  });
+
+  describe('category filtering', () => {
+    it('filters results by category in fuzzy mode', async () => {
+      const httpResults = await search.search('plugin', { mode: 'fuzzy', category: 'http' });
+      const allResults = await search.search('plugin', { mode: 'fuzzy' });
+      expect(httpResults.length).toBeLessThanOrEqual(allResults.length);
+    });
+
+    it('filters results by category in semantic mode', async () => {
+      const results = await search.search('plugin', { mode: 'semantic', category: 'http' });
+      expect(Array.isArray(results)).toBe(true);
+    });
+
+    it('filters results by category in hybrid mode', async () => {
+      const results = await search.search('streaming', { mode: 'hybrid', category: 'ai' });
+      expect(Array.isArray(results)).toBe(true);
+    });
+  });
+
+  describe('snippet fuzzy matching', () => {
+    it('should use fuzzy matching when no exact match found in content', async () => {
+      const fuzzyDocs: IndexedDoc[] = [
+        {
+          id: 'fuzzy-1',
+          path: 'test/fuzzy.md',
+          title: 'Fuzzy Test',
+          content: `This document contains variations like retrying and cached responses.
+          It also has middleware plugins and error handling patterns.`,
+          category: 'test',
+          keywords: ['fuzzy', 'variations']
+        }
+      ];
+      const fuzzySearch = new HybridSearch();
+      await fuzzySearch.initialize(fuzzyDocs);
+
+      // Search for "retry" which should fuzzy match "retrying"
+      const results = await fuzzySearch.search('retry cached middleware');
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].snippet.length).toBeGreaterThan(0);
+    });
+
+    it('should extract snippet with ellipsis for long content', async () => {
+      const longDocs: IndexedDoc[] = [
+        {
+          id: 'long-1',
+          path: 'test/long.md',
+          title: 'Long Content Test',
+          content: 'A'.repeat(100) + ' important keyword here ' + 'B'.repeat(100),
+          category: 'test',
+          keywords: ['long']
+        }
+      ];
+      const longSearch = new HybridSearch();
+      await longSearch.initialize(longDocs);
+
+      const results = await longSearch.search('important keyword');
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].snippet).toContain('...');
+    });
+  });
+
+  describe('multi-word query processing', () => {
+    it('should handle queries with multiple terms and remove duplicates', async () => {
+      const results = await search.search('retry retry exponential exponential backoff');
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].title).toBe('Retry Plugin');
+    });
+
+    it('should normalize casing in search terms', async () => {
+      const results = await search.search('RETRY CACHE MIDDLEWARE');
+      expect(results.length).toBeGreaterThan(0);
+    });
+  });
 });
