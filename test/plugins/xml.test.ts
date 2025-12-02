@@ -306,4 +306,24 @@ describe('XML Plugin', () => {
       expect(history[0].headers.get('Content-Type')).toBe('application/xml');
     });
   });
+
+  describe('edge cases', () => {
+    it('should handle malformed XML with unclosed tags', () => {
+      // Malformed XML - missing closing tag
+      const result = parseXML('<root><child>content');
+      // Should still return whatever it could parse
+      expect(result).toBeDefined();
+    });
+
+    it('should handle empty XML', () => {
+      const result = parseXML('');
+      // Empty XML returns empty string after trimming
+      expect(result).toBe('');
+    });
+
+    it('should handle whitespace-only XML', () => {
+      const result = parseXML('   \n\t  ');
+      expect(result).toBe('');
+    });
+  });
 });

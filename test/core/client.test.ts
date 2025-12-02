@@ -130,4 +130,16 @@ describe('Recker Client', () => {
     const client = createClient({ baseUrl, transport: new TimeoutTransport() as any });
     await expect(client.get('/slow')).rejects.toBeInstanceOf(TimeoutError);
   });
+
+  describe('WHOIS functionality', () => {
+    it('should expose whois method', () => {
+      const client = createClient({ baseUrl });
+      expect(typeof client.whois).toBe('function');
+    });
+
+    it('should expose isDomainAvailable method', () => {
+      const client = createClient({ baseUrl });
+      expect(typeof client.isDomainAvailable).toBe('function');
+    });
+  });
 });

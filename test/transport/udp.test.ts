@@ -407,6 +407,24 @@ describe('UDPResponse', () => {
     });
   });
 
+  describe('SSE Error', () => {
+    it('should throw when calling sse()', async () => {
+      const response = new UDPResponseWrapper(Buffer.from('data'));
+      await expect(async () => {
+        for await (const _ of response.sse()) { /* empty */ }
+      }).rejects.toThrow('SSE is not supported for UDP responses');
+    });
+  });
+
+  describe('read() after body used', () => {
+    it('should return null when body was already used', async () => {
+      const response = new UDPResponseWrapper(Buffer.from('already used'));
+      await response.text(); // Use the body
+      const stream = response.read();
+      expect(stream).toBeNull();
+    });
+  });
+
   describe('Download Progress', () => {
     it('should emit download progress', async () => {
       const response = new UDPResponseWrapper(Buffer.from('progress test'));
@@ -452,6 +470,143 @@ describe('StreamingUDPResponse', () => {
 
     const buffer = await response.buffer();
     expect(buffer.toString()).toBe('hello world');
+  });
+
+  it('should return JSON from streaming response', async () => {
+    const response = new StreamingUDPResponse();
+    response.pushPacket(Buffer.from('{"foo":'));
+    response.pushPacket(Buffer.from('"bar"}'));
+    response.complete();
+
+    const json = await response.json();
+    expect(json).toEqual({ foo: 'bar' });
+  });
+
+  it('should return text from streaming response', async () => {
+    const response = new StreamingUDPResponse();
+    response.pushPacket(Buffer.from('hello '));
+    response.pushPacket(Buffer.from('world'));
+    response.complete();
+
+    const text = await response.text();
+    expect(text).toBe('hello world');
+  });
+
+  it('should return clean text from streaming response', async () => {
+    const response = new StreamingUDPResponse();
+    response.pushPacket(Buffer.from('hello\x00'));
+    response.pushPacket(Buffer.from('world\n\t'));
+    response.complete();
+
+    const clean = await response.cleanText();
+    expect(clean).toBe('hello world');
+  });
+
+  it('should return blob from streaming response', async () => {
+    const response = new StreamingUDPResponse();
+    response.pushPacket(Buffer.from('blob'));
+    response.pushPacket(Buffer.from(' data'));
+    response.complete();
+
+    const blob = await response.blob();
+    expect(blob.size).toBe(9);
+  });
+
+  it('should return readable stream', async () => {
+    const response = new StreamingUDPResponse();
+    response.pushPacket(Buffer.from('stream'));
+    response.complete();
+
+    const stream = response.read();
+    expect(stream).toBeInstanceOf(ReadableStream);
+  });
+
+  it('should clone streaming response', async () => {
+    const response = new StreamingUDPResponse({
+      timings: { queued: 1, send: 2, receive: 3, retransmissions: 0, total: 6 },
+      connection: {
+        protocol: 'udp',
+        localAddress: '127.0.0.1',
+        localPort: 12345,
+        remoteAddress: '192.168.1.1',
+        remotePort: 5000,
+      },
+      url: 'udp://test',
+    });
+    response.pushPacket(Buffer.from('clone'));
+    response.complete();
+
+    const cloned = response.clone();
+    expect(await cloned.text()).toBe('clone');
+    expect(cloned.timings).toEqual(response.timings);
+    expect(cloned.connection).toEqual(response.connection);
+    expect(cloned.url).toBe('udp://test');
+  });
+
+  it('should throw SSE error for streaming response', async () => {
+    const response = new StreamingUDPResponse();
+    response.complete();
+
+    await expect(async () => {
+      for await (const _ of response.sse()) { /* empty */ }
+    }).rejects.toThrow('SSE is not supported for UDP responses');
+  });
+
+  it('should emit download progress for streaming response', async () => {
+    const response = new StreamingUDPResponse();
+    response.pushPacket(Buffer.from('chunk1'));
+    response.pushPacket(Buffer.from('chunk2'));
+    response.complete();
+
+    const events: any[] = [];
+    for await (const event of response.download()) {
+      events.push(event);
+    }
+
+    expect(events.length).toBe(2);
+    expect(events[0].loaded).toBe(6);
+    expect(events[1].loaded).toBe(12);
+  });
+
+  it('should async iterate streaming response', async () => {
+    const response = new StreamingUDPResponse();
+    response.pushPacket(Buffer.from('iter1'));
+    response.pushPacket(Buffer.from('iter2'));
+    response.complete();
+
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of response) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks.length).toBe(2);
+    expect(Buffer.from(chunks[0]).toString()).toBe('iter1');
+    expect(Buffer.from(chunks[1]).toString()).toBe('iter2');
+  });
+
+  it('should throw when pushing to completed stream', () => {
+    const response = new StreamingUDPResponse();
+    response.complete();
+
+    expect(() => response.pushPacket(Buffer.from('late'))).toThrow('Cannot push to completed stream');
+  });
+
+  it('should get url, timings, and connection properties', () => {
+    const response = new StreamingUDPResponse({
+      url: 'udp://example.com:1234',
+      timings: { queued: 5, send: 10, receive: 15, retransmissions: 1, total: 30 },
+      connection: {
+        protocol: 'udp',
+        localAddress: '127.0.0.1',
+        localPort: 54321,
+        remoteAddress: '192.168.0.1',
+        remotePort: 1234,
+      },
+    });
+
+    expect(response.url).toBe('udp://example.com:1234');
+    expect(response.timings.total).toBe(30);
+    expect(response.connection.remotePort).toBe(1234);
   });
 });
 

@@ -132,4 +132,53 @@ describe('New Plugins', () => {
         expect(res.status).toBe(201);
         expect(await res.json()).toEqual({ success: true });
     });
+
+    it('GraphQL: should use GET method when specified', async () => {
+        class GETMockTransport {
+            async dispatch(req: ReckerRequest) {
+                // Check if it's a GET request
+                if (req.method === 'GET' && req.url.includes('query=')) {
+                    return {
+                        ok: true,
+                        status: 200,
+                        headers: new Headers({ 'content-type': 'application/json' }),
+                        json: async () => ({ data: { users: [{ id: 1 }] } }),
+                        clone: function() { return this; }
+                    } as any;
+                }
+                return { ok: true, status: 200, headers: new Headers(), json: async () => ({}) } as any;
+            }
+        }
+
+        const client = createClient({
+            baseUrl: 'http://test/graphql',
+            transport: new GETMockTransport()
+        });
+        const res = await graphql(client, 'query { users { id } }', {}, { method: 'GET' });
+        expect(res).toEqual({ users: [{ id: 1 }] });
+    });
+
+    it('GraphQL: should pass variables with GET method', async () => {
+        class GETVarsMockTransport {
+            async dispatch(req: ReckerRequest) {
+                if (req.method === 'GET' && req.url.includes('variables=')) {
+                    return {
+                        ok: true,
+                        status: 200,
+                        headers: new Headers({ 'content-type': 'application/json' }),
+                        json: async () => ({ data: { user: { id: 1 } } }),
+                        clone: function() { return this; }
+                    } as any;
+                }
+                return { ok: true, status: 200, headers: new Headers(), json: async () => ({}) } as any;
+            }
+        }
+
+        const client = createClient({
+            baseUrl: 'http://test/graphql',
+            transport: new GETVarsMockTransport()
+        });
+        const res = await graphql(client, 'query($id: ID!) { user(id: $id) { id } }', { id: '1' }, { method: 'GET' });
+        expect(res).toEqual({ user: { id: 1 } });
+    });
 });

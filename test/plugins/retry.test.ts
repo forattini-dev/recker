@@ -301,4 +301,33 @@ describe('Advanced Retry Logic', () => {
     delays.forEach(d => expect(d).toBeLessThanOrEqual(100));
   });
 
+  it('should dispatch onRetry global hooks', async () => {
+    let attempts = 0;
+    const hookCalls: any[] = [];
+
+    const mockTransport = new MockTransport();
+    mockTransport.setMockResponse('GET', '/hook-test', 503, '', undefined, { times: 1 });
+    mockTransport.setMockResponse('GET', '/hook-test', 200, { ok: true });
+
+    const client = createClient({
+      baseUrl,
+      transport: mockTransport,
+      plugins: [retry({ maxAttempts: 3, delay: 10 })]
+    });
+
+    // Add global onRetry hook
+    client.hooks = client.hooks || {};
+    client.hooks.onRetry = [
+      async (error, attempt, delay, req) => {
+        hookCalls.push({ error, attempt, delay, url: req.url });
+      }
+    ];
+
+    await client.get('/hook-test').json();
+
+    expect(hookCalls.length).toBeGreaterThan(0);
+    expect(hookCalls[0].attempt).toBe(1);
+    expect(hookCalls[0].delay).toBeGreaterThan(0);
+  });
+
 });

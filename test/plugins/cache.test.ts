@@ -727,4 +727,48 @@ describe('Cache Plugin', () => {
       expect(mockTransport.getCallCount('GET', '/req-nocache')).toBe(2);
     });
   });
+
+  describe('network-first strategy', () => {
+    it('should fetch from network first and cache the response', async () => {
+      const mockTransport = new MockTransport();
+      mockTransport.setMockResponse('GET', '/network-first', 200, { data: 'from-network' });
+
+      const storage = new MemoryStorage();
+      const client = createClient({
+        baseUrl,
+        transport: mockTransport,
+        plugins: [cache({ storage, ttl: 60000, strategy: 'network-first' })]
+      });
+
+      // First request - hits network
+      const res1 = await client.get('/network-first').json<{ data: string }>();
+      expect(res1.data).toBe('from-network');
+      expect(mockTransport.getCallCount('GET', '/network-first')).toBe(1);
+
+      // Second request - also hits network (network-first)
+      const res2 = await client.get('/network-first').json<{ data: string }>();
+      expect(res2.data).toBe('from-network');
+      expect(mockTransport.getCallCount('GET', '/network-first')).toBe(2);
+    });
+
+    it('should cache network response even if not accessed again', async () => {
+      const mockTransport = new MockTransport();
+      mockTransport.setMockResponse('GET', '/cache-store', 200, { data: 'stored' });
+
+      const storage = new MemoryStorage();
+      const client = createClient({
+        baseUrl,
+        transport: mockTransport,
+        plugins: [cache({ storage, ttl: 60000, strategy: 'network-first' })]
+      });
+
+      // Request to store in cache
+      const res1 = await client.get('/cache-store').json<{ data: string }>();
+      expect(res1.data).toBe('stored');
+
+      // Verify it was stored in cache
+      const keys = await storage.keys?.() || [];
+      expect(keys.length).toBeGreaterThan(0);
+    });
+  });
 });

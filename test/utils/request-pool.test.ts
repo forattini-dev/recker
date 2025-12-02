@@ -260,5 +260,6 @@ describe('RequestPool', () => {
       // Signal should not affect anything now
       controller.abort();
     });
+
   });
 });

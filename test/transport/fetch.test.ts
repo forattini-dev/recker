@@ -310,5 +310,35 @@ describe('Fetch Transport', () => {
           }
           expect(chunks).toEqual([]);
       });
+
+      it('should track download progress', async () => {
+          const transport = new FetchTransport();
+          const request = new HttpRequest(`${url}/stream`, { method: 'GET' });
+          const response = await transport.dispatch(request);
+
+          const events: any[] = [];
+          for await (const event of response.download()) {
+              events.push(event);
+          }
+
+          expect(events.length).toBeGreaterThan(0);
+          expect(events[events.length - 1].direction).toBe('download');
+      });
+
+      it('should handle async iteration for stream response', async () => {
+          const transport = new FetchTransport();
+          const request = new HttpRequest(`${url}/stream`, { method: 'GET' });
+          const response = await transport.dispatch(request);
+
+          const chunks: Uint8Array[] = [];
+          for await (const chunk of response) {
+              chunks.push(chunk);
+          }
+
+          const combined = Buffer.concat(chunks).toString();
+          // The response is 'chunk1chunk2end' = 15 chars as specified by Content-Length
+          expect(combined.length).toBe(15);
+          expect(combined).toContain('chunk');
+      });
   });
 });
