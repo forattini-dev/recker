@@ -1,11 +1,14 @@
-import pc from '../../utils/colors.js';
+import colors from '../../utils/colors.js';
 import { plot } from '../../utils/chart.js';
 import readline from 'node:readline';
 import { LoadGenerator, LoadConfig } from '../../bench/generator.js';
 import { LoadStats, ErrorEntry } from '../../bench/stats.js';
+import { sparkline, SparklineBuffer } from '../../utils/sparkline.js';
+import { SystemMetrics } from '../../utils/system-metrics.js';
 
 const ALTERNATE_SCREEN_ENTER = '\x1b[?1049h';
 const ALTERNATE_SCREEN_EXIT = '\x1b[?1049l';
+const SPARKLINE_WIDTH = 40;
 
 export async function startLoadDashboard(config: LoadConfig) {
   // Enter Alternate Screen Buffer (saves current shell state)
@@ -19,7 +22,27 @@ export async function startLoadDashboard(config: LoadConfig) {
   }
 
   const generator = new LoadGenerator(config);
-  
+
+  // System metrics collector
+  const sysMetrics = new SystemMetrics();
+  const cpuBuffer = new SparklineBuffer(SPARKLINE_WIDTH);
+  const memBuffer = new SparklineBuffer(SPARKLINE_WIDTH);
+  let currentCpu = 0;
+  let currentMem = { percent: 0, used: 0, total: 0 };
+
+  // Start collecting system metrics
+  sysMetrics.onSnapshot((snap) => {
+    cpuBuffer.push(snap.cpu);
+    memBuffer.push(snap.memory);
+    currentCpu = snap.cpu;
+    currentMem = {
+      percent: snap.memory,
+      used: snap.memoryUsed,
+      total: snap.memoryTotal
+    };
+  });
+  sysMetrics.startPolling(1000);
+
   let abortReject: (reason?: any) => void;
   const abortPromise = new Promise((_, reject) => {
       abortReject = reject;
@@ -28,11 +51,12 @@ export async function startLoadDashboard(config: LoadConfig) {
   const onKeypress = (_str: string, key: { name: string, ctrl: boolean }) => {
       if (key && (key.name === 'escape' || (key.ctrl && key.name === 'c'))) {
           generator.stop();
+          sysMetrics.stopPolling();
           if (abortReject) abortReject(new Error('User aborted'));
       }
   };
   process.stdin.on('keypress', onKeypress);
-  
+
   // Data history for charts (keep last 60 seconds or so)
   const rpsHistory: number[] = new Array(60).fill(0);
   const latencyHistory: number[] = new Array(60).fill(0);
@@ -53,18 +77,23 @@ export async function startLoadDashboard(config: LoadConfig) {
     }
 
     const snapshot = generator.stats.getSnapshot();
-    
+
     // Update history
     rpsHistory.shift();
     rpsHistory.push(snapshot.rps);
-    
+
     latencyHistory.shift();
     latencyHistory.push(snapshot.p95);
 
     usersHistory.shift();
     usersHistory.push(snapshot.activeUsers);
 
-    render(config, elapsed, remaining, snapshot, rpsHistory, latencyHistory, usersHistory, generator.stats);
+    render(
+      config, elapsed, remaining, snapshot,
+      rpsHistory, latencyHistory, usersHistory,
+      generator.stats,
+      cpuBuffer, memBuffer, currentCpu, currentMem
+    );
 
   }, 1000);
 
@@ -74,13 +103,14 @@ export async function startLoadDashboard(config: LoadConfig) {
       if (e.message !== 'User aborted') throw e;
   } finally {
       clearInterval(interval);
+      sysMetrics.stopPolling();
       process.stdin.off('keypress', onKeypress);
       if (process.stdin.isTTY) process.stdin.setRawMode(false);
-      
+
       // Exit Alternate Screen Buffer (restores shell state)
       process.stdout.write(ALTERNATE_SCREEN_EXIT);
   }
-  
+
   // Render final report on the main screen (shell history)
   renderFinalReport(generator.stats, config);
 }
@@ -93,73 +123,91 @@ function render(
     rpsHistory: number[],
     latencyHistory: number[],
     usersHistory: number[],
-    stats: LoadStats
+    stats: LoadStats,
+    cpuBuffer: SparklineBuffer,
+    memBuffer: SparklineBuffer,
+    currentCpu: number,
+    currentMem: { percent: number, used: number, total: number }
 ) {
     // Clear screen (in alternate buffer, 0,0 is top left)
     readline.cursorTo(process.stdout, 0, 0);
     readline.clearScreenDown(process.stdout);
 
-    console.log(pc.bold(pc.cyan('🔥 Rek Load Generator')));
-    console.log(pc.gray(`Target: ${config.url}`));
-    console.log(pc.gray(`Mode: ${config.mode.toUpperCase()} ${config.http2 ? '(HTTP/2)' : ''}`));
-    console.log(pc.gray('Press ESC to stop'));
+    console.log(colors.bold(colors.cyan('🔥 Rek Load Generator')));
+    console.log(colors.gray(`Target: ${config.url}`));
+    console.log(colors.gray(`Mode: ${config.mode.toUpperCase()} ${config.http2 ? '(HTTP/2)' : ''}`));
+    console.log(colors.gray('Press ESC to stop'));
     console.log('');
 
     // Status Bar
     console.log(
-        `${pc.white('Time:')} ${pc.green(elapsed + 's')} ` +
-        `${pc.gray('/')} ${config.duration}s ` +
-        `${pc.gray('(')}${pc.yellow(remaining + 's left')}${pc.gray(')')}   ` +
-        `${pc.white('Reqs:')} ${pc.bold(String(stats.totalRequests))}`
+        `${colors.white('Time:')} ${colors.green(elapsed + 's')} ` +
+        `${colors.gray('/')} ${config.duration}s ` +
+        `${colors.gray('(')}${colors.yellow(remaining + 's left')}${colors.gray(')')}   ` +
+        `${colors.white('Reqs:')} ${colors.bold(String(stats.totalRequests))}`
     );
 
     // Metrics Row
     console.log(
-        `${pc.blue('Users:')} ${pc.bold(String(snapshot.activeUsers))}   ` +
-        `${pc.green('RPS:')} ${pc.bold(snapshot.rps.toFixed(0))}   ` +
-        `${pc.magenta('Latency (P95):')} ${pc.bold(snapshot.p95.toFixed(0) + 'ms')}   ` +
-        `${pc.white('Errors:')} ${stats.failed > 0 ? pc.red(String(stats.failed)) : pc.green('0')}`
+        `${colors.blue('Users:')} ${colors.bold(String(snapshot.activeUsers))}   ` +
+        `${colors.green('RPS:')} ${colors.bold(snapshot.rps.toFixed(0))}   ` +
+        `${colors.magenta('Latency (P95):')} ${colors.bold(snapshot.p95.toFixed(0) + 'ms')}   ` +
+        `${colors.white('Errors:')} ${stats.failed > 0 ? colors.red(String(stats.failed)) : colors.green('0')}`
     );
 
-    console.log(pc.gray('──────────────────────────────────────────────────'));
+    console.log(colors.gray('──────────────────────────────────────────────────'));
 
     // 1. Active Users Chart
-    console.log(pc.bold(pc.blue('👥 Active Users')));
-    console.log(pc.blue(plot(usersHistory, { height: 4 })));
+    console.log(colors.bold(colors.blue('👥 Active Users')));
+    console.log(colors.blue(plot(usersHistory, { height: 4 })));
     console.log('');
 
     // 2. RPS Chart
-    console.log(pc.bold(pc.green('⚡ Requests per Second')));
-    console.log(pc.green(plot(rpsHistory, { height: 6 })));
+    console.log(colors.bold(colors.green('⚡ Requests per Second')));
+    console.log(colors.green(plot(rpsHistory, { height: 6 })));
     console.log('');
 
     // 3. Latency Chart
-    console.log(pc.bold(pc.magenta('⏱️  Latency P95 (ms)')));
-    console.log(pc.magenta(plot(latencyHistory, { height: 4 })));
+    console.log(colors.bold(colors.magenta('⏱️  Latency P95 (ms)')));
+    console.log(colors.magenta(plot(latencyHistory, { height: 4 })));
+    console.log('');
 
-    // 4. Real-time Error List (if any errors)
+    // 4. System Resources (CPU & Memory sparklines)
+    console.log(colors.bold(colors.yellow('💻 System Resources')));
+    const cpuSparkline = cpuBuffer.render({ min: 0, max: 100 });
+    const memSparkline = memBuffer.render({ min: 0, max: 100 });
+    const memUsed = SystemMetrics.formatBytes(currentMem.used);
+    const memTotal = SystemMetrics.formatBytes(currentMem.total);
+    console.log(
+        `  ${colors.yellow('CPU')} ${colors.gray(cpuSparkline)} ${colors.bold(currentCpu.toFixed(0) + '%')}`
+    );
+    console.log(
+        `  ${colors.yellow('RAM')} ${colors.gray(memSparkline)} ${colors.bold(currentMem.percent.toFixed(0) + '%')} ${colors.gray(`(${memUsed}/${memTotal})`)}`
+    );
+
+    // 5. Real-time Error List (if any errors)
     const recentErrors = stats.getRecentErrors();
     if (recentErrors.length > 0) {
         console.log('');
-        console.log(pc.bold(pc.red('⚠️  Recent Errors')));
+        console.log(colors.bold(colors.red('⚠️  Recent Errors')));
         renderErrorList(recentErrors, 5);
     }
 }
 
 /**
- * Format error entry with status code badge
+ * Format error entry compactly: "123x 429 TooManyRequests"
  */
 function formatErrorEntry(entry: ErrorEntry): string {
-    const count = pc.gray(`${entry.count}x`);
+    const count = colors.white(`${entry.count}x`);
 
     if (entry.status === 0) {
-        // Network error (no status code)
-        return `  ${count} ${pc.red('NET')} ${entry.message}`;
+        // Network error (no status code) - show as red tag
+        return `  ${count} ${colors.red('ERR')} ${colors.gray(entry.message)}`;
     }
 
-    // HTTP error with status code
-    const statusBadge = formatStatusBadge(entry.status);
-    return `  ${count} ${statusBadge} ${entry.message}`;
+    // HTTP error: "123x 429 TooManyRequests"
+    const statusColor = entry.status >= 500 ? colors.red : colors.yellow;
+    return `  ${count} ${statusColor(String(entry.status))} ${colors.gray(entry.message)}`;
 }
 
 /**
@@ -167,10 +215,10 @@ function formatErrorEntry(entry: ErrorEntry): string {
  */
 function formatStatusBadge(status: number): string {
     const code = String(status);
-    if (status >= 500) return pc.bgRed(pc.white(` ${code} `));
-    if (status >= 400) return pc.bgYellow(pc.black(` ${code} `));
-    if (status >= 300) return pc.bgCyan(pc.black(` ${code} `));
-    return pc.bgGreen(pc.black(` ${code} `));
+    if (status >= 500) return colors.bgRed(colors.white(` ${code} `));
+    if (status >= 400) return colors.bgYellow(colors.black(` ${code} `));
+    if (status >= 300) return colors.bgCyan(colors.black(` ${code} `));
+    return colors.bgGreen(colors.black(` ${code} `));
 }
 
 /**
@@ -182,28 +230,28 @@ function renderErrorList(errors: ErrorEntry[], maxItems: number = 10) {
         console.log(formatErrorEntry(entry));
     }
     if (errors.length > maxItems) {
-        console.log(pc.gray(`  ... and ${errors.length - maxItems} more`));
+        console.log(colors.gray(`  ... and ${errors.length - maxItems} more`));
     }
 }
 
 function renderFinalReport(stats: LoadStats, config: LoadConfig) {
     const summary = stats.getSummary();
 
-    console.log(pc.bold(pc.green('\n✅ Load Test Complete')));
+    console.log(colors.bold(colors.green('\n✅ Load Test Complete')));
 
-    console.log(pc.bold('Configuration:'));
+    console.log(colors.bold('Configuration:'));
     console.log(`  URL:      ${config.url}`);
     console.log(`  Mode:     ${config.mode}`);
     console.log(`  Users:    ${config.users}`);
     console.log(`  Duration: ${config.duration}s`);
 
-    console.log('\n' + pc.bold('Traffic:'));
+    console.log('\n' + colors.bold('Traffic:'));
     console.log(`  Total Requests:  ${summary.total}`);
-    console.log(`  Successful:      ${pc.green(String(summary.success))}`);
-    console.log(`  Failed:          ${summary.failed > 0 ? pc.red(String(summary.failed)) : pc.gray('0')}`);
+    console.log(`  Successful:      ${colors.green(String(summary.success))}`);
+    console.log(`  Failed:          ${summary.failed > 0 ? colors.red(String(summary.failed)) : colors.gray('0')}`);
     console.log(`  Total Bytes:     ${(summary.bytes / 1024 / 1024).toFixed(2)} MB`);
 
-    console.log('\n' + pc.bold('Latency (ms):'));
+    console.log('\n' + colors.bold('Latency (ms):'));
     console.log(`  Avg: ${summary.latency.avg.toFixed(2)}`);
     console.log(`  P50: ${summary.latency.p50.toFixed(0)}`);
     console.log(`  P95: ${summary.latency.p95.toFixed(0)}`);
@@ -211,35 +259,51 @@ function renderFinalReport(stats: LoadStats, config: LoadConfig) {
     console.log(`  Max: ${summary.latency.max.toFixed(0)}`);
 
     if (Object.keys(summary.codes).length > 0) {
-        console.log('\n' + pc.bold('Status Codes:'));
-        Object.entries(summary.codes)
+        console.log('\n' + colors.bold('Status Codes:'));
+        // Compact format: "200: 1234  404: 56  500: 12"
+        const codeEntries = Object.entries(summary.codes)
             .sort(([a], [b]) => Number(a) - Number(b))
-            .forEach(([code, count]) => {
-                const badge = formatStatusBadge(Number(code));
-                console.log(`  ${badge} ${count}`);
+            .map(([code, count]) => {
+                const c = Number(code);
+                const color = c >= 500 ? colors.red : c >= 400 ? colors.yellow : colors.green;
+                return `${color(code)}: ${count}`;
             });
+        console.log(`  ${codeEntries.join('  ')}`);
     }
 
-    // Show errors with status codes
+    // Show errors compactly
     const allErrors = stats.getErrors();
     if (allErrors.length > 0) {
-        console.log('\n' + pc.bold(pc.red('Errors:')));
-        renderErrorList(allErrors, 15);
+        console.log('\n' + colors.bold(colors.red('Errors:')));
 
-        // Summary of error types
-        const networkErrors = allErrors.filter(e => e.status === 0);
+        // Group by type for cleaner output
         const httpErrors = allErrors.filter(e => e.status > 0);
+        const netErrors = allErrors.filter(e => e.status === 0);
 
-        if (networkErrors.length > 0 || httpErrors.length > 0) {
-            console.log('');
-            console.log(pc.gray('  Summary:'));
-            if (networkErrors.length > 0) {
-                const total = networkErrors.reduce((sum, e) => sum + e.count, 0);
-                console.log(pc.gray(`    Network errors: ${total} (${networkErrors.length} types)`));
+        // Show HTTP errors inline: "123x 429 TooManyRequests, 45x 503 ServiceUnavailable"
+        if (httpErrors.length > 0) {
+            const httpLine = httpErrors
+                .slice(0, 5)
+                .map(e => {
+                    const color = e.status >= 500 ? colors.red : colors.yellow;
+                    return `${e.count}x ${color(String(e.status))} ${colors.gray(e.message)}`;
+                })
+                .join(colors.gray(', '));
+            console.log(`  ${httpLine}`);
+            if (httpErrors.length > 5) {
+                console.log(colors.gray(`  ... +${httpErrors.length - 5} more HTTP errors`));
             }
-            if (httpErrors.length > 0) {
-                const total = httpErrors.reduce((sum, e) => sum + e.count, 0);
-                console.log(pc.gray(`    HTTP errors: ${total} (${httpErrors.length} types)`));
+        }
+
+        // Show network errors
+        if (netErrors.length > 0) {
+            const netLine = netErrors
+                .slice(0, 5)
+                .map(e => `${e.count}x ${colors.red('ERR')} ${colors.gray(e.message)}`)
+                .join(colors.gray(', '));
+            console.log(`  ${netLine}`);
+            if (netErrors.length > 5) {
+                console.log(colors.gray(`  ... +${netErrors.length - 5} more network errors`));
             }
         }
     }

@@ -1,6 +1,6 @@
 import { createClient } from '../core/client.js';
 import { requireOptional } from '../utils/optional-require.js';
-import pc from '../utils/colors.js';
+import colors from '../utils/colors.js';
 import oraImport from 'ora';
 
 // Lazy-loaded optional dependency
@@ -36,7 +36,7 @@ export async function handleRequest(options: RequestOptions) {
   await initDependencies();
 
   const spinner = ora({
-    text: `${pc.bold(options.method)} ${pc.cyan(options.url)}`,
+    text: `${colors.bold(options.method)} ${colors.cyan(options.url)}`,
     color: 'cyan',
     spinner: 'dots'
   }).start();
@@ -95,32 +95,32 @@ export async function handleRequest(options: RequestOptions) {
     spinner.stop();
 
     // Status Line
-    const statusColor = response.ok ? pc.green : pc.red;
+    const statusColor = response.ok ? colors.green : colors.red;
     console.log(
-      `${statusColor(pc.bold(response.status))} ${statusColor(response.statusText)} ` +
-      `${pc.gray(`(${duration}ms)`)}`
+      `${statusColor(colors.bold(response.status))} ${statusColor(response.statusText)} ` +
+      `${colors.gray(`(${duration}ms)`)}`
     );
 
     // Verbose: Request details
     if (options.verbose) {
-        console.log(pc.gray('\n--- Request ---'));
-        console.log(`${pc.bold(options.method)} ${options.url}`);
+        console.log(colors.gray('\n--- Request ---'));
+        console.log(`${colors.bold(options.method)} ${options.url}`);
         Object.entries(options.headers).forEach(([k, v]) => {
-            console.log(`${pc.blue(k)}: ${v}`);
+            console.log(`${colors.blue(k)}: ${v}`);
         });
         if (options.body) {
-            console.log(pc.gray('Body:'), JSON.stringify(options.body, null, 2));
+            console.log(colors.gray('Body:'), JSON.stringify(options.body, null, 2));
         }
-        console.log(pc.gray('---------------\n'));
+        console.log(colors.gray('---------------\n'));
     }
 
     // Verbose: Response Headers
     if (options.verbose) {
-        console.log(pc.gray('--- Response Headers ---'));
+        console.log(colors.gray('--- Response Headers ---'));
         response.headers.forEach((value, key) => {
-            console.log(`${pc.blue(key)}: ${value}`);
+            console.log(`${colors.blue(key)}: ${value}`);
         });
-        console.log(pc.gray('------------------------\n'));
+        console.log(colors.gray('------------------------\n'));
     }
 
     // Response Body
@@ -145,7 +145,7 @@ export async function handleRequest(options: RequestOptions) {
     }
 
   } catch (error) {
-    spinner.fail(pc.red('Request Failed'));
+    spinner.fail(colors.red('Request Failed'));
     throw error;
   }
 }

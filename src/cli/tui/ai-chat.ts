@@ -1,21 +1,21 @@
 import readline from 'node:readline';
-import pc from '../../utils/colors.js';
+import colors from '../../utils/colors.js';
 import { createAI } from '../../ai/client.js';
 import { ChatMessage } from '../../types/ai.js';
 
 export async function startAIChat(rl: readline.Interface, provider: string = 'openai', apiKey?: string, model?: string) {
   console.clear();
-  console.log(pc.bold(pc.magenta(`🤖 Rek AI Chat (${provider})`)));
-  console.log(pc.gray('Type your message. Ctrl+C to exit.'));
+  console.log(colors.bold(colors.magenta(`🤖 Rek AI Chat (${provider})`)));
+  console.log(colors.gray('Type your message. Ctrl+C to exit.'));
 
   // Resolve API Key
   const envKey = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
   const key = apiKey || process.env[envKey];
 
   if (!key) {
-    console.log(pc.yellow(`
+    console.log(colors.yellow(`
 Warning: No API Key found for ${provider}.`));
-    console.log(`Please set it via environment variable ${pc.bold(envKey)} or passing it to the command.`);
+    console.log(`Please set it via environment variable ${colors.bold(envKey)} or passing it to the command.`);
     console.log(`Example: set ${envKey}=sk-... inside the shell.`);
     return;
   }
@@ -34,7 +34,7 @@ Warning: No API Key found for ${provider}.`));
     { role: 'system', content: 'You are Recker AI, a helpful and concise assistant in a terminal environment.' }
   ];
 
-  rl.setPrompt(pc.magenta('You › '));
+  rl.setPrompt(colors.magenta('You › '));
   rl.prompt();
 
   return new Promise<void>((resolve) => {
@@ -49,7 +49,7 @@ Warning: No API Key found for ${provider}.`));
       if (input.toLowerCase() === '/clear') {
         history.length = 1;
         console.clear();
-        console.log(pc.gray('Context cleared.'));
+        console.log(colors.gray('Context cleared.'));
         rl.prompt();
         return;
       }
@@ -65,7 +65,7 @@ Warning: No API Key found for ${provider}.`));
 
       // Pause RL while generating to prevent input mess
       rl.pause();
-      process.stdout.write(pc.cyan('AI  › '));
+      process.stdout.write(colors.cyan('AI  › '));
 
       let fullResponse = '';
       
@@ -88,9 +88,9 @@ Warning: No API Key found for ${provider}.`));
         history.push({ role: 'assistant', content: fullResponse });
 
       } catch (error: any) {
-        console.log(pc.red(`
+        console.log(colors.red(`
 Error: ${error.message}`));
-        if (error.cause) console.log(pc.gray(error.cause));
+        if (error.cause) console.log(colors.gray(error.cause));
       } finally {
         rl.resume();
         rl.prompt();
