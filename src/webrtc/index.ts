@@ -3,6 +3,16 @@
  *
  * Provides WebRTC utilities for peer-to-peer communication and data channels.
  * Note: WebRTC requires a browser environment or Node.js with wrtc package.
+ */
+
+import {
+  StateError,
+  TimeoutError,
+  ConnectionError,
+  UnsupportedError,
+} from '../core/errors.js';
+
+/**
  *
  * @example
  * ```typescript
@@ -295,7 +305,10 @@ export class WebRTCClient extends EventEmitter {
    */
   async connect(remotePeerId: string): Promise<void> {
     if (this.connections.has(remotePeerId)) {
-      throw new Error(`Already connected to peer: ${remotePeerId}`);
+      throw new StateError(`Already connected to peer: ${remotePeerId}`, {
+        expectedState: 'disconnected',
+        actualState: 'connected',
+      });
     }
 
     this.log(`Connecting to peer: ${remotePeerId}`);
@@ -358,7 +371,10 @@ export class WebRTCClient extends EventEmitter {
     if (remotePeerId) {
       const dc = this.dataChannels.get(remotePeerId);
       if (!dc || dc.readyState !== 'open') {
-        throw new Error(`No open data channel to peer: ${remotePeerId}`);
+        throw new StateError(`No open data channel to peer: ${remotePeerId}`, {
+          expectedState: 'open',
+          actualState: dc?.readyState ?? 'no-channel',
+        });
       }
       dc.send(message);
     } else {
@@ -378,7 +394,10 @@ export class WebRTCClient extends EventEmitter {
     if (remotePeerId) {
       const dc = this.dataChannels.get(remotePeerId);
       if (!dc || dc.readyState !== 'open') {
-        throw new Error(`No open data channel to peer: ${remotePeerId}`);
+        throw new StateError(`No open data channel to peer: ${remotePeerId}`, {
+          expectedState: 'open',
+          actualState: dc?.readyState ?? 'no-channel',
+        });
       }
       // Use any to bypass strict type checking for cross-platform compatibility
       (dc as any).send(data);
@@ -409,9 +428,9 @@ export class WebRTCClient extends EventEmitter {
     // Note: RTCPeerConnection is not available in Node.js by default
     // Users need to provide a polyfill like 'wrtc' or use this in a browser
     if (typeof RTCPeerConnection === 'undefined') {
-      throw new Error(
-        'RTCPeerConnection is not available. ' +
-        'In Node.js, install the "wrtc" package and ensure it\'s loaded before using WebRTC.'
+      throw new UnsupportedError(
+        'RTCPeerConnection is not available. In Node.js, install the "wrtc" package and ensure it\'s loaded before using WebRTC.',
+        { feature: 'RTCPeerConnection' }
       );
     }
 
@@ -562,7 +581,10 @@ export class WebRTCClient extends EventEmitter {
   private waitForConnection(remotePeerId: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error(`Connection timeout to peer: ${remotePeerId}`));
+        reject(new TimeoutError(undefined, {
+          phase: 'webrtc-connect',
+          timeout: this.connectionTimeout,
+        }));
       }, this.connectionTimeout);
 
       const checkConnection = () => {
@@ -583,7 +605,9 @@ export class WebRTCClient extends EventEmitter {
       this.on('disconnected', (peerId) => {
         if (peerId === remotePeerId) {
           clearTimeout(timeout);
-          reject(new Error(`Connection failed to peer: ${remotePeerId}`));
+          reject(new ConnectionError(`Connection failed to peer: ${remotePeerId}`, {
+            host: remotePeerId,
+          }));
         }
       });
 

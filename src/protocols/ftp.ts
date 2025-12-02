@@ -12,6 +12,14 @@ import { TLSSocket, connect as tlsConnect, type ConnectionOptions } from 'node:t
 import { Readable, Writable } from 'node:stream';
 import { createWriteStream, createReadStream } from 'node:fs';
 import { EventEmitter } from 'node:events';
+import {
+  ProtocolError,
+  StateError,
+  AuthenticationError,
+  ConnectionError,
+  TimeoutError,
+  ParseError,
+} from '../core/errors.js';
 
 // ============================================================================
 // FTP Response Codes (RFC 959)
@@ -213,7 +221,11 @@ export class FTP extends EventEmitter {
       this.debug('Welcome: %s', welcome.message);
 
       if (welcome.code !== ResponseCode.SERVICE_READY) {
-        throw new Error(`Server not ready: ${welcome.message}`);
+        throw new ProtocolError(`Server not ready: ${welcome.message}`, {
+          protocol: 'ftp',
+          code: welcome.code,
+          phase: 'connect',
+        });
       }
 
       // Authenticate
@@ -341,7 +353,11 @@ export class FTP extends EventEmitter {
       const response = await this.readResponse();
       if (response.code !== ResponseCode.CLOSING_DATA_CONNECTION &&
           response.code !== ResponseCode.FILE_ACTION_OK) {
-        throw new Error(response.message);
+        throw new ProtocolError(response.message, {
+          protocol: 'ftp',
+          code: response.code,
+          phase: 'transfer',
+        });
       }
 
       return {
@@ -453,7 +469,11 @@ export class FTP extends EventEmitter {
       const response = await this.readResponse();
       if (response.code !== ResponseCode.CLOSING_DATA_CONNECTION &&
           response.code !== ResponseCode.FILE_ACTION_OK) {
-        throw new Error(response.message);
+        throw new ProtocolError(response.message, {
+          protocol: 'ftp',
+          code: response.code,
+          phase: 'transfer',
+        });
       }
 
       return {
@@ -575,7 +595,11 @@ export class FTP extends EventEmitter {
       // RNFR - Rename From
       const rnfrResponse = await this.sendCommand(`RNFR ${oldPath}`);
       if (rnfrResponse.code !== ResponseCode.FILE_ACTION_PENDING) {
-        throw new Error(rnfrResponse.message);
+        throw new ProtocolError(rnfrResponse.message, {
+          protocol: 'ftp',
+          code: rnfrResponse.code,
+          phase: 'rename',
+        });
       }
 
       // RNTO - Rename To
@@ -713,7 +737,10 @@ export class FTP extends EventEmitter {
    */
   getSocket(): Socket | TLSSocket {
     if (!this.controlSocket) {
-      throw new Error('Not connected. Call connect() first.');
+      throw new StateError('Not connected. Call connect() first.', {
+        expectedState: 'connected',
+        actualState: 'disconnected',
+      });
     }
     return this.controlSocket;
   }
@@ -738,7 +765,10 @@ export class FTP extends EventEmitter {
 
       socket.on('timeout', () => {
         socket.destroy();
-        reject(new Error('Connection timeout'));
+        reject(new TimeoutError(undefined, {
+          phase: 'connect',
+          timeout: this.config.timeout,
+        }));
       });
 
       socket.connect(this.config.port, this.config.host);
@@ -765,7 +795,10 @@ export class FTP extends EventEmitter {
       socket.setTimeout(this.config.timeout);
       socket.on('timeout', () => {
         socket.destroy();
-        reject(new Error('Connection timeout'));
+        reject(new TimeoutError(undefined, {
+          phase: 'secureConnect',
+          timeout: this.config.timeout,
+        }));
       });
     });
   }
@@ -774,7 +807,11 @@ export class FTP extends EventEmitter {
     // Send AUTH TLS command
     const authResponse = await this.sendCommand('AUTH TLS');
     if (authResponse.code !== ResponseCode.AUTH_OK) {
-      throw new Error(`AUTH TLS failed: ${authResponse.message}`);
+      throw new ProtocolError(`AUTH TLS failed: ${authResponse.message}`, {
+        protocol: 'ftp',
+        code: authResponse.code,
+        phase: 'tls-upgrade',
+      });
     }
 
     // Upgrade socket to TLS
@@ -805,14 +842,18 @@ export class FTP extends EventEmitter {
     }
 
     if (userResponse.code !== ResponseCode.NEED_PASSWORD) {
-      throw new Error(`Authentication failed: ${userResponse.message}`);
+      throw new AuthenticationError(`Authentication failed: ${userResponse.message}`, {
+        authType: 'ftp-user',
+      });
     }
 
     // Send PASS
     const passResponse = await this.sendCommand(`PASS ${this.config.password}`);
 
     if (passResponse.code !== ResponseCode.USER_LOGGED_IN) {
-      throw new Error(`Authentication failed: ${passResponse.message}`);
+      throw new AuthenticationError(`Authentication failed: ${passResponse.message}`, {
+        authType: 'ftp-password',
+      });
     }
 
     // Enable protection if using TLS
@@ -831,13 +872,19 @@ export class FTP extends EventEmitter {
     const pasvResponse = await this.sendCommand('PASV');
 
     if (pasvResponse.code !== ResponseCode.ENTERING_PASSIVE) {
-      throw new Error(`PASV failed: ${pasvResponse.message}`);
+      throw new ProtocolError(`PASV failed: ${pasvResponse.message}`, {
+        protocol: 'ftp',
+        code: pasvResponse.code,
+        phase: 'pasv',
+      });
     }
 
     // Parse PASV response: 227 Entering Passive Mode (h1,h2,h3,h4,p1,p2)
     const match = pasvResponse.message.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
     if (!match) {
-      throw new Error('Failed to parse PASV response');
+      throw new ParseError('Failed to parse PASV response', {
+        format: 'pasv',
+      });
     }
 
     const host = `${match[1]}.${match[2]}.${match[3]}.${match[4]}`;
@@ -885,7 +932,11 @@ export class FTP extends EventEmitter {
           const response = await this.readResponse();
           if (response.code !== ResponseCode.CLOSING_DATA_CONNECTION &&
               response.code !== ResponseCode.FILE_ACTION_OK) {
-            reject(new Error(response.message));
+            reject(new ProtocolError(response.message, {
+              protocol: 'ftp',
+              code: response.code,
+              phase: 'data-transfer',
+            }));
           } else {
             resolve(data);
           }
@@ -904,7 +955,10 @@ export class FTP extends EventEmitter {
 
   private async sendCommand(command: string): Promise<FTPReply> {
     if (!this.controlSocket) {
-      throw new Error('Not connected');
+      throw new StateError('Not connected', {
+        expectedState: 'connected',
+        actualState: 'disconnected',
+      });
     }
 
     const displayCommand = command.startsWith('PASS ')
@@ -1124,7 +1178,10 @@ export class FTP extends EventEmitter {
 
   private ensureConnected(): void {
     if (!this.connected || !this.controlSocket || this.controlSocket.destroyed) {
-      throw new Error('Not connected to FTP server. Call connect() first.');
+      throw new StateError('Not connected to FTP server. Call connect() first.', {
+        expectedState: 'connected',
+        actualState: 'disconnected',
+      });
     }
   }
 
@@ -1189,7 +1246,10 @@ export async function ftp<T>(
   try {
     const result = await client.connect();
     if (!result.success) {
-      throw new Error(result.message || 'Failed to connect to FTP server');
+      throw new ConnectionError(result.message || 'Failed to connect to FTP server', {
+        host: config.host,
+        port: config.port,
+      });
     }
 
     return await operation(client);
