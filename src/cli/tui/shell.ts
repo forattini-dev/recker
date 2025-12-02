@@ -12,6 +12,7 @@ import { rdap } from '../../utils/rdap.js';
 import { ScrapeDocument } from '../../scrape/document.js';
 import colors from '../../utils/colors.js';
 import { getShellSearch } from './shell-search.js';
+import { openSearchPanel } from './search-panel.js';
 
 // Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
@@ -108,7 +109,7 @@ export class RekShell {
     const commands = [
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
-      'whois', 'tls', 'ssl', 'dns', 'rdap', 'ping',
+      'whois', 'tls', 'ssl', 'dns', 'dns:propagate', 'rdap', 'ping',
       'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
       '?', 'search', 'suggest', 'example',
       'help', 'clear', 'exit', 'set', 'url', 'vars', 'env'
@@ -154,6 +155,15 @@ export class RekShell {
   }
 
   private async handleCommand(input: string) {
+    // 0. Natural language search: lines ending with ?
+    // "how to configure retry?" - triggers search panel
+    // Note: "? query" is handled by the switch case below
+    if (input.endsWith('?') && !input.startsWith('?') && input.length > 1) {
+      // Natural question like "how to configure retry?"
+      await this.runSearch(input.slice(0, -1).trim());
+      return;
+    }
+
     // 1. Variable assignment: var = value
     if (input.includes('=') && !input.includes(' ') && !input.startsWith('http')) {
       // Allow simple variable setting context? Maybe later.
@@ -203,6 +213,9 @@ export class RekShell {
         return;
       case 'dns':
         await this.runDNS(parts[1]);
+        return;
+      case 'dns:propagate':
+        await this.runDNSPropagation(parts[1], parts[2]);
         return;
       case 'rdap':
         await this.runRDAP(parts[1]);
@@ -884,6 +897,29 @@ export class RekShell {
       console.error(colors.red(`DNS lookup failed: ${error.message}`));
     }
     console.log('');
+  }
+
+  private async runDNSPropagation(domain: string, type: string = 'A') {
+    if (!domain) {
+      domain = this.getBaseDomain() || '';
+      if (!domain) {
+        console.log(colors.yellow('Usage: dns:propagate <domain> [type]'));
+        console.log(colors.gray('  Examples: dns:propagate google.com | dns:propagate github.com TXT'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
+    }
+
+    console.log(colors.gray(`Checking DNS propagation for ${domain} (${type})...`));
+    
+    try {
+      const { checkPropagation, formatPropagationReport } = await import('../../dns/propagation.js');
+      const results = await checkPropagation(domain, type);
+      console.log(formatPropagationReport(results, domain, type));
+      this.lastResponse = results;
+    } catch (error: any) {
+      console.error(colors.red(`Propagation check failed: ${error.message}`));
+    }
   }
 
   private async runRDAP(domain?: string) {
@@ -1989,45 +2025,18 @@ export class RekShell {
   // ============ Documentation Search Commands ============
 
   private async runSearch(query: string) {
-    if (!query.trim()) {
-      console.log(colors.yellow('Usage: ? <query> or search <query>'));
-      console.log(colors.gray('  Examples:'));
-      console.log(colors.gray('    ? retry exponential backoff'));
-      console.log(colors.gray('    search cache configuration'));
-      return;
-    }
-
-    console.log(colors.gray('Searching documentation...'));
-
+    // Open fullscreen search panel
     try {
-      const search = getShellSearch();
-      const results = await search.search(query, { limit: 5 });
+      // Close readline temporarily to allow raw mode
+      this.rl.pause();
 
-      if (results.length === 0) {
-        console.log(colors.yellow(`No results for: "${query}"`));
-        console.log(colors.gray('Try different keywords like: retry, cache, streaming, websocket, pagination'));
-        return;
-      }
+      await openSearchPanel(query.trim() || undefined);
 
-      console.log(colors.bold(colors.cyan(`\nFound ${results.length} results for "${query}":\n`)));
-
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        const score = Math.round(result.score * 100);
-
-        console.log(`  ${colors.green(`${i + 1}.`)} ${colors.bold(result.title)} ${colors.gray(`(${score}%)`)}`);
-        console.log(`     ${colors.gray(result.path)}`);
-
-        if (result.snippet) {
-          const snippet = result.snippet.slice(0, 120).replace(/\n/g, ' ');
-          console.log(`     ${colors.gray(snippet)}${result.snippet.length > 120 ? '...' : ''}`);
-        }
-        console.log('');
-      }
-
-      console.log(colors.gray('  Tip: Use "get_doc <path>" to read full documentation'));
+      // Resume readline after panel closes
+      this.rl.resume();
     } catch (error: any) {
       console.error(colors.red(`Search failed: ${error.message}`));
+      this.rl.resume();
     }
   }
 

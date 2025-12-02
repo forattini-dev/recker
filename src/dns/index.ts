@@ -32,6 +32,7 @@ import { getSecurityRecords as getSecurityRecordsUtil, type DnsSecurityRecords }
 export { createLookupFunction, customDNSLookup } from '../utils/dns.js';
 export { createDoHLookup } from '../utils/doh.js';
 export { getSecurityRecords, type DnsSecurityRecords } from '../utils/dns-toolkit.js';
+export { checkPropagation, type PropagationResult, type DnsRecord, formatPropagationReport } from './propagation.js';
 export type { DNSOptions } from '../types/index.js';
 
 /**
