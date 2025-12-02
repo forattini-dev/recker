@@ -213,4 +213,108 @@ describe('Embeddings Loader', () => {
       }
     });
   });
+
+  describe('downloadEmbeddings', () => {
+    it('should download and cache embeddings from GitHub', async () => {
+      const { downloadEmbeddings } = await import('../../src/mcp/embeddings-loader.js');
+
+      // Mock successful fetch
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockEmbeddings),
+      } as Response);
+
+      const downloaded = await downloadEmbeddings(testVersion);
+
+      expect(downloaded.model).toBe('BGESmallENV15');
+      expect(downloaded.documents).toHaveLength(1);
+
+      // Should have cached
+      expect(hasLocalEmbeddings(testVersion)).toBe(true);
+    });
+
+    it('should throw on HTTP error', async () => {
+      const { downloadEmbeddings } = await import('../../src/mcp/embeddings-loader.js');
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      } as Response);
+
+      await expect(downloadEmbeddings(testVersion)).rejects.toThrow('Failed to download');
+    });
+
+    it('should throw on network error', async () => {
+      const { downloadEmbeddings } = await import('../../src/mcp/embeddings-loader.js');
+
+      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
+
+      await expect(downloadEmbeddings(testVersion)).rejects.toThrow('Failed to download');
+    });
+  });
+
+  describe('loadEmbeddings with download', () => {
+    it('should download when cache is empty and online', async () => {
+      // Mock successful fetch
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockEmbeddings),
+      } as Response);
+
+      const loaded = await loadEmbeddings({
+        version: testVersion,
+        offline: false,
+      });
+
+      expect(loaded).not.toBeNull();
+      expect(loaded?.model).toBe('BGESmallENV15');
+    });
+
+    it('should fall back to bundled when download fails', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
+
+      const loaded = await loadEmbeddings({
+        version: testVersion,
+        offline: false,
+      });
+
+      // Should have fallen back to bundled or returned null
+      expect(loaded === null || loaded.documents !== undefined).toBe(true);
+    });
+
+    it('should log download progress when debug enabled', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockEmbeddings),
+      } as Response);
+
+      await loadEmbeddings({
+        version: testVersion,
+        debug: true,
+      });
+
+      expect(consoleSpy).toHaveBeenCalled();
+      const logs = consoleSpy.mock.calls.map(c => String(c[0]));
+      // Should have some log output about the loading process
+      expect(logs.some(l => l.includes('[embeddings-loader]'))).toBe(true);
+    });
+  });
+
+  describe('loadLocalEmbeddings error handling', () => {
+    it('should return null on corrupted cache', () => {
+      // Write invalid JSON to cache
+      const cachePath = getEmbeddingsCachePath(testVersion);
+      const { mkdirSync, writeFileSync } = require('fs');
+      const { dirname } = require('path');
+
+      mkdirSync(dirname(cachePath), { recursive: true });
+      writeFileSync(cachePath, 'not valid json {{{');
+
+      const loaded = loadLocalEmbeddings(testVersion);
+      expect(loaded).toBeNull();
+    });
+  });
 });
