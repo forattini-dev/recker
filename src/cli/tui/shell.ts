@@ -249,16 +249,16 @@ export class RekShell {
             return true;
           }
 
-          // Check for scroll keys (Page Up/Down, Home/End, Escape)
+          // Check for scroll keys (Page Up/Down, Home/End, Q to quit)
           const scrollKey = parseScrollKey(data);
           if (scrollKey) {
-            // Handle escape: exit scroll mode if in it, otherwise pass through
-            if (scrollKey === 'escape') {
+            // Handle quit: exit scroll mode if in it, otherwise pass through
+            if (scrollKey === 'quit') {
               if (self.inScrollMode) {
                 self.exitScrollMode();
                 return true;
               }
-              // Not in scroll mode - pass through to readline
+              // Not in scroll mode - pass 'q' through to readline
               return originalEmit(event, ...args);
             }
             // Handle other scroll keys (pageUp, pageDown, home, end, scrollUp, scrollDown)
@@ -332,7 +332,7 @@ export class RekShell {
         }
         break;
 
-      case 'escape':
+      case 'quit':
         if (this.inScrollMode) {
           this.exitScrollMode();
           return;
@@ -418,7 +418,7 @@ export class RekShell {
     const scrollInfo = this.scrollBuffer.isScrolledUp
       ? colors.yellow(`↑ ${this.scrollBuffer.position} lines | ${info.percent}% | `)
       : '';
-    const helpText = colors.gray('Page Up/Down • Home/End • Esc to exit');
+    const helpText = colors.gray('Page Up/Down • Home/End • Q to exit');
     const statusBar = `\x1b[${rows};1H\x1b[7m ${scrollInfo}${helpText} \x1b[0m`;
     this.originalStdoutWrite(statusBar);
   }

@@ -236,14 +236,15 @@ describe('parseScrollKey', () => {
     expect(parseScrollKey(Buffer.from('\x1bOF'))).toBe('end');
   });
 
-  it('should detect Escape', () => {
-    expect(parseScrollKey(Buffer.from('\x1b'))).toBe('escape');
-    expect(parseScrollKey(Buffer.from('\x1b\x1b'))).toBe('escape');
+  it('should detect Q to quit', () => {
+    expect(parseScrollKey(Buffer.from('q'))).toBe('quit');
+    expect(parseScrollKey(Buffer.from('Q'))).toBe('quit');
   });
 
   it('should return null for unknown keys', () => {
     expect(parseScrollKey(Buffer.from('a'))).toBeNull();
     expect(parseScrollKey(Buffer.from('\x1b[A'))).toBeNull(); // Regular up arrow
+    expect(parseScrollKey(Buffer.from('\x1b'))).toBeNull(); // Escape - not used for scroll
   });
 });
 

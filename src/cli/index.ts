@@ -357,7 +357,101 @@ complete -F _rek_completions rek
       await openSearchPanel(query || undefined);
     });
 
-  // DNS Tools
+  // Security Headers Grader
+  program
+    .command('security')
+    .alias('headers')
+    .description('Analyze HTTP response headers for security best practices')
+    .argument('<url>', 'URL to analyze')
+    .action(async (url) => {
+      if (!url.startsWith('http')) url = `https://${url}`;
+      
+      const { createClient } = await import('../core/client.js');
+      const { analyzeSecurityHeaders } = await import('../utils/security-grader.js');
+      
+      console.log(pc.gray(`Analyzing security headers for ${url}...`));
+      
+      try {
+        // Initialize client with the target origin to handle relative redirects correctly if needed,
+        // though undici handles absolute URLs fine.
+        const origin = new URL(url).origin;
+        const client = createClient({ baseUrl: origin });
+        
+        // Just a simple get, let the client defaults handle redirects (default is follow)
+        const res = await client.get(url);
+        
+        const report = analyzeSecurityHeaders(res.headers);
+        
+        // Color grade
+        let gradeColor = pc.red;
+        if (report.grade.startsWith('A')) gradeColor = pc.green;
+        if (report.grade.startsWith('B')) gradeColor = pc.blue;
+        if (report.grade.startsWith('C')) gradeColor = pc.yellow;
+        
+        console.log(`
+${pc.bold(pc.cyan('🛡️  Security Headers Report'))}
+Grade: ${gradeColor(pc.bold(report.grade))}  (${report.score}/100)
+
+${pc.bold('Details:')}`);
+
+        report.details.forEach(item => {
+          const icon = item.status === 'pass' ? pc.green('✔') : item.status === 'warn' ? pc.yellow('⚠') : pc.red('✖');
+          const headerName = pc.bold(item.header);
+          const value = item.value ? pc.gray(`= ${item.value.length > 50 ? item.value.slice(0, 47) + '...' : item.value}`) : pc.gray('(missing)');
+          
+          console.log(`  ${icon} ${headerName} ${value}`);
+          if (item.status !== 'pass') {
+             console.log(`      ${pc.red('→')} ${item.message}`);
+          }
+        });
+        console.log('');
+
+      } catch (error: any) {
+        console.error(pc.red(`Analysis failed: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // IP Intelligence
+  program
+    .command('ip')
+    .description('Get IP address intelligence (Geo, ASN, ISP)')
+    .argument('<address>', 'IP address to lookup')
+    .action(async (address) => {
+        const { getIpInfo } = await import('../utils/ip-intel.js');
+        
+        console.log(pc.gray(`Fetching intelligence for ${address}...`));
+        try {
+            const info = await getIpInfo(address);
+            
+            if (info.bogon) {
+                console.log(pc.yellow(`\n⚠  ${address} is a Bogon/Private IP.`));
+                return;
+            }
+
+            console.log(`
+${pc.bold(pc.cyan('🌍 IP Intelligence Report'))}
+
+${pc.bold('Location:')}
+  ${pc.gray('City:')}      ${info.city || 'N/A'}
+  ${pc.gray('Region:')}    ${info.region || 'N/A'}
+  ${pc.gray('Country:')}   ${info.country || 'N/A'}
+  ${pc.gray('Timezone:')}  ${info.timezone || 'N/A'}
+  ${pc.gray('Coords:')}    ${info.loc ? pc.cyan(info.loc) : 'N/A'}
+
+${pc.bold('Network:')}
+  ${pc.gray('IP:')}        ${info.ip}
+  ${pc.gray('Hostname:')}  ${info.hostname || 'N/A'}
+  ${pc.gray('ASN/Org:')}   ${info.org || 'N/A'}
+  ${pc.gray('Anycast:')}   ${info.anycast ? pc.green('Yes') : pc.gray('No')}
+`);
+        } catch (err: any) {
+            console.error(pc.red(`IP Lookup Failed: ${err.message}`));
+            process.exit(1);
+        }
+    });
+
+  // TLS/SSL Inspector
   const dns = program.command('dns').description('DNS tools and diagnostics');
 
   dns

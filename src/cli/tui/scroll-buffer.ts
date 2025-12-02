@@ -228,7 +228,7 @@ export class ScrollBuffer extends EventEmitter {
 /**
  * Key sequence detection for scroll navigation
  */
-export function parseScrollKey(data: Buffer): 'pageUp' | 'pageDown' | 'scrollUp' | 'scrollDown' | 'home' | 'end' | 'escape' | null {
+export function parseScrollKey(data: Buffer): 'pageUp' | 'pageDown' | 'scrollUp' | 'scrollDown' | 'home' | 'end' | 'quit' | null {
   const str = data.toString();
 
   // Page Up: \x1b[5~ or \x1bOy
@@ -249,8 +249,8 @@ export function parseScrollKey(data: Buffer): 'pageUp' | 'pageDown' | 'scrollUp'
   // End: \x1b[F or \x1b[4~
   if (str === '\x1b[F' || str === '\x1b[4~' || str === '\x1bOF') return 'end';
 
-  // Escape
-  if (str === '\x1b' || str === '\x1b\x1b') return 'escape';
+  // Q or q to quit scroll mode
+  if (str === 'q' || str === 'Q') return 'quit';
 
   return null;
 }
