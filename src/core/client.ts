@@ -3,7 +3,7 @@ import { HttpRequest } from './request.js';
 import { HttpResponse } from './response.js';
 import { UndiciTransport } from '../transport/undici.js';
 import { RequestPromise } from './request-promise.js';
-import { HttpError, MaxSizeExceededError, ReckerError } from '../core/errors.js';
+import { HttpError, MaxSizeExceededError, ConfigurationError, ValidationError, TimeoutError } from '../core/errors.js';
 import { processBody, createFormData, createMultipart, isPlainObject } from '../utils/body.js';
 import { AgentManager } from '../utils/agent-manager.js';
 import { RequestPool } from '../utils/request-pool.js';
@@ -126,15 +126,11 @@ export class Client {
         observability: options.observability
       });
     } else {
-      throw new ReckerError(
+      throw new ConfigurationError(
         'baseUrl is required for default UndiciTransport, or provide a custom transport.',
-        undefined,
-        undefined,
-        [
-          'Set baseUrl when using the built-in Undici transport.',
-          'Pass an absolute URL to each request.',
-          'Provide a custom transport if you need to handle relative paths differently.'
-        ]
+        {
+          configKey: 'baseUrl',
+        }
       );
     }
 
@@ -538,15 +534,12 @@ export class Client {
           usedParams.add(paramName);
           return encodeURIComponent(String(mergedParams[paramName]));
         }
-        throw new ReckerError(
+        throw new ValidationError(
           `Missing required path parameter: ${paramName}`,
-          undefined,
-          undefined,
-          [
-            `Provide '${paramName}' in request params or defaults.`,
-            'Ensure the path template matches the provided params.',
-            'If optional, remove the placeholder from the path.'
-          ]
+          {
+            field: paramName,
+            value: undefined,
+          }
         );
       });
     }
@@ -560,15 +553,11 @@ export class Client {
       const p = finalPath.startsWith('/') ? finalPath : '/' + finalPath;
       finalUrl = base + p;
     } else {
-      throw new ReckerError(
+      throw new ConfigurationError(
         'Relative path provided without a baseUrl or explicit transport.',
-        undefined,
-        undefined,
-        [
-          'Set baseUrl when creating the client.',
-          'Use an absolute URL in request().',
-          'Provide a custom transport that resolves relative paths.'
-        ]
+        {
+          configKey: 'baseUrl',
+        }
       );
     }
 
@@ -634,15 +623,12 @@ export class Client {
       if (timeout) {
         const totalTimeout = typeof timeout === 'number' ? timeout : timeout.request;
         if (totalTimeout) {
-          timeoutId = setTimeout(() => controller!.abort(new ReckerError(
-            'Request timed out (total timeout reached)',
+          timeoutId = setTimeout(() => controller!.abort(new TimeoutError(
             req,
-            undefined,
-            [
-              'Increase the timeout value for long-running requests.',
-              'Check upstream performance or network latency.',
-              'Use per-phase timeouts to pinpoint where the delay occurs.'
-            ]
+            {
+              phase: 'request',
+              timeout: totalTimeout,
+            }
           )), totalTimeout);
         }
       }
@@ -1122,15 +1108,11 @@ export class Client {
       const base = this.baseUrl.replace(/^http/, 'ws');
       wsUrl = new URL(path, base).toString();
     } else {
-      throw new ReckerError(
+      throw new ConfigurationError(
         'WebSocket requires either a full ws:// URL or a baseUrl',
-        undefined,
-        undefined,
-        [
-          'Pass a full ws:// or wss:// URL to websocket().',
-          'Configure baseUrl so relative websocket paths can be resolved.',
-          'Ensure the baseUrl uses http/https so it can be converted to ws/wss.'
-        ]
+        {
+          configKey: 'baseUrl',
+        }
       );
     }
 
