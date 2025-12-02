@@ -346,6 +346,33 @@ complete -F _rek_completions rek
       shell.start();
     });
 
+  // Documentation Search command
+  program
+    .command('docs [query...]')
+    .alias('?')
+    .description('Search Recker documentation (opens fullscreen panel)')
+    .action(async (queryParts: string[]) => {
+      const query = queryParts.join(' ').trim();
+      const { openSearchPanel } = await import('./tui/search-panel.js');
+      await openSearchPanel(query || undefined);
+    });
+
+  // DNS Tools
+  const dns = program.command('dns').description('DNS tools and diagnostics');
+
+  dns
+    .command('propagate')
+    .description('Check global DNS propagation across multiple providers')
+    .argument('<domain>', 'Domain name to check')
+    .argument('[type]', 'Record type (A, AAAA, CNAME, MX, NS, TXT)', 'A')
+    .action(async (domain, type) => {
+       const { checkPropagation, formatPropagationReport } = await import('../dns/propagation.js');
+       
+       console.log(pc.gray(`Checking propagation for ${domain} (${type})...`));
+       const results = await checkPropagation(domain, type);
+       console.log(formatPropagationReport(results, domain, type));
+    });
+
   // Benchmark command
   const bench = program.command('bench').description('Performance benchmarking tools');
 
