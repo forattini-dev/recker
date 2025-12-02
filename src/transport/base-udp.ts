@@ -13,7 +13,7 @@ import type {
   UDPTimings,
   UDPConnection,
 } from '../types/udp.js';
-import { TimeoutError, NetworkError } from '../core/errors.js';
+import { TimeoutError, NetworkError, AbortError, ValidationError } from '../core/errors.js';
 
 /**
  * Request context for tracking timing and connection info
@@ -100,7 +100,7 @@ export abstract class BaseUDPTransport {
     while (attempts < maxAttempts) {
       try {
         if (signal?.aborted) {
-          throw new Error('Request aborted');
+          throw new AbortError('Request aborted');
         }
 
         const response = await this.sendOnce(socket, data, port, address, signal);
@@ -189,7 +189,7 @@ export abstract class BaseUDPTransport {
           if (resolved) return;
           resolved = true;
           cleanup();
-          reject(new Error('Request aborted'));
+          reject(new AbortError('Request aborted'));
         }, { once: true });
       }
 
@@ -298,8 +298,12 @@ export abstract class BaseUDPTransport {
    */
   protected validatePacketSize(data: Buffer): void {
     if (data.length > this.options.maxPacketSize) {
-      throw new Error(
-        `Packet size ${data.length} exceeds maximum ${this.options.maxPacketSize} bytes`
+      throw new ValidationError(
+        `Packet size ${data.length} exceeds maximum ${this.options.maxPacketSize} bytes`,
+        {
+          field: 'packetSize',
+          value: data.length,
+        }
       );
     }
   }

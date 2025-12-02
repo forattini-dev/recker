@@ -16,6 +16,7 @@ import type {
 } from '../types/udp.js';
 import { BaseUDPTransport, udpRequestStorage, UDPRequestContext } from './base-udp.js';
 import { UDPResponseWrapper } from './udp-response.js';
+import { ValidationError } from '../core/errors.js';
 
 /**
  * Default UDP transport options
@@ -158,7 +159,10 @@ export class UDPClient extends BaseUDPTransport {
       this.log(`Dispatch to ${fullUrl}`);
 
       if (!host || !port) {
-        throw new Error(`Invalid UDP URL: ${fullUrl}. Expected format: udp://host:port/path`);
+        throw new ValidationError(`Invalid UDP URL: ${fullUrl}. Expected format: udp://host:port/path`, {
+          field: 'url',
+          value: fullUrl,
+        });
       }
 
       // Get request body as Buffer
