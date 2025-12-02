@@ -13,6 +13,7 @@ import { ScrapeDocument } from '../../scrape/document.js';
 import colors from '../../utils/colors.js';
 import { getShellSearch } from './shell-search.js';
 import { openSearchPanel } from './search-panel.js';
+import { ScrollBuffer, parseScrollKey, parseMouseScroll, enableMouseReporting, disableMouseReporting } from './scroll-buffer.js';
 
 // Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
@@ -47,14 +48,22 @@ export class RekShell {
   private initialized = false;
   private currentDoc: ScrapeDocument | null = null;
   private currentDocUrl: string = '';
+  private scrollBuffer: ScrollBuffer;
+  private originalStdoutWrite: typeof process.stdout.write | null = null;
+  private inScrollMode: boolean = false;
 
   constructor() {
     // We initialize with a placeholder base URL because the Client enforces it.
     // In the shell, we might change targets dynamically, so we override it per request.
+    // Enable HTTP/2 support for better performance
     this.client = createClient({
-      baseUrl: 'http://localhost', 
-      checkHooks: false 
+      baseUrl: 'http://localhost',
+      checkHooks: false,
+      http2: true
     } as any);
+
+    // Initialize scroll buffer for history navigation
+    this.scrollBuffer = new ScrollBuffer({ maxLines: 10000 });
   }
 
   private async ensureInitialized() {
@@ -122,9 +131,13 @@ export class RekShell {
   public async start() {
     await this.ensureInitialized();
 
+    // Set up scroll buffer output interception
+    this.setupScrollCapture();
+
     console.clear();
     console.log(colors.bold(colors.cyan('Rek Console')));
     console.log(colors.gray('Chat with your APIs. Type "help" for magic.'));
+    console.log(colors.gray('Page Up/Down or mouse scroll to view history.'));
     console.log(colors.gray('--------------------------------------------\n'));
 
     this.prompt();
@@ -144,9 +157,228 @@ export class RekShell {
     });
 
     this.rl.on('close', () => {
+      this.cleanupScrollCapture();
       console.log(colors.gray('\nSee ya.'));
       process.exit(0);
     });
+
+    // Handle terminal resize
+    process.stdout.on('resize', () => {
+      this.scrollBuffer.updateViewport();
+    });
+
+    // Set up raw mode key listener for Page Up/Down and mouse scroll
+    this.setupScrollKeyHandler();
+  }
+
+  /**
+   * Set up stdout interception to capture output into scroll buffer
+   */
+  private setupScrollCapture(): void {
+    this.originalStdoutWrite = process.stdout.write.bind(process.stdout);
+
+    const self = this;
+    // Override stdout.write to capture all output
+    (process.stdout as any).write = function(
+      chunk: Buffer | string,
+      encodingOrCallback?: BufferEncoding | ((err?: Error | null) => void),
+      callback?: (err?: Error | null) => void
+    ): boolean {
+      const content = typeof chunk === 'string' ? chunk : chunk.toString();
+
+      // Capture in scroll buffer
+      self.scrollBuffer.write(content);
+
+      // If not in scroll mode, pass through to actual stdout
+      if (!self.inScrollMode && self.originalStdoutWrite) {
+        return self.originalStdoutWrite(chunk as any, encodingOrCallback as any, callback as any);
+      }
+
+      return true;
+    };
+  }
+
+  /**
+   * Clean up stdout interception
+   */
+  private cleanupScrollCapture(): void {
+    if (this.originalStdoutWrite) {
+      process.stdout.write = this.originalStdoutWrite;
+      this.originalStdoutWrite = null;
+    }
+    disableMouseReporting();
+  }
+
+  /**
+   * Set up raw mode key handler for scroll navigation
+   */
+  private setupScrollKeyHandler(): void {
+    // Enable mouse reporting for scroll wheel
+    enableMouseReporting();
+
+    // Listen for raw keypress data
+    if (process.stdin.isTTY) {
+      process.stdin.on('data', (data: Buffer) => {
+        // Check for scroll keys
+        const scrollKey = parseScrollKey(data);
+        if (scrollKey) {
+          this.handleScrollKey(scrollKey);
+          return;
+        }
+
+        // Check for mouse scroll
+        const mouseScroll = parseMouseScroll(data);
+        if (mouseScroll) {
+          this.handleScrollKey(mouseScroll);
+          return;
+        }
+      });
+    }
+  }
+
+  /**
+   * Handle scroll key input
+   */
+  private handleScrollKey(key: string): void {
+    let needsRedraw = false;
+
+    switch (key) {
+      case 'pageUp':
+        if (!this.inScrollMode) {
+          this.enterScrollMode();
+        }
+        needsRedraw = this.scrollBuffer.pageUp();
+        break;
+
+      case 'pageDown':
+        needsRedraw = this.scrollBuffer.pageDown();
+        // Exit scroll mode if at bottom
+        if (!this.scrollBuffer.isScrolledUp && this.inScrollMode) {
+          this.exitScrollMode();
+          return;
+        }
+        break;
+
+      case 'scrollUp':
+        if (!this.inScrollMode) {
+          this.enterScrollMode();
+        }
+        needsRedraw = this.scrollBuffer.scrollUp(3);
+        break;
+
+      case 'scrollDown':
+        needsRedraw = this.scrollBuffer.scrollDown(3);
+        if (!this.scrollBuffer.isScrolledUp && this.inScrollMode) {
+          this.exitScrollMode();
+          return;
+        }
+        break;
+
+      case 'home':
+        if (!this.inScrollMode) {
+          this.enterScrollMode();
+        }
+        this.scrollBuffer.scrollToTop();
+        needsRedraw = true;
+        break;
+
+      case 'end':
+        this.scrollBuffer.scrollToBottom();
+        if (this.inScrollMode) {
+          this.exitScrollMode();
+          return;
+        }
+        break;
+
+      case 'escape':
+        if (this.inScrollMode) {
+          this.exitScrollMode();
+          return;
+        }
+        break;
+    }
+
+    if (needsRedraw && this.inScrollMode) {
+      this.renderScrollView();
+    }
+  }
+
+  /**
+   * Enter scroll mode (freeze output, show scroll view)
+   */
+  private enterScrollMode(): void {
+    if (this.inScrollMode) return;
+    this.inScrollMode = true;
+
+    // Pause readline to prevent input during scroll
+    this.rl.pause();
+
+    // Hide cursor
+    if (this.originalStdoutWrite) {
+      this.originalStdoutWrite('\x1b[?25l');
+    }
+
+    // Render scroll view
+    this.renderScrollView();
+  }
+
+  /**
+   * Exit scroll mode (return to live output)
+   */
+  private exitScrollMode(): void {
+    if (!this.inScrollMode) return;
+    this.inScrollMode = false;
+
+    // Clear screen and restore
+    if (this.originalStdoutWrite) {
+      // Show cursor
+      this.originalStdoutWrite('\x1b[?25h');
+      // Clear screen
+      this.originalStdoutWrite('\x1b[2J\x1b[H');
+    }
+
+    // Show recent output (last viewport worth)
+    const recentLines = this.scrollBuffer.getVisibleLines();
+    if (this.originalStdoutWrite) {
+      this.originalStdoutWrite(recentLines.join('\n') + '\n');
+    }
+
+    // Resume readline and show prompt
+    this.rl.resume();
+    this.prompt();
+  }
+
+  /**
+   * Render the scroll view
+   */
+  private renderScrollView(): void {
+    if (!this.originalStdoutWrite) return;
+
+    const rows = process.stdout.rows || 24;
+    const cols = process.stdout.columns || 80;
+
+    // Get visible lines
+    const visibleLines = this.scrollBuffer.getVisibleLines();
+    const info = this.scrollBuffer.getScrollInfo();
+
+    // Clear screen and move to top
+    this.originalStdoutWrite('\x1b[2J\x1b[H');
+
+    // Render visible lines
+    for (let i = 0; i < visibleLines.length && i < rows - 1; i++) {
+      const line = visibleLines[i] || '';
+      // Truncate line if too long
+      const truncated = line.length > cols ? line.slice(0, cols - 1) + '…' : line;
+      this.originalStdoutWrite(truncated + '\n');
+    }
+
+    // Render status bar at bottom
+    const scrollInfo = this.scrollBuffer.isScrolledUp
+      ? colors.yellow(`↑ ${this.scrollBuffer.position} lines | ${info.percent}% | `)
+      : '';
+    const helpText = colors.gray('Page Up/Down • Home/End • Esc to exit');
+    const statusBar = `\x1b[${rows};1H\x1b[7m ${scrollInfo}${helpText} \x1b[0m`;
+    this.originalStdoutWrite(statusBar);
   }
 
   private prompt() {
@@ -2189,6 +2421,12 @@ export class RekShell {
     ${colors.green('search <query>')}      Alias for ? (hybrid fuzzy+semantic search).
     ${colors.green('suggest <use-case>')}  Get implementation suggestions.
     ${colors.green('example <feature>')}   Get code examples for a feature.
+
+  ${colors.bold('Navigation:')}
+    ${colors.green('Page Up/Down')}        Scroll through command history.
+    ${colors.green('Home/End')}            Jump to top/bottom of history.
+    ${colors.green('Mouse Scroll')}        Scroll with mouse wheel.
+    ${colors.green('Escape')}              Exit scroll mode.
 
   ${colors.bold('Examples:')}
     › url httpbin.org
