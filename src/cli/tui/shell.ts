@@ -217,7 +217,6 @@ export class RekShell {
     enableMouseReporting();
 
     // We need to intercept stdin BEFORE readline processes it
-    // Use keypress event which fires before readline line event
     if (process.stdin.isTTY) {
       // Store original emit to intercept
       const originalEmit = process.stdin.emit.bind(process.stdin);
@@ -226,17 +225,48 @@ export class RekShell {
       (process.stdin as any).emit = function(event: string, ...args: any[]) {
         if (event === 'data') {
           const data = args[0] as Buffer;
+          const str = data.toString();
 
-          // Check for mouse scroll events and consume them
-          const mouseScroll = parseMouseScroll(data);
-          if (mouseScroll) {
-            self.handleScrollKey(mouseScroll);
-            return true; // Consume the event
+          // Check for ALL mouse events (SGR format: \x1b[< ... M or m)
+          // Button codes: 0=left, 1=middle, 2=right, 64=scroll up, 65=scroll down
+          // Always consume to prevent garbage on screen
+          if (str.includes('\x1b[<')) {
+            const mouseScroll = parseMouseScroll(data);
+            if (mouseScroll) {
+              self.handleScrollKey(mouseScroll);
+            }
+            // Silently consume all mouse events (clicks, scrolls, moves)
+            return true;
           }
 
-          // Check for scroll keys (Page Up/Down, etc.)
+          // Check for legacy mouse events (\x1b[M...)
+          if (data.length >= 6 && data[0] === 0x1b && data[1] === 0x5b && data[2] === 0x4d) {
+            const mouseScroll = parseMouseScroll(data);
+            if (mouseScroll) {
+              self.handleScrollKey(mouseScroll);
+            }
+            // Silently consume all mouse events
+            return true;
+          }
+
+          // In scroll mode, handle escape and consume all other input
+          if (self.inScrollMode) {
+            // Check for escape key to exit scroll mode
+            if (str === '\x1b' || str === '\x1b\x1b') {
+              self.exitScrollMode();
+            }
+            // Consume ALL input in scroll mode (prevents garbage and shell exit)
+            return true;
+          }
+
+          // Check for scroll keys (Page Up/Down, etc.) - only when NOT in scroll mode
+          // This prevents conflicts with escape handling
           const scrollKey = parseScrollKey(data);
           if (scrollKey) {
+            // Don't treat bare escape as scroll key outside scroll mode
+            if (scrollKey === 'escape') {
+              return originalEmit(event, ...args);
+            }
             self.handleScrollKey(scrollKey);
             return true; // Consume the event
           }
