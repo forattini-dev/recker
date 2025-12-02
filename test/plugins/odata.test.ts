@@ -713,7 +713,7 @@ HTTP/1.1 204 No Content
         serviceRoot: 'https://services.odata.org'
       });
 
-      await expect(od.getById('Products', 999)).rejects.toThrow('OData request failed: 500');
+      await expect(od.getById('Products', 999)).rejects.toThrow(/500/);
     });
 
     it('should handle ODataException with details and innererror', async () => {

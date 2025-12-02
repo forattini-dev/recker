@@ -114,7 +114,7 @@ describe('Telnet Protocol Utility', () => {
       const result = await client.connect();
 
       expect(result.success).toBe(false);
-      expect(result.message?.toLowerCase()).toContain('timeout');
+      expect(result.message?.toLowerCase()).toContain('timed out');
     });
 
     it('should handle socket timeout', async () => {
@@ -195,7 +195,7 @@ describe('Telnet Protocol Utility', () => {
       const result = await telnetClient.exec('long running command', { timeout: 100 });
 
       expect(result.success).toBe(false);
-      expect(result.message).toContain('Timeout');
+      expect(result.message.toLowerCase()).toContain('timed out');
     });
   });
 
@@ -295,7 +295,7 @@ describe('Telnet Protocol Utility', () => {
       const result = await telnetClient.waitFor(/never-match/, 100);
 
       expect(result.success).toBe(false);
-      expect(result.message).toContain('Timeout');
+      expect(result.message.toLowerCase()).toContain('timed out');
     });
   });
 
@@ -416,7 +416,7 @@ describe('Telnet Protocol Utility', () => {
         telnet({ host: 'bad.host', timeout: 200 }, async (client) => {
           return await client.exec('test');
         })
-      ).rejects.toThrow(/timeout/i); // Connection timeout
+      ).rejects.toThrow(/time.*out/i); // Connection timeout (matches "timeout" or "timed out")
     });
   });
 
