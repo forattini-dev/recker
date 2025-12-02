@@ -2,23 +2,71 @@
 
 Domain and IP registration lookup utilities.
 
-## WHOIS
+## Usage Styles
+
+### 1. Direct Functions (Zero Config)
+
+```typescript
+import { whois, whoisAvailable } from 'recker';
+// or
+import { recker } from 'recker';
+
+// Quick lookup
+const result = await whois('github.com');
+// or
+const result = await recker.whois('github.com');
+console.log(result.parsed);
+
+// Check availability
+const available = await whoisAvailable('my-new-domain.com');
+// or
+const available = await recker.whoisAvailable('my-new-domain.com');
+```
+
+### 2. Configured Client
+
+```typescript
+import { createWhois } from 'recker';
+// or
+const whoisClient = recker.whoisClient(options);
+
+const whoisClient = createWhois({
+  timeout: 15000,
+  debug: true
+});
+
+// Lookup domain info
+const result = await whoisClient.lookup('example.com');
+console.log(result.raw);     // Full WHOIS text
+console.log(result.parsed);  // Parsed key-value pairs
+
+// Check availability
+const available = await whoisClient.isAvailable('my-new-domain.com');
+
+// Get specific info
+const registrar = await whoisClient.getRegistrar('github.com');
+const expiration = await whoisClient.getExpiration('github.com');
+const nameServers = await whoisClient.getNameServers('github.com');
+```
 
 ### Type Definitions
 
 ```typescript
-interface WhoisOptions {
-  /** Custom WHOIS server to query */
+interface WhoisClientOptions {
+  /** Default WHOIS server to use */
   server?: string;
 
-  /** Port to connect to (default: 43) */
+  /** Default port (default: 43) */
   port?: number;
 
-  /** Connection timeout in milliseconds (default: 10000) */
+  /** Default timeout in milliseconds (default: 10000) */
   timeout?: number;
 
   /** Follow referrals to other WHOIS servers (default: true) */
   follow?: boolean;
+
+  /** Enable debug logging (default: false) */
+  debug?: boolean;
 }
 
 interface WhoisResult {
@@ -34,55 +82,18 @@ interface WhoisResult {
   /**
    * Parsed key-value pairs from response
    * Keys are lowercase. Values can be string or string[] for multiple entries.
-   *
-   * Common fields (vary by TLD/registrar):
-   * - 'domain name': Domain queried
-   * - 'registrar': Registrar name
-   * - 'registrar url': Registrar website
-   * - 'registrar iana id': IANA registrar ID
-   * - 'registrar abuse contact email': Abuse email
-   * - 'registrar abuse contact phone': Abuse phone
-   * - 'creation date': Domain creation date (ISO format)
-   * - 'registry expiry date': Expiration date (ISO format)
-   * - 'updated date': Last update date (ISO format)
-   * - 'domain status': Status flags (often array)
-   * - 'name server': Name servers (often array)
-   * - 'dnssec': DNSSEC status ('unsigned', 'signedDelegation', etc.)
-   *
-   * For IP lookups (ARIN/RIPE/APNIC):
-   * - 'organization': Organization name
-   * - 'orgname': Organization name (alt)
-   * - 'cidr': Network CIDR notation
-   * - 'inetnum': IP range
-   * - 'netname': Network name
-   * - 'country': Country code
-   * - 'abuse-mailbox': Abuse email
    */
   data: Record<string, string | string[]>;
 }
 ```
 
-### Quick Start
-
-```typescript
-import { whois, isDomainAvailable } from 'recker/utils/whois';
-
-// Lookup domain info
-const result = await whois('example.com');
-console.log(result.raw);     // Full WHOIS text
-console.log(result.data);    // Parsed key-value pairs
-
-// Check availability
-const available = await isDomainAvailable('my-new-domain.com');
-console.log('Available:', available);
-```
-
 ### Domain Lookup
 
 ```typescript
-import { whois } from 'recker/utils/whois';
+import { createWhois } from 'recker';
 
-const result = await whois('github.com');
+const whois = createWhois();
+const result = await whois.lookup('github.com');
 
 console.log('Query:', result.query);
 console.log('Server:', result.server);
@@ -97,24 +108,26 @@ console.log('Name servers:', result.data['name server']);
 ### IP Address Lookup
 
 ```typescript
-import { whois } from 'recker/utils/whois';
+import { createWhois } from 'recker';
+
+const whois = createWhois();
 
 // IPv4
-const ipv4 = await whois('8.8.8.8');
+const ipv4 = await whois.lookup('8.8.8.8');
 console.log('Organization:', ipv4.data['organization']);
 console.log('Network:', ipv4.data['cidr']);
 
 // IPv6
-const ipv6 = await whois('2001:4860:4860::8888');
+const ipv6 = await whois.lookup('2001:4860:4860::8888');
 console.log('Organization:', ipv6.data['organization']);
 ```
 
-### Options
+### Client Options
 
 ```typescript
-import { whois } from 'recker/utils/whois';
+import { createWhois } from 'recker';
 
-const result = await whois('example.com', {
+const whois = createWhois({
   // Custom WHOIS server
   server: 'whois.verisign-grs.com',
 
@@ -125,17 +138,28 @@ const result = await whois('example.com', {
   timeout: 10000,
 
   // Follow referrals (default: true)
-  follow: true
+  follow: true,
+
+  // Enable debug logging
+  debug: true
+});
+
+// Override options per lookup
+const result = await whois.lookup('example.com', {
+  server: 'whois.nic.io',
+  timeout: 5000
 });
 ```
 
 ### Domain Availability
 
 ```typescript
-import { isDomainAvailable } from 'recker/utils/whois';
+import { createWhois } from 'recker';
+
+const whois = createWhois();
 
 // Check if domain is available for registration
-const available = await isDomainAvailable('my-startup.com');
+const available = await whois.isAvailable('my-startup.com');
 
 if (available) {
   console.log('Domain is available!');
@@ -144,24 +168,24 @@ if (available) {
 }
 ```
 
-### Parsed Data
+### Convenience Methods
 
 ```typescript
-const result = await whois('google.com');
+import { createWhois } from 'recker';
 
-// Common fields (may vary by TLD)
-const info = {
-  registrar: result.data['registrar'],
-  registrarUrl: result.data['registrar url'],
-  creationDate: result.data['creation date'],
-  expirationDate: result.data['registry expiry date'],
-  updatedDate: result.data['updated date'],
-  status: result.data['domain status'],
-  nameServers: result.data['name server'],
-  dnssec: result.data['dnssec']
-};
+const whois = createWhois();
 
-console.log(info);
+// Get registrar info directly
+const registrar = await whois.getRegistrar('github.com');
+console.log('Registrar:', registrar);
+
+// Get expiration date as Date object
+const expiry = await whois.getExpiration('github.com');
+console.log('Expires:', expiry);
+
+// Get name servers as array
+const nameServers = await whois.getNameServers('github.com');
+console.log('NS:', nameServers);
 ```
 
 ### Supported TLDs
@@ -286,18 +310,14 @@ interface RDAPResult {
 ### Domain Expiration Check
 
 ```typescript
-import { whois } from 'recker/utils/whois';
+import { createWhois } from 'recker';
+
+const whois = createWhois();
 
 async function checkExpiration(domain: string) {
-  const result = await whois(domain);
+  const expiry = await whois.getExpiration(domain);
 
-  const expiryField =
-    result.data['registry expiry date'] ||
-    result.data['expiration date'] ||
-    result.data['paid-till'];
-
-  if (expiryField) {
-    const expiry = new Date(expiryField as string);
+  if (expiry) {
     const daysUntil = Math.floor((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
     return {
@@ -318,10 +338,10 @@ console.log(`${status.domain} expires in ${status.daysUntil} days`);
 ### Bulk Domain Check
 
 ```typescript
-import { createClient } from 'recker';
-import { isDomainAvailable } from 'recker/utils/whois';
+import { createClient, createWhois } from 'recker';
 
 const client = createClient();
+const whois = createWhois();
 
 const domains = ['cool-startup.com', 'my-app.io', 'new-service.dev'];
 
@@ -332,7 +352,7 @@ const { results, stats } = await client.batch(
     concurrency: 3,  // Respect WHOIS rate limits
     mapResponse: async (_, item) => ({
       domain: item.domain,
-      available: await isDomainAvailable(item.domain)
+      available: await whois.isAvailable(item.domain)
     })
   }
 );
@@ -347,10 +367,12 @@ for (const { domain, available } of results) {
 ### IP Ownership Lookup
 
 ```typescript
-import { whois } from 'recker/utils/whois';
+import { createWhois } from 'recker';
+
+const whois = createWhois();
 
 async function getIPOwner(ip: string) {
-  const result = await whois(ip);
+  const result = await whois.lookup(ip);
 
   return {
     ip,
@@ -369,10 +391,12 @@ console.log('Network:', owner.network);
 ### Registrar Information
 
 ```typescript
-import { whois } from 'recker/utils/whois';
+import { createWhois } from 'recker';
+
+const whois = createWhois();
 
 async function getRegistrarInfo(domain: string) {
-  const result = await whois(domain);
+  const result = await whois.lookup(domain);
 
   return {
     domain,
@@ -392,10 +416,12 @@ console.log('Registrar:', info.registrar);
 ### WHOIS Errors
 
 ```typescript
-import { whois } from 'recker/utils/whois';
+import { createWhois } from 'recker';
+
+const whois = createWhois({ debug: true });
 
 try {
-  const result = await whois('example.com');
+  const result = await whois.lookup('example.com');
   console.log(result.data);
 } catch (error) {
   if (error.message.includes('timed out')) {
@@ -430,18 +456,26 @@ try {
 ### 1. Use Timeouts
 
 ```typescript
-const result = await whois('example.com', {
+import { createWhois } from 'recker';
+
+const whois = createWhois({
   timeout: 10000  // 10 seconds
 });
+
+const result = await whois.lookup('example.com');
 ```
 
 ### 2. Handle Rate Limits
 
 ```typescript
+import { createWhois } from 'recker';
+
+const whois = createWhois();
+
 // WHOIS servers may rate limit
 // Add delays between bulk lookups
 for (const domain of domains) {
-  await whois(domain);
+  await whois.lookup(domain);
   await sleep(1000);  // 1 second delay
 }
 ```
@@ -449,13 +483,18 @@ for (const domain of domains) {
 ### 3. Prefer RDAP When Available
 
 ```typescript
+import { createClient, createWhois, rdap } from 'recker';
+
+const client = createClient();
+const whois = createWhois();
+
 // RDAP provides structured data
 // Use WHOIS as fallback
 async function lookupDomain(domain: string) {
   try {
     return await rdap(client, domain);
   } catch {
-    return await whois(domain);
+    return await whois.lookup(domain);
   }
 }
 ```
@@ -463,6 +502,9 @@ async function lookupDomain(domain: string) {
 ### 4. Cache Results
 
 ```typescript
+import { createWhois } from 'recker';
+
+const whois = createWhois();
 const cache = new Map<string, { data: any; expires: number }>();
 const TTL = 3600000; // 1 hour
 
@@ -473,7 +515,7 @@ async function cachedWhois(domain: string) {
     return cached.data;
   }
 
-  const result = await whois(domain);
+  const result = await whois.lookup(domain);
   cache.set(domain, { data: result, expires: Date.now() + TTL });
 
   return result;

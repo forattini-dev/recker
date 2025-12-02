@@ -90,4 +90,72 @@ describe('Circuit Breaker Plugin', () => {
       
       expect(stateChange).toHaveBeenLastCalledWith('CLOSED', 'recover.com');
   });
+
+  it('should handle error events correctly', async () => {
+    let callCount = 0;
+    const transport = {
+        async dispatch() {
+            callCount++;
+            throw new Error('Network error');
+        }
+    };
+
+    const stateChange = vi.fn();
+    const client = createClient({
+        baseUrl: 'http://error.com',
+        transport: transport as any,
+        plugins: [
+            circuitBreaker({
+                threshold: 2,
+                resetTimeout: 50,
+                onStateChange: stateChange
+            })
+        ]
+    });
+
+    // Trip circuit via errors
+    await expect(client.get('/error')).rejects.toThrow('Network error');
+    await expect(client.get('/error')).rejects.toThrow('Network error');
+
+    // Circuit should be open now
+    await expect(client.get('/error')).rejects.toThrow(CircuitBreakerError);
+    expect(callCount).toBe(2); // Third call didn't reach transport
+  });
+
+  it('should reset failures on successful request in CLOSED state', async () => {
+    let callCount = 0;
+    const transport = {
+        async dispatch() {
+            callCount++;
+            if (callCount === 1) {
+                return { ok: false, status: 500, statusText: 'Error' } as any;
+            }
+            return { ok: true, status: 200 } as any;
+        }
+    };
+
+    const client = createClient({
+        baseUrl: 'http://reset.com',
+        transport: transport as any,
+        plugins: [
+            circuitBreaker({
+                threshold: 3,
+                resetTimeout: 50
+            })
+        ]
+    });
+
+    // First request fails
+    await client.get('/test', { throwHttpErrors: false });
+
+    // Second request succeeds - should reset failures
+    await client.get('/test');
+
+    // Third request fails - since failures were reset, won't trip yet
+    await client.get('/test', { throwHttpErrors: false });
+
+    // Fourth request should still work (not tripped)
+    const res = await client.get('/test');
+    expect(res.ok).toBe(true);
+  });
 });

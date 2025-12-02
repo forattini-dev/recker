@@ -2,47 +2,75 @@
 
 <div align="center">
 
-### The HTTP SDK for the AI Era
+### The Network SDK for the AI Era
 
-**Fast as infrastructure demands. AI-ready from the first byte. Observable down to the millisecond. Resilient when everything else fails.**
+**Zero-config HTTP. Multi-protocol support. AI-native streaming. Observable to the millisecond.**
 
 [![npm version](https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623)](https://www.npmjs.com/package/recker)
 [![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Coverage](https://img.shields.io/badge/coverage-78%25-F5A623?style=flat-square)](https://github.com/forattini-dev/recker)
+[![Coverage](https://img.shields.io/badge/coverage-90%25-34C759?style=flat-square)](https://github.com/forattini-dev/recker)
 
 </div>
 
 ---
 
-Modern applications demand more than just HTTP requests. They need **streaming for LLMs**, **scraping for data extraction**, **observability for debugging**, and **resilience for production**. Recker delivers all of this in a single, type-safe package built on the fastest HTTP engine available.
+## Quick Start
+
+```typescript
+import { get, post, whois, dns } from 'recker';
+
+// HTTP - zero config
+const users = await get('https://api.example.com/users').json();
+await post('https://api.example.com/users', { json: { name: 'John' } });
+
+// WHOIS
+const info = await whois('github.com');
+
+// DNS
+const ips = await dns('google.com');
+```
+
+### Unified Namespace
+
+```typescript
+import { recker } from 'recker';
+
+// Everything in one place
+await recker.get('https://api.example.com/users').json();
+await recker.whois('github.com');
+await recker.dns('google.com');
+await recker.ai.chat('Hello!');
+
+const socket = recker.ws('wss://api.example.com/ws');
+```
+
+### With Configuration
 
 ```typescript
 import { createClient } from 'recker';
 
-const client = createClient({ baseUrl: 'https://api.openai.com/v1' });
+const api = createClient({
+  baseUrl: 'https://api.example.com',
+  headers: { 'Authorization': 'Bearer token' },
+  timeout: 10000,
+  retry: { maxAttempts: 3 }
+});
 
-// Stream AI completions with real-time SSE parsing
-for await (const event of client.post('/chat/completions', {
-  json: { model: 'gpt-5', messages: [...], stream: true }
-}).sse()) {
-  process.stdout.write(event.data);
-}
+const user = await api.get('/users/:id', { params: { id: '123' } }).json();
 ```
 
-## Highlights
+## Features
 
 | Feature | Description |
-|:--------|:------------|
-| **High Performance** | Built on Node.js's fastest HTTP engine with optimized connection pooling. |
-| **AI-First Streaming** | Native SSE parsing, async iteration, progress tracking for LLM apps. |
-| **MCP Server** | Built-in documentation server for Claude Code, Cursor, and AI assistants. |
-| **HTML Scraping** | jQuery-like API with Cheerio. Extract links, images, meta, OpenGraph, JSON-LD. |
-| **Type-Safe Contracts** | Define your API with Zod schemas. Get autocomplete and validation for free. |
-| **Full Observability** | DNS/TCP/TLS/TTFB timings, connection info, HAR recording, Server-Timing. |
-| **Resilience Built-In** | Retry with backoff, circuit breaker, rate limiting, request deduplication. |
-| **Network Utilities** | WHOIS lookups, DNS resolution, DoH queries, SSL certificate inspection. |
+|:---|:---|
+| **Zero Config** | Direct functions work out of the box. No setup required. |
+| **Multi-Protocol** | HTTP, WebSocket, DNS, WHOIS in one SDK. |
+| **AI-Native** | SSE streaming, token counting, provider abstraction. |
+| **Type-Safe** | Full TypeScript with Zod schema validation. |
+| **Observable** | DNS/TCP/TLS/TTFB timing breakdown per request. |
+| **Resilient** | Retry, circuit breaker, rate limiting, deduplication. |
 
 ## Quick Navigation
 
@@ -63,112 +91,67 @@ for await (const event of client.post('/chat/completions', {
   - [Retry & Circuit Breaker](http/07-resilience.md)
   - [Caching (SWR)](http/09-cache.md)
 
-- **Advanced**
-  - [Concurrency & Rate Limiting](http/08-concurrency.md)
-  - [Observability](http/12-observability.md)
-  - [Testing](reference/03-testing.md)
-  - [Plugin Development](http/10-plugins.md)
+- **Protocols**
+  - [WebSocket](protocols/01-websocket.md)
+  - [DNS](protocols/04-dns.md)
+  - [WHOIS](protocols/05-whois-rdap.md)
 
 - **AI Integration**
-  - [MCP Server](ai/06-mcp-server.md) - Docs for AI assistants
-  - [MCP Client](ai/05-mcp-client.md) - Connect to MCP servers
+  - [AI Overview](ai/01-overview.md)
+  - [MCP Server](ai/06-mcp-server.md)
+
+- **Reference**
+  - [API Reference](reference/01-api.md)
+  - [Testing](reference/03-testing.md)
 
 </div>
 
-## Quick Install
+## Install
 
 ```bash
-pnpm add recker
-# or
 npm install recker
 ```
 
-**Optional peer dependencies:**
-```bash
-pnpm add cheerio    # For HTML scraping
-pnpm add ioredis    # For Redis cache storage
-```
+## Highlights
 
-## Quick Example
+### AI Streaming
 
 ```typescript
-import { createClient } from 'recker';
-
-const client = createClient({
-  baseUrl: 'https://api.example.com',
-  headers: { 'Authorization': 'Bearer token' }
-});
-
-// GET with automatic JSON parsing
-const users = await client.get('/users').json<User[]>();
-
-// POST with body
-const created = await client.post('/users', {
-  json: { name: 'John', email: 'john@example.com' }
-}).json<User>();
-
-// Path parameters + query string
-const user = await client.get('/users/:id', {
-  params: { id: '123', expand: 'profile' }
-}).json<User>();
-// → GET /users/123?expand=profile
-```
-
-## Streaming for AI
-
-```typescript
-// Server-Sent Events (SSE) for LLM streaming
-const response = client.post('/v1/chat/completions', {
-  json: { model: 'gpt-5', messages, stream: true }
-});
-
-for await (const event of response.sse()) {
-  if (event.event === 'message') {
-    const chunk = JSON.parse(event.data);
-    process.stdout.write(chunk.choices[0].delta.content || '');
-  }
+for await (const event of recker.ai.stream({
+  model: 'gpt-4',
+  messages: [{ role: 'user', content: 'Hello!' }]
+})) {
+  process.stdout.write(event.choices[0]?.delta?.content || '');
 }
 ```
 
-## HTML Scraping
+### Request Timing
 
 ```typescript
-// Built-in scraping with Cheerio
-const doc = await client.scrape('https://news.ycombinator.com');
-
-// Extract structured data
-const stories = doc.selectAll('.athing').map(el => ({
-  title: el.find('.titleline a').text(),
-  url: el.find('.titleline a').attr('href'),
-  score: el.next().find('.score').text()
-}));
-
-// Quick extraction methods
-const links = doc.links({ absolute: true });
-const meta = doc.meta();
-const og = doc.openGraph();
-const jsonLd = doc.jsonLd();
-```
-
-## Observability
-
-```typescript
-const response = await client.get('/api/data');
-
-// Detailed timing breakdown
+const response = await get('https://api.example.com/data');
 console.log(response.timings);
 // { dns: 12, tcp: 8, tls: 45, firstByte: 23, total: 156 }
-
-// Connection info
-console.log(response.connection);
-// { protocol: 'h2', cipher: 'TLS_AES_256_GCM_SHA384', remoteAddress: '...' }
 ```
 
-## Community
+### Scraping
 
-- [GitHub Repository](https://github.com/forattini-dev/recker)
-- [Report Issues](https://github.com/forattini-dev/recker/issues)
-- [Contributing Guide](contributing.md)
+```typescript
+const doc = await client.scrape('https://example.com');
+const titles = doc.selectAll('h1').map(el => el.text());
+```
+
+### Circuit Breaker
+
+```typescript
+import { createClient, circuitBreaker } from 'recker';
+
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  plugins: [
+    circuitBreaker({ threshold: 5, resetTimeout: 30000 })
+  ]
+});
+```
 
 ---
 

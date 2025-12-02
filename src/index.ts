@@ -68,3 +68,28 @@ export * from './mcp/contract.js';
 
 // Branded alias for the Client class
 export { Client as Recker } from './core/client.js';
+
+// ============================================================================
+// Unified API - The "Recker Style"
+// ============================================================================
+
+// Direct functions (zero boilerplate)
+export {
+  get,
+  post,
+  put,
+  patch,
+  del,
+  del as delete,
+  head,
+  options,
+  whois,
+  whoisAvailable,
+  dns,
+  dnsSecurity,
+  ws,
+  recker,
+} from './recker.js';
+
+// Default export is the unified namespace
+export { default } from './recker.js';

@@ -2,12 +2,100 @@
 
 DNS lookup, DNS over HTTPS (DoH), and security record analysis.
 
-## DNS Lookup
+## Usage Styles
 
-### Custom DNS Lookup
+### 1. Direct Functions (Zero Config)
 
 ```typescript
-import { customDNSLookup } from 'recker/utils/dns';
+import { dns, dnsSecurity } from 'recker';
+// or
+import { recker } from 'recker';
+
+// DNS resolution
+const ips = await dns('google.com');
+// or
+const ips = await recker.dns('google.com');
+
+// Specific record type
+const mx = await dns('example.com', 'MX');
+
+// Security records (SPF, DMARC, DKIM, CAA)
+const security = await dnsSecurity('example.com');
+// or
+const security = await recker.dnsSecurity('example.com');
+```
+
+### 2. Configured Client
+
+```typescript
+import { createDNS } from 'recker/dns';
+// or
+const dnsClient = recker.dnsClient(options);
+
+const dnsClient = createDNS({
+  provider: 'cloudflare',  // Use DNS-over-HTTPS
+  timeout: 3000,
+  debug: true
+});
+
+const ips = await dnsClient.resolve('example.com', 'A');
+const mx = await dnsClient.resolveMx('example.com');
+const security = await dnsClient.getSecurityRecords('example.com');
+```
+
+## DNS Client
+
+### Creating a Client
+
+```typescript
+import { createDNS } from 'recker/dns';
+
+// Simple usage with system resolver
+const dns = createDNS();
+const ips = await dns.resolve('example.com');
+
+// With DNS-over-HTTPS (Cloudflare)
+const secureDns = createDNS({
+  provider: 'cloudflare',
+  timeout: 3000,
+  debug: true
+});
+
+// With custom servers
+const customDns = createDNS({
+  servers: ['8.8.8.8', '8.8.4.4']
+});
+```
+
+### Resolving Records
+
+```typescript
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
+
+// A records (IPv4)
+const ipv4 = await dns.resolve4('example.com');
+
+// AAAA records (IPv6)
+const ipv6 = await dns.resolve6('example.com');
+
+// MX records
+const mx = await dns.resolveMx('example.com');
+
+// TXT records
+const txt = await dns.resolveTxt('example.com');
+
+// All records at once
+const all = await dns.resolveAll('example.com');
+```
+
+## Standalone Functions
+
+For one-off lookups:
+
+```typescript
+import { customDNSLookup } from 'recker/dns';
 
 // Basic lookup
 const result = await customDNSLookup('example.com');
@@ -101,9 +189,10 @@ const custom = createDoHLookup('https://dns.example.com/dns-query');
 ### Get All Security Records
 
 ```typescript
-import { getSecurityRecords } from 'recker/utils/dns-toolkit';
+import { createDNS } from 'recker/dns';
 
-const records = await getSecurityRecords('example.com');
+const dns = createDNS();
+const records = await dns.getSecurityRecords('example.com');
 
 console.log('SPF:', records.spf);
 console.log('DMARC:', records.dmarc);
@@ -115,7 +204,10 @@ console.log('TXT:', records.txt);
 ### SPF Records
 
 ```typescript
-const records = await getSecurityRecords('example.com');
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
+const records = await dns.getSecurityRecords('example.com');
 
 // SPF defines allowed mail senders
 if (records.spf && records.spf.length > 0) {
@@ -127,7 +219,10 @@ if (records.spf && records.spf.length > 0) {
 ### DMARC Records
 
 ```typescript
-const records = await getSecurityRecords('example.com');
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
+const records = await dns.getSecurityRecords('example.com');
 
 // DMARC defines email authentication policy
 if (records.dmarc) {
@@ -139,7 +234,10 @@ if (records.dmarc) {
 ### CAA Records
 
 ```typescript
-const records = await getSecurityRecords('example.com');
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
+const records = await dns.getSecurityRecords('example.com');
 
 // CAA defines allowed certificate authorities
 if (records.caa) {
@@ -152,13 +250,13 @@ if (records.caa) {
 ### MX Records
 
 ```typescript
-const records = await getSecurityRecords('example.com');
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
 
 // MX records for mail routing
-if (records.mx) {
-  console.log('Mail servers:', records.mx);
-  // ['mail1.example.com', 'mail2.example.com']
-}
+const mx = await dns.resolveMx('example.com');
+console.log('Mail servers:', mx);
 ```
 
 ## Integration with HTTP Client
@@ -225,10 +323,12 @@ const client = createClient({
 ### Check Email Security
 
 ```typescript
-import { getSecurityRecords } from 'recker/utils/dns-toolkit';
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
 
 async function checkEmailSecurity(domain: string) {
-  const records = await getSecurityRecords(domain);
+  const records = await dns.getSecurityRecords(domain);
   const issues = [];
 
   // Check SPF
@@ -263,10 +363,12 @@ console.log('Issues:', result.issues);
 ### Check SSL Configuration
 
 ```typescript
-import { getSecurityRecords } from 'recker/utils/dns-toolkit';
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
 
 async function checkCAA(domain: string) {
-  const records = await getSecurityRecords(domain);
+  const records = await dns.getSecurityRecords(domain);
 
   if (!records.caa || !records.caa.issue) {
     return {
@@ -293,18 +395,20 @@ console.log('Allowed CAs:', caaStatus.allowedCAs);
 ### Health Check with DNS
 
 ```typescript
-import { customDNSLookup } from 'recker/utils/dns';
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
 
 async function checkDNSHealth(domain: string) {
   try {
     const start = Date.now();
-    const result = await customDNSLookup(domain);
+    const ips = await dns.resolve4(domain);
     const duration = Date.now() - start;
 
     return {
       healthy: true,
-      ip: result.address,
-      family: result.family === 4 ? 'IPv4' : 'IPv6',
+      ip: ips[0],
+      family: 'IPv4',
       latencyMs: duration
     };
   } catch (error) {
@@ -319,7 +423,10 @@ async function checkDNSHealth(domain: string) {
 ### Round-Robin DNS
 
 ```typescript
-import { promises as dns } from 'dns';
+import { createClient } from 'recker';
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
 
 async function getRandomIP(domain: string): Promise<string> {
   const addresses = await dns.resolve4(domain);
@@ -338,6 +445,9 @@ const client = createClient({
 ### DNS Caching
 
 ```typescript
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
 const dnsCache = new Map<string, { ip: string; expires: number }>();
 const TTL = 300000; // 5 minutes
 
@@ -348,13 +458,13 @@ async function cachedLookup(domain: string): Promise<string> {
     return cached.ip;
   }
 
-  const result = await customDNSLookup(domain);
+  const ips = await dns.resolve4(domain);
   dnsCache.set(domain, {
-    ip: result.address,
+    ip: ips[0],
     expires: Date.now() + TTL
   });
 
-  return result.address;
+  return ips[0];
 }
 ```
 
@@ -393,8 +503,12 @@ const lookup = createDoHLookup('cloudflare');
 ### 4. Verify Email Security
 
 ```typescript
+import { createDNS } from 'recker/dns';
+
+const dns = createDNS();
+
 // Before trusting email from a domain
-const security = await getSecurityRecords(domain);
+const security = await dns.getSecurityRecords(domain);
 const hasSPF = security.spf?.length > 0;
 const hasDMARC = !!security.dmarc;
 ```

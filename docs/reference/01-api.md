@@ -2,9 +2,86 @@
 
 Complete API reference for Recker.
 
+## Direct Functions
+
+Zero-config functions for immediate use:
+
+```typescript
+import { get, post, put, patch, del, head, options } from 'recker';
+import { whois, whoisAvailable, dns, dnsSecurity, ws } from 'recker';
+```
+
+### HTTP Functions
+
+```typescript
+get(url: string, options?: RequestOptions): RequestPromise
+post(url: string, options?: RequestOptions): RequestPromise
+put(url: string, options?: RequestOptions): RequestPromise
+patch(url: string, options?: RequestOptions): RequestPromise
+del(url: string, options?: RequestOptions): RequestPromise
+head(url: string, options?: RequestOptions): RequestPromise
+options(url: string, options?: RequestOptions): RequestPromise
+```
+
+### Protocol Functions
+
+```typescript
+// WHOIS lookup
+whois(query: string, options?: WhoisOptions): Promise<WhoisResult>
+
+// Domain availability check
+whoisAvailable(domain: string): Promise<boolean>
+
+// DNS resolution
+dns(hostname: string, type?: 'A' | 'AAAA' | 'MX' | 'TXT' | 'NS' | 'CNAME'): Promise<string[]>
+
+// DNS security records (SPF, DMARC, DKIM, CAA)
+dnsSecurity(domain: string): Promise<DnsSecurityRecords>
+
+// WebSocket connection
+ws(url: string, options?: WebSocketOptions): ReckerWebSocket
+```
+
+## recker Namespace
+
+Unified access to all Recker functionality:
+
+```typescript
+import { recker } from 'recker';
+
+// HTTP
+recker.get(url, options)
+recker.post(url, options)
+recker.put(url, options)
+recker.patch(url, options)
+recker.delete(url, options)
+recker.head(url, options)
+recker.options(url, options)
+
+// Protocols
+recker.whois(query)
+recker.whoisAvailable(domain)
+recker.dns(hostname, type)
+recker.dnsSecurity(domain)
+recker.ws(url, options)
+
+// AI
+recker.ai.chat(prompt)
+recker.ai.stream(options)
+recker.ai.embed(options)
+
+// Factory methods (when you need custom config)
+recker.client(options)      // → Client
+recker.dnsClient(options)   // → DNSClient
+recker.whoisClient(options) // → WhoisClient
+recker.aiClient(options)    // → AIClient
+```
+
+---
+
 ## createClient
 
-Creates an HTTP client instance.
+Creates a configured HTTP client instance.
 
 ```typescript
 import { createClient } from 'recker';
@@ -19,13 +96,13 @@ interface ClientOptions {
   // Base URL for all requests
   baseUrl?: string;
 
-  // Default headers for all requests
+  // Default headers
   headers?: Record<string, string>;
 
   // Default query parameters
   params?: Record<string, string | number | boolean>;
 
-  // Timeout configuration
+  // Timeout in ms or detailed config
   timeout?: number | TimeoutOptions;
 
   // Retry configuration
@@ -37,41 +114,20 @@ interface ClientOptions {
   // Request deduplication
   dedup?: boolean;
 
-  // Debug mode
+  // Debug logging
   debug?: boolean;
 
-  // Custom logger
-  logger?: Logger;
-
-  // Throw on non-2xx responses
+  // Throw on non-2xx responses (default: true)
   throwHttpErrors?: boolean;
 
-  // Follow redirects
+  // Follow redirects (default: true)
   followRedirects?: boolean;
 
-  // Max redirects to follow
+  // Max redirects (default: 10)
   maxRedirects?: number;
 
-  // DNS configuration
-  dns?: DNSOptions;
-
-  // Connection pool configuration
-  pool?: PoolOptions;
-
-  // Proxy configuration
-  proxy?: ProxyOptions | string;
-
-  // TLS options
-  tls?: TLSOptions;
-
-  // Enable HTTP/2
-  http2?: boolean;
-
-  // Custom transport
-  transport?: Transport;
-
-  // Enable observability (timings, connection info)
-  observability?: boolean;
+  // Plugins array
+  plugins?: Plugin[];
 }
 ```
 
@@ -79,17 +135,10 @@ interface ClientOptions {
 
 ```typescript
 interface TimeoutOptions {
-  // Timeout for establishing connection
-  connect?: number;
-
-  // Time to first byte
-  firstByte?: number;
-
-  // Time between bytes
-  betweenBytes?: number;
-
-  // Total request timeout
-  total?: number;
+  connect?: number;     // Connection timeout
+  firstByte?: number;   // Time to first byte
+  betweenBytes?: number; // Idle timeout between chunks
+  total?: number;       // Total request timeout
 }
 ```
 
@@ -97,25 +146,11 @@ interface TimeoutOptions {
 
 ```typescript
 interface RetryOptions {
-  // Max retry attempts
-  maxAttempts?: number;
-
-  // Backoff strategy
+  maxAttempts?: number;  // Max retry attempts (default: 3)
   backoff?: 'linear' | 'exponential' | 'decorrelated';
-
-  // Base delay in milliseconds
-  delay?: number;
-
-  // Enable jitter
-  jitter?: boolean;
-
-  // Status codes to retry
-  retryOn?: number[];
-
-  // Model fallbacks (for AI)
-  fallback?: Record<string, string>;
-
-  // Retry callback
+  delay?: number;        // Base delay in ms (default: 1000)
+  jitter?: boolean;      // Add randomness to prevent thundering herd
+  retryOn?: number[];    // Status codes to retry (default: [429, 500, 502, 503, 504])
   onRetry?: (attempt: number, error: Error) => void;
 }
 ```
@@ -124,78 +159,25 @@ interface RetryOptions {
 
 ```typescript
 interface CacheOptions {
-  // Cache storage backend
-  storage?: CacheStorage;
-
-  // Time to live in milliseconds
-  ttl?: number;
-
-  // Cache strategy
+  storage?: CacheStorage; // Memory or file storage
+  ttl?: number;           // Time to live in ms
   strategy?: 'cache-first' | 'stale-while-revalidate' | 'network-only';
-
-  // Methods to cache
-  methods?: string[];
-
-  // Cache key generator
-  keyGenerator?: (req: Request) => string;
+  methods?: string[];     // Methods to cache (default: ['GET'])
 }
 ```
 
-## Client Methods
+---
 
-### HTTP Methods
+## RequestOptions
 
-```typescript
-// GET request
-client.get(path: string, options?: RequestOptions): RequestPromise;
-
-// POST request
-client.post(path: string, options?: RequestOptions): RequestPromise;
-
-// PUT request
-client.put(path: string, options?: RequestOptions): RequestPromise;
-
-// PATCH request
-client.patch(path: string, options?: RequestOptions): RequestPromise;
-
-// DELETE request
-client.delete(path: string, options?: RequestOptions): RequestPromise;
-
-// HEAD request
-client.head(path: string, options?: RequestOptions): RequestPromise;
-
-// OPTIONS request
-client.options(path: string, options?: RequestOptions): RequestPromise;
-```
-
-### Additional Methods
-
-```typescript
-// WebDAV methods
-client.propfind(path: string, options?: RequestOptions): RequestPromise;
-client.proppatch(path: string, options?: RequestOptions): RequestPromise;
-client.mkcol(path: string, options?: RequestOptions): RequestPromise;
-client.copy(path: string, options?: RequestOptions): RequestPromise;
-client.move(path: string, options?: RequestOptions): RequestPromise;
-client.lock(path: string, options?: RequestOptions): RequestPromise;
-client.unlock(path: string, options?: RequestOptions): RequestPromise;
-
-// CDN methods
-client.purge(path: string, options?: RequestOptions): RequestPromise;
-
-// Diagnostic methods
-client.trace(path: string, options?: RequestOptions): RequestPromise;
-client.connect(path: string, options?: RequestOptions): RequestPromise;
-```
-
-### RequestOptions
+Options for individual requests:
 
 ```typescript
 interface RequestOptions {
-  // Path parameters
+  // URL path parameters (:param substitution)
   params?: Record<string, string | number | boolean>;
 
-  // Query parameters
+  // Query string parameters
   query?: Record<string, string | number | boolean>;
 
   // Request headers
@@ -205,9 +187,9 @@ interface RequestOptions {
   body?: BodyInit;
 
   // JSON body (auto-serialized)
-  json?: any;
+  json?: unknown;
 
-  // Form data body
+  // Form data (URL encoded)
   form?: Record<string, string>;
 
   // Multipart form data
@@ -220,61 +202,79 @@ interface RequestOptions {
   timeout?: number | TimeoutOptions;
 
   // Override retry
-  retry?: RetryOptions;
+  retry?: RetryOptions | false;
 
   // Override throw behavior
   throwHttpErrors?: boolean;
 
-  // Response format
-  responseFormat?: 'json' | 'text' | 'blob' | 'buffer' | 'stream';
-
-  // Download progress callback
+  // Progress callbacks
   onDownloadProgress?: (progress: Progress) => void;
-
-  // Upload progress callback
   onUploadProgress?: (progress: Progress) => void;
 }
 ```
 
-## Response Object
+---
 
-### ReckerResponse
+## RequestPromise
+
+Chainable promise returned by request methods:
 
 ```typescript
-interface ReckerResponse {
-  // HTTP status code
-  status: number;
-
-  // Status text
-  statusText: string;
-
-  // Response OK (2xx)
-  ok: boolean;
-
-  // Response headers
-  headers: Headers;
-
-  // Request URL
-  url: string;
-
-  // Response timing information
-  timings?: ResponseTimings;
-
-  // Connection information
-  connection?: ConnectionInfo;
-
-  // Rate limit information
-  rateLimit?: RateLimitInfo;
-
-  // Cache information
-  cache?: CacheInfo;
-
-  // Body methods
-  json<T>(): Promise<T>;
+interface RequestPromise extends Promise<ReckerResponse> {
+  // Parse response body
+  json<T = unknown>(): Promise<T>;
   text(): Promise<string>;
   blob(): Promise<Blob>;
   buffer(): Promise<Buffer>;
-  stream(): ReadableStream;
+
+  // Validate with Zod
+  parse<T>(schema: ZodSchema<T>): Promise<T>;
+  safeParse<T>(schema: ZodSchema<T>): Promise<SafeParseResult<T>>;
+
+  // Write to file
+  write(path: string): Promise<void>;
+
+  // Cancel request
+  cancel(): void;
+
+  // SSE streaming
+  sse(): AsyncGenerator<SSEEvent>;
+
+  // Raw byte streaming
+  [Symbol.asyncIterator](): AsyncIterableIterator<Uint8Array>;
+}
+```
+
+---
+
+## ReckerResponse
+
+Response object with metadata:
+
+```typescript
+interface ReckerResponse {
+  // HTTP status
+  status: number;
+  statusText: string;
+  ok: boolean;
+
+  // Headers
+  headers: Headers;
+
+  // Request URL (after redirects)
+  url: string;
+
+  // Timing information
+  timings?: ResponseTimings;
+
+  // Connection info
+  connection?: ConnectionInfo;
+
+  // Body methods
+  json<T = unknown>(): Promise<T>;
+  text(): Promise<string>;
+  blob(): Promise<Blob>;
+  buffer(): Promise<Buffer>;
 
   // Clone response
   clone(): ReckerResponse;
@@ -282,7 +282,7 @@ interface ReckerResponse {
   // SSE iterator
   sse(): AsyncGenerator<SSEEvent>;
 
-  // Clean text for AI
+  // Clean text (strips HTML)
   cleanText(): Promise<string>;
 }
 ```
@@ -291,13 +291,13 @@ interface ReckerResponse {
 
 ```typescript
 interface ResponseTimings {
-  queuing: number;    // Time in queue
-  dns: number;        // DNS lookup time
-  tcp: number;        // TCP connection time
-  tls: number;        // TLS handshake time
-  firstByte: number;  // Time to first byte
-  content: number;    // Content download time
-  total: number;      // Total request time
+  queuing: number;   // Time in queue
+  dns: number;       // DNS lookup
+  tcp: number;       // TCP connection
+  tls: number;       // TLS handshake
+  firstByte: number; // Time to first byte
+  content: number;   // Content download
+  total: number;     // Total time
 }
 ```
 
@@ -305,160 +305,130 @@ interface ResponseTimings {
 
 ```typescript
 interface ConnectionInfo {
-  protocol: string;       // 'h2', 'HTTP/1.1'
-  cipher?: string;        // TLS cipher
-  remoteAddress: string;  // Server IP
-  remotePort: number;     // Server port
-  localAddress: string;   // Client IP
-  localPort: number;      // Client port
-  reused: boolean;        // Connection reused
+  protocol: string;      // 'h2', 'HTTP/1.1'
+  cipher?: string;       // TLS cipher
+  remoteAddress: string;
+  remotePort: number;
+  localAddress: string;
+  localPort: number;
+  reused: boolean;       // Connection reused
 }
 ```
 
-## RequestPromise
-
-Chainable promise-like object returned by request methods.
+### Progress
 
 ```typescript
-interface RequestPromise extends Promise<ReckerResponse> {
-  // Parse as JSON
-  json<T>(): Promise<T>;
-
-  // Parse as text
-  text(): Promise<string>;
-
-  // Parse as blob
-  blob(): Promise<Blob>;
-
-  // Parse as buffer
-  buffer(): Promise<Buffer>;
-
-  // Parse with Zod schema
-  parse<T>(schema: ZodSchema<T>): Promise<T>;
-
-  // Safe parse with Zod
-  safeParse<T>(schema: ZodSchema<T>): Promise<{ success: boolean; data?: T; error?: ZodError }>;
-
-  // Write to file
-  write(path: string): Promise<void>;
-
-  // Cancel request
-  cancel(): void;
-
-  // SSE iterator
-  sse(): AsyncGenerator<SSEEvent>;
-
-  // Async iteration (raw bytes)
-  [Symbol.asyncIterator](): AsyncIterableIterator<Uint8Array>;
+interface Progress {
+  loaded: number;     // Bytes transferred
+  total?: number;     // Total bytes (if known)
+  percent?: number;   // Percentage complete
+  rate?: number;      // Bytes per second
+  estimated?: number; // Estimated time remaining (ms)
 }
 ```
 
-## Hooks
-
-### beforeRequest
-
-```typescript
-client.beforeRequest(
-  (request: ReckerRequest) => ReckerRequest | void | Promise<ReckerRequest | void>
-);
-```
-
-### afterResponse
-
-```typescript
-client.afterResponse(
-  (request: ReckerRequest, response: ReckerResponse) => ReckerResponse | void | Promise<ReckerResponse | void>
-);
-```
-
-### onError
-
-```typescript
-client.onError(
-  (error: Error, request: ReckerRequest) => ReckerResponse | void | Promise<ReckerResponse | void>
-);
-```
-
-## Plugins
-
-### Plugin Interface
-
-```typescript
-type Plugin = (client: Client) => void;
-```
-
-### Using Plugins
-
-```typescript
-client.use(plugin: Plugin | Middleware): Client;
-```
-
-### Middleware Interface
-
-```typescript
-type Middleware = (
-  request: ReckerRequest,
-  next: (request: ReckerRequest) => Promise<ReckerResponse>
-) => Promise<ReckerResponse>;
-```
+---
 
 ## Errors
 
-### Error Classes
-
 ```typescript
 import {
-  ReckerError,      // Base error class
-  HttpError,        // Non-2xx response error
-  TimeoutError,     // Request timeout
-  NetworkError,     // Network connectivity error
-  ValidationError   // Schema validation error
+  ReckerError,     // Base error class
+  HttpError,       // Non-2xx response
+  TimeoutError,    // Request timeout
+  NetworkError,    // Connection error
+  ValidationError  // Zod validation error
 } from 'recker';
 ```
 
-### Error Properties
+### HttpError
 
 ```typescript
-interface ReckerError {
-  message: string;
-  name: string;
-  code?: string;
-  cause?: Error;
-  suggestions?: string[];
-}
-
 interface HttpError extends ReckerError {
   status: number;
   statusText: string;
   response: ReckerResponse;
 }
+```
 
+### TimeoutError
+
+```typescript
 interface TimeoutError extends ReckerError {
   type: 'connect' | 'firstByte' | 'betweenBytes' | 'total';
 }
+```
 
+### NetworkError
+
+```typescript
 interface NetworkError extends ReckerError {
   code: string;  // 'ECONNRESET', 'ENOTFOUND', etc.
 }
 ```
 
-## AI Client
+---
 
-### createAIClient
+## Hooks
 
 ```typescript
-import { createAIClient, ai } from 'recker/ai';
+// Transform requests before sending
+client.beforeRequest((request: ReckerRequest) => {
+  return request.withHeader('X-Timestamp', Date.now().toString());
+});
 
-const client = createAIClient(options?: AIClientOptions);
+// Transform responses after receiving
+client.afterResponse((request, response) => {
+  console.log(`${request.method} ${request.url} → ${response.status}`);
+  return response;
+});
 
-// Or use default client
-await ai.chat('Hello!');
+// Handle errors
+client.onError((error, request) => {
+  if (error instanceof HttpError && error.status === 401) {
+    // Return fallback response
+    return new ReckerResponse({ status: 200, body: '{}' });
+  }
+  throw error;
+});
 ```
 
-### AIClientOptions
+---
+
+## Plugins
 
 ```typescript
-interface AIClientOptions {
+type Plugin = (client: Client) => void;
+type Middleware = (request: ReckerRequest, next: Next) => Promise<ReckerResponse>;
+
+// Using plugins
+import { retry, cache, dedup, circuitBreaker } from 'recker';
+
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  plugins: [
+    retry({ maxAttempts: 3, backoff: 'exponential' }),
+    cache({ ttl: 60000 }),
+    dedup(),
+    circuitBreaker({ threshold: 5 })
+  ]
+});
+```
+
+---
+
+## AI Client
+
+```typescript
+import { createAI } from 'recker/ai';
+// or
+const ai = recker.aiClient(options);
+```
+
+### AIClientConfig
+
+```typescript
+interface AIClientConfig {
   defaultProvider?: 'openai' | 'anthropic';
   providers?: {
     openai?: {
@@ -472,136 +442,156 @@ interface AIClientOptions {
       baseUrl?: string;
     };
   };
-  timeout?: TimeoutOptions;
+  timeout?: number;
   retry?: RetryOptions;
-  debug?: boolean;
 }
 ```
 
 ### AI Methods
 
 ```typescript
-// Chat completion
-client.chat(options: ChatOptions): Promise<AIResponse>;
-client.chat(prompt: string): Promise<AIResponse>;
+// Simple chat
+ai.chat(prompt: string): Promise<string>
+ai.chat(options: ChatOptions): Promise<ChatResponse>
 
 // Streaming
-client.stream(options: ChatOptions): Promise<AsyncIterable<StreamEvent>>;
+ai.stream(options: ChatOptions): AsyncGenerator<StreamEvent>
 
 // Embeddings
-client.embed(options: EmbedOptions): Promise<EmbedResponse>;
+ai.embed(options: EmbedOptions): Promise<EmbedResponse>
 
-// Extended client
-client.extend(options: Partial<ChatOptions>): AIClient;
-
-// Metrics
-client.metrics.summary(): MetricsSummary;
-client.metrics.reset(): void;
+// Extended client with defaults
+ai.extend(defaults: Partial<ChatOptions>): AIClient
 ```
 
-## MCP Client
+---
 
-### createMCPClient
+## DNS Client
 
 ```typescript
-import { createMCPClient } from 'recker/mcp';
-
-const mcp = createMCPClient(options: MCPClientOptions);
+import { createDNS } from 'recker/dns';
+// or
+const dns = recker.dnsClient(options);
 ```
 
-### MCPClientOptions
+### DNSClientOptions
 
 ```typescript
-interface MCPClientOptions {
-  endpoint: string;
-  clientName?: string;
-  clientVersion?: string;
-  protocolVersion?: string;
-  headers?: Record<string, string>;
+interface DNSClientOptions {
+  provider?: 'system' | 'cloudflare' | 'google';
   timeout?: number;
-  retries?: number;
-  debug?: boolean;
 }
 ```
 
-### MCP Methods
+### DNS Methods
 
 ```typescript
-// Connection
-mcp.connect(): Promise<MCPServerInfo>;
-mcp.disconnect(): Promise<void>;
-mcp.isConnected(): boolean;
-mcp.ping(): Promise<void>;
-
-// Tools
-mcp.tools.list(): Promise<MCPTool[]>;
-mcp.tools.get(name: string): Promise<MCPTool | undefined>;
-mcp.tools.call(name: string, args?: object): Promise<MCPToolResult>;
-
-// Resources
-mcp.resources.list(): Promise<MCPResource[]>;
-mcp.resources.read(uri: string): Promise<MCPResourceContent[]>;
-mcp.resources.subscribe(uri: string): Promise<void>;
-mcp.resources.unsubscribe(uri: string): Promise<void>;
-
-// Prompts
-mcp.prompts.list(): Promise<MCPPrompt[]>;
-mcp.prompts.get(name: string, args?: object): Promise<MCPPromptMessage[]>;
+dns.resolve(hostname: string, type: string): Promise<string[]>
+dns.resolve4(hostname: string): Promise<string[]>
+dns.resolve6(hostname: string): Promise<string[]>
+dns.resolveMx(hostname: string): Promise<MXRecord[]>
+dns.resolveTxt(hostname: string): Promise<string[]>
+dns.resolveAll(hostname: string): Promise<Record<string, unknown[]>>
+dns.getSecurityRecords(domain: string): Promise<DnsSecurityRecords>
 ```
 
-## Protocols
-
-### WebSocket
+### DnsSecurityRecords
 
 ```typescript
-import { websocket, ReckerWebSocket } from 'recker/websocket';
+interface DnsSecurityRecords {
+  spf: string[];
+  dmarc: string[];
+  dkim: string[];
+  caa: string[];
+}
+```
 
-const ws = websocket(url: string, options?: WebSocketOptions);
+---
+
+## WHOIS Client
+
+```typescript
+import { createWhois } from 'recker';
 // or
-const ws = new ReckerWebSocket(url, options);
-await ws.connect();
+const whois = recker.whoisClient(options);
 ```
 
-### FTP
+### WhoisOptions
 
 ```typescript
-import { createFTP, ftp } from 'recker/protocols';
-
-const client = createFTP(config: FTPConfig);
-// or one-shot
-await ftp(config, async (client) => { ... });
+interface WhoisOptions {
+  server?: string;  // Custom WHOIS server
+  timeout?: number;
+}
 ```
 
-### SFTP
+### WhoisResult
 
 ```typescript
-import { createSFTP, sftp } from 'recker/protocols';
-
-const client = createSFTP(config: SFTPConfig);
-// or one-shot
-await sftp(config, async (client) => { ... });
+interface WhoisResult {
+  raw: string;
+  parsed: Record<string, string>;
+  domainName?: string;
+  registrar?: string;
+  creationDate?: Date;
+  expirationDate?: Date;
+  nameServers?: string[];
+}
 ```
 
-### Telnet
+### WHOIS Methods
 
 ```typescript
-import { createTelnet, telnet } from 'recker/protocols';
-
-const client = createTelnet(config: TelnetConfig);
-// or one-shot
-await telnet(config, async (client) => { ... });
+whois.lookup(query: string): Promise<WhoisResult>
+whois.isAvailable(domain: string): Promise<boolean>
+whois.getRegistrar(domain: string): Promise<string | null>
+whois.getExpiration(domain: string): Promise<Date | null>
+whois.getNameServers(domain: string): Promise<string[]>
 ```
 
-### WHOIS
+---
+
+## WebSocket
 
 ```typescript
-import { whois, isDomainAvailable } from 'recker/utils/whois';
-
-const result = await whois(query: string, options?: WhoisOptions);
-const available = await isDomainAvailable(domain: string);
+import { createWebSocket } from 'recker';
+// or
+const ws = recker.ws(url, options);
 ```
+
+### WebSocketOptions
+
+```typescript
+interface WebSocketOptions {
+  protocols?: string | string[];
+  headers?: Record<string, string>;
+  reconnect?: boolean;
+  reconnectInterval?: number;
+  maxReconnects?: number;
+}
+```
+
+### ReckerWebSocket
+
+```typescript
+interface ReckerWebSocket {
+  send(data: string | Buffer): void;
+  close(code?: number, reason?: string): void;
+
+  on(event: 'open', handler: () => void): void;
+  on(event: 'message', handler: (data: MessageEvent) => void): void;
+  on(event: 'error', handler: (error: Error) => void): void;
+  on(event: 'close', handler: (code: number, reason: string) => void): void;
+
+  readyState: number;
+  url: string;
+}
+```
+
+---
 
 ## Next Steps
 
-- **[Recipes](02-recipes.md)** - Common patterns
-- **[Testing](03-testing.md)** - Test your code
+- **[Recipes](./02-recipes.md)** - Common patterns
+- **[Testing](./03-testing.md)** - Mock and test your code
+- **[Presets](./04-presets.md)** - Pre-configured clients for popular APIs

@@ -12,24 +12,59 @@ Unified AI communication across OpenAI, Anthropic, and more.
 - **Retry Logic**: Smart retry with fallbacks
 - **Type Safety**: Full TypeScript support
 
-## Quick Start
+## Usage Styles
 
-### Installation
+### 1. Direct Functions (Zero Config)
 
 ```typescript
-import { ai, createAIClient } from 'recker/ai';
+import { recker } from 'recker';
+
+// Simple chat
+const response = await recker.ai.chat('Hello, how are you?');
+console.log(response);
+
+// Streaming
+for await (const event of recker.ai.stream({
+  model: 'gpt-4',
+  messages: [{ role: 'user', content: 'Write a poem' }]
+})) {
+  process.stdout.write(event.choices[0]?.delta?.content || '');
+}
+
+// Embeddings
+const embeddings = await recker.ai.embed({
+  input: 'Hello, world!'
+});
 ```
 
-### Simple Chat
+### 2. Configured Client
 
 ```typescript
+import { createAI } from 'recker/ai';
+// or
+const ai = recker.aiClient(options);
+
+const ai = createAI({
+  defaultProvider: 'openai',
+  timeout: 30000
+});
+
+const response = await ai.chat('Hello!');
+```
+
+## Simple Chat
+
+```typescript
+import { recker } from 'recker';
+
 // Simple prompt
-const response = await ai.chat('Hello, how are you?');
-console.log(response.content);
+const response = await recker.ai.chat('Hello, how are you?');
+console.log(response);
 
 // With options
+const ai = recker.aiClient();
 const response = await ai.chat({
-  model: 'gpt-5.1',
+  model: 'gpt-4',
   messages: [{ role: 'user', content: 'Hello!' }],
   temperature: 0.7
 });
@@ -38,28 +73,32 @@ console.log(response.content);
 console.log(response.usage); // { inputTokens, outputTokens, totalTokens }
 ```
 
-### Streaming
+## Streaming
 
 ```typescript
-const stream = await ai.stream({
-  model: 'gpt-5.1',
-  messages: [{ role: 'user', content: 'Write a poem' }]
-});
+import { recker } from 'recker';
 
-for await (const event of stream) {
+for await (const event of recker.ai.stream({
+  model: 'gpt-4',
+  messages: [{ role: 'user', content: 'Write a poem' }]
+})) {
   if (event.type === 'text') {
     process.stdout.write(event.content);
   }
 }
 ```
 
-### Use Different Provider
+## Use Different Provider
 
 ```typescript
+import { createAI } from 'recker/ai';
+
+const ai = createAI();
+
 // OpenAI (default)
 await ai.chat({
   provider: 'openai',
-  model: 'gpt-5.1',
+  model: 'gpt-4',
   messages: [{ role: 'user', content: 'Hello' }]
 });
 
@@ -86,7 +125,9 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 ### Custom Client
 
 ```typescript
-const myClient = createAIClient({
+import { createAI } from 'recker/ai';
+
+const ai = createAI({
   defaultProvider: 'anthropic',
   providers: {
     openai: {
@@ -114,6 +155,9 @@ const myClient = createAIClient({
 ## Response Object
 
 ```typescript
+import { createAI } from 'recker/ai';
+
+const ai = createAI();
 const response = await ai.chat('Hello');
 
 console.log({
@@ -149,6 +193,10 @@ console.log({
 Create pre-configured clients for specific use cases:
 
 ```typescript
+import { createAI } from 'recker/ai';
+
+const ai = createAI();
+
 // Code assistant
 const codeClient = ai.extend({
   model: 'gpt-5.1',
@@ -179,14 +227,16 @@ const chatClient = ai.extend({
 Track usage across all requests:
 
 ```typescript
-const client = createAIClient();
+import { createAI } from 'recker/ai';
+
+const ai = createAI();
 
 // Make requests
-await client.chat('Hello');
-await client.chat('World');
+await ai.chat('Hello');
+await ai.chat('World');
 
 // Get metrics
-console.log(client.metrics.summary());
+console.log(ai.metrics.summary());
 // {
 //   totalRequests: 2,
 //   totalTokens: 150,
@@ -199,7 +249,7 @@ console.log(client.metrics.summary());
 // }
 
 // Reset metrics
-client.metrics.reset();
+ai.metrics.reset();
 ```
 
 ## Error Handling
