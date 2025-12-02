@@ -7,6 +7,7 @@
 
 import { Readable, Writable } from 'node:stream';
 import { requireOptional } from '../utils/optional-require.js';
+import { StateError, ConnectionError } from '../core/errors.js';
 
 // Type-only imports for TypeScript (these don't require the module at runtime)
 import type SFTPClient from 'ssh2-sftp-client';
@@ -489,14 +490,20 @@ export class SFTP {
    */
   getClient(): SFTPClient {
     if (!this.initialized) {
-      throw new Error('Client not initialized. Call connect() first.');
+      throw new StateError('Client not initialized. Call connect() first.', {
+        expectedState: 'initialized',
+        actualState: 'not-initialized',
+      });
     }
     return this.client;
   }
 
   private ensureConnected(): void {
     if (!this.connected) {
-      throw new Error('Not connected to SFTP server. Call connect() first.');
+      throw new StateError('Not connected to SFTP server. Call connect() first.', {
+        expectedState: 'connected',
+        actualState: 'disconnected',
+      });
     }
   }
 
@@ -554,7 +561,10 @@ export async function sftp<T>(
   try {
     const result = await client.connect();
     if (!result.success) {
-      throw new Error(result.message || 'Failed to connect to SFTP server');
+      throw new ConnectionError(result.message || 'Failed to connect to SFTP server', {
+        host: config.host,
+        port: config.port,
+      });
     }
 
     return await operation(client);

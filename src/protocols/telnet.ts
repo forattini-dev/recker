@@ -9,6 +9,7 @@
 
 import { Socket } from 'node:net';
 import { EventEmitter } from 'node:events';
+import { StateError, TimeoutError, ConnectionError } from '../core/errors.js';
 
 // ============================================================================
 // Telnet Protocol Constants (RFC 854/855)
@@ -433,7 +434,10 @@ export class Telnet extends EventEmitter {
    */
   getSocket(): Socket {
     if (!this.socket) {
-      throw new Error('Not connected. Call connect() first.');
+      throw new StateError('Not connected. Call connect() first.', {
+        expectedState: 'connected',
+        actualState: 'disconnected',
+      });
     }
     return this.socket;
   }
@@ -741,7 +745,10 @@ export class Telnet extends EventEmitter {
     return new Promise((resolve, reject) => {
       const check = () => {
         if (Date.now() - start > timeout) {
-          reject(new Error('Timeout waiting for prompt'));
+          reject(new TimeoutError(undefined, {
+            phase: 'response',
+            timeout,
+          }));
           return;
         }
 
@@ -769,7 +776,10 @@ export class Telnet extends EventEmitter {
    */
   private write(data: string | Buffer): void {
     if (!this.socket || !this.connected) {
-      throw new Error('Not connected');
+      throw new StateError('Not connected', {
+        expectedState: 'connected',
+        actualState: 'disconnected',
+      });
     }
 
     const buffer = typeof data === 'string' ? Buffer.from(data) : data;
@@ -787,7 +797,10 @@ export class Telnet extends EventEmitter {
 
       const check = () => {
         if (Date.now() - start > timeout) {
-          reject(new Error(`Timeout waiting for pattern: ${pattern}`));
+          reject(new TimeoutError(undefined, {
+            phase: 'response',
+            timeout,
+          }));
           return;
         }
 
@@ -845,7 +858,10 @@ export class Telnet extends EventEmitter {
    */
   private ensureConnected(): void {
     if (!this.connected || !this.socket) {
-      throw new Error('Not connected to Telnet server. Call connect() first.');
+      throw new StateError('Not connected to Telnet server. Call connect() first.', {
+        expectedState: 'connected',
+        actualState: 'disconnected',
+      });
     }
   }
 
@@ -920,7 +936,10 @@ export async function telnet<T>(
   try {
     const result = await client.connect();
     if (!result.success) {
-      throw new Error(result.message || 'Failed to connect to Telnet server');
+      throw new ConnectionError(result.message || 'Failed to connect to Telnet server', {
+        host: config.host,
+        port: config.port,
+      });
     }
 
     return await operation(client);
