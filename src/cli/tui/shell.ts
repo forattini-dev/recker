@@ -249,26 +249,26 @@ export class RekShell {
             return true;
           }
 
-          // In scroll mode, handle escape and consume all other input
-          if (self.inScrollMode) {
-            // Check for escape key to exit scroll mode
-            if (str === '\x1b' || str === '\x1b\x1b') {
-              self.exitScrollMode();
-            }
-            // Consume ALL input in scroll mode (prevents garbage and shell exit)
-            return true;
-          }
-
-          // Check for scroll keys (Page Up/Down, etc.) - only when NOT in scroll mode
-          // This prevents conflicts with escape handling
+          // Check for scroll keys (Page Up/Down, Home/End, Escape)
           const scrollKey = parseScrollKey(data);
           if (scrollKey) {
-            // Don't treat bare escape as scroll key outside scroll mode
+            // Handle escape: exit scroll mode if in it, otherwise pass through
             if (scrollKey === 'escape') {
+              if (self.inScrollMode) {
+                self.exitScrollMode();
+                return true;
+              }
+              // Not in scroll mode - pass through to readline
               return originalEmit(event, ...args);
             }
+            // Handle other scroll keys (pageUp, pageDown, home, end, scrollUp, scrollDown)
             self.handleScrollKey(scrollKey);
             return true; // Consume the event
+          }
+
+          // In scroll mode, consume all other input to prevent garbage
+          if (self.inScrollMode) {
+            return true;
           }
         }
 
