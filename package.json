@@ -1,6 +1,6 @@
 {
   "name": "recker",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "AI & DevX focused HTTP client for Node.js 18+",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
