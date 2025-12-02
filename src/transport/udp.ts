@@ -15,7 +15,7 @@ import type {
   SimpleUDPAPI,
 } from '../types/udp.js';
 import { BaseUDPTransport, udpRequestStorage, UDPRequestContext } from './base-udp.js';
-import { UDPResponseImpl } from './udp-response.js';
+import { UDPResponseWrapper } from './udp-response.js';
 
 /**
  * Default UDP transport options
@@ -25,6 +25,7 @@ const DEFAULT_OPTIONS: UDPTransportOptions = {
   retransmissions: 3,
   maxPacketSize: 65507,
   observability: true,
+  debug: false,
   broadcast: false,
   multicastTTL: 1,
   multicastLoopback: true,
@@ -32,26 +33,31 @@ const DEFAULT_OPTIONS: UDPTransportOptions = {
 };
 
 /**
- * UDP Transport implementation
+ * UDP Transport
+ *
+ * Generic UDP transport for sending and receiving datagrams.
+ * Supports broadcast, multicast, and request-response patterns.
  *
  * @example
  * ```typescript
- * import { createClient } from 'recker';
- * import { UDPTransport } from 'recker/udp';
+ * import { createUDP } from 'recker/udp';
  *
- * const client = createClient({
- *   baseUrl: 'udp://192.168.1.100:5000',
- *   transport: new UDPTransport({
- *     timeout: 5000,
- *     retransmissions: 3,
- *   })
+ * const udp = createUDP({
+ *   timeout: 5000,
+ *   debug: true
  * });
  *
- * const response = await client.get('/status');
- * const data = await response.buffer();
+ * // Send datagram
+ * await udp.send('192.168.1.100', 5000, Buffer.from('hello'));
+ *
+ * // Broadcast
+ * await udp.broadcast(5000, Buffer.from('discover'));
+ *
+ * // Close when done
+ * await udp.close();
  * ```
  */
-export class UDPTransportImpl extends BaseUDPTransport {
+export class UDPClient extends BaseUDPTransport {
   private socket: dgram.Socket | null = null;
   private baseUrl: string;
   private udpOptions: Required<UDPTransportOptions>;
@@ -67,6 +73,7 @@ export class UDPTransportImpl extends BaseUDPTransport {
       retransmissions: options.retransmissions ?? DEFAULT_OPTIONS.retransmissions!,
       maxPacketSize: options.maxPacketSize ?? DEFAULT_OPTIONS.maxPacketSize!,
       observability: options.observability ?? DEFAULT_OPTIONS.observability!,
+      debug: options.debug ?? DEFAULT_OPTIONS.debug!,
       localAddress: options.localAddress ?? '',
       localPort: options.localPort ?? 0,
       broadcast: options.broadcast ?? DEFAULT_OPTIONS.broadcast!,
@@ -77,6 +84,12 @@ export class UDPTransportImpl extends BaseUDPTransport {
       recvBufferSize: options.recvBufferSize,
       sendBufferSize: options.sendBufferSize,
     } as Required<UDPTransportOptions>;
+  }
+
+  private log(message: string, ...args: unknown[]): void {
+    if (this.udpOptions.debug) {
+      console.log(`[UDP] ${message}`, ...args);
+    }
   }
 
   /**
@@ -142,6 +155,8 @@ export class UDPTransportImpl extends BaseUDPTransport {
       const fullUrl = this.baseUrl ? `${this.baseUrl}${req.url}` : req.url;
       const { host, port, path } = this.parseUrl(fullUrl);
 
+      this.log(`Dispatch to ${fullUrl}`);
+
       if (!host || !port) {
         throw new Error(`Invalid UDP URL: ${fullUrl}. Expected format: udp://host:port/path`);
       }
@@ -201,8 +216,10 @@ export class UDPTransportImpl extends BaseUDPTransport {
       const timings = this.collectTimings();
       const connection = this.collectConnection(socket);
 
+      this.log(`Response received in ${timings.total.toFixed(0)}ms (${responseBuffer.length} bytes)`);
+
       // Create response
-      return new UDPResponseImpl(responseBuffer, {
+      return new UDPResponseWrapper(responseBuffer, {
         timings,
         connection,
         url: fullUrl,
@@ -305,10 +322,23 @@ export class UDPTransportImpl extends BaseUDPTransport {
 // ============================================================================
 
 /**
- * Create a simple UDP API for standalone use
+ * Create a UDP client
+ *
+ * @example
+ * ```typescript
+ * import { createUDP } from 'recker/udp';
+ *
+ * const udp = createUDP({
+ *   timeout: 5000,
+ *   debug: true
+ * });
+ *
+ * await udp.send('192.168.1.100', 5000, Buffer.from('hello'));
+ * await udp.close();
+ * ```
  */
-export function createUDPClient(options: UDPTransportOptions = {}): UDPTransportImpl {
-  return new UDPTransportImpl('', options);
+export function createUDP(options: UDPTransportOptions = {}): UDPClient {
+  return new UDPClient('', options);
 }
 
 /**
@@ -323,7 +353,7 @@ export const udp: SimpleUDPAPI = {
     data: Buffer,
     options: UDPTransportOptions = {}
   ): Promise<UDPResponse> {
-    const transport = new UDPTransportImpl('', options);
+    const transport = new UDPClient('', options);
     try {
       const response = await transport.dispatch({
         url: address.startsWith('udp://') ? address : `udp://${address}`,
@@ -419,5 +449,5 @@ export const udp: SimpleUDPAPI = {
   },
 };
 
-// Re-export for convenience
-export { UDPTransportImpl as UDPTransport };
+// Alias for transport interface compatibility
+export { UDPClient as UDPTransport };

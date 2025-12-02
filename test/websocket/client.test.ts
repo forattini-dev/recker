@@ -10,7 +10,7 @@ vi.mock('undici', async () => {
 });
 
 // Import client AFTER mocking
-import { ReckerWebSocket, websocket } from '../../src/websocket/client.js';
+import { ReckerWebSocket, createWebSocket } from '../../src/websocket/client.js';
 
 describe('WebSocket Client', () => {
   let ws: ReckerWebSocket;
@@ -393,7 +393,7 @@ describe('WebSocket Client', () => {
 
   describe('Helper Function', () => {
     it('should create and auto-connect WebSocket', async () => {
-      const ws = websocket('ws://localhost:8080');
+      const ws = createWebSocket('ws://localhost:8080');
 
       await new Promise(resolve => setTimeout(resolve, 50));
 

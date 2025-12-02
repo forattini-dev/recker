@@ -6,15 +6,15 @@ describe('UDP Module Exports', () => {
     expect(UDPTransport).toBeDefined();
   });
 
-  it('should export UDPTransportImpl', async () => {
-    const { UDPTransportImpl } = await import('../../src/udp/index.js');
-    expect(UDPTransportImpl).toBeDefined();
+  it('should export UDPClient', async () => {
+    const { UDPClient } = await import('../../src/udp/index.js');
+    expect(UDPClient).toBeDefined();
   });
 
-  it('should export createUDPClient', async () => {
-    const { createUDPClient } = await import('../../src/udp/index.js');
-    expect(createUDPClient).toBeDefined();
-    expect(typeof createUDPClient).toBe('function');
+  it('should export createUDP', async () => {
+    const { createUDP } = await import('../../src/udp/index.js');
+    expect(createUDP).toBeDefined();
+    expect(typeof createUDP).toBe('function');
   });
 
   it('should export udp helper', async () => {
@@ -25,9 +25,9 @@ describe('UDP Module Exports', () => {
     expect(typeof udp.discover).toBe('function');
   });
 
-  it('should export UDPResponseImpl', async () => {
-    const { UDPResponseImpl } = await import('../../src/udp/index.js');
-    expect(UDPResponseImpl).toBeDefined();
+  it('should export UDPResponseWrapper', async () => {
+    const { UDPResponseWrapper } = await import('../../src/udp/index.js');
+    expect(UDPResponseWrapper).toBeDefined();
   });
 
   it('should export StreamingUDPResponse', async () => {

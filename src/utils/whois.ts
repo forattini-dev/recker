@@ -330,3 +330,169 @@ export async function isDomainAvailable(
     return false;
   }
 }
+
+// ============================================================================
+// WHOIS Client Class
+// ============================================================================
+
+/**
+ * WHOIS Client options
+ */
+export interface WhoisClientOptions {
+  /**
+   * Default WHOIS server to use
+   */
+  server?: string;
+
+  /**
+   * Default port
+   * @default 43
+   */
+  port?: number;
+
+  /**
+   * Default timeout in milliseconds
+   * @default 10000
+   */
+  timeout?: number;
+
+  /**
+   * Follow referrals to other WHOIS servers
+   * @default true
+   */
+  follow?: boolean;
+
+  /**
+   * Enable debug logging
+   * @default false
+   */
+  debug?: boolean;
+}
+
+/**
+ * WHOIS Client class
+ *
+ * Provides a consistent interface for WHOIS lookups.
+ *
+ * @example
+ * ```typescript
+ * const whoisClient = createWhois({ timeout: 15000, debug: true });
+ *
+ * // Domain lookup
+ * const result = await whoisClient.lookup('example.com');
+ * console.log(result.data);
+ *
+ * // IP lookup
+ * const ipResult = await whoisClient.lookup('8.8.8.8');
+ *
+ * // Check availability
+ * const available = await whoisClient.isAvailable('my-new-domain.com');
+ * ```
+ */
+export class WhoisClient {
+  private options: Required<WhoisClientOptions>;
+
+  constructor(options: WhoisClientOptions = {}) {
+    this.options = {
+      server: options.server ?? '',
+      port: options.port ?? 43,
+      timeout: options.timeout ?? 10000,
+      follow: options.follow ?? true,
+      debug: options.debug ?? false,
+    };
+  }
+
+  private log(message: string, ...args: unknown[]): void {
+    if (this.options.debug) {
+      console.log(`[WHOIS] ${message}`, ...args);
+    }
+  }
+
+  /**
+   * Perform WHOIS lookup for domain or IP
+   */
+  async lookup(query: string, options?: WhoisOptions): Promise<WhoisResult> {
+    this.log(`Looking up: ${query}`);
+    const start = Date.now();
+
+    const result = await whois(query, {
+      server: options?.server ?? (this.options.server || undefined),
+      port: options?.port ?? this.options.port,
+      timeout: options?.timeout ?? this.options.timeout,
+      follow: options?.follow ?? this.options.follow,
+    });
+
+    this.log(`Lookup completed in ${Date.now() - start}ms from ${result.server}`);
+    return result;
+  }
+
+  /**
+   * Check if a domain is available
+   */
+  async isAvailable(domain: string): Promise<boolean> {
+    this.log(`Checking availability: ${domain}`);
+    return isDomainAvailable(domain, {
+      server: this.options.server || undefined,
+      port: this.options.port,
+      timeout: this.options.timeout,
+      follow: this.options.follow,
+    });
+  }
+
+  /**
+   * Get registrar info for a domain
+   */
+  async getRegistrar(domain: string): Promise<string | null> {
+    const result = await this.lookup(domain);
+    return (result.data['registrar'] as string) ||
+           (result.data['sponsoring registrar'] as string) ||
+           null;
+  }
+
+  /**
+   * Get expiration date for a domain
+   */
+  async getExpiration(domain: string): Promise<Date | null> {
+    const result = await this.lookup(domain);
+    const expiry = result.data['registry expiry date'] as string ||
+                   result.data['expiration date'] as string ||
+                   result.data['expiry date'] as string;
+
+    if (expiry) {
+      const date = new Date(expiry);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    return null;
+  }
+
+  /**
+   * Get name servers for a domain
+   */
+  async getNameServers(domain: string): Promise<string[]> {
+    const result = await this.lookup(domain);
+    const ns = result.data['name server'] || result.data['nserver'] || [];
+    return Array.isArray(ns) ? ns : [ns];
+  }
+}
+
+/**
+ * Create a WHOIS client
+ *
+ * @example
+ * ```typescript
+ * import { createWhois } from 'recker';
+ *
+ * const whois = createWhois({
+ *   timeout: 15000,
+ *   debug: true
+ * });
+ *
+ * const result = await whois.lookup('example.com');
+ * console.log(result.data);
+ *
+ * const available = await whois.isAvailable('my-domain.com');
+ * ```
+ */
+export function createWhois(options?: WhoisClientOptions): WhoisClient {
+  return new WhoisClient(options);
+}

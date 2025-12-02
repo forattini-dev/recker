@@ -11,8 +11,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import dgram from 'node:dgram';
-import { UDPTransportImpl, udp, createUDPClient } from '../../src/transport/udp.js';
-import { UDPResponseImpl, StreamingUDPResponse } from '../../src/transport/udp-response.js';
+import { UDPClient, udp, createUDP } from '../../src/transport/udp.js';
+import { UDPResponseWrapper, StreamingUDPResponse } from '../../src/transport/udp-response.js';
 
 describe('UDPTransport', () => {
   let server: dgram.Socket;
@@ -44,7 +44,7 @@ describe('UDPTransport', () => {
 
   describe('Basic Operations', () => {
     it('should send and receive UDP packet', async () => {
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${serverPort}`);
+      const transport = new UDPClient(`udp://127.0.0.1:${serverPort}`);
 
       try {
         const response = await transport.dispatch({
@@ -66,7 +66,7 @@ describe('UDPTransport', () => {
     });
 
     it('should handle Buffer body', async () => {
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${serverPort}`);
+      const transport = new UDPClient(`udp://127.0.0.1:${serverPort}`);
 
       try {
         const response = await transport.dispatch({
@@ -86,7 +86,7 @@ describe('UDPTransport', () => {
     });
 
     it('should handle JSON body', async () => {
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${serverPort}`);
+      const transport = new UDPClient(`udp://127.0.0.1:${serverPort}`);
 
       try {
         const response = await transport.dispatch({
@@ -106,7 +106,7 @@ describe('UDPTransport', () => {
     });
 
     it('should send path as body for GET without body', async () => {
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${serverPort}`);
+      const transport = new UDPClient(`udp://127.0.0.1:${serverPort}`);
 
       try {
         const response = await transport.dispatch({
@@ -128,7 +128,7 @@ describe('UDPTransport', () => {
 
   describe('Timings and Connection', () => {
     it('should collect timing information', async () => {
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${serverPort}`, {
+      const transport = new UDPClient(`udp://127.0.0.1:${serverPort}`, {
         observability: true,
       });
 
@@ -151,7 +151,7 @@ describe('UDPTransport', () => {
     });
 
     it('should collect connection information', async () => {
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${serverPort}`, {
+      const transport = new UDPClient(`udp://127.0.0.1:${serverPort}`, {
         observability: true,
       });
 
@@ -175,7 +175,7 @@ describe('UDPTransport', () => {
     });
 
     it('should skip observability when disabled', async () => {
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${serverPort}`, {
+      const transport = new UDPClient(`udp://127.0.0.1:${serverPort}`, {
         observability: false,
       });
 
@@ -205,7 +205,7 @@ describe('UDPTransport', () => {
       });
       const silentPort = (silentServer.address() as dgram.AddressInfo).port;
 
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${silentPort}`, {
+      const transport = new UDPClient(`udp://127.0.0.1:${silentPort}`, {
         timeout: 100,
         retransmissions: 0,
       });
@@ -244,7 +244,7 @@ describe('UDPTransport', () => {
       });
       const delayPort = (delayServer.address() as dgram.AddressInfo).port;
 
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${delayPort}`, {
+      const transport = new UDPClient(`udp://127.0.0.1:${delayPort}`, {
         timeout: 100,
         retransmissions: 2,
       });
@@ -282,7 +282,7 @@ describe('UDPTransport', () => {
       });
       const listenerPort = (listener.address() as dgram.AddressInfo).port;
 
-      const transport = new UDPTransportImpl('');
+      const transport = new UDPClient('');
 
       try {
         await transport.send('127.0.0.1', listenerPort, Buffer.from('fire-and-forget'));
@@ -299,7 +299,7 @@ describe('UDPTransport', () => {
 
   describe('Packet Validation', () => {
     it('should reject packets larger than maxPacketSize', async () => {
-      const transport = new UDPTransportImpl(`udp://127.0.0.1:${serverPort}`, {
+      const transport = new UDPClient(`udp://127.0.0.1:${serverPort}`, {
         maxPacketSize: 100,
       });
 
@@ -324,31 +324,31 @@ describe('UDPTransport', () => {
 describe('UDPResponse', () => {
   describe('Data Access', () => {
     it('should return buffer', async () => {
-      const response = new UDPResponseImpl(Buffer.from('hello'));
+      const response = new UDPResponseWrapper(Buffer.from('hello'));
       const buffer = await response.buffer();
       expect(buffer.toString()).toBe('hello');
     });
 
     it('should return text', async () => {
-      const response = new UDPResponseImpl(Buffer.from('hello world'));
+      const response = new UDPResponseWrapper(Buffer.from('hello world'));
       const text = await response.text();
       expect(text).toBe('hello world');
     });
 
     it('should return JSON', async () => {
-      const response = new UDPResponseImpl(Buffer.from('{"foo":"bar"}'));
+      const response = new UDPResponseWrapper(Buffer.from('{"foo":"bar"}'));
       const json = await response.json();
       expect(json).toEqual({ foo: 'bar' });
     });
 
     it('should return clean text', async () => {
-      const response = new UDPResponseImpl(Buffer.from('hello\x00world\n\t'));
+      const response = new UDPResponseWrapper(Buffer.from('hello\x00world\n\t'));
       const clean = await response.cleanText();
       expect(clean).toBe('hello world');
     });
 
     it('should return blob', async () => {
-      const response = new UDPResponseImpl(Buffer.from('blob data'));
+      const response = new UDPResponseWrapper(Buffer.from('blob data'));
       const blob = await response.blob();
       expect(blob.size).toBe(9);
     });
@@ -356,13 +356,13 @@ describe('UDPResponse', () => {
 
   describe('Streaming', () => {
     it('should return readable stream', () => {
-      const response = new UDPResponseImpl(Buffer.from('stream data'));
+      const response = new UDPResponseWrapper(Buffer.from('stream data'));
       const stream = response.read();
       expect(stream).toBeInstanceOf(ReadableStream);
     });
 
     it('should async iterate', async () => {
-      const response = new UDPResponseImpl(Buffer.from('iterate'));
+      const response = new UDPResponseWrapper(Buffer.from('iterate'));
       const chunks: Uint8Array[] = [];
 
       for await (const chunk of response) {
@@ -374,7 +374,7 @@ describe('UDPResponse', () => {
     });
 
     it('should iterate packets', async () => {
-      const response = new UDPResponseImpl(Buffer.from('packet'));
+      const response = new UDPResponseWrapper(Buffer.from('packet'));
       const packets: Buffer[] = [];
 
       for await (const packet of response.packets()) {
@@ -388,7 +388,7 @@ describe('UDPResponse', () => {
 
   describe('Clone', () => {
     it('should clone response', async () => {
-      const response = new UDPResponseImpl(Buffer.from('original'), {
+      const response = new UDPResponseWrapper(Buffer.from('original'), {
         timings: { queued: 1, send: 2, receive: 3, retransmissions: 0, total: 6 },
         connection: {
           protocol: 'udp',
@@ -409,7 +409,7 @@ describe('UDPResponse', () => {
 
   describe('Download Progress', () => {
     it('should emit download progress', async () => {
-      const response = new UDPResponseImpl(Buffer.from('progress test'));
+      const response = new UDPResponseWrapper(Buffer.from('progress test'));
       const events: any[] = [];
 
       for await (const event of response.download()) {
@@ -491,9 +491,9 @@ describe('Simple UDP API', () => {
   });
 });
 
-describe('createUDPClient', () => {
+describe('createUDP', () => {
   it('should create a UDP client', () => {
-    const client = createUDPClient({ timeout: 5000 });
-    expect(client).toBeInstanceOf(UDPTransportImpl);
+    const client = createUDP({ timeout: 5000 });
+    expect(client).toBeInstanceOf(UDPClient);
   });
 });

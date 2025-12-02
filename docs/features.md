@@ -43,10 +43,13 @@ await client.purge('/cached-resource');
 [See all HTTP methods →](examples.md#http-methods)
 
 ### HTTP/2 and HTTP/3
-- **Automatic negotiation**: Uses HTTP/2 when server supports it
+- **Automatic HTTP/2**: Uses HTTP/2 when server supports it (via Undici)
 - **ALPN detection**: Automatic protocol detection
 - **Detailed metrics**: Stream IDs, priorities, window sizes
-- **HTTP/3/QUIC**: Full support with 0-RTT detection
+- **HTTP/3 Discovery**: Alt-Svc header parsing and endpoint detection
+- **QUIC Ready**: Types and infrastructure for future native QUIC support (Node.js 23+)
+
+> **Note**: Native HTTP/3/QUIC transport requires Node.js 23+ with `--experimental-quic` flag. Currently, HTTP/3 endpoints are discovered via Alt-Svc headers but requests use HTTP/2 fallback.
 
 [Learn more →](http/05-configuration.md)
 
