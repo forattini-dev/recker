@@ -5,6 +5,7 @@
  * - Fuse.js handles fuzzy text matching (typos, partial matches)
  * - Pre-computed embeddings enable semantic search without runtime model
  * - Reciprocal Rank Fusion combines results from both methods
+ * - Lazy loading: embeddings are downloaded from GitHub Releases on first use
  *
  * Dependencies:
  * - Runtime: fuse.js (30KB, 0 deps)
@@ -13,6 +14,7 @@
 
 import Fuse from 'fuse.js';
 import { cosineSimilarity, combineScores, levenshtein } from './math.js';
+import { loadEmbeddings, type LoadEmbeddingsOptions } from '../embeddings-loader.js';
 import type {
   IndexedDoc,
   SearchResult,
@@ -86,8 +88,12 @@ export class HybridSearch {
   }
 
   /**
-   * Load pre-computed embeddings from JSON.
-   * This file is generated at build time by scripts/build-embeddings.ts.
+   * Load pre-computed embeddings using lazy loader.
+   *
+   * The loader will:
+   * 1. Check local cache (~/.cache/recker/)
+   * 2. Try bundled file (development mode)
+   * 3. Download from GitHub Releases (first time)
    */
   private async loadPrecomputedEmbeddings(): Promise<void> {
     try {
@@ -95,33 +101,14 @@ export class HybridSearch {
       if (cachedEmbeddings) {
         this.embeddingsData = cachedEmbeddings;
       } else {
-        // Dynamic import for the embeddings JSON
-        // Note: This path is relative to the compiled output
-        const embeddingsPath = new URL('../data/embeddings.json', import.meta.url);
+        // Load using lazy loader (handles cache, bundled, and download)
+        const data = await loadEmbeddings({
+          debug: this.config.debug,
+        });
 
-        try {
-          const response = await fetch(embeddingsPath);
-          if (response.ok) {
-            this.embeddingsData = (await response.json()) as EmbeddingsData;
-            cachedEmbeddings = this.embeddingsData;
-          }
-        } catch {
-          // Fallback: try require for Node.js environments
-          try {
-            const fs = await import('fs');
-            const path = await import('path');
-            const embeddingsFile = path.join(
-              path.dirname(new URL(import.meta.url).pathname),
-              '../data/embeddings.json'
-            );
-            if (fs.existsSync(embeddingsFile)) {
-              const data = fs.readFileSync(embeddingsFile, 'utf-8');
-              this.embeddingsData = JSON.parse(data) as EmbeddingsData;
-              cachedEmbeddings = this.embeddingsData;
-            }
-          } catch {
-            // No embeddings file available
-          }
+        if (data) {
+          this.embeddingsData = data;
+          cachedEmbeddings = data;
         }
       }
 
