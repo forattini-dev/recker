@@ -535,8 +535,7 @@ export class UndiciTransport implements Transport {
               connectTimeout: timeouts.connectTimeout,
               headersTimeout: timeouts.headersTimeout,
               bodyTimeout: timeouts.bodyTimeout,
-              // Disable undici redirects when handling manually, otherwise use configured value
-              maxRedirections: handleRedirectsManually ? 0 : this.options.maxRedirections,
+              maxRedirections: 0, // Always handle redirects manually to support hooks and avoid dispatcher issues
             };
 
             // If body is a stream (from FormData conversion or otherwise), set duplex: half
@@ -593,11 +592,11 @@ export class UndiciTransport implements Transport {
             undiciResponse = await undiciRequest(currentUrl, undiciOptions);
           }
 
-          // Handle redirects manually when beforeRedirect is provided
+          // Handle redirects (Manual or Automatic)
           const statusCode = undiciResponse.statusCode;
           const isRedirect = statusCode >= 300 && statusCode < 400;
 
-          if (handleRedirectsManually && isRedirect && followRedirects && redirectCount < maxRedirects) {
+          if (isRedirect && followRedirects && redirectCount < maxRedirects) {
             const locationHeader = undiciResponse.headers['location'];
             const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader;
 
@@ -605,43 +604,53 @@ export class UndiciTransport implements Transport {
               // Resolve relative URLs
               const nextUrl = new URL(location, currentUrl).toString();
 
-              // Convert undici headers to Headers object for the hook
-              const responseHeaders = new Headers();
-              for (const [key, value] of Object.entries(undiciResponse.headers)) {
-                if (value !== undefined) {
-                  if (Array.isArray(value)) {
-                    value.forEach(v => responseHeaders.append(key, v));
-                  } else {
-                    responseHeaders.set(key, value);
+              // Run hook if provided
+              if (handleRedirectsManually) {
+                // Convert undici headers to Headers object for the hook
+                const responseHeaders = new Headers();
+                for (const [key, value] of Object.entries(undiciResponse.headers)) {
+                  if (value !== undefined) {
+                    if (Array.isArray(value)) {
+                      value.forEach(v => responseHeaders.append(key, v));
+                    } else {
+                      responseHeaders.set(key, value);
+                    }
                   }
                 }
+
+                const redirectInfo: RedirectInfo = {
+                  from: currentUrl,
+                  to: nextUrl,
+                  status: statusCode,
+                  headers: responseHeaders,
+                };
+
+                // Call beforeRedirect hook
+                const hookResult = await req.beforeRedirect!(redirectInfo);
+
+                // Check if redirect should be stopped
+                if (hookResult === false) {
+                  // Return the redirect response without following
+                  const finalResponse = req.onDownloadProgress
+                    ? wrapDownloadResponse(undiciResponse, req.onDownloadProgress)
+                    : undiciResponse;
+
+                  return new HttpResponse(finalResponse, {
+                    timings: requestContext.timings,
+                    connection: requestContext.connection
+                  });
+                }
+
+                // Update URL (possibly modified by hook)
+                if (typeof hookResult === 'string') {
+                    currentUrl = hookResult;
+                } else {
+                    currentUrl = nextUrl;
+                }
+              } else {
+                  // No hook, just follow
+                  currentUrl = nextUrl;
               }
-
-              const redirectInfo: RedirectInfo = {
-                from: currentUrl,
-                to: nextUrl,
-                status: statusCode,
-                headers: responseHeaders,
-              };
-
-              // Call beforeRedirect hook
-              const hookResult = await req.beforeRedirect!(redirectInfo);
-
-              // Check if redirect should be stopped
-              if (hookResult === false) {
-                // Return the redirect response without following
-                const finalResponse = req.onDownloadProgress
-                  ? wrapDownloadResponse(undiciResponse, req.onDownloadProgress)
-                  : undiciResponse;
-
-                return new HttpResponse(finalResponse, {
-                  timings: requestContext.timings,
-                  connection: requestContext.connection
-                });
-              }
-
-              // Update URL (possibly modified by hook)
-              currentUrl = typeof hookResult === 'string' ? hookResult : nextUrl;
 
               // Handle method and body changes based on status code
               // 301/302: GET request follows (browsers behavior, though spec says preserve)
@@ -828,7 +837,7 @@ export class UndiciTransport implements Transport {
           connectTimeout: timeouts.connectTimeout,
           headersTimeout: timeouts.headersTimeout,
           bodyTimeout: timeouts.bodyTimeout,
-          maxRedirections: handleRedirectsManually ? 0 : this.options.maxRedirections,
+          maxRedirections: 0, // Always handle redirects manually
         };
 
         // Stream body handling
@@ -879,50 +888,58 @@ export class UndiciTransport implements Transport {
           undiciResponse = await undiciRequest(currentUrl, undiciOptions);
         }
 
-        // Handle redirects manually when beforeRedirect is provided
+        // Handle redirects (Manual or Automatic)
         const statusCode = undiciResponse.statusCode;
         const isRedirect = statusCode >= 300 && statusCode < 400;
 
-        if (handleRedirectsManually && isRedirect && followRedirects && redirectCount < maxRedirects) {
+        if (isRedirect && followRedirects && redirectCount < maxRedirects) {
           const locationHeader = undiciResponse.headers['location'];
           const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader;
 
           if (location) {
             const nextUrl = new URL(location, currentUrl).toString();
 
-            const responseHeaders = new Headers();
-            for (const [key, value] of Object.entries(undiciResponse.headers)) {
-              if (value !== undefined) {
-                if (Array.isArray(value)) {
-                  value.forEach(v => responseHeaders.append(key, v));
-                } else {
-                  responseHeaders.set(key, value);
+            if (handleRedirectsManually) {
+                const responseHeaders = new Headers();
+                for (const [key, value] of Object.entries(undiciResponse.headers)) {
+                  if (value !== undefined) {
+                    if (Array.isArray(value)) {
+                      value.forEach(v => responseHeaders.append(key, v));
+                    } else {
+                      responseHeaders.set(key, value);
+                    }
+                  }
                 }
-              }
+
+                const redirectInfo: RedirectInfo = {
+                  from: currentUrl,
+                  to: nextUrl,
+                  status: statusCode,
+                  headers: responseHeaders,
+                };
+
+                const hookResult = await req.beforeRedirect!(redirectInfo);
+
+                if (hookResult === false) {
+                  const finalResponse = req.onDownloadProgress
+                    ? wrapDownloadResponse(undiciResponse, req.onDownloadProgress)
+                    : undiciResponse;
+
+                  // Return with empty timings/connection (observability disabled)
+                  return new HttpResponse(finalResponse, {
+                    timings: {},
+                    connection: {}
+                  });
+                }
+                
+                if (typeof hookResult === 'string') {
+                    currentUrl = hookResult;
+                } else {
+                    currentUrl = nextUrl;
+                }
+            } else {
+                currentUrl = nextUrl;
             }
-
-            const redirectInfo: RedirectInfo = {
-              from: currentUrl,
-              to: nextUrl,
-              status: statusCode,
-              headers: responseHeaders,
-            };
-
-            const hookResult = await req.beforeRedirect!(redirectInfo);
-
-            if (hookResult === false) {
-              const finalResponse = req.onDownloadProgress
-                ? wrapDownloadResponse(undiciResponse, req.onDownloadProgress)
-                : undiciResponse;
-
-              // Return with empty timings/connection (observability disabled)
-              return new HttpResponse(finalResponse, {
-                timings: {},
-                connection: {}
-              });
-            }
-
-            currentUrl = typeof hookResult === 'string' ? hookResult : nextUrl;
 
             if (statusCode === 303 || ((statusCode === 301 || statusCode === 302) && currentMethod !== 'GET' && currentMethod !== 'HEAD')) {
               currentMethod = 'GET';
