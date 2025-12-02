@@ -216,23 +216,35 @@ export class RekShell {
     // Enable mouse reporting for scroll wheel
     enableMouseReporting();
 
-    // Listen for raw keypress data
+    // We need to intercept stdin BEFORE readline processes it
+    // Use keypress event which fires before readline line event
     if (process.stdin.isTTY) {
-      process.stdin.on('data', (data: Buffer) => {
-        // Check for scroll keys
-        const scrollKey = parseScrollKey(data);
-        if (scrollKey) {
-          this.handleScrollKey(scrollKey);
-          return;
+      // Store original emit to intercept
+      const originalEmit = process.stdin.emit.bind(process.stdin);
+      const self = this;
+
+      (process.stdin as any).emit = function(event: string, ...args: any[]) {
+        if (event === 'data') {
+          const data = args[0] as Buffer;
+
+          // Check for mouse scroll events and consume them
+          const mouseScroll = parseMouseScroll(data);
+          if (mouseScroll) {
+            self.handleScrollKey(mouseScroll);
+            return true; // Consume the event
+          }
+
+          // Check for scroll keys (Page Up/Down, etc.)
+          const scrollKey = parseScrollKey(data);
+          if (scrollKey) {
+            self.handleScrollKey(scrollKey);
+            return true; // Consume the event
+          }
         }
 
-        // Check for mouse scroll
-        const mouseScroll = parseMouseScroll(data);
-        if (mouseScroll) {
-          this.handleScrollKey(mouseScroll);
-          return;
-        }
-      });
+        // Pass through to original handler
+        return originalEmit(event, ...args);
+      };
     }
   }
 
