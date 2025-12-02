@@ -46,3 +46,6 @@ GEMINI.md
 test-*.*js
 repositories/
 local_cache/
+
+# MCP Embeddings (downloaded at runtime from GitHub Releases)
+src/mcp/data/embeddings.json
