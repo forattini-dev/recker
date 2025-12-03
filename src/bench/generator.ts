@@ -26,7 +26,19 @@ export class LoadGenerator {
     this.running = true;
     const startTime = Date.now();
 
-    // Create a pool-optimized client
+    // Create a pool-optimized client for high-concurrency load testing
+    // Undici connection pool limits:
+    // - connections: max TCP connections per origin (default 10, we scale with users)
+    // - pipelining: max requests per connection before waiting (default 1)
+    // - keepAlive: reuse connections (critical for performance)
+    //
+    // To avoid "AssertionError: expression evaluated to a falsy value":
+    // - Ensure connections >= concurrent users / pipelining
+    // - Use higher pipelining (10) to multiplex requests per connection
+    // - Cap connections at 100 to avoid socket exhaustion
+    const connections = Math.min(Math.ceil(this.config.users / 10), 100);
+    const pipelining = this.config.mode === 'stress' ? 1 : 10; // Stress mode = 1 req/conn for max isolation
+
     const client = createClient({
       baseUrl: new URL(this.config.url).origin,
       observability: false, // Disable logging overhead
@@ -36,9 +48,11 @@ export class LoadGenerator {
         requestsPerInterval: Infinity,
         interval: 1000,
         agent: {
-          connections: this.config.users,
-          pipelining: this.config.mode === 'throughput' ? 2 : 1,
-          keepAlive: true // Keep connections alive for better performance
+          connections,
+          pipelining,
+          keepAlive: true, // Keep connections alive for better performance
+          keepAliveTimeout: 30000, // 30s keep-alive (longer for sustained load)
+          connectTimeout: 5000, // 5s connect timeout (fail fast)
         }
       },
       retry: {

@@ -142,6 +142,34 @@ export class AgentManager {
   }
 
   /**
+   * Create an optimized agent for stress/load testing
+   *
+   * Configures undici to handle extreme concurrency without pool exhaustion.
+   * Key optimizations:
+   * - High pipelining (10) to multiplex requests per connection
+   * - Capped connections (100) to avoid socket exhaustion
+   * - Longer keep-alive (30s) for sustained load
+   * - Shorter connect timeout (5s) to fail fast
+   *
+   * @param concurrency - Target number of concurrent users
+   */
+  createStressTestAgent(concurrency: number): Agent {
+    // Formula: connections = ceil(concurrency / pipelining)
+    // With pipelining=10, 300 users need 30 connections
+    // Cap at 100 to avoid socket exhaustion
+    const pipelining = 10;
+    const connections = Math.min(Math.ceil(concurrency / pipelining), 100);
+
+    return this.createAgent({
+      connections,
+      pipelining,
+      keepAliveTimeout: 30000,      // 30s keep-alive for sustained load
+      keepAliveMaxTimeout: 120000,  // 2 min max (shorter than default)
+      connectTimeout: 5000,         // 5s connect timeout (fail fast)
+    });
+  }
+
+  /**
    * Create a new Agent instance with given options
    */
   private createAgent(options: Partial<AgentOptions>): Agent {
