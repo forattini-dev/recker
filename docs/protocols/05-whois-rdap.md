@@ -210,21 +210,64 @@ Built-in WHOIS server mappings:
 
 ## RDAP
 
-RDAP (Registration Data Access Protocol) is the modern replacement for WHOIS. It returns structured JSON data.
+RDAP (Registration Data Access Protocol) is the modern replacement for WHOIS. It returns structured JSON data with better internationalization support.
 
 ### Quick Start
 
 ```typescript
 import { createClient } from 'recker';
-import { rdap } from 'recker/utils/rdap';
+import { rdap, supportsRDAP, getNoRDAPTLDs } from 'recker/utils/rdap';
 
 const client = createClient();
-const result = await rdap(client, 'example.com');
 
-console.log('Status:', result.status);
-console.log('Events:', result.events);
-console.log('Entities:', result.entities);
+// Check if TLD supports RDAP before querying
+if (supportsRDAP('com')) {
+  const result = await rdap(client, 'example.com');
+  console.log('Status:', result.status);
+  console.log('Events:', result.events);
+}
 ```
+
+### TLD Support
+
+Not all TLDs support RDAP. Recker automatically detects support using:
+
+1. **IANA Bootstrap** - Official RDAP server registry (cached 24h)
+2. **Hardcoded fallbacks** - Common TLDs for faster lookups
+3. **Blocklist** - TLDs known to not support RDAP
+
+```typescript
+import { supportsRDAP, getNoRDAPTLDs } from 'recker/utils/rdap';
+
+// Check if a TLD supports RDAP
+supportsRDAP('com');  // true
+supportsRDAP('io');   // false - use WHOIS instead
+supportsRDAP('dev');  // true (Google registry)
+
+// Get list of unsupported TLDs
+const unsupported = getNoRDAPTLDs();
+// ['io', 'ai', 'gg', 'im', 'je', 'sh', 'ac', 'cx', 'gs', 'ms', 'nf', 'pn', 'tc', 'vg']
+```
+
+### Supported Registries
+
+Recker includes hardcoded RDAP servers for common TLDs:
+
+| TLD | Registry |
+|-----|----------|
+| `.com`, `.net` | Verisign |
+| `.org` | Public Interest Registry |
+| `.dev`, `.app` | Google |
+| `.br` | Registro.br |
+| `.xyz` | CentralNic |
+| `.info` | Afilias |
+| `.uk` | Nominet |
+| `.de` | DENIC |
+| `.eu` | EURid |
+| `.nl` | SIDN |
+| `.au` | auDA |
+
+For other TLDs, Recker fetches the IANA Bootstrap file to find the correct RDAP server.
 
 ### Domain Lookup
 
@@ -252,6 +295,14 @@ for (const entity of result.entities || []) {
 
 ### IP Address Lookup
 
+RDAP supports IP lookups via Regional Internet Registries (RIRs). Recker uses ARIN as the entry point, which automatically redirects to the correct RIR:
+
+- **ARIN** - North America
+- **RIPE NCC** - Europe, Middle East, Central Asia
+- **APNIC** - Asia-Pacific
+- **LACNIC** - Latin America, Caribbean
+- **AFRINIC** - Africa
+
 ```typescript
 import { createClient } from 'recker';
 import { rdap } from 'recker/utils/rdap';
@@ -261,9 +312,31 @@ const result = await rdap(client, '8.8.8.8');
 
 console.log('Handle:', result.handle);
 console.log('Name:', result.name);
-console.log('Type:', result.type);
 console.log('Start address:', result.startAddress);
 console.log('End address:', result.endAddress);
+```
+
+### Error Handling
+
+```typescript
+import { createClient } from 'recker';
+import { rdap, supportsRDAP } from 'recker/utils/rdap';
+import { UnsupportedError, NotFoundError } from 'recker';
+
+const client = createClient();
+
+try {
+  const result = await rdap(client, 'example.io');
+} catch (error) {
+  if (error instanceof UnsupportedError) {
+    // TLD doesn't support RDAP
+    console.log('Use WHOIS instead:', error.message);
+    // "RDAP is not available for .io domains. Use WHOIS instead: rek whois example.io"
+  } else if (error instanceof NotFoundError) {
+    // Domain not registered
+    console.log('Domain not found');
+  }
+}
 ```
 
 ### RDAP Response Structure
@@ -272,6 +345,9 @@ console.log('End address:', result.endAddress);
 interface RDAPResult {
   // Unique identifier
   handle?: string;
+
+  // Domain name (for domain lookups)
+  ldhName?: string;
 
   // Status array
   status?: string[];
@@ -288,6 +364,17 @@ interface RDAPResult {
     roles?: string[];
     vcardArray?: any[];
   }>;
+
+  // Nameservers (for domain lookups)
+  nameservers?: Array<{ ldhName: string }>;
+
+  // DNSSEC info
+  secureDNS?: { delegationSigned: boolean };
+
+  // IP-specific fields
+  name?: string;
+  startAddress?: string;
+  endAddress?: string;
 
   // Additional fields vary by registry
   [key: string]: any;

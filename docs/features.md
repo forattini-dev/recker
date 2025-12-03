@@ -92,6 +92,40 @@ const available = await client.isDomainAvailable('my-startup.com');
 
 [Learn more →](protocols/05-whois-rdap.md)
 
+### RDAP (Modern WHOIS)
+- **Structured JSON**: Machine-readable responses
+- **IANA Bootstrap**: Automatic server discovery with 24h cache
+- **TLD Detection**: Know which TLDs support RDAP vs WHOIS
+- **IP Lookups**: Via Regional Internet Registries (RIRs)
+
+```typescript
+import { rdap, supportsRDAP } from 'recker/utils/rdap';
+
+// Check TLD support
+if (supportsRDAP('com')) {
+  const result = await rdap(client, 'example.com');
+  console.log(result.status, result.events);
+}
+```
+
+[Learn more →](protocols/05-whois-rdap.md#rdap)
+
+### GeoIP (Offline)
+- **MaxMind GeoLite2**: Offline database lookups
+- **IPv4/IPv6**: Full dual-stack support
+- **Bogon detection**: Identifies private/reserved IPs
+- **ASN info**: Autonomous System Number data
+
+```typescript
+// Via CLI
+rek geoip 8.8.8.8
+// Country: United States (US)
+// City: Mountain View
+// ASN: AS15169 (Google LLC)
+```
+
+[Learn more →](cli/06-protocols.md#geoip)
+
 ## 🛠️ Advanced Configuration
 
 ### Custom DNS
