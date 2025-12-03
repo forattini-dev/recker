@@ -132,4 +132,15 @@ describe('tryFn', () => {
     expect(ok).toBe(false);
     expect(err?.message).toContain('cannot be null');
   });
+
+  it('should return sync result for function returning a non-null value', () => {
+    // This tests line 71 - returning synchronously for sync functions that return values
+    const result = tryFn(() => 'sync value');
+    // Should be synchronous result (not a promise)
+    expect(Array.isArray(result)).toBe(true);
+    const [ok, err, data] = result as [boolean, Error | null, string | undefined];
+    expect(ok).toBe(true);
+    expect(err).toBeNull();
+    expect(data).toBe('sync value');
+  });
 });

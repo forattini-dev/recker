@@ -158,4 +158,60 @@ describe('Circuit Breaker Plugin', () => {
     const res = await client.get('/test');
     expect(res.ok).toBe(true);
   });
+
+  it('should handle invalid URL and use "unknown" key', async () => {
+    const transport = {
+      async dispatch() {
+        return { ok: true, status: 200 } as any;
+      }
+    };
+
+    const stateChange = vi.fn();
+    const client = createClient({
+      transport: transport as any,
+      plugins: [
+        circuitBreaker({
+          threshold: 3,
+          resetTimeout: 50,
+          onStateChange: stateChange
+        })
+      ]
+    });
+
+    // Make a request with an invalid URL (no baseUrl)
+    // This should not throw but use "unknown" as the circuit key
+    const res = await client.get('not-a-valid-url');
+    expect(res.ok).toBe(true);
+  });
+
+  it('should rethrow CircuitBreakerError in onError handler', async () => {
+    let callCount = 0;
+    const transport = {
+      async dispatch() {
+        callCount++;
+        throw new Error('Network error');
+      }
+    };
+
+    const client = createClient({
+      baseUrl: 'http://breaker-test.com',
+      transport: transport as any,
+      plugins: [
+        circuitBreaker({
+          threshold: 2,
+          resetTimeout: 100
+        })
+      ]
+    });
+
+    // Trip the circuit
+    await expect(client.get('/test1')).rejects.toThrow('Network error');
+    await expect(client.get('/test2')).rejects.toThrow('Network error');
+
+    // Now the circuit is open - this should throw CircuitBreakerError
+    // and the error should propagate correctly through the onError handler
+    const promise = client.get('/test3');
+    await expect(promise).rejects.toThrow(CircuitBreakerError);
+    expect(callCount).toBe(2); // The third call should not reach transport
+  });
 });

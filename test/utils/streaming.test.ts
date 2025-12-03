@@ -135,5 +135,103 @@ describe('Streaming Utils', () => {
             const lastCall = onProgress.mock.calls[onProgress.mock.calls.length - 1][0];
             expect(lastCall.percent).toBeUndefined();
         });
+
+        it('should throttle progress updates when chunks arrive faster than 100ms', async () => {
+            const progressCalls: Array<{loaded: number; percent?: number}> = [];
+            const onProgress = vi.fn((p) => progressCalls.push(p));
+
+            // Create a stream that emits data slowly enough for throttling to kick in
+            const source = new Readable({
+                read() {}
+            });
+
+            const tracked = trackStreamProgress(source, { onProgress, total: 300 });
+
+            // Consume the stream asynchronously
+            const chunks: Buffer[] = [];
+            tracked.on('data', chunk => chunks.push(chunk));
+
+            // Push data and wait for throttle window
+            source.push(Buffer.alloc(100));
+            await new Promise(r => setTimeout(r, 150)); // Wait > 100ms
+            source.push(Buffer.alloc(100));
+            await new Promise(r => setTimeout(r, 150));
+            source.push(Buffer.alloc(100));
+            source.push(null); // End stream
+
+            // Wait for stream to finish
+            await new Promise(r => tracked.on('end', r));
+
+            // onProgress should have been called with percent values
+            expect(onProgress).toHaveBeenCalled();
+            const callsWithPercent = progressCalls.filter(p => p.percent !== undefined);
+            expect(callsWithPercent.length).toBeGreaterThan(0);
+        });
+    });
+
+    describe('webToNodeStream error handling', () => {
+        it('should handle destroy with cancel', async () => {
+            const cancelFn = vi.fn();
+            const webStream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(Buffer.from('data'));
+                },
+                cancel: cancelFn
+            });
+
+            const nodeStream = webToNodeStream(webStream as any);
+
+            // Read first chunk then destroy
+            for await (const chunk of nodeStream) {
+                nodeStream.destroy();
+                break;
+            }
+
+            // Give time for cancel to be called
+            await new Promise(resolve => setTimeout(resolve, 10));
+            expect(cancelFn).toHaveBeenCalled();
+        });
+
+    });
+
+    describe('nodeToWebStream error and cancel', () => {
+        it('should propagate errors from node stream', async () => {
+            const nodeStream = new Readable({
+                read() {
+                    this.destroy(new Error('Node stream error'));
+                }
+            });
+
+            const webStream = nodeToWebStream(nodeStream);
+            const reader = webStream.getReader();
+
+            await expect(reader.read()).rejects.toThrow('Node stream error');
+        });
+
+        it('should cancel node stream when web stream is cancelled', async () => {
+            const destroyFn = vi.fn();
+            let pushCount = 0;
+            const nodeStream = new Readable({
+                read() {
+                    if (pushCount < 2) {
+                        this.push(Buffer.from('data'));
+                        pushCount++;
+                    }
+                },
+                destroy(err, cb) {
+                    destroyFn();
+                    cb(err);
+                }
+            });
+
+            const webStream = nodeToWebStream(nodeStream);
+            const reader = webStream.getReader();
+
+            // Read one chunk then cancel
+            await reader.read();
+            await reader.cancel();
+
+            expect(destroyFn).toHaveBeenCalled();
+        });
     });
 });

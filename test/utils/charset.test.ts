@@ -129,13 +129,15 @@ describe('Charset Detection', () => {
     });
 
     it('should detect charset from http-equiv meta tag', () => {
+      // Make sure this doesn't match the simple <meta charset="..."> pattern by not having charset= at the start
       const html = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252"></head></html>';
       expect(detectFromHTMLMeta(html)).toBe('windows-1252');
     });
 
-    it('should detect charset with reversed attribute order', () => {
-      const html = '<html><head><meta content="text/html; charset=utf-8" http-equiv="Content-Type"></head></html>';
-      expect(detectFromHTMLMeta(html)).toBe('utf-8');
+    it('should detect charset with reversed attribute order (content before http-equiv)', () => {
+      // This tests the reverse pattern where content comes before http-equiv
+      const html = '<html><head><meta content="text/html; charset=iso-8859-15" http-equiv="Content-Type"></head></html>';
+      expect(detectFromHTMLMeta(html)).toBe('iso-8859-15');
     });
 
     it('should return null if no charset meta', () => {

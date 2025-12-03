@@ -84,8 +84,92 @@ describe('Cookie Jar Plugin', () => {
     });
 
     await clientWithStore.post('/login');
-    
+
     expect(store.get('session_id')).toBe('12345');
     expect(store.get('user_pref')).toBe('dark');
+  });
+
+  it('should handle Domain attribute in cookies', async () => {
+    const transport = {
+      async dispatch(req: ReckerRequest) {
+        const url = req.url;
+        if (url.endsWith('/set-domain-cookie')) {
+          const headers = new Headers();
+          headers.append('set-cookie', 'domain_cookie=value123; Domain=.example.com; Path=/');
+          return {
+            ok: true,
+            status: 200,
+            headers: headers,
+            json: async () => ({})
+          } as any;
+        }
+        if (url.endsWith('/check-cookie')) {
+          const cookies = req.headers.get('cookie');
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            json: async () => ({ hasCookie: cookies?.includes('domain_cookie') ?? false })
+          } as any;
+        }
+        return { ok: true, status: 200, headers: new Headers() } as any;
+      }
+    };
+
+    const client = createClient({
+      baseUrl: 'http://sub.example.com',
+      transport: transport,
+      plugins: [cookieJar()]
+    });
+
+    // Set a domain cookie
+    await client.get('/set-domain-cookie');
+
+    // Check that cookie is sent to subdomain
+    const result = await client.get('/check-cookie').json<{hasCookie: boolean}>();
+    expect(result.hasCookie).toBe(true);
+  });
+
+  it('should match subdomain cookies from parent domain', async () => {
+    // This test validates lines 53-55 - subdomain matching
+    const transport = {
+      callCount: 0,
+      async dispatch(req: ReckerRequest) {
+        this.callCount++;
+        const url = req.url;
+        if (url.endsWith('/set-parent-cookie')) {
+          const headers = new Headers();
+          // Set a cookie with Domain=.example.com (parent domain)
+          headers.append('set-cookie', 'parent_session=abc123; Domain=.example.com; Path=/');
+          return {
+            ok: true,
+            status: 200,
+            headers: headers,
+            json: async () => ({})
+          } as any;
+        }
+        // Return the cookies received
+        const cookies = req.headers.get('cookie') || '';
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: async () => ({ cookies })
+        } as any;
+      }
+    };
+
+    const client = createClient({
+      baseUrl: 'http://www.example.com',
+      transport: transport,
+      plugins: [cookieJar()]
+    });
+
+    // First set a cookie on parent domain
+    await client.get('/set-parent-cookie');
+
+    // Now make a request to a subdomain path - should include the cookie
+    const result = await client.get('/check').json<{cookies: string}>();
+    expect(result.cookies).toContain('parent_session=abc123');
   });
 });

@@ -412,20 +412,24 @@ ${colors.bold('Details:')}`);
       }
     });
 
-  // IP Intelligence
+  // IP Intelligence (uses local MaxMind GeoLite2 database)
   program
     .command('ip')
-    .description('Get IP address intelligence (Geo, ASN, ISP)')
+    .description('Get IP address intelligence using local GeoLite2 database')
     .argument('<address>', 'IP address to lookup')
     .action(async (address) => {
-        const { getIpInfo } = await import('../utils/ip-intel.js');
-        
-        console.log(colors.gray(`Fetching intelligence for ${address}...`));
+        const { getIpInfo, isGeoIPAvailable } = await import('../mcp/ip-intel.js');
+
+        if (!isGeoIPAvailable()) {
+            console.log(colors.gray(`Downloading GeoLite2 database...`));
+        }
+
         try {
             const info = await getIpInfo(address);
-            
+
             if (info.bogon) {
                 console.log(colors.yellow(`\n⚠  ${address} is a Bogon/Private IP.`));
+                console.log(colors.gray(`   Type: ${info.bogonType}`));
                 return;
             }
 
@@ -435,15 +439,16 @@ ${colors.bold(colors.cyan('🌍 IP Intelligence Report'))}
 ${colors.bold('Location:')}
   ${colors.gray('City:')}      ${info.city || 'N/A'}
   ${colors.gray('Region:')}    ${info.region || 'N/A'}
-  ${colors.gray('Country:')}   ${info.country || 'N/A'}
+  ${colors.gray('Country:')}   ${info.country || 'N/A'} ${info.countryCode ? `(${info.countryCode})` : ''}
+  ${colors.gray('Continent:')} ${info.continent || 'N/A'}
   ${colors.gray('Timezone:')}  ${info.timezone || 'N/A'}
   ${colors.gray('Coords:')}    ${info.loc ? colors.cyan(info.loc) : 'N/A'}
+  ${colors.gray('Accuracy:')}  ${info.accuracy ? `~${info.accuracy} km` : 'N/A'}
 
 ${colors.bold('Network:')}
   ${colors.gray('IP:')}        ${info.ip}
-  ${colors.gray('Hostname:')}  ${info.hostname || 'N/A'}
-  ${colors.gray('ASN/Org:')}   ${info.org || 'N/A'}
-  ${colors.gray('Anycast:')}   ${info.anycast ? colors.green('Yes') : colors.gray('No')}
+  ${colors.gray('Type:')}      ${info.isIPv6 ? 'IPv6' : 'IPv4'}
+  ${colors.gray('Postal:')}    ${info.postal || 'N/A'}
 `);
         } catch (err: any) {
             console.error(colors.red(`IP Lookup Failed: ${err.message}`));

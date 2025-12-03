@@ -15,7 +15,7 @@ import { getShellSearch } from './shell-search.js';
 import { openSearchPanel } from './search-panel.js';
 import { ScrollBuffer, parseScrollKey, parseMouseScroll, enableMouseReporting, disableMouseReporting } from './scroll-buffer.js';
 import { analyzeSecurityHeaders, SecurityReport } from '../../utils/security-grader.js'; // Import security grader
-import { getIpInfo, IpInfo } from '../../utils/ip-intel.js'; // Import IP Intel
+import { getIpInfo, IpInfo } from '../../mcp/ip-intel.js'; // Import IP Intel (MaxMind)
 import { checkPropagation, formatPropagationReport, PropagationResult } from '../../dns/propagation.js'; // Import DNS Propagation
 
 // Lazy-loaded optional dependency (syntax highlighting only)
@@ -1203,14 +1203,20 @@ ${colors.bold('Details:')}`);
       return;
     }
 
-    console.log(colors.gray(`Fetching intelligence for ${address}...`));
-    
+    console.log(colors.gray(`Looking up ${address} using local GeoLite2 database...`));
+
     try {
-      const { getIpInfo } = await import('../../utils/ip-intel.js');
+      const { getIpInfo, isGeoIPAvailable } = await import('../../mcp/ip-intel.js');
+
+      if (!isGeoIPAvailable()) {
+        console.log(colors.gray(`Downloading GeoLite2 database...`));
+      }
+
       const info = await getIpInfo(address);
-      
+
       if (info.bogon) {
           console.log(colors.yellow(`\n⚠  ${address} is a Bogon/Private IP.`));
+          console.log(colors.gray(`   Type: ${info.bogonType}`));
           this.lastResponse = info;
           return;
       }
@@ -1221,15 +1227,16 @@ ${colors.bold(colors.cyan('🌍 IP Intelligence Report'))}
 ${colors.bold('Location:')}
   ${colors.gray('City:')}      ${info.city || 'N/A'}
   ${colors.gray('Region:')}    ${info.region || 'N/A'}
-  ${colors.gray('Country:')}   ${info.country || 'N/A'}
+  ${colors.gray('Country:')}   ${info.country || 'N/A'} ${info.countryCode ? `(${info.countryCode})` : ''}
+  ${colors.gray('Continent:')} ${info.continent || 'N/A'}
   ${colors.gray('Timezone:')}  ${info.timezone || 'N/A'}
   ${colors.gray('Coords:')}    ${info.loc ? colors.cyan(info.loc) : 'N/A'}
+  ${colors.gray('Accuracy:')}  ${info.accuracy ? `~${info.accuracy} km` : 'N/A'}
 
 ${colors.bold('Network:')}
   ${colors.gray('IP:')}        ${info.ip}
-  ${colors.gray('Hostname:')}  ${info.hostname || 'N/A'}
-  ${colors.gray('ASN/Org:')}   ${info.org || 'N/A'}
-  ${colors.gray('Anycast:')}   ${info.anycast ? colors.green('Yes') : colors.gray('No')}
+  ${colors.gray('Type:')}      ${info.isIPv6 ? 'IPv6' : 'IPv4'}
+  ${colors.gray('Postal:')}    ${info.postal || 'N/A'}
 `);
       this.lastResponse = info;
 

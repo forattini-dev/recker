@@ -107,6 +107,11 @@ describe('User-Agent Utilities', () => {
       const ua = getRandomUserAgent('invalid.category');
       expect(ua).toMatch(/^recker\//);
     });
+
+    it('should return random bot user agent', () => {
+      const ua = getRandomUserAgent('bot');
+      expect(['Googlebot', 'bot'].some(term => ua.includes(term))).toBe(true);
+    });
   });
 
   describe('detectDeviceType', () => {
@@ -143,6 +148,11 @@ describe('User-Agent Utilities', () => {
     it('should detect desktop from Safari Mac UA', () => {
       const ua = getUserAgent('safari_mac');
       expect(detectDeviceType(ua)).toBe('desktop');
+    });
+
+    it('should return unknown for unrecognized user agents', () => {
+      const ua = 'Some Random Agent/1.0';
+      expect(detectDeviceType(ua)).toBe('unknown');
     });
   });
 

@@ -75,7 +75,7 @@ describe('MCP Server', () => {
         const result = await sendRequest('tools/list');
 
         expect(result.result.tools).toBeDefined();
-        expect(result.result.tools).toHaveLength(5);
+        expect(result.result.tools).toHaveLength(6);
 
         const toolNames = result.result.tools.map((t: any) => t.name);
         expect(toolNames).toContain('search_docs');
@@ -83,6 +83,7 @@ describe('MCP Server', () => {
         expect(toolNames).toContain('code_examples');
         expect(toolNames).toContain('api_schema');
         expect(toolNames).toContain('suggest');
+        expect(toolNames).toContain('ip_lookup');
       });
 
       it('should handle resources/list', async () => {
@@ -227,6 +228,63 @@ describe('MCP Server', () => {
       });
     });
 
+    describe('ip_lookup tool', () => {
+      const callTool = async (name: string, args: Record<string, unknown>) => {
+        const response = await fetch(`http://localhost:${testPort}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name, arguments: args },
+          }),
+        });
+        return response.json();
+      };
+
+      it('should return error without ip', async () => {
+        const result = await callTool('ip_lookup', {});
+
+        expect(result.result.isError).toBe(true);
+        expect(result.result.content[0].text).toContain('ip is required');
+      });
+
+      it('should return error for invalid IP', async () => {
+        const result = await callTool('ip_lookup', { ip: 'not-an-ip' });
+
+        expect(result.result.isError).toBe(true);
+        expect(result.result.content[0].text).toContain('not a valid IP address');
+      });
+
+      it('should identify bogon/private IPs', async () => {
+        const result = await callTool('ip_lookup', { ip: '192.168.1.1' });
+
+        expect(result.result.isError).toBeUndefined();
+        expect(result.result.content[0].text).toContain('Private');
+        expect(result.result.content[0].text).toContain('Bogon');
+      });
+
+      it('should identify loopback', async () => {
+        const result = await callTool('ip_lookup', { ip: '127.0.0.1' });
+
+        expect(result.result.content[0].text).toContain('Loopback');
+      });
+
+      it('should identify IPv6 loopback', async () => {
+        const result = await callTool('ip_lookup', { ip: '::1' });
+
+        expect(result.result.content[0].text).toContain('Loopback');
+      });
+
+      it('should handle public IPs (CLI suggestion)', async () => {
+        const result = await callTool('ip_lookup', { ip: '8.8.8.8' });
+
+        // Should either return geo info or CLI suggestion (depends on DB availability)
+        expect(result.result.content[0].text).toMatch(/IP Intelligence|rek ip/);
+      });
+    });
+
     describe('HTTP Protocol', () => {
       it('should handle CORS preflight', async () => {
         const response = await fetch(`http://localhost:${testPort}`, {
@@ -303,7 +361,7 @@ describe('MCP Server', () => {
       });
 
       const result = await response.json();
-      expect(result.result.tools).toHaveLength(5);
+      expect(result.result.tools).toHaveLength(6);
     });
 
     it('should establish SSE connection', async () => {

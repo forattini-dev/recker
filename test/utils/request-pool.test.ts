@@ -261,5 +261,32 @@ describe('RequestPool', () => {
       controller.abort();
     });
 
+    it('should handle abort when signal is aborted during dequeue', async () => {
+      vi.useRealTimers();
+      const pool = new RequestPool({ concurrency: 1 });
+      const controller = new AbortController();
+
+      // First request blocks the pool
+      let resolveFirst: () => void;
+      const firstPromise = new Promise<void>(r => { resolveFirst = r; });
+      const first = pool.run(async () => {
+        await firstPromise;
+        return 'first';
+      });
+
+      // Second request gets queued with signal
+      const second = pool.run(async () => 'second', controller.signal);
+
+      // Abort while queued - this test covers the reject in the abort listener (lines 68-73)
+      controller.abort(new Error('Aborted by user'));
+
+      // Complete the first request to trigger dequeue
+      resolveFirst!();
+      await first;
+
+      // Second should be rejected with the abort reason
+      await expect(second).rejects.toThrow('Aborted by user');
+    });
+
   });
 });

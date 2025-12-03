@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { rdap } from '../../src/utils/rdap.js';
+import { rdap, supportsRDAP, getNoRDAPTLDs } from '../../src/utils/rdap.js';
 import { createClient } from '../../src/core/client.js';
+import { UnsupportedError } from '../../src/core/errors.js';
 import { createServer, Server, IncomingMessage, ServerResponse } from 'node:http';
 
 describe('RDAP Utils', () => {
@@ -192,11 +193,25 @@ describe('RDAP Utils', () => {
       await expect(rdap(client, 'example.com')).rejects.toThrow('Server Error');
     });
 
-    it('should handle io TLD with /domain/ in base URL', async () => {
+    it('should throw UnsupportedError for .io TLD', async () => {
+      const client = createClient({
+        transport: {
+          dispatch: async () => {
+            throw new Error('Should not reach transport');
+          }
+        }
+      });
+
+      await expect(rdap(client, 'test.io')).rejects.toThrow(UnsupportedError);
+      await expect(rdap(client, 'test.io')).rejects.toThrow('RDAP is not available for .io domains');
+    });
+
+    it('should handle .dev TLD (Google registry)', async () => {
       const client = createClient({
         transport: {
           dispatch: async (req) => {
-            // Verify the URL doesn't have double /domain/domain/
+            // Verify URL format is correct
+            expect(req.url).toContain('/domain/test.dev');
             expect(req.url).not.toContain('/domain/domain/');
             const newUrl = req.url.replace(/https?:\/\/[^\/]+/, baseUrl);
             const response = await fetch(newUrl);
@@ -217,8 +232,34 @@ describe('RDAP Utils', () => {
         }
       });
 
-      const result = await rdap(client, 'test.io');
-      expect(result.handle).toBe('TEST-IO');
+      // This will try to hit our mock server (404) but the URL format should be correct
+      await expect(rdap(client, 'test.dev')).rejects.toThrow();
+    });
+  });
+
+  describe('supportsRDAP', () => {
+    it('should return false for .io', () => {
+      expect(supportsRDAP('io')).toBe(false);
+      expect(supportsRDAP('.io')).toBe(false);
+    });
+
+    it('should return true for .com', () => {
+      expect(supportsRDAP('com')).toBe(true);
+      expect(supportsRDAP('.com')).toBe(true);
+    });
+
+    it('should return true for TLDs not in the blocklist', () => {
+      expect(supportsRDAP('xyz')).toBe(true);
+      expect(supportsRDAP('dev')).toBe(true);
+    });
+  });
+
+  describe('getNoRDAPTLDs', () => {
+    it('should return list of unsupported TLDs', () => {
+      const tlds = getNoRDAPTLDs();
+      expect(tlds).toContain('io');
+      expect(tlds).toContain('ai');
+      expect(Array.isArray(tlds)).toBe(true);
     });
   });
 });

@@ -68,6 +68,5 @@
 
 - **Resources**
   - [Benchmarks](/benchmarks.md)
-  - [Changelog](/changelog.md)
   - [Contributing](/contributing.md)
   - [Acknowledgements](/acknowledgements.md)

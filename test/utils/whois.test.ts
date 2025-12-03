@@ -9,7 +9,7 @@ vi.mock('net', () => {
 });
 
 import { createConnection } from 'net';
-import { whois, isDomainAvailable } from '../../src/utils/whois.js';
+import { whois, isDomainAvailable, createWhois, WhoisClient } from '../../src/utils/whois.js';
 import { createClient } from '../../src/core/client.js';
 
 const mockedCreateConnection = vi.mocked(createConnection);
@@ -299,6 +299,47 @@ Creation Date: 2000-01-01
       expect(result.data['creation date']).toBe('2000-01-01');
     });
 
+    it('should handle more than 2 values with same key (push to array)', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Name Server: ns1.example.com
+Name Server: ns2.example.com
+Name Server: ns3.example.com
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const resultPromise = whois('example.com');
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.data['name server']).toEqual(['ns1.example.com', 'ns2.example.com', 'ns3.example.com']);
+    });
+
+    it('should handle socket close with error and no response', async () => {
+      const mockSocket = createMockSocket();
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        // Simulate connection then error close without data
+        process.nextTick(() => {
+          callback?.();
+          // Emit close with hadError=true and no response (skip 'end' event)
+          mockSocket.emit('close', true);
+        });
+        return mockSocket as any;
+      });
+
+      await expect(whois('google.com')).rejects.toThrow(/WHOIS connection closed unexpectedly/);
+    });
+
     it('should skip comment lines and empty lines in parsing', async () => {
       const mockSocket = createMockSocket();
       const response = `
@@ -536,6 +577,404 @@ Referral URL: http://whois.example-registrar.com
       const result = await resultPromise;
 
       expect(result.server).toBe('whois.example-registrar.com');
+    });
+  });
+
+  describe('WhoisClient class', () => {
+    it('should create client with default options', () => {
+      const client = createWhois();
+      expect(client).toBeInstanceOf(WhoisClient);
+    });
+
+    it('should create client with custom options', () => {
+      const client = createWhois({
+        timeout: 15000,
+        port: 4343,
+        follow: false,
+        debug: true,
+      });
+      expect(client).toBeInstanceOf(WhoisClient);
+    });
+
+    it('should perform lookup', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Registrar: Example Registrar
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.lookup('example.com');
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.query).toBe('example.com');
+    });
+
+    it('should check availability', async () => {
+      const mockSocket = createMockSocket();
+      const response = 'No match for "available.com".\n';
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.isAvailable('available.com');
+      await vi.runAllTimersAsync();
+      const available = await resultPromise;
+
+      expect(available).toBe(true);
+    });
+
+    it('should get registrar', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Registrar: MarkMonitor Inc.
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getRegistrar('example.com');
+      await vi.runAllTimersAsync();
+      const registrar = await resultPromise;
+
+      expect(registrar).toBe('MarkMonitor Inc.');
+    });
+
+    it('should get registrar from sponsoring registrar field', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Sponsoring Registrar: Sponsor Registrar LLC
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getRegistrar('example.com');
+      await vi.runAllTimersAsync();
+      const registrar = await resultPromise;
+
+      expect(registrar).toBe('Sponsor Registrar LLC');
+    });
+
+    it('should return null when no registrar found', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getRegistrar('example.com');
+      await vi.runAllTimersAsync();
+      const registrar = await resultPromise;
+
+      expect(registrar).toBeNull();
+    });
+
+    it('should get expiration date', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Registry Expiry Date: 2025-12-31T00:00:00Z
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getExpiration('example.com');
+      await vi.runAllTimersAsync();
+      const expiration = await resultPromise;
+
+      expect(expiration).toBeInstanceOf(Date);
+      expect(expiration?.getFullYear()).toBe(2025);
+    });
+
+    it('should get expiration from expiration date field', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Expiration Date: 2026-06-15T00:00:00Z
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getExpiration('example.com');
+      await vi.runAllTimersAsync();
+      const expiration = await resultPromise;
+
+      expect(expiration).toBeInstanceOf(Date);
+      expect(expiration?.getFullYear()).toBe(2026);
+    });
+
+    it('should get expiration from expiry date field', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Expiry Date: 2027-01-20T00:00:00Z
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getExpiration('example.com');
+      await vi.runAllTimersAsync();
+      const expiration = await resultPromise;
+
+      expect(expiration).toBeInstanceOf(Date);
+      expect(expiration?.getFullYear()).toBe(2027);
+    });
+
+    it('should return null for invalid expiration date', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Registry Expiry Date: invalid-date
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getExpiration('example.com');
+      await vi.runAllTimersAsync();
+      const expiration = await resultPromise;
+
+      expect(expiration).toBeNull();
+    });
+
+    it('should return null when no expiration found', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Registrar: Some Registrar
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getExpiration('example.com');
+      await vi.runAllTimersAsync();
+      const expiration = await resultPromise;
+
+      expect(expiration).toBeNull();
+    });
+
+    it('should get name servers as array', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Name Server: ns1.example.com
+Name Server: ns2.example.com
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getNameServers('example.com');
+      await vi.runAllTimersAsync();
+      const nameServers = await resultPromise;
+
+      expect(nameServers).toEqual(['ns1.example.com', 'ns2.example.com']);
+    });
+
+    it('should get single name server as array', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Name Server: ns1.example.com
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getNameServers('example.com');
+      await vi.runAllTimersAsync();
+      const nameServers = await resultPromise;
+
+      expect(nameServers).toEqual(['ns1.example.com']);
+    });
+
+    it('should get name servers from nserver field', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+nserver: ns1.example.com
+nserver: ns2.example.com
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getNameServers('example.com');
+      await vi.runAllTimersAsync();
+      const nameServers = await resultPromise;
+
+      expect(nameServers).toEqual(['ns1.example.com', 'ns2.example.com']);
+    });
+
+    it('should return empty array when no name servers found', async () => {
+      const mockSocket = createMockSocket();
+      const response = `
+Domain Name: EXAMPLE.COM
+Registrar: Some Registrar
+`;
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois();
+      const resultPromise = client.getNameServers('example.com');
+      await vi.runAllTimersAsync();
+      const nameServers = await resultPromise;
+
+      expect(nameServers).toEqual([]);
+    });
+
+    it('should use custom server option', async () => {
+      const mockSocket = createMockSocket();
+      const response = 'Custom response\n';
+
+      mockedCreateConnection.mockImplementation((options: any, callback) => {
+        expect(options.host).toBe('custom.whois.server');
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois({ server: 'custom.whois.server' });
+      const resultPromise = client.lookup('example.com');
+      await vi.runAllTimersAsync();
+      await resultPromise;
+    });
+
+    it('should log in debug mode', async () => {
+      const mockSocket = createMockSocket();
+      const response = 'Response\n';
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      mockedCreateConnection.mockImplementation((options, callback) => {
+        setImmediate(() => {
+          callback?.();
+          mockSocket.emit('data', Buffer.from(response));
+          mockSocket.emit('end');
+        });
+        return mockSocket as any;
+      });
+
+      const client = createWhois({ debug: true });
+      const resultPromise = client.lookup('example.com');
+      await vi.runAllTimersAsync();
+      await resultPromise;
+
+      expect(consoleSpy).toHaveBeenCalled();
+      expect(consoleSpy.mock.calls.some(call => call[0].includes('[WHOIS]'))).toBe(true);
+      consoleSpy.mockRestore();
     });
   });
 
