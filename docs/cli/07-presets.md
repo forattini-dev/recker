@@ -145,6 +145,43 @@ rek @discord/channels/channel-id/messages \
   content="Hello from Rek!"
 ```
 
+#### Mailgun
+
+```bash
+# Requires: MAILGUN_API_KEY, MAILGUN_DOMAIN
+
+# Send email
+rek @mailgun/messages \
+  from="sender@example.com" \
+  to="recipient@example.com" \
+  subject="Hello!" \
+  text="Email body here"
+
+# List events
+rek @mailgun/events
+
+# Get bounces
+rek @mailgun/bounces
+```
+
+#### Sinch
+
+```bash
+# Requires: SINCH_PROJECT_ID, SINCH_KEY_ID, SINCH_KEY_SECRET
+
+# Send SMS
+rek @sinch/batches \
+  from="+1234567890" \
+  to:='["+0987654321"]' \
+  body="Hello from Rek!"
+
+# Get batch status
+rek @sinch/batches/batch-id
+
+# List inbound messages
+rek @sinch/inbounds
+```
+
 ### Databases & Storage
 
 #### Supabase
@@ -221,6 +258,8 @@ Each preset looks for specific environment variables for authentication:
 | `@slack` | `SLACK_TOKEN` |
 | `@discord` | `DISCORD_TOKEN` |
 | `@cloudflare` | `CLOUDFLARE_API_TOKEN` |
+| `@mailgun` | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` |
+| `@sinch` | `SINCH_PROJECT_ID`, `SINCH_KEY_ID`, `SINCH_KEY_SECRET` |
 
 ### Setting Environment Variables
 

@@ -314,6 +314,59 @@ await client.post('/2010-04-01/Accounts/{AccountSid}/Messages.json', {
 });
 ```
 
+### Mailgun
+
+```typescript
+import { mailgun } from 'recker/presets';
+
+const client = createClient(mailgun({
+  apiKey: process.env.MAILGUN_API_KEY,
+  domain: 'mg.example.com',  // Your Mailgun domain
+  region: 'us'               // 'us' (default) or 'eu'
+}));
+
+// Send email
+await client.post('/messages', {
+  form: {
+    from: 'sender@example.com',
+    to: 'recipient@example.com',
+    subject: 'Hello from Recker!',
+    text: 'This is the email body.'
+  }
+});
+
+// List events
+const events = await client.get('/events').json();
+```
+
+### Sinch
+
+```typescript
+import { sinch } from 'recker/presets';
+
+const client = createClient(sinch({
+  projectId: process.env.SINCH_PROJECT_ID,
+  keyId: process.env.SINCH_KEY_ID,
+  keySecret: process.env.SINCH_KEY_SECRET,
+  product: 'sms',   // 'sms', 'voice', 'conversation', 'numbers', 'verification'
+  region: 'us'      // 'us', 'eu', 'au', 'br', 'ca' (SMS only)
+}));
+
+// Send SMS
+await client.post('/batches', {
+  json: {
+    from: '+1234567890',
+    to: ['+0987654321'],
+    body: 'Hello from Recker!'
+  }
+});
+
+// Get delivery report
+const report = await client.get('/batches/:batchId/delivery_report', {
+  params: { batchId: 'batch-123' }
+}).json();
+```
+
 ### Linear
 
 ```typescript
@@ -412,6 +465,8 @@ if (preset) {
 | `discord.com/api` | `discord` |
 | `*.supabase.co` | `supabase` |
 | `api.cloudflare.com` | `cloudflare` |
+| `api.mailgun.net` | `mailgun` |
+| `*.sms.api.sinch.com` | `sinch` |
 
 ## Combining Presets
 

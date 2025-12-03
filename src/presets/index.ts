@@ -25,6 +25,8 @@ export * from './digitalocean.js';
 // SaaS APIs
 export * from './stripe.js';
 export * from './twilio.js';
+export * from './mailgun.js';
+export * from './sinch.js';
 export * from './linear.js';
 export * from './notion.js';
 export * from './slack.js';
