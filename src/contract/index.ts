@@ -1,8 +1,6 @@
 /**
  * Contract Module
  * Type-safe API contracts with Zod validation
- *
- * Requires: pnpm add zod
  */
 
 import type { z, ZodSchema } from 'zod';

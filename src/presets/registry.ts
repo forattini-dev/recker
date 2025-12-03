@@ -27,6 +27,8 @@ import { vercel } from './vercel.js';
 import { supabase } from './supabase.js';
 import { stripe } from './stripe.js';
 import { twilio } from './twilio.js';
+import { mailgun } from './mailgun.js';
+import { sinch } from './sinch.js';
 import { digitalocean } from './digitalocean.js';
 import { linear } from './linear.js';
 import { notion } from './notion.js';
@@ -271,6 +273,24 @@ export const presetRegistry: PresetInfo[] = [
     category: 'saas',
     requiredAuth: ['accountSid', 'authToken'],
     docsUrl: 'https://www.twilio.com/docs/usage/api',
+  },
+  {
+    name: 'mailgun',
+    displayName: 'Mailgun',
+    patterns: [/api\.mailgun\.net/, /api\.eu\.mailgun\.net/],
+    factory: mailgun,
+    category: 'saas',
+    requiredAuth: ['apiKey'],
+    docsUrl: 'https://documentation.mailgun.com/docs/mailgun/api-reference/',
+  },
+  {
+    name: 'sinch',
+    displayName: 'Sinch',
+    patterns: [/\.api\.sinch\.com/, /sms\.api\.sinch\.com/, /calling\.api\.sinch\.com/],
+    factory: sinch,
+    category: 'saas',
+    requiredAuth: ['projectId', 'keyId', 'keySecret'],
+    docsUrl: 'https://developers.sinch.com/docs/',
   },
   {
     name: 'digitalocean',
