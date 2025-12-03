@@ -117,7 +117,7 @@
     "test:coverage": "vitest run --coverage",
     "bench": "tsx benchmark/index.ts",
     "bench:all": "tsx benchmark/run-all.ts",
-    "docs": "npx docsify-cli serve docs -p 3000 -o",
+    "docs": "pnpm serve docs -p 3000",
     "lint": "echo \"No linting configured for this project.\" && exit 0",
     "cli": "tsx src/cli/index.ts",
     "mcp:start": "tsx src/mcp/cli.ts",
