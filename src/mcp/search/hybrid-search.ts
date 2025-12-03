@@ -51,7 +51,7 @@ export class HybridSearch {
 
   constructor(config: HybridSearchConfig = {}) {
     this.config = {
-      fuzzyThreshold: config.fuzzyThreshold ?? 0.6,  // Higher = more permissive matching
+      fuzzyThreshold: config.fuzzyThreshold ?? 0.3,  // Strict: only close matches (0 = exact, 1 = match anything)
       fuzzyWeight: config.fuzzyWeight ?? 0.5,
       semanticWeight: config.semanticWeight ?? 0.5,
       debug: config.debug ?? false,
@@ -67,11 +67,11 @@ export class HybridSearch {
     // 1. Initialize Fuse.js for fuzzy search
     this.fuse = new Fuse(docs, {
       keys: [
-        { name: 'keywords', weight: 6 },   // Keywords get highest priority (exact domain terms)
-        { name: 'title', weight: 4 },      // Title matches are important
-        { name: 'section', weight: 3 },    // Section headings matter
-        { name: 'path', weight: 1 },
-        { name: 'content', weight: 0.3 },  // Content is a fallback
+        { name: 'keywords', weight: 10 },  // Keywords get HIGHEST priority (exact domain terms like 'retry')
+        { name: 'title', weight: 6 },      // Title matches are very important
+        { name: 'section', weight: 4 },    // Section headings matter
+        { name: 'path', weight: 2 },       // Path can contain useful info
+        { name: 'content', weight: 0.5 },  // Content is a fallback
       ],
       includeScore: true,
       threshold: this.config.fuzzyThreshold,
@@ -198,13 +198,56 @@ export class HybridSearch {
       );
     }
 
-    return results.slice(0, limit).map((r) => ({
+    const queryTerms = this.tokenize(query);
+
+    // First pass: calculate scores with boosts
+    const scored = results.slice(0, limit).map((r) => {
+      const fuseScore = r.score || 0; // Fuse: 0 = perfect match
+      const baseScore = 1 - fuseScore;
+      let boost = 0;
+
+      // Only apply boosts if Fuse found a reasonable match (score < 0.3)
+      if (fuseScore < 0.3) {
+        const keywords = r.item.keywords || [];
+        const titleLower = r.item.title.toLowerCase();
+
+        // Boost for exact keyword match
+        for (const term of queryTerms) {
+          if (keywords.some(k => k.toLowerCase() === term)) {
+            boost += 0.15;
+          }
+        }
+
+        // Boost for title containing query term
+        for (const term of queryTerms) {
+          if (titleLower.includes(term)) {
+            boost += 0.10;
+          }
+        }
+      } else {
+        // Penalize weak fuzzy matches
+        boost = -0.3;
+      }
+
+      return {
+        item: r.item,
+        baseScore,
+        boost,
+        finalScore: baseScore + boost,
+      };
+    });
+
+    // Sort by final score (with boost) and normalize to 0-1
+    scored.sort((a, b) => b.finalScore - a.finalScore);
+    const maxScore = scored[0]?.finalScore || 1;
+
+    return scored.map((r) => ({
       id: r.item.id,
       path: r.item.path,
       title: r.item.title,
       content: r.item.content,
       snippet: this.extractSnippet(r.item.content, query),
-      score: 1 - (r.score || 0), // Fuse: 0 = perfect match, we invert
+      score: Math.max(0, Math.min(1, r.finalScore / maxScore)), // Normalize to 0-1
       source: 'fuzzy' as const,
     }));
   }
@@ -409,14 +452,14 @@ export class HybridSearch {
     'muito', 'pouco', 'mais', 'menos', 'bem', 'mal', 'assim', 'entao', 'logo',
     'yo', 'hey', 'oi', 'ola', 'bom', 'boa', 'obrigado', 'por favor',
     // Generic verbs that don't add search value
-    'configure', 'configuro', 'configurar', 'configurando',
-    'use', 'usar', 'using', 'usar',
-    'create', 'criar', 'creating', 'criando',
-    'setup', 'setar', 'setting', 'setando',
-    'add', 'adicionar', 'adding', 'adicionando',
-    'get', 'getting', 'pegar', 'pegando',
-    'set', 'setting', 'definir', 'definindo',
-    'make', 'making', 'fazer', 'fazendo',
+    'configure', 'configuro', 'configurar', 'configurando', 'configura',
+    'use', 'usar', 'using', 'uso', 'usa',
+    'create', 'criar', 'creating', 'criando', 'cria', 'crio',
+    'setup', 'setar', 'setting', 'setando', 'seta', 'seto',
+    'add', 'adicionar', 'adding', 'adicionando', 'adiciona', 'adiciono',
+    'get', 'getting', 'pegar', 'pegando', 'pega', 'pego',
+    'set', 'setting', 'definir', 'definindo', 'define', 'defino',
+    'make', 'making', 'fazer', 'fazendo', 'faz', 'faço', 'faco',
   ]);
 
   /**

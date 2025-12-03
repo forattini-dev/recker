@@ -286,9 +286,15 @@ jobs:
               | jq -r '.commits[].author.login // empty' | sort -u | grep -v '^$' || true)
             if [ -n "$CONTRIBUTORS" ]; then
               echo "$CONTRIBUTORS" | while read -r user; do
-                echo "- @$user" >> CHANGELOG_BODY.md
+                # Only add @ for valid GitHub usernames (no spaces)
+                if [[ ! "$user" =~ \  ]]; then
+                  echo "- @$user" >> CHANGELOG_BODY.md
+                else
+                  echo "- $user" >> CHANGELOG_BODY.md
+                fi
               done
             else
+              # Fallback: list contributors without @ mention (no GitHub username available)
               git log $PREV_TAG..HEAD --pretty=format:"- %an" | sort -u >> CHANGELOG_BODY.md
             fi
             echo "" >> CHANGELOG_BODY.md
