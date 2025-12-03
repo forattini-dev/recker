@@ -29,6 +29,7 @@ npm install recker
 
 ```typescript
 import { get, post, whois, dns } from 'recker';
+import { rdap, supportsRDAP } from 'recker/utils/rdap';
 
 // HTTP - zero config
 const users = await get('https://api.example.com/users').json();
@@ -36,6 +37,12 @@ await post('https://api.example.com/users', { json: { name: 'John' } });
 
 // WHOIS
 const info = await whois('github.com');
+
+// RDAP (modern WHOIS)
+if (supportsRDAP('com')) {
+  const data = await rdap(client, 'google.com');
+  console.log(data.status, data.events);
+}
 
 // DNS
 const ips = await dns('google.com');
@@ -75,11 +82,13 @@ const user = await api.get('/users/:id', { params: { id: '123' } }).json();
 | Feature | Description |
 |:---|:---|
 | **Zero Config** | Direct functions work out of the box. No setup required. |
-| **Multi-Protocol** | HTTP, WebSocket, DNS, WHOIS, FTP, SFTP, Telnet in one SDK. |
+| **Multi-Protocol** | HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet in one SDK. |
 | **AI-Native** | SSE streaming, token counting, provider abstraction. |
 | **Type-Safe** | Full TypeScript with Zod schema validation. |
 | **Observable** | DNS/TCP/TLS/TTFB timing breakdown per request. |
 | **Resilient** | Retry, circuit breaker, rate limiting, deduplication. |
+| **GeoIP (Offline)** | MaxMind GeoLite2 database with bogon detection. |
+| **RDAP Support** | Modern WHOIS with IANA Bootstrap and TLD detection. |
 
 ## Highlights
 
