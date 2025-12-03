@@ -61,9 +61,14 @@ describe('Environment Proxy Utils', () => {
       expect(getProxyForUrl('https://example.com')).toBe('http://all-proxy:8080');
     });
 
-    it('should fallback to all_proxy (lowercase)', () => {
+    it('should fallback to all_proxy (lowercase) for http URLs', () => {
       process.env.all_proxy = 'http://all-proxy:8080';
       expect(getProxyForUrl('http://example.com')).toBe('http://all-proxy:8080');
+    });
+
+    it('should fallback to all_proxy (lowercase) for https URLs', () => {
+      process.env.all_proxy = 'http://all-proxy:8080';
+      expect(getProxyForUrl('https://example.com')).toBe('http://all-proxy:8080');
     });
 
     it('should return undefined when no proxy is set', () => {

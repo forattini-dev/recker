@@ -15,6 +15,7 @@ import type {
   MCPToolsListResponse,
 } from './types.js';
 import { UnsupportedError } from '../core/errors.js';
+import { getIpInfo, isValidIP, isGeoIPAvailable, isBogon, isIPv6, type IpInfo } from './ip-intel.js';
 
 export type MCPTransportMode = 'stdio' | 'http' | 'sse';
 
@@ -679,6 +680,20 @@ export class MCPServer {
           required: ['useCase'],
         },
       },
+      {
+        name: 'ip_lookup',
+        description: 'Get geolocation and network information for an IP address using the local MaxMind GeoLite2 database. Returns city, country, coordinates, timezone, and more. Works offline after first download.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            ip: {
+              type: 'string',
+              description: 'IPv4 or IPv6 address to lookup (e.g., "8.8.8.8", "2001:4860:4860::8888")',
+            },
+          },
+          required: ['ip'],
+        },
+      },
     ];
 
     // Filter tools if filter is specified
@@ -730,6 +745,8 @@ export class MCPServer {
         return this.getApiSchema(args);
       case 'suggest':
         return this.getSuggestions(args);
+      case 'ip_lookup':
+        return this.ipLookup(args);
       default:
         return {
           content: [{ type: 'text', text: `Unknown tool: ${name}` }],
@@ -1072,6 +1089,117 @@ export class MCPServer {
         text: `# Suggested Implementation for: "${useCase}"\n\n${output}\n\n---\n\n## Combined Configuration\n\n\`\`\`typescript\n${combinedConfig}\n\`\`\``,
       }],
     };
+  }
+
+  private ipLookupResult: IpInfo | null = null;
+  private ipLookupPending: Promise<void> | null = null;
+
+  private ipLookup(args: Record<string, unknown>): MCPToolResult {
+    const ip = String(args.ip || '').trim();
+
+    if (!ip) {
+      return {
+        content: [{ type: 'text', text: 'Error: ip is required' }],
+        isError: true,
+      };
+    }
+
+    if (!isValidIP(ip)) {
+      return {
+        content: [{ type: 'text', text: `Error: "${ip}" is not a valid IP address` }],
+        isError: true,
+      };
+    }
+
+    // Check for bogon IPs first (this is synchronous and doesn't need the database)
+    const bogonCheck = isBogon(ip);
+    const ipv6 = isIPv6(ip);
+
+    if (bogonCheck.isBogon) {
+      return {
+        content: [{
+          type: 'text',
+          text: this.formatIpResult({
+            ip,
+            bogon: true,
+            bogonType: bogonCheck.type,
+            isIPv6: ipv6,
+            org: bogonCheck.type,
+          }),
+        }],
+      };
+    }
+
+    // For public IPs, check if GeoIP database is available
+    if (!isGeoIPAvailable()) {
+      // Trigger download in background
+      getIpInfo(ip).catch(() => {});
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# GeoIP Database Required\n\nThe MaxMind GeoLite2 database is being downloaded (~70MB).\n\nPlease try again in a few seconds, or use the CLI:\n\n\`\`\`bash\nrek ip ${ip}\n\`\`\``,
+        }],
+      };
+    }
+
+    // Start async lookup in background (can't wait since MCP is sync)
+    this.ipLookupPending = getIpInfo(ip).then(info => {
+      this.ipLookupResult = info;
+    });
+
+    // For public IPs, provide CLI instructions since we can't block
+    return {
+      content: [{
+        type: 'text',
+        text: `# IP Intelligence: ${ip}\n\n**Status:** Public ${ipv6 ? 'IPv6' : 'IPv4'} Address\n\nFor detailed geolocation data (city, country, coordinates, timezone), use the CLI:\n\n\`\`\`bash\nrek ip ${ip}\n\`\`\`\n\n_Note: The MCP server uses a synchronous protocol. Full GeoIP lookups are available via CLI._`,
+      }],
+    };
+  }
+
+  private formatIpResult(info: IpInfo): string {
+    const lines: string[] = [`# IP Intelligence: ${info.ip}\n`];
+
+    if (info.bogon) {
+      lines.push(`**Type:** Private/Reserved IP (Bogon)`);
+      lines.push(`**Category:** ${info.bogonType}`);
+      lines.push(`\nThis is a non-routable IP address used for internal networks or special purposes.`);
+    } else {
+      if (info.city || info.region || info.country) {
+        const location = [info.city, info.region, info.country].filter(Boolean).join(', ');
+        lines.push(`**Location:** ${location}`);
+      }
+      if (info.countryCode) {
+        lines.push(`**Country Code:** ${info.countryCode}`);
+      }
+      if (info.continent) {
+        lines.push(`**Continent:** ${info.continent}`);
+      }
+      if (info.loc) {
+        lines.push(`**Coordinates:** ${info.loc}`);
+      }
+      if (info.timezone) {
+        lines.push(`**Timezone:** ${info.timezone}`);
+      }
+      if (info.postal) {
+        lines.push(`**Postal Code:** ${info.postal}`);
+      }
+      if (info.org) {
+        lines.push(`**Organization:** ${info.org}`);
+      }
+      if (info.asn) {
+        lines.push(`**ASN:** ${info.asn}`);
+      }
+      if (info.accuracy) {
+        lines.push(`**Accuracy:** ~${info.accuracy} km`);
+      }
+    }
+
+    if (info.isIPv6) {
+      lines.push(`\n_IPv6 Address_`);
+    }
+
+    return lines.join('\n');
   }
 
   private getFeatureConfig(feature: string): string {

@@ -297,6 +297,45 @@ describe('HttpResponse', () => {
       expect(progressEvents[0].total).toBeUndefined();
     });
 
+    it('should calculate smoothed rate across multiple progress updates', async () => {
+      // Create a chunked stream that allows for multiple progress updates
+      const chunks = [
+        new Uint8Array(500),
+        new Uint8Array(500),
+        new Uint8Array(500),
+        new Uint8Array(500)
+      ];
+
+      const stream = new ReadableStream({
+        async start(controller) {
+          for (const chunk of chunks) {
+            controller.enqueue(chunk);
+            // Wait > 100ms between chunks to trigger throttled updates
+            await new Promise(r => setTimeout(r, 120));
+          }
+          controller.close();
+        }
+      });
+
+      const webResponse = new Response(stream, {
+        headers: { 'Content-Length': '2000' }
+      });
+
+      const response = new HttpResponse(webResponse);
+      const progressEvents: any[] = [];
+
+      for await (const progress of response.download()) {
+        progressEvents.push(progress);
+      }
+
+      // Should have multiple progress events (initial + updates + final)
+      expect(progressEvents.length).toBeGreaterThan(2);
+
+      // Later events should have smoothed rate applied
+      const laterEvents = progressEvents.filter(e => e.rate > 0);
+      expect(laterEvents.length).toBeGreaterThan(1);
+    });
+
     it('should return early when no body', async () => {
       const webResponse = new Response(null, { status: 204 });
       const response = new HttpResponse(webResponse);

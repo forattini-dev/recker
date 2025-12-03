@@ -266,6 +266,30 @@ describe('ScrapeElement', () => {
       expect(article.hasClass('product')).toBe(true);
       expect(article.hasClass('other')).toBe(false);
     });
+
+    it('should return raw Cheerio object', () => {
+      const h1 = doc.select('h1');
+      const raw = h1.raw;
+      expect(raw).toBeDefined();
+      expect(typeof raw.html).toBe('function'); // Cheerio has .html() method
+    });
+
+    it('should get underlying DOM element at index', () => {
+      const links = doc.select('nav a');
+      const first = links.get(0);
+      expect(first).toBeDefined();
+      expect(first?.tagName).toBe('a');
+
+      const second = links.get(1);
+      expect(second).toBeDefined();
+      expect(second?.tagName).toBe('a');
+    });
+
+    it('should return undefined for out of bounds index', () => {
+      const links = doc.select('nav a');
+      const outOfBounds = links.get(100);
+      expect(outOfBounds).toBeUndefined();
+    });
   });
 
   describe('iteration methods', () => {
@@ -1120,5 +1144,61 @@ describe('ScrapeElement additional methods', () => {
     const nonExistent = doc.select('.nonexistent');
     const result = nonExistent.find('a');
     expect(result.exists()).toBe(false);
+  });
+
+  it('should clone an element', () => {
+    const h1 = doc.select('h1');
+    const cloned = h1.clone();
+    expect(cloned.text()).toBe(h1.text());
+    expect(cloned.exists()).toBe(true);
+    // Cloned should be a separate instance
+    expect(cloned).not.toBe(h1);
+  });
+
+  it('should convert element to string', () => {
+    const h1 = doc.select('h1');
+    const str = h1.toString();
+    expect(str).toContain('<h1>');
+    expect(str).toContain('Main Title');
+    expect(str).toContain('</h1>');
+  });
+
+  it('should get element index without selector', () => {
+    const links = doc.select('nav a');
+    const third = links.eq(2);
+    expect(third.index()).toBe(2);
+  });
+
+  it('should get element index with selector', () => {
+    const links = doc.select('nav a');
+    const external = links.filter('[target="_blank"]').first();
+    // index() with selector finds position within all siblings matching selector
+    expect(external.index('a')).toBeGreaterThanOrEqual(0);
+  });
+
+  it('should return false from every() when predicate fails', () => {
+    const links = doc.select('nav a');
+    // Not all links have target attribute
+    const allHaveTarget = links.every((el) => el.attr('target') !== undefined);
+    expect(allHaveTarget).toBe(false);
+  });
+
+  it('should return false from some() when no element matches', () => {
+    const links = doc.select('nav a');
+    const hasDataFoo = links.some((el) => el.data('foo') !== undefined);
+    expect(hasDataFoo).toBe(false);
+  });
+
+  it('should get all data attributes when no name is provided', () => {
+    const article = doc.select('article');
+    const allData = article.data() as Record<string, unknown>;
+    expect(allData).toBeDefined();
+    expect(allData.id).toBe(123);
+  });
+
+  it('should get prop value', () => {
+    const input = doc.select('input[name="name"]');
+    const tagName = input.prop('tagName');
+    expect(tagName).toBe('INPUT');
   });
 });

@@ -78,6 +78,13 @@ describe('ASCII Chart', () => {
       expect(result).toBeTruthy();
     });
 
+    it('should return empty string when all values are invalid', () => {
+      const data = [NaN, NaN, Infinity, -Infinity];
+      const result = plot(data, { height: 4 });
+
+      expect(result).toBe('');
+    });
+
     it('should respect custom min/max options', () => {
       const data = [5, 6, 7, 8, 9];
       const result = plot(data, { height: 4, min: 0, max: 10 });
@@ -123,6 +130,13 @@ describe('ASCII Chart', () => {
 
     it('should handle empty series list', () => {
       const result = plotMultiple([], { height: 4 });
+      expect(result).toBe('');
+    });
+
+    it('should return empty string when all values in all series are invalid', () => {
+      const series1 = [NaN, NaN];
+      const series2 = [Infinity, -Infinity];
+      const result = plotMultiple([series1, series2], { height: 4 });
       expect(result).toBe('');
     });
   });

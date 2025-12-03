@@ -147,5 +147,29 @@ describe('Concurrency Utilities', () => {
       expect(result.requestsPerInterval).toBe(baseConfig.requestsPerInterval);
       expect(result.interval).toBe(baseConfig.interval);
     });
+
+    it('should use base pipelining for batch with requestCount <= 20', () => {
+      const result = createBatchConfig(baseConfig, 10, 20);
+      expect(result.agent.pipelining).toBe(baseConfig.agent.pipelining ?? 1);
+    });
+
+    it('should use base pipelining for batch with concurrency <= 5', () => {
+      const result = createBatchConfig(baseConfig, 5, 25);
+      expect(result.agent.pipelining).toBe(baseConfig.agent.pipelining ?? 1);
+    });
+  });
+
+  describe('normalizeConcurrency edge cases', () => {
+    it('should use explicit pipelining value when calculating connections', () => {
+      const result = normalizeConcurrency({
+        concurrency: {
+          max: 100,
+          agent: { pipelining: 4 }
+        }
+      });
+      // With pipelining=4 and max=100, connections should be 100/4 = 25
+      expect(result.agent.connections).toBe(25);
+      expect(result.agent.pipelining).toBe(4);
+    });
   });
 });

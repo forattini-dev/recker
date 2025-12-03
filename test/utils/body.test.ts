@@ -222,5 +222,27 @@ describe('Body Processing', () => {
       expect(result.body).toBe(JSON.stringify(obj));
       expect(result.contentType).toBe('application/json');
     });
+
+    it('should fallback to string for non-standard types', () => {
+      // Number type should be converted to string
+      const num = 42;
+      // @ts-ignore - testing fallback behavior
+      const result = processBody(num);
+
+      expect(result.body).toBe('42');
+      expect(result.contentType).toBe('text/plain; charset=utf-8');
+    });
+
+    it('should handle array with blob values in createFormData', () => {
+      const blob = new Blob(['test']);
+      const formData = createFormData({
+        files: [blob, 'string-value']
+      });
+
+      const files = formData.getAll('files');
+      expect(files).toHaveLength(2);
+      expect(files[0]).toBeInstanceOf(Blob);
+      expect(files[1]).toBe('string-value');
+    });
   });
 });
