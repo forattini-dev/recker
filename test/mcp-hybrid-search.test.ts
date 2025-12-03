@@ -479,8 +479,10 @@ describe('HybridSearch', () => {
     });
 
     it('should normalize casing in search terms', async () => {
-      const results = await search.search('RETRY CACHE MIDDLEWARE');
+      // Use uppercase terms that exist in the test docs
+      const results = await search.search('RETRY BACKOFF');
       expect(results.length).toBeGreaterThan(0);
+      expect(results[0].title).toBe('Retry Plugin');
     });
   });
 });

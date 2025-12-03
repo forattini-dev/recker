@@ -388,8 +388,9 @@ export class SearchPanel {
   private render(): void {
     const output: string[] = [];
 
-    // Hide cursor and move to home
+    // Hide cursor, clear screen, and move to home
     output.push(CURSOR_HIDE);
+    output.push(CLEAR_SCREEN);
     output.push(CURSOR_HOME);
 
     // Header
