@@ -96,6 +96,8 @@ export class LoadStats {
       if (msg.includes('UND_ERR_BODY_TIMEOUT')) return 'Body timeout';
       if (msg.includes('UND_ERR_CONNECT_TIMEOUT')) return 'Connect timeout';
       if (msg.includes('AbortError') || msg.includes('aborted')) return 'Request aborted';
+      if (msg.includes('expression evaluated to a falsy value')) return 'Connection pool exhausted';
+      if (msg.includes('AssertionError')) return 'Internal assertion failed';
 
       // Truncate long messages
       if (msg.length > 50) {
