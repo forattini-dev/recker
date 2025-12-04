@@ -26,6 +26,7 @@ import { whois as performWhois, isDomainAvailable, type WhoisOptions, type Whois
 import { MemoryCookieJar } from '../cookies/memory-cookie-jar.js';
 import { scrape as scrapeHelper, type ScrapePromise } from '../plugins/scrape.js';
 import type { ScrapeOptions, ExtractedLink, ExtractedImage, ExtractedMeta, OpenGraphData, TwitterCardData, JsonLdData, ExtractedForm, ExtractedTable, ExtractedScript, ExtractedStyle, ExtractionSchema, LinkExtractionOptions, ImageExtractionOptions } from '../scrape/types.js';
+import { HlsPromise, type HlsOptions } from '../plugins/hls.js';
 
 // Extended Cache Config for Client
 interface ClientCacheConfig extends Omit<CacheOptions, 'storage'> {
@@ -1163,6 +1164,48 @@ export class Client {
    */
   async isDomainAvailable(domain: string, options?: WhoisOptions): Promise<boolean> {
     return isDomainAvailable(domain, options);
+  }
+
+  // ============================================
+  // HLS Streaming
+  // ============================================
+
+  /**
+   * Download HLS (HTTP Live Streaming) content
+   *
+   * @example
+   * ```typescript
+   * // Simple VOD download
+   * await client.hls('https://example.com/video.m3u8').download('./video.ts');
+   *
+   * // Live stream recording for 2 minutes
+   * await client.hls('https://example.com/live.m3u8', {
+   *   live: { duration: 120_000 }
+   * }).download('./recording.ts');
+   *
+   * // Download as separate chunks
+   * await client.hls(url, { mode: 'chunks' })
+   *   .download((seg) => `./segments/part-${seg.sequence}.ts`);
+   *
+   * // Stream segments for custom processing
+   * for await (const segment of client.hls(url).stream()) {
+   *   console.log(`Segment ${segment.sequence}: ${segment.data.byteLength} bytes`);
+   *   await uploadToS3(segment.data);
+   * }
+   *
+   * // Get playlist info without downloading
+   * const info = await client.hls(url).info();
+   * console.log(`Is live: ${info.isLive}`);
+   * console.log(`Duration: ${info.totalDuration}s`);
+   *
+   * // Select quality
+   * await client.hls(url, { quality: 'highest' }).download('./hd.ts');
+   * await client.hls(url, { quality: '720p' }).download('./720p.ts');
+   * await client.hls(url, { quality: { bandwidth: 2000000 } }).download('./2mbps.ts');
+   * ```
+   */
+  hls(manifestUrl: string, options: HlsOptions = {}): HlsPromise {
+    return new HlsPromise(this, manifestUrl, options);
   }
 }
 
