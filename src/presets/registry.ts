@@ -20,6 +20,13 @@ import { deepseek } from './deepseek.js';
 import { fireworks } from './fireworks.js';
 import { xai, grok } from './xai.js';
 import { azureOpenai } from './azure-openai.js';
+import { aws } from './aws.js';
+import { gcp } from './gcp.js';
+import { azure } from './azure.js';
+import { oracle } from './oracle.js';
+import { youtube } from './youtube.js';
+import { meta } from './meta.js';
+import { tiktok } from './tiktok.js';
 import { cloudflare, cloudflareWorkersAI } from './cloudflare.js';
 import { github } from './github.js';
 import { gitlab } from './gitlab.js';
@@ -30,6 +37,7 @@ import { twilio } from './twilio.js';
 import { mailgun } from './mailgun.js';
 import { sinch } from './sinch.js';
 import { digitalocean } from './digitalocean.js';
+import { vultr } from './vultr.js';
 import { linear } from './linear.js';
 import { notion } from './notion.js';
 import { slack } from './slack.js';
@@ -212,6 +220,69 @@ export const presetRegistry: PresetInfo[] = [
 
   // Cloud & DevTools
   {
+    name: 'aws',
+    displayName: 'Amazon Web Services',
+    patterns: [/\.amazonaws\.com/, /\.aws\.amazon\.com/],
+    factory: aws,
+    category: 'cloud',
+    requiredAuth: ['accessKeyId', 'secretAccessKey', 'region', 'service'],
+    docsUrl: 'https://docs.aws.amazon.com/',
+  },
+  {
+    name: 'gcp',
+    displayName: 'Google Cloud Platform',
+    patterns: [/\.googleapis\.com/],
+    factory: gcp,
+    category: 'cloud',
+    requiredAuth: ['projectId', 'auth'],
+    docsUrl: 'https://cloud.google.com/apis/docs/overview',
+  },
+  {
+    name: 'azure',
+    displayName: 'Microsoft Azure',
+    patterns: [/\.azure\.com/, /\.windows\.net/, /\.microsoft\.com/],
+    factory: azure,
+    category: 'cloud',
+    requiredAuth: ['auth'],
+    docsUrl: 'https://docs.microsoft.com/en-us/rest/api/azure/',
+  },
+  {
+    name: 'oracle',
+    displayName: 'Oracle Cloud Infrastructure',
+    patterns: [/\.oraclecloud\.com/],
+    factory: oracle,
+    category: 'cloud',
+    requiredAuth: ['tenancyId', 'userId', 'fingerprint', 'privateKey', 'region'],
+    docsUrl: 'https://docs.oracle.com/en-us/iaas/api/',
+  },
+  {
+    name: 'youtube',
+    displayName: 'YouTube Data API',
+    patterns: [/googleapis\.com\/youtube/],
+    factory: youtube,
+    category: 'saas',
+    requiredAuth: ['apiKey'],
+    docsUrl: 'https://developers.google.com/youtube/v3/docs',
+  },
+  {
+    name: 'meta',
+    displayName: 'Meta (Facebook, Instagram, WhatsApp, Threads)',
+    patterns: [/graph\.facebook\.com/],
+    factory: meta,
+    category: 'saas',
+    requiredAuth: ['accessToken'],
+    docsUrl: 'https://developers.facebook.com/docs/graph-api/',
+  },
+  {
+    name: 'tiktok',
+    displayName: 'TikTok API',
+    patterns: [/open\.tiktokapis\.com/, /business-api\.tiktok\.com/],
+    factory: tiktok,
+    category: 'saas',
+    requiredAuth: ['accessToken'],
+    docsUrl: 'https://developers.tiktok.com/doc/overview/',
+  },
+  {
     name: 'cloudflare',
     displayName: 'Cloudflare',
     patterns: [/api\.cloudflare\.com/],
@@ -300,6 +371,15 @@ export const presetRegistry: PresetInfo[] = [
     category: 'cloud',
     requiredAuth: ['token'],
     docsUrl: 'https://docs.digitalocean.com/reference/api/',
+  },
+  {
+    name: 'vultr',
+    displayName: 'Vultr',
+    patterns: [/api\.vultr\.com/],
+    factory: vultr,
+    category: 'cloud',
+    requiredAuth: ['apiKey'],
+    docsUrl: 'https://www.vultr.com/api/',
   },
   {
     name: 'linear',
