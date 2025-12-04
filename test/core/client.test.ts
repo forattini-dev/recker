@@ -142,4 +142,61 @@ describe('Recker Client', () => {
       expect(typeof client.isDomainAvailable).toBe('function');
     });
   });
+
+  describe('client without baseUrl', () => {
+    it('should create client without baseUrl', () => {
+      // Should not throw
+      const client = createClient();
+      expect(client).toBeDefined();
+    });
+
+    it('should make requests with absolute URLs when no baseUrl', async () => {
+      const mockTransport = new MockTransport();
+      mockTransport.setMockResponse('GET', 'https://api.example.com/users', 200, { users: [] });
+
+      const client = createClient({ transport: mockTransport });
+      const res = await client.get('https://api.example.com/users').json<{ users: unknown[] }>();
+
+      expect(res).toEqual({ users: [] });
+    });
+
+    it('should make requests to multiple domains with same client', async () => {
+      const mockTransport = new MockTransport();
+      mockTransport.setMockResponse('GET', 'https://api1.example.com/data', 200, { source: 'api1' });
+      mockTransport.setMockResponse('GET', 'https://api2.example.com/data', 200, { source: 'api2' });
+
+      const client = createClient({ transport: mockTransport });
+
+      const [res1, res2] = await Promise.all([
+        client.get('https://api1.example.com/data').json<{ source: string }>(),
+        client.get('https://api2.example.com/data').json<{ source: string }>(),
+      ]);
+
+      expect(res1).toEqual({ source: 'api1' });
+      expect(res2).toEqual({ source: 'api2' });
+    });
+
+    it('should work with real HTTP server without baseUrl', async () => {
+      const { createServer } = await import('node:http');
+      const { once } = await import('node:events');
+
+      const server = createServer((req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ path: req.url }));
+      });
+
+      server.listen(0);
+      await once(server, 'listening');
+      const address = server.address();
+      const port = typeof address === 'string' ? 0 : address?.port;
+
+      // Client without baseUrl
+      const client = createClient();
+
+      const res = await client.get(`http://localhost:${port}/test`).json<{ path: string }>();
+      expect(res).toEqual({ path: '/test' });
+
+      server.close();
+    });
+  });
 });

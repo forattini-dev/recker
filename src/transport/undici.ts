@@ -313,8 +313,8 @@ export class UndiciTransport implements Transport {
   private socketClient?: Client;  // Unix domain socket client
   private observability: boolean;  // Enable/disable timing capture
 
-  constructor(baseUrl: string, options: UndiciTransportOptions = {}) {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl?: string, options: UndiciTransportOptions = {}) {
+    this.baseUrl = baseUrl || '';
     this.options = options;
     this.tlsOptions = options.tls;
     this.observability = options.observability !== false;  // Default: true
@@ -404,7 +404,7 @@ export class UndiciTransport implements Transport {
       });
     }
 
-    if (options.socketPath) {
+    if (options.socketPath && baseUrl) {
       // For Unix sockets, use the base URL as origin with socketPath option
       this.socketClient = new Client(baseUrl, {
         socketPath: options.socketPath
@@ -418,8 +418,15 @@ export class UndiciTransport implements Transport {
     const contentLengthHeader = headers['content-length'];
     const uploadTotal = contentLengthHeader ? parseInt(contentLengthHeader, 10) : undefined;
 
-    const path = req.url.startsWith(this.baseUrl) ? req.url.substring(this.baseUrl.length) : req.url;
-    let currentUrl = new URL(path, this.baseUrl).toString();
+    // Handle URL resolution: if baseUrl is empty, req.url must be absolute
+    let currentUrl: string;
+    if (this.baseUrl) {
+      const path = req.url.startsWith(this.baseUrl) ? req.url.substring(this.baseUrl.length) : req.url;
+      currentUrl = new URL(path, this.baseUrl).toString();
+    } else {
+      // No baseUrl - req.url must be an absolute URL
+      currentUrl = req.url;
+    }
 
     // Determine if we handle redirects manually (when beforeRedirect hook is provided)
     const handleRedirectsManually = Boolean(req.beforeRedirect);

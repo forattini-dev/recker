@@ -102,7 +102,7 @@ export class Client {
 
     if (options.transport) {
       this.transport = options.transport;
-    } else if (this.baseUrl) {
+    } else {
       // Parse HTTP/2 options
       let http2Options: HTTP2Options | undefined;
       if (options.http2) {
@@ -116,7 +116,8 @@ export class Client {
       // Create AgentManager with auto-configured options
       this.agentManager = new AgentManager(this.concurrencyConfig.agent);
 
-      this.transport = new UndiciTransport(this.baseUrl, {
+      // UndiciTransport accepts optional baseUrl - when empty, requests must use absolute URLs
+      this.transport = new UndiciTransport(this.baseUrl || undefined, {
         proxy: options.proxy,
         http2: http2Options,
         dns: options.dns,
@@ -125,13 +126,6 @@ export class Client {
         tls: options.tls,
         observability: options.observability
       });
-    } else {
-      throw new ConfigurationError(
-        'baseUrl is required for default UndiciTransport, or provide a custom transport.',
-        {
-          configKey: 'baseUrl',
-        }
-      );
     }
 
     // 1. Auto-wire plugins based on config
