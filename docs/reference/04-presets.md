@@ -185,10 +185,195 @@ const client = createClient(azureOpenai({
 
 ## Cloud Providers
 
-### GitHub
+### AWS (Amazon Web Services)
 
 ```typescript
-import { github } from 'recker/presets';
+import { aws, awsS3, awsDynamoDB, awsLambda, awsBedrock } from 'recker/presets';
+
+// Generic AWS client (specify service)
+const ec2 = createClient(aws({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: 'us-east-1',
+  service: 'ec2',
+  sessionToken: process.env.AWS_SESSION_TOKEN  // Optional (for temp credentials)
+}));
+
+// Convenience aliases for popular services
+const s3 = createClient(awsS3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: 'us-east-1'
+}));
+
+const dynamodb = createClient(awsDynamoDB({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: 'us-east-1'
+}));
+
+const lambda = createClient(awsLambda({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: 'us-east-1'
+}));
+
+// AWS Bedrock (AI/ML)
+const bedrock = createClient(awsBedrock({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: 'us-east-1'
+}));
+
+// Custom endpoint (LocalStack, MinIO, etc.)
+const localS3 = createClient(aws({
+  accessKeyId: 'test',
+  secretAccessKey: 'test',
+  region: 'us-east-1',
+  service: 's3',
+  endpoint: 'http://localhost:4566'
+}));
+```
+
+**Supported Services:**
+- `s3`, `dynamodb`, `lambda`, `sqs`, `sns`, `ses`
+- `secretsmanager`, `ssm`, `sts`, `iam`, `kms`
+- `ec2`, `ecs`, `eks`
+- `cloudwatch`, `logs`, `events`
+- `kinesis`, `firehose`
+- `apigateway`, `execute-api`
+- `cognito-idp`, `cognito-identity`
+- `athena`, `glue`
+- `stepfunctions`, `states`
+- `bedrock`, `bedrock-runtime`
+
+### Google Cloud Platform (GCP)
+
+```typescript
+import { gcp, gcpStorage, gcpBigQuery, gcpVertexAI } from 'recker/presets';
+
+// With API Key (for public APIs like Translate, Vision)
+const translate = createClient(gcp({
+  projectId: 'my-project',
+  auth: { type: 'api-key', apiKey: process.env.GCP_API_KEY },
+  service: 'translate'
+}));
+
+// With OAuth access token
+const compute = createClient(gcp({
+  projectId: 'my-project',
+  auth: { type: 'oauth', accessToken: process.env.GCP_ACCESS_TOKEN },
+  service: 'compute'
+}));
+
+// Convenience aliases
+const storage = createClient(gcpStorage({
+  projectId: 'my-project',
+  auth: { type: 'oauth', accessToken: process.env.GCP_ACCESS_TOKEN }
+}));
+
+const bigquery = createClient(gcpBigQuery({
+  projectId: 'my-project',
+  auth: { type: 'oauth', accessToken: process.env.GCP_ACCESS_TOKEN }
+}));
+
+// Vertex AI (regional)
+const vertexai = createClient(gcpVertexAI({
+  projectId: 'my-project',
+  auth: { type: 'oauth', accessToken: process.env.GCP_ACCESS_TOKEN },
+  region: 'us-central1'
+}));
+```
+
+**Supported Services:**
+- `compute`, `storage`, `bigquery`, `pubsub`, `firestore`
+- `functions`, `run`, `cloudsql`, `kubernetes`
+- `aiplatform`, `translate`, `vision`, `speech`, `language`
+- `secretmanager`, `iam`, `logging`, `monitoring`
+
+### Microsoft Azure
+
+```typescript
+import { azure, azureResourceManager, azureBlobStorage, microsoftGraph } from 'recker/presets';
+
+// Azure Resource Manager
+const arm = createClient(azureResourceManager({
+  subscriptionId: process.env.AZURE_SUBSCRIPTION_ID,
+  auth: { type: 'bearer', token: process.env.AZURE_TOKEN }
+}));
+
+// List resource groups
+const groups = await arm.get('/subscriptions/:subscriptionId/resourcegroups', {
+  params: {
+    subscriptionId: process.env.AZURE_SUBSCRIPTION_ID,
+    'api-version': '2021-04-01'
+  }
+}).json();
+
+// Azure Blob Storage with SAS token
+const blob = createClient(azureBlobStorage({
+  accountName: 'mystorageaccount',
+  auth: { type: 'sas', sasToken: process.env.AZURE_SAS_TOKEN }
+}));
+
+// Microsoft Graph API
+const graph = createClient(microsoftGraph({
+  auth: { type: 'bearer', token: process.env.AZURE_TOKEN }
+}));
+
+// Get user profile
+const me = await graph.get('/me').json();
+```
+
+**Supported Services:**
+- `management` (Resource Manager), `storage-blob`, `storage-queue`, `storage-table`, `storage-file`
+- `cosmos-db`, `keyvault`, `servicebus`, `eventhubs`
+- `functions`, `cognitive`, `devops`, `graph`, `monitor`, `containerregistry`
+
+### Oracle Cloud Infrastructure (OCI)
+
+```typescript
+import { oracle, ociCompute, ociObjectStorage, ociGenerativeAI } from 'recker/presets';
+
+const compute = createClient(ociCompute({
+  tenancyId: process.env.OCI_TENANCY_ID,
+  userId: process.env.OCI_USER_ID,
+  fingerprint: process.env.OCI_FINGERPRINT,
+  privateKey: process.env.OCI_PRIVATE_KEY,
+  region: 'us-ashburn-1'
+}));
+
+// List instances
+const instances = await compute.get('/20160918/instances', {
+  params: { compartmentId: 'ocid1.compartment...' }
+}).json();
+
+// Object Storage
+const storage = createClient(ociObjectStorage({
+  tenancyId: process.env.OCI_TENANCY_ID,
+  userId: process.env.OCI_USER_ID,
+  fingerprint: process.env.OCI_FINGERPRINT,
+  privateKey: process.env.OCI_PRIVATE_KEY,
+  region: 'us-ashburn-1'
+}));
+
+// OCI Generative AI
+const genai = createClient(ociGenerativeAI({
+  tenancyId: process.env.OCI_TENANCY_ID,
+  userId: process.env.OCI_USER_ID,
+  fingerprint: process.env.OCI_FINGERPRINT,
+  privateKey: process.env.OCI_PRIVATE_KEY,
+  region: 'us-chicago-1'
+}));
+```
+
+**Supported Services:**
+- `core` (Compute, VCN), `objectstorage`, `database`, `identity`
+- `containerengine` (OKE), `functions`, `streaming`
+- `logging`, `monitoring`, `vault`, `kms`, `nosql`
+- `generativeai`, `aidocument`, `aivision`
+
+### GitHub
 
 const client = createClient(github({
   token: process.env.GITHUB_TOKEN,
@@ -255,6 +440,31 @@ const client = createClient(digitalocean({
 }));
 
 const droplets = await client.get('/droplets').json();
+```
+
+### Vultr
+
+```typescript
+import { vultr } from 'recker/presets';
+
+const client = createClient(vultr({
+  apiKey: process.env.VULTR_API_KEY
+}));
+
+// List instances
+const instances = await client.get('/instances').json();
+
+// List regions
+const regions = await client.get('/regions').json();
+
+// Create instance
+await client.post('/instances', {
+  json: {
+    region: 'ewr',
+    plan: 'vc2-1c-1gb',
+    os_id: 387
+  }
+});
 ```
 
 ### Supabase
@@ -431,6 +641,141 @@ await client.post('/channels/{channel_id}/messages', {
 });
 ```
 
+## Media & Content
+
+### YouTube
+
+```typescript
+import { youtube } from 'recker/presets';
+
+const client = createClient(youtube({
+  apiKey: process.env.YOUTUBE_API_KEY
+}));
+
+// Search videos
+const results = await client.get('/search', {
+  params: {
+    part: 'snippet',
+    q: 'nodejs tutorial',
+    type: 'video',
+    maxResults: 10
+  }
+}).json();
+
+// Get video details
+const video = await client.get('/videos', {
+  params: {
+    part: 'snippet,statistics',
+    id: 'dQw4w9WgXcQ'
+  }
+}).json();
+
+// Get channel info
+const channel = await client.get('/channels', {
+  params: {
+    part: 'snippet,statistics',
+    id: 'UC_x5XG1OV2P6uZZ5FSM9Ttw'
+  }
+}).json();
+
+// Get playlist items
+const playlist = await client.get('/playlistItems', {
+  params: {
+    part: 'snippet',
+    playlistId: 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf',
+    maxResults: 50
+  }
+}).json();
+
+// Get comments
+const comments = await client.get('/commentThreads', {
+  params: {
+    part: 'snippet',
+    videoId: 'dQw4w9WgXcQ',
+    maxResults: 100
+  }
+}).json();
+```
+
+### Meta (Facebook, Instagram, WhatsApp, Threads)
+
+```typescript
+import { meta, facebook, instagram, whatsapp, threads } from 'recker/presets';
+
+// Main preset (recommended)
+const client = createClient(meta({
+  accessToken: process.env.META_ACCESS_TOKEN,
+  version: 'v19.0'  // Optional, default: v19.0
+}));
+
+// Get user profile
+const me = await client.get('/me', {
+  params: { fields: 'id,name,email,picture' }
+}).json();
+
+// Get user's pages
+const pages = await client.get('/me/accounts').json();
+
+// Post to a page
+await client.post('/:pageId/feed', {
+  params: { pageId: '123456789' },
+  form: {
+    message: 'Hello from Recker!',
+    access_token: pageAccessToken
+  }
+});
+
+// Get page insights
+const insights = await client.get('/:pageId/insights', {
+  params: {
+    pageId: '123456789',
+    metric: 'page_impressions,page_engaged_users',
+    period: 'day'
+  }
+}).json();
+
+// Aliases for clarity (all use the same Meta Graph API)
+const fb = createClient(facebook({ accessToken: '...' }));
+const ig = createClient(instagram({ accessToken: '...' }));
+const wa = createClient(whatsapp({ accessToken: '...' }));
+const th = createClient(threads({ accessToken: '...' }));
+```
+
+### TikTok
+
+```typescript
+import { tiktok, tiktokBusiness } from 'recker/presets';
+
+// TikTok API (for login kit, content posting)
+const client = createClient(tiktok({
+  accessToken: process.env.TIKTOK_ACCESS_TOKEN
+}));
+
+// Get user info
+const user = await client.get('/user/info/', {
+  params: { fields: 'open_id,union_id,avatar_url,display_name' }
+}).json();
+
+// Get user's videos
+const videos = await client.post('/video/list/', {
+  json: { max_count: 20 }
+}).json();
+
+// TikTok Business/Ads API
+const business = createClient(tiktokBusiness({
+  accessToken: process.env.TIKTOK_BUSINESS_TOKEN,
+  advertiserId: process.env.TIKTOK_ADVERTISER_ID
+}));
+
+// Get advertiser info
+const info = await business.get('/advertiser/info/', {
+  params: { advertiser_ids: ['advertiser_id'] }
+}).json();
+
+// Get campaigns
+const campaigns = await business.get('/campaign/get/').json();
+```
+
 ## Auto-Detection (Registry)
 
 Automatically detect and configure presets from URLs:
@@ -467,6 +812,14 @@ if (preset) {
 | `api.cloudflare.com` | `cloudflare` |
 | `api.mailgun.net` | `mailgun` |
 | `*.sms.api.sinch.com` | `sinch` |
+| `*.amazonaws.com` | `aws` |
+| `api.vultr.com` | `vultr` |
+| `*.googleapis.com` | `gcp` |
+| `*.azure.com` | `azure` |
+| `*.oraclecloud.com` | `oracle` |
+| `googleapis.com/youtube` | `youtube` |
+| `graph.facebook.com` | `meta` |
+| `open.tiktokapis.com` | `tiktok` |
 
 ## Combining Presets
 

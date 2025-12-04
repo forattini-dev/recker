@@ -97,10 +97,20 @@ rek @gitlab/projects/12345/merge_requests state="opened"
 #### AWS (Signature V4)
 
 ```bash
-# Requires: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+# Requires: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
 
-# Note: AWS preset handles Signature V4 authentication
-rek @aws/ec2 Action="DescribeInstances"
+# S3 - List buckets
+rek @aws-s3/
+
+# DynamoDB - List tables
+rek @aws-dynamodb/ \
+  X-Amz-Target:"DynamoDB_20120810.ListTables"
+
+# Lambda - List functions
+rek @aws-lambda/2015-03-31/functions
+
+# EC2 - Describe instances
+rek @aws-ec2/?Action=DescribeInstances&Version=2016-11-15
 ```
 
 #### Cloudflare
@@ -260,6 +270,14 @@ Each preset looks for specific environment variables for authentication:
 | `@cloudflare` | `CLOUDFLARE_API_TOKEN` |
 | `@mailgun` | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` |
 | `@sinch` | `SINCH_PROJECT_ID`, `SINCH_KEY_ID`, `SINCH_KEY_SECRET` |
+| `@aws` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| `@vultr` | `VULTR_API_KEY` |
+| `@gcp` | `GCP_PROJECT_ID`, `GCP_ACCESS_TOKEN` or `GCP_API_KEY` |
+| `@azure` | `AZURE_SUBSCRIPTION_ID`, `AZURE_TOKEN` |
+| `@oracle` | `OCI_TENANCY_ID`, `OCI_USER_ID`, `OCI_FINGERPRINT`, `OCI_PRIVATE_KEY` |
+| `@youtube` | `YOUTUBE_API_KEY` |
+| `@meta` | `META_ACCESS_TOKEN` |
+| `@tiktok` | `TIKTOK_ACCESS_TOKEN` |
 
 ### Setting Environment Variables
 
