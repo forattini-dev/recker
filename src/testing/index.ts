@@ -59,3 +59,58 @@ export type {
   MockUDPServerOptions,
   ReceivedMessage,
 } from './mock-udp-server.js';
+
+// HLS Testing
+export {
+  MockHlsServer,
+  createMockHlsVod,
+  createMockHlsLive,
+  createMockHlsMultiQuality,
+} from './mock-hls-server.js';
+
+export type {
+  MockHlsServerOptions,
+  MockHlsVariant,
+  MockHlsSegment,
+  MockHlsStats,
+} from './mock-hls-server.js';
+
+// WebSocket Testing
+export {
+  MockWebSocketServer,
+  createMockWebSocketServer,
+} from './mock-websocket-server.js';
+
+export type {
+  MockWebSocketServerOptions,
+  MockWebSocketClient,
+  MockWebSocketMessage,
+  MockWebSocketStats,
+} from './mock-websocket-server.js';
+
+// SSE Testing
+export {
+  MockSSEServer,
+  createMockSSEServer,
+} from './mock-sse-server.js';
+
+export type {
+  MockSSEServerOptions,
+  SSEEvent,
+  MockSSEClient,
+  MockSSEStats,
+} from './mock-sse-server.js';
+
+// HTTP Testing
+export {
+  MockHttpServer,
+  createMockHttpServer,
+} from './mock-http-server.js';
+
+export type {
+  MockHttpServerOptions,
+  MockHttpResponse,
+  MockHttpRequest,
+  MockHttpHandler,
+  MockHttpStats,
+} from './mock-http-server.js';
