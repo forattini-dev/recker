@@ -24,8 +24,8 @@ importers:
         specifier: ^5.0.0
         version: 5.8.2
       ora:
-        specifier: ^8.0.0
-        version: 8.2.0
+        specifier: ^9.0.0
+        version: 9.0.0
       undici:
         specifier: ^7.16.0
         version: 7.16.0
@@ -863,9 +863,9 @@ packages:
     resolution: {integrity: sha512-aCj4O5wKyszjMmDT4tZj93kxyydN/K5zPWSCe6/0AV/AA1pqe5ZBIw0a2ZfPQV7lL5/yb5HsUreJ6UFAF1tEQw==}
     engines: {node: '>=18'}
 
-  cli-spinners@2.9.2:
-    resolution: {integrity: sha512-ywqV+5MmyL4E7ybXgKys4DugZbX0FC6LnwrhjuykIjnK9k8OQacQ7axGKnjDXWNhns0xot3bZI5h55H8yo9cJg==}
-    engines: {node: '>=6'}
+  cli-spinners@3.3.0:
+    resolution: {integrity: sha512-/+40ljC3ONVnYIttjMWrlL51nItDAbBrq2upN8BPyvGU/2n5Oxw3tbNwORCaNuNqLJnxGqOfjUuhsv7l5Q4IsQ==}
+    engines: {node: '>=18.20'}
 
   clipboardy@3.0.0:
     resolution: {integrity: sha512-Su+uU5sr1jkUy1sGRpLKjKrvEOVXgSgiSInwa/qeID6aJ07yh+5NWc3h2QfjHjBnfX4LhtFcuAWKUsJ3r+fjbg==}
@@ -1000,9 +1000,6 @@ packages:
 
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
-
-  emoji-regex@10.6.0:
-    resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
@@ -1255,10 +1252,6 @@ packages:
     resolution: {integrity: sha512-Dnz92NInDqYckGEUJv689RbRiTSEHCQ7wOVeALbkOz999YpqT46yMRIGtSNl2iCL1waAZSx40+h59NV/EwzV/A==}
     engines: {node: '>=18'}
 
-  is-unicode-supported@1.3.0:
-    resolution: {integrity: sha512-43r2mRvz+8JRIKnWJ+3j8JtjRKZ6GmjzfaE/qiBJnikNnYv/6bagRJ1kUhNk8R5EX/GkobD+r+sfxCPJsiKBLQ==}
-    engines: {node: '>=12'}
-
   is-unicode-supported@2.1.0:
     resolution: {integrity: sha512-mE00Gnza5EEB3Ds0HfMyllZzbBrmLOX3vfWoj9A9PEnTfratQ/BcaJOuMhnkhjXvb2+FkY3VuHqtAGpTPmglFQ==}
     engines: {node: '>=18'}
@@ -1311,8 +1304,8 @@ packages:
   lodash.isarguments@3.1.0:
     resolution: {integrity: sha512-chi4NHZlZqZD18a0imDHnZPrDeBbTtVN7GXMwuGdRH9qotxAjYs3aVLKc7zNOG9eddR5Ksd8rvFEBc9SsggPpg==}
 
-  log-symbols@6.0.0:
-    resolution: {integrity: sha512-i24m8rpwhmPIS4zscNzK6MSEhk0DUWa/8iYQWxhffV8jkI4Phvs3F+quL5xvS0gdQR0FyTCMMH33Y78dDTzzIw==}
+  log-symbols@7.0.1:
+    resolution: {integrity: sha512-ja1E3yCr9i/0hmBVaM0bfwDjnGy8I/s6PP4DFp+yP+a+mrHO4Rm7DtmnqROTUkHIkqffC84YY7AeqX6oFk0WFg==}
     engines: {node: '>=18'}
 
   loupe@3.2.1:
@@ -1493,9 +1486,9 @@ packages:
     resolution: {integrity: sha512-NeaCX6WW2L8cRCSqy3bInlo5ojjQqu2fD3D+9W5qb5irwxhEyWKXeH2vZ8W9r6VxaMPUan+4/7NDwZMtouZxEw==}
     os: [win32, darwin, linux]
 
-  ora@8.2.0:
-    resolution: {integrity: sha512-weP+BZ8MVNnlCm8c0Qdc1WSWq4Qn7I+9CJGm7Qali6g44e/PUzbjNqJX5NJ9ljlNMosfJvg1fKEGILklK9cwnw==}
-    engines: {node: '>=18'}
+  ora@9.0.0:
+    resolution: {integrity: sha512-m0pg2zscbYgWbqRR6ABga5c3sZdEon7bSgjnlXC64kxtxLOyjRcbbUkLj7HFyy/FTD+P2xdBWu8snGhYI0jc4A==}
+    engines: {node: '>=20'}
 
   p-cancelable@4.0.1:
     resolution: {integrity: sha512-wBowNApzd45EIKdO1LaU+LrMBwAcjfPaYtVzV3lmfM3gf8Z4CHZsiIqlM8TZZ8okYvh5A1cP6gTfCRQtwUpaUg==}
@@ -1720,9 +1713,9 @@ packages:
     resolution: {integrity: sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA==}
     engines: {node: '>=12'}
 
-  string-width@7.2.0:
-    resolution: {integrity: sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ==}
-    engines: {node: '>=18'}
+  string-width@8.1.0:
+    resolution: {integrity: sha512-Kxl3KJGb/gxkaUMOjRsQ8IrXiGW75O4E3RPjFIINOVH8AMl2SQ/yWdTzWwF3FevIX9LcMAjJW+GRwAlAbTSXdg==}
+    engines: {node: '>=20'}
 
   string_decoder@1.3.0:
     resolution: {integrity: sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA==}
@@ -1954,6 +1947,10 @@ packages:
 
   yallist@5.0.0:
     resolution: {integrity: sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==}
+    engines: {node: '>=18'}
+
+  yoctocolors@2.1.2:
+    resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
   zod@4.1.13:
@@ -2552,7 +2549,7 @@ snapshots:
     dependencies:
       restore-cursor: 5.1.0
 
-  cli-spinners@2.9.2: {}
+  cli-spinners@3.3.0: {}
 
   clipboardy@3.0.0:
     dependencies:
@@ -2691,8 +2688,6 @@ snapshots:
       gopd: 1.2.0
 
   eastasianwidth@0.2.0: {}
-
-  emoji-regex@10.6.0: {}
 
   emoji-regex@8.0.0: {}
 
@@ -2996,8 +2991,6 @@ snapshots:
 
   is-stream@4.0.1: {}
 
-  is-unicode-supported@1.3.0: {}
-
   is-unicode-supported@2.1.0: {}
 
   is-wsl@2.2.0:
@@ -3049,10 +3042,10 @@ snapshots:
 
   lodash.isarguments@3.1.0: {}
 
-  log-symbols@6.0.0:
+  log-symbols@7.0.1:
     dependencies:
-      chalk: 5.6.2
-      is-unicode-supported: 1.3.0
+      is-unicode-supported: 2.1.0
+      yoctocolors: 2.1.2
 
   loupe@3.2.1: {}
 
@@ -3194,16 +3187,16 @@ snapshots:
       onnxruntime-common: 1.21.0
       tar: 7.5.2
 
-  ora@8.2.0:
+  ora@9.0.0:
     dependencies:
       chalk: 5.6.2
       cli-cursor: 5.0.0
-      cli-spinners: 2.9.2
+      cli-spinners: 3.3.0
       is-interactive: 2.0.0
       is-unicode-supported: 2.1.0
-      log-symbols: 6.0.0
+      log-symbols: 7.0.1
       stdin-discarder: 0.2.2
-      string-width: 7.2.0
+      string-width: 8.1.0
       strip-ansi: 7.1.2
 
   p-cancelable@4.0.1: {}
@@ -3463,9 +3456,8 @@ snapshots:
       emoji-regex: 9.2.2
       strip-ansi: 7.1.2
 
-  string-width@7.2.0:
+  string-width@8.1.0:
     dependencies:
-      emoji-regex: 10.6.0
       get-east-asian-width: 1.4.0
       strip-ansi: 7.1.2
 
@@ -3696,5 +3688,7 @@ snapshots:
   yallist@4.0.0: {}
 
   yallist@5.0.0: {}
+
+  yoctocolors@2.1.2: {}
 
   zod@4.1.13: {}
