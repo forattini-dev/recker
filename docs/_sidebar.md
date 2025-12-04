@@ -58,6 +58,7 @@
   - [WHOIS & RDAP](/protocols/05-whois-rdap.md)
   - [SSE](/protocols/06-sse.md)
   - [Enterprise](/protocols/07-enterprise.md)
+  - [HLS](/protocols/08-hls.md)
 
 - **Reference**
   - [API Reference](/reference/01-api.md)
