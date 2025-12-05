@@ -177,6 +177,8 @@ async function main() {
     .version(version)
     .argument('[args...]', 'URL, Method, Headers (Key:Value), Data (key=value)')
     .option('-v, --verbose', 'Show full request/response details')
+    .option('-q, --quiet', 'Output only response body (no colors, perfect for piping)')
+    .option('-o, --output <file>', 'Write response body to file')
     .option('-j, --json', 'Force JSON content-type')
     .option('-e, --env [path]', 'Load .env file from current directory or specified path')
     .addHelpText('after', `
@@ -189,7 +191,7 @@ ${colors.bold(colors.yellow('Examples:'))}
 ${colors.bold(colors.yellow('Available Presets:'))}
   ${colors.cyan(PRESET_NAMES.map(p => '@' + p).join(', '))}
 `)
-    .action(async (args: string[], options: { verbose?: boolean; json?: boolean; env?: string | boolean }) => {
+    .action(async (args: string[], options: { verbose?: boolean; quiet?: boolean; output?: string; json?: boolean; env?: string | boolean }) => {
       if (args.length === 0) {
         program.help();
         return;
@@ -272,13 +274,17 @@ ${colors.bold(colors.yellow('Available Presets:'))}
           headers,
           body,
           verbose: options.verbose,
+          quiet: options.quiet,
+          output: options.output,
           presetConfig
         });
       } catch (error: any) {
-        console.error(colors.red(`
+        if (!options.quiet) {
+          console.error(colors.red(`
 Error: ${error.message}`));
-        if (options.verbose && error.cause) {
-          console.error(error.cause);
+          if (options.verbose && error.cause) {
+            console.error(error.cause);
+          }
         }
         process.exit(1);
       }

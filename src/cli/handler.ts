@@ -28,6 +28,8 @@ interface RequestOptions {
   headers: Record<string, string>;
   body?: any;
   verbose?: boolean;
+  quiet?: boolean;
+  output?: string;
   presetConfig?: any;
 }
 
@@ -35,7 +37,18 @@ export async function handleRequest(options: RequestOptions) {
   // Load dependencies on first call
   await initDependencies();
 
-  const spinner = ora({
+  // Handle EPIPE errors gracefully (happens when piping to commands like `head`)
+  // This is standard Unix behavior - the reader closed the pipe
+  if (options.quiet) {
+    process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EPIPE') {
+        process.exit(0); // Success - reader just closed early
+      }
+    });
+  }
+
+  // In quiet mode, skip spinner entirely
+  const spinner = options.quiet ? null : ora({
     text: `${colors.bold(options.method)} ${colors.cyan(options.url)}`,
     color: 'cyan',
     spinner: 'dots'
@@ -92,7 +105,32 @@ export async function handleRequest(options: RequestOptions) {
     });
 
     const duration = Math.round(performance.now() - start);
-    spinner.stop();
+    spinner?.stop();
+
+    // Get response body
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+
+    // Quiet mode: raw output only (for piping to bash, etc.)
+    if (options.quiet) {
+      if (options.output) {
+        // Write to file
+        const fsPromises = await import('node:fs/promises');
+        await fsPromises.writeFile(options.output, text);
+        // Exit silently on success, with error code on failure
+        if (!response.ok) {
+          process.exit(1);
+        }
+        return;
+      }
+      // Write raw body to stdout (no formatting, no colors)
+      process.stdout.write(text);
+      // Exit with error code if response was not ok
+      if (!response.ok) {
+        process.exit(1);
+      }
+      return;
+    }
 
     // Status Line
     const statusColor = response.ok ? colors.green : colors.red;
@@ -123,10 +161,15 @@ export async function handleRequest(options: RequestOptions) {
         console.log(colors.gray('------------------------\n'));
     }
 
-    // Response Body
-    const contentType = response.headers.get('content-type') || '';
-    const text = await response.text();
+    // Output to file if specified
+    if (options.output) {
+      const fsPromises = await import('node:fs/promises');
+      await fsPromises.writeFile(options.output, text);
+      console.log(colors.green(`✓ Saved to ${options.output}`));
+      return;
+    }
 
+    // Response Body
     if (!text) return;
 
     if (contentType.includes('application/json')) {
@@ -145,7 +188,11 @@ export async function handleRequest(options: RequestOptions) {
     }
 
   } catch (error) {
-    spinner.fail(colors.red('Request Failed'));
+    if (options.quiet) {
+      // In quiet mode, just exit with error
+      process.exit(1);
+    }
+    spinner?.fail(colors.red('Request Failed'));
     throw error;
   }
 }
