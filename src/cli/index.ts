@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { program } from 'commander';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
