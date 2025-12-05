@@ -10,6 +10,8 @@ The `rek` CLI is not just an alternative to cURL. It's a **complete API Workstat
 | POST JSON | `curl -X POST -H "Content-Type: application/json" -d '{"a":1}'` | `rek api.com a=1` |
 | Headers | `-H "Auth: Bearer token"` | `Auth:"Bearer token"` |
 | Native types | Manual escaping | `count:=42 active:=true` |
+| Pipe to bash | `curl -s url \| bash` | `rek -q url \| bash` |
+| Save to file | `curl -o file url` | `rek -o file url` |
 | Syntax highlighting | No | Yes (JSON, XML) |
 | Interactive mode | No | Full REPL shell |
 | Load testing | No | Built-in dashboard |
@@ -106,7 +108,10 @@ rek bench load api.com/endpoint users=50 duration=30
 | Option | Description |
 |--------|-------------|
 | `-v, --verbose` | Show full request/response details including headers |
+| `-q, --quiet` | Output only response body (no colors, perfect for piping to bash) |
+| `-o, --output <file>` | Write response body to file (like `curl -o`) |
 | `-j, --json` | Force Content-Type and Accept headers to application/json |
+| `-e, --env [path]` | Load environment variables from .env file |
 | `-h, --help` | Display help information |
 | `-V, --version` | Display version number |
 
