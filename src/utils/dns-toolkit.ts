@@ -209,7 +209,7 @@ export async function getSecurityRecords(domain: string): Promise<DnsSecurityRec
     try {
       const dmarcRecords = await dns.resolveTxt(`_dmarc.${domain}`);
       const dmarcTxt = dmarcRecords.map(chunks => chunks.join(''))[0];
-      if (dmarcTxt && dmarcTxt.startsWith('v=DMARC1')) {
+      if (dmarcTxt?.startsWith('v=DMARC1')) {
         results.dmarc = dmarcTxt;
       }
     } catch {

@@ -11,7 +11,7 @@ describe('MockUDPServer', () => {
   });
 
   afterEach(async () => {
-    if (server && server.isRunning) {
+    if (server?.isRunning) {
       await server.stop();
     }
     client.close();

@@ -92,7 +92,7 @@ undiciRequestChannel.subscribe((message: unknown) => {
 undiciBodySentChannel.subscribe((message: unknown) => {
     const store = requestStorage.getStore();
     // Dispatch onRequestSent hook
-    if (store && store.hooks && store.hooks.onRequestSent) {
+    if (store?.hooks && store.hooks.onRequestSent) {
         // We don't have req object here directly but we have it in closure? No.
         // Wait, store.hooks functions are bound to 'req' in Client.ts closure!
         // Client.ts: req._hooks.onRequestSent = () => userHooks.forEach(h => h(req))

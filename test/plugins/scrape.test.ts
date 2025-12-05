@@ -694,7 +694,7 @@ describe('Extractors', () => {
 
     it('should extract inline scripts', () => {
       const scripts = extractScripts($);
-      const inlineScript = scripts.find((s) => s.inline && s.inline.includes('console.log'));
+      const inlineScript = scripts.find((s) => s.inline?.includes('console.log'));
       expect(inlineScript).toBeDefined();
     });
   });
