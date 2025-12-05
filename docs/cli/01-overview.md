@@ -118,3 +118,4 @@ rek bench load api.com/endpoint users=50 duration=30
 - **[Load Testing](05-load-testing.md)** - Benchmark your APIs
 - **[Protocols](06-protocols.md)** - WebSocket, UDP support
 - **[Presets](07-presets.md)** - Quick access to popular APIs
+- **[Mock Servers](08-mock-servers.md)** - Built-in test servers for all protocols

@@ -880,7 +880,7 @@ ${colors.gray('Status:')} ${statusIcon}
     .command('generate-dmarc')
     .description('Generate a DMARC record interactively')
     .option('-p, --policy <policy>', 'Policy: none, quarantine, reject', 'none')
-    .option('-sp, --subdomain-policy <policy>', 'Subdomain policy')
+    .option('--subdomain-policy <policy>', 'Subdomain policy')
     .option('--pct <percent>', 'Percentage of emails to apply policy', '100')
     .option('--rua <emails>', 'Aggregate report email(s), comma-separated')
     .option('--ruf <emails>', 'Forensic report email(s), comma-separated')
@@ -1043,6 +1043,335 @@ ${colors.bold(colors.yellow('Examples:'))}
 
         const { startLoadDashboard } = await import('./tui/load-dashboard.js');
         await startLoadDashboard({ url, users, duration, mode, http2, rampUp });
+    });
+
+  // Mock Server command
+  const serve = program.command('serve').description('Start mock servers for testing protocols');
+
+  serve
+    .command('http')
+    .description('Start a mock HTTP server')
+    .option('-p, --port <number>', 'Port to listen on', '3000')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('--echo', 'Echo request body back in response')
+    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .option('--cors', 'Enable CORS', true)
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve http')}                    ${colors.gray('Start on port 3000')}
+  ${colors.green('$ rek serve http -p 8080')}            ${colors.gray('Start on port 8080')}
+  ${colors.green('$ rek serve http --echo')}             ${colors.gray('Echo mode')}
+  ${colors.green('$ rek serve http --delay 500')}        ${colors.gray('Add 500ms delay')}
+`)
+    .action(async (options: { port: string; host: string; echo?: boolean; delay: string; cors?: boolean }) => {
+      const { MockHttpServer } = await import('../testing/mock-http-server.js');
+
+      const server = await MockHttpServer.create({
+        port: parseInt(options.port),
+        host: options.host,
+        delay: parseInt(options.delay),
+        cors: options.cors,
+      });
+
+      // Echo mode: return request body
+      if (options.echo) {
+        server.any('/*', (req) => ({
+          status: 200,
+          body: {
+            method: req.method,
+            path: req.path,
+            query: req.query,
+            headers: req.headers,
+            body: req.body,
+          },
+        }));
+      }
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Mock HTTP Server')}                   │
+├─────────────────────────────────────────────┤
+│  URL: ${colors.cyan(server.url.padEnd(37))}│
+│  Mode: ${colors.yellow((options.echo ? 'Echo' : 'Default').padEnd(36))}│
+│  Delay: ${colors.gray((options.delay + 'ms').padEnd(35))}│
+├─────────────────────────────────────────────┤
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      server.on('request', (req) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(req.method.padEnd(7)) + req.path);
+      });
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        await server.stop();
+        process.exit(0);
+      });
+    });
+
+  serve
+    .command('websocket')
+    .alias('ws')
+    .description('Start a mock WebSocket server')
+    .option('-p, --port <number>', 'Port to listen on', '8080')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('--echo', 'Echo messages back (default: true)', true)
+    .option('--no-echo', 'Disable echo mode')
+    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve websocket')}               ${colors.gray('Start on port 8080')}
+  ${colors.green('$ rek serve ws -p 9000')}              ${colors.gray('Start on port 9000')}
+  ${colors.green('$ rek serve ws --no-echo')}            ${colors.gray('Disable echo')}
+`)
+    .action(async (options: { port: string; host: string; echo: boolean; delay: string }) => {
+      const { MockWebSocketServer } = await import('../testing/mock-websocket-server.js');
+
+      const server = await MockWebSocketServer.create({
+        port: parseInt(options.port),
+        host: options.host,
+        echo: options.echo,
+        delay: parseInt(options.delay),
+      });
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Mock WebSocket Server')}              │
+├─────────────────────────────────────────────┤
+│  URL: ${colors.cyan(server.url.padEnd(37))}│
+│  Echo: ${colors.yellow((options.echo ? 'Enabled' : 'Disabled').padEnd(36))}│
+│  Delay: ${colors.gray((options.delay + 'ms').padEnd(35))}│
+├─────────────────────────────────────────────┤
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      server.on('connection', (client) => {
+        console.log(colors.green(`+ Connected: ${client.id}`));
+      });
+
+      server.on('message', (msg, client) => {
+        const data = msg.data.toString().slice(0, 50);
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(client.id) + ` ${data}${msg.data.toString().length > 50 ? '...' : ''}`);
+      });
+
+      server.on('disconnect', (client) => {
+        console.log(colors.red(`- Disconnected: ${client.id}`));
+      });
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        await server.stop();
+        process.exit(0);
+      });
+    });
+
+  serve
+    .command('sse')
+    .description('Start a mock SSE (Server-Sent Events) server')
+    .option('-p, --port <number>', 'Port to listen on', '8081')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('--path <string>', 'SSE endpoint path', '/events')
+    .option('--heartbeat <ms>', 'Send heartbeat every N ms (0 = disabled)', '0')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve sse')}                     ${colors.gray('Start on port 8081')}
+  ${colors.green('$ rek serve sse -p 9000')}             ${colors.gray('Start on port 9000')}
+  ${colors.green('$ rek serve sse --heartbeat 5000')}    ${colors.gray('Send heartbeat every 5s')}
+
+${colors.bold(colors.yellow('Interactive Commands:'))}
+  Type a message and press Enter to broadcast it to all clients.
+`)
+    .action(async (options: { port: string; host: string; path: string; heartbeat: string }) => {
+      const { MockSSEServer } = await import('../testing/mock-sse-server.js');
+      const readline = await import('node:readline');
+
+      const server = await MockSSEServer.create({
+        port: parseInt(options.port),
+        host: options.host,
+        path: options.path,
+      });
+
+      if (parseInt(options.heartbeat) > 0) {
+        server.startPeriodicEvents('heartbeat', parseInt(options.heartbeat));
+      }
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Mock SSE Server')}                    │
+├─────────────────────────────────────────────┤
+│  URL: ${colors.cyan(server.url.padEnd(37))}│
+│  Heartbeat: ${colors.yellow((options.heartbeat === '0' ? 'Disabled' : options.heartbeat + 'ms').padEnd(31))}│
+├─────────────────────────────────────────────┤
+│  Type message + Enter to broadcast          │
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      server.on('connection', (client) => {
+        console.log(colors.green(`+ Connected: ${client.id}`));
+      });
+
+      server.on('disconnect', (client) => {
+        console.log(colors.red(`- Disconnected: ${client.id}`));
+      });
+
+      // Interactive broadcast
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      rl.on('line', (line) => {
+        if (line.trim()) {
+          const sent = server.sendData(line.trim());
+          console.log(colors.gray(`Broadcast to ${sent} client(s): ${line.trim()}`));
+        }
+      });
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        rl.close();
+        await server.stop();
+        process.exit(0);
+      });
+    });
+
+  serve
+    .command('hls')
+    .description('Start a mock HLS streaming server')
+    .option('-p, --port <number>', 'Port to listen on', '8082')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('--mode <type>', 'Stream mode: vod, live, event', 'vod')
+    .option('--segments <number>', 'Number of segments (VOD mode)', '10')
+    .option('--duration <seconds>', 'Segment duration in seconds', '6')
+    .option('--qualities <list>', 'Comma-separated quality variants', '720p,480p,360p')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve hls')}                     ${colors.gray('Start VOD server')}
+  ${colors.green('$ rek serve hls --mode live')}         ${colors.gray('Start live stream')}
+  ${colors.green('$ rek serve hls --segments 20')}       ${colors.gray('VOD with 20 segments')}
+  ${colors.green('$ rek serve hls --qualities 1080p,720p,480p')}
+
+${colors.bold(colors.yellow('Endpoints:'))}
+  ${colors.cyan('/master.m3u8')}     Master playlist (multi-quality)
+  ${colors.cyan('/playlist.m3u8')}   Single quality playlist
+  ${colors.cyan('/<quality>/playlist.m3u8')}  Quality-specific playlist
+`)
+    .action(async (options: { port: string; host: string; mode: string; segments: string; duration: string; qualities: string }) => {
+      const { MockHlsServer } = await import('../testing/mock-hls-server.js');
+      const http = await import('node:http');
+
+      const port = parseInt(options.port);
+      const host = options.host;
+      const qualities = options.qualities.split(',').map(q => q.trim());
+      const resolutions = ['1920x1080', '1280x720', '854x480', '640x360', '426x240'];
+      const bandwidths = [5000000, 2500000, 1400000, 800000, 500000];
+
+      const variants = qualities.map((name, i) => ({
+        name,
+        bandwidth: bandwidths[i] || 500000,
+        resolution: resolutions[i] || '640x360',
+      }));
+
+      const baseUrl = `http://${host}:${port}`;
+      const hlsServer = await MockHlsServer.create({
+        baseUrl,
+        mode: options.mode as 'vod' | 'live' | 'event',
+        segmentCount: parseInt(options.segments),
+        segmentDuration: parseInt(options.duration),
+        multiQuality: variants.length > 1,
+        variants: variants.length > 1 ? variants : undefined,
+      });
+
+      // Create HTTP server wrapper for the transport-based MockHlsServer
+      const httpServer = http.createServer(async (req, res) => {
+        const url = `${baseUrl}${req.url}`;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const response = await hlsServer.transport.dispatch({ url, method: req.method || 'GET' } as any) as any;
+          res.statusCode = response.status;
+          response.headers.forEach((value: string, key: string) => {
+            res.setHeader(key, value);
+          });
+          const body = await response.arrayBuffer();
+          res.end(Buffer.from(body));
+        } catch {
+          res.statusCode = 404;
+          res.end('Not Found');
+        }
+      });
+
+      httpServer.listen(port, host, () => {
+        console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Mock HLS Server')}                    │
+├─────────────────────────────────────────────┤
+│  Master: ${colors.cyan((hlsServer.manifestUrl).padEnd(34))}│
+│  Mode: ${colors.yellow(options.mode.padEnd(36))}│
+│  Segments: ${colors.gray(options.segments.padEnd(32))}│
+│  Duration: ${colors.gray((options.duration + 's').padEnd(32))}│
+│  Qualities: ${colors.cyan(qualities.join(', ').padEnd(31))}│
+├─────────────────────────────────────────────┤
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+      });
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        httpServer.close();
+        await hlsServer.stop();
+        process.exit(0);
+      });
+    });
+
+  serve
+    .command('udp')
+    .description('Start a mock UDP server')
+    .option('-p, --port <number>', 'Port to listen on', '9000')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('--echo', 'Echo messages back (default: true)', true)
+    .option('--no-echo', 'Disable echo mode')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve udp')}                     ${colors.gray('Start on port 9000')}
+  ${colors.green('$ rek serve udp -p 5353')}             ${colors.gray('Start on port 5353')}
+  ${colors.green('$ rek serve udp --no-echo')}           ${colors.gray('Disable echo')}
+`)
+    .action(async (options: { port: string; host: string; echo: boolean }) => {
+      const { MockUDPServer } = await import('../testing/mock-udp-server.js');
+
+      const server = new MockUDPServer({
+        port: parseInt(options.port),
+        host: options.host,
+        echo: options.echo,
+      });
+
+      await server.start();
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Mock UDP Server')}                    │
+├─────────────────────────────────────────────┤
+│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
+│  Echo: ${colors.yellow((options.echo ? 'Enabled' : 'Disabled').padEnd(36))}│
+├─────────────────────────────────────────────┤
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      server.on('message', (msg) => {
+        const data = msg.data.toString().slice(0, 50);
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(`${msg.rinfo.address}:${msg.rinfo.port}`) + ` ${data}${msg.data.toString().length > 50 ? '...' : ''}`);
+      });
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        await server.stop();
+        process.exit(0);
+      });
     });
 
   // MCP Server command
