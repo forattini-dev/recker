@@ -332,7 +332,7 @@ rek api.com/post message="Hello World!"
 ### Piping Output
 
 ```bash
-# Save to file
+# Save to file (with status info)
 rek api.com/data > response.json
 
 # Pipe to jq for processing
@@ -340,6 +340,46 @@ rek api.com/users | jq '.users[0].name'
 
 # Use with other tools
 rek api.com/config | yq -y '.settings'
+```
+
+## Quiet Mode (Pipe to Bash)
+
+Use `-q` for raw output without colors or formatting—perfect for piping to bash:
+
+```bash
+# Install scripts (like curl | bash)
+rek -q https://get.docker.com | bash
+rek -q https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+
+# Pipe to other commands
+rek -q api.com/users | jq '.users[].name'
+rek -q api.com/config | grep -i "debug"
+
+# Works with head/tail (EPIPE handled gracefully)
+rek -q api.com/large-file | head -100
+```
+
+The `-q` flag:
+- Outputs **only** the response body
+- No colors, no status line, no formatting
+- Exits with code 1 on HTTP errors
+- Handles EPIPE gracefully (when receiver closes pipe early)
+
+## Save to File
+
+Use `-o` to save the response directly to a file:
+
+```bash
+# Save response to file
+rek -o response.json api.com/data
+
+# Download and inspect before executing
+rek -o install.sh https://get.docker.com
+cat install.sh   # review the script
+bash install.sh  # then execute
+
+# Quiet mode + output file (silent download)
+rek -q -o backup.json api.com/export
 ```
 
 ## Next Steps
