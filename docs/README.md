@@ -72,6 +72,30 @@ const user = await api.get('/users/:id', { params: { id: '123' } }).json();
 | **Observable** | DNS/TCP/TLS/TTFB timing breakdown per request. |
 | **Resilient** | Retry, circuit breaker, rate limiting, deduplication. |
 
+## CLI (`rek`)
+
+A powerful terminal client that replaces curl:
+
+```bash
+# Install globally
+npm install -g recker
+
+# Simple requests
+rek httpbin.org/json
+rek POST api.com/users name="John" age:=30
+
+# Pipe to bash (like curl)
+rek -q https://get.docker.com | bash
+
+# Save to file
+rek -o data.json api.com/export
+
+# Interactive shell
+rek shell
+```
+
+See [CLI Documentation](cli/01-overview.md) for more.
+
 ## Quick Navigation
 
 <div class="feature-cards">
@@ -80,6 +104,12 @@ const user = await api.get('/users/:id', { params: { id: '123' } }).json();
   - [Installation](getting-started/installation.md)
   - [Quick Start](http/01-quickstart.md)
   - [Client Configuration](http/05-configuration.md)
+
+- **CLI**
+  - [CLI Overview](cli/01-overview.md)
+  - [Quick Start](cli/02-quick-start.md)
+  - [Interactive Shell](cli/03-shell.md)
+  - [Mock Servers](cli/08-mock-servers.md)
 
 - **Core Features**
   - [Streaming & SSE](ai/02-streaming.md)

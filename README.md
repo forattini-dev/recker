@@ -131,14 +131,45 @@ const client = createClient({
 });
 ```
 
+## CLI (`rek`)
+
+A powerful terminal client that replaces curl:
+
+```bash
+# Install globally
+npm install -g recker
+
+# Simple requests
+rek httpbin.org/json
+rek POST api.com/users name="John" age:=30
+
+# Pipe to bash (like curl)
+rek -q https://get.docker.com | bash
+
+# Save to file
+rek -o data.json api.com/export
+
+# Interactive shell
+rek shell
+
+# Mock servers for testing
+rek serve http    # HTTP on :3000
+rek serve ws      # WebSocket on :8080
+rek serve hls     # HLS streaming on :8082
+```
+
+See [CLI Documentation](./docs/cli/01-overview.md) for more.
+
 ## Documentation
 
 - **[Quick Start](./docs/http/01-quickstart.md)** - Get running in 2 minutes
+- **[CLI Guide](./docs/cli/01-overview.md)** - Terminal client documentation
 - **[API Reference](./docs/reference/01-api.md)** - Complete API documentation
 - **[Configuration](./docs/http/05-configuration.md)** - Client options
 - **[Plugins](./docs/http/10-plugins.md)** - Extend functionality
 - **[AI Integration](./docs/ai/01-overview.md)** - OpenAI, Anthropic, and more
 - **[Protocols](./docs/protocols/01-websocket.md)** - WebSocket, DNS, WHOIS
+- **[Mock Servers](./docs/cli/08-mock-servers.md)** - Built-in test servers
 
 ## License
 
