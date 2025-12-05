@@ -114,3 +114,53 @@ export type {
   MockHttpHandler,
   MockHttpStats,
 } from './mock-http-server.js';
+
+// DNS Testing
+export {
+  MockDnsServer,
+} from './mock-dns-server.js';
+
+export type {
+  MockDnsServerOptions,
+  DnsRecordType,
+  DnsRecord,
+  DnsMxRecord,
+  DnsSoaRecord,
+  DnsSrvRecord,
+  MockDnsStats,
+} from './mock-dns-server.js';
+
+// WHOIS Testing
+export {
+  MockWhoisServer,
+} from './mock-whois-server.js';
+
+export type {
+  MockWhoisServerOptions,
+  WhoisDomainData,
+  MockWhoisStats,
+} from './mock-whois-server.js';
+
+// Telnet Testing
+export {
+  MockTelnetServer,
+} from './mock-telnet-server.js';
+
+export type {
+  MockTelnetServerOptions,
+  CommandHandler,
+  TelnetSession,
+  MockTelnetStats,
+} from './mock-telnet-server.js';
+
+// FTP Testing
+export {
+  MockFtpServer,
+} from './mock-ftp-server.js';
+
+export type {
+  MockFtpServerOptions,
+  VirtualFile,
+  FtpSession,
+  MockFtpStats,
+} from './mock-ftp-server.js';
