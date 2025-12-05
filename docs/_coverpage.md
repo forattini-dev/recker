@@ -15,5 +15,5 @@ Observable down to the millisecond. Resilient when everything else fails.
 
 </div>
 
-<!-- background image -->
-![](assets/cover-bg.svg ':size=cover')
+<!-- background color fallback -->
+![color](#0a0d12)
