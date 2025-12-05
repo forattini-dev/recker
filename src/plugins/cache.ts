@@ -468,7 +468,7 @@ export function cache(options: CacheOptions = {}): Plugin {
         key = generateKey(req, baseEntry.vary);
         // Fetch from the vary-adjusted key (don't use baseEntry as it might be a marker)
         cachedEntry = await storage.get(key);
-      } else if (baseEntry && baseEntry.body) {
+      } else if (baseEntry?.body) {
         // Base entry without vary, or with body - use it
         cachedEntry = baseEntry;
       } else {

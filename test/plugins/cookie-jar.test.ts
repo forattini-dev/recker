@@ -30,7 +30,7 @@ class CookieMockTransport {
 
         // Simulate authenticated endpoint
         if (url.endsWith('/profile')) {
-            if (cookies && cookies.includes('session_id=12345')) {
+            if (cookies?.includes('session_id=12345')) {
                 return {
                     ok: true,
                     status: 200,

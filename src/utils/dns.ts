@@ -11,7 +11,7 @@ const lookupAsync = promisify(lookup);
 export function createLookupFunction(options: DNSOptions) {
   return (hostname: string, opts: any, callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void) => {
     // 1. Check Overrides
-    if (options.override && options.override[hostname]) {
+    if (options.override?.[hostname]) {
       const ip = options.override[hostname];
       // Detect family (simple check)
       const family = ip.includes(':') ? 6 : 4;
@@ -34,7 +34,7 @@ export function createLookupFunction(options: DNSOptions) {
  * we gracefully fall back to system resolution.
  */
 export async function customDNSLookup(hostname: string, options: DNSOptions = {}): Promise<{ address: string; family: number }> {
-  if (options.override && options.override[hostname]) {
+  if (options.override?.[hostname]) {
     const ip = options.override[hostname];
     const family = ip.includes(':') ? 6 : 4;
     return { address: ip, family };

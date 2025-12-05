@@ -127,7 +127,7 @@ export async function requireOptional<T = unknown>(
     const isModuleNotFound =
       err.code === 'ERR_MODULE_NOT_FOUND' ||
       err.code === 'MODULE_NOT_FOUND' ||
-      (err.message && err.message.includes('Cannot find module'));
+      (err.message?.includes('Cannot find module'));
 
     if (isModuleNotFound) {
       const info = OPTIONAL_DEPENDENCIES[packageName];

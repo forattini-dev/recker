@@ -148,7 +148,7 @@ export function retry(options: RetryOptions = {}): Plugin {
             }
             
             // Dispatch Global Hook (if available)
-            if (client.hooks && client.hooks.onRetry) {
+            if (client.hooks?.onRetry) {
                 for (const hook of client.hooks.onRetry) {
                     await hook(err, attempt, delayMs, req);
                 }
@@ -169,7 +169,7 @@ export function retry(options: RetryOptions = {}): Plugin {
             }
 
             // Dispatch Global Hook (if available)
-            if (client.hooks && client.hooks.onRetry) {
+            if (client.hooks?.onRetry) {
                 for (const hook of client.hooks.onRetry) {
                     await hook(error, attempt, delayMs, req);
                 }
