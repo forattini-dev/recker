@@ -49,6 +49,7 @@
   - [Load Testing](/cli/05-load-testing.md)
   - [Protocols](/cli/06-protocols.md)
   - [Presets](/cli/07-presets.md)
+  - [Mock Servers](/cli/08-mock-servers.md)
 
 - **Protocols**
   - [WebSocket](/protocols/01-websocket.md)
