@@ -2104,7 +2104,7 @@ ${colors.bold('Network:')}
       // List sources
       console.log(colors.bold('\nOriginal sources:'));
       mapData.sources.forEach((source, i) => {
-        const hasContent = mapData.sourcesContent && mapData.sourcesContent[i];
+        const hasContent = mapData.sourcesContent?.[i];
         const sizeInfo = hasContent
           ? colors.green(`[${(mapData.sourcesContent![i]!.length / 1024).toFixed(1)}kb]`)
           : colors.yellow('[no content]');

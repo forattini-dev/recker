@@ -548,7 +548,7 @@ export class WebRTCClient extends EventEmitter {
 
       const pc = this.connections.get(message.from);
 
-      if (pc && pc.remoteDescription) {
+      if (pc?.remoteDescription) {
         await pc.addIceCandidate(message.payload as RTCIceCandidateInit);
       } else {
         // Store for later

@@ -21,7 +21,7 @@ describe('MCP Client', () => {
   });
 
   afterEach(async () => {
-    if (mcp && mcp.isConnected()) {
+    if (mcp?.isConnected()) {
       await mcp.disconnect();
     }
   });
