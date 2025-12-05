@@ -1374,6 +1374,235 @@ ${colors.bold(colors.yellow('Examples:'))}
       });
     });
 
+  serve
+    .command('dns')
+    .description('Start a mock DNS server')
+    .option('-p, --port <number>', 'Port to listen on', '5353')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve dns')}                     ${colors.gray('Start on port 5353')}
+  ${colors.green('$ rek serve dns -p 53')}               ${colors.gray('Start on standard port (requires root)')}
+  ${colors.green('$ dig @127.0.0.1 -p 5353 example.com')} ${colors.gray('Test with dig')}
+
+${colors.bold(colors.yellow('Default Records:'))}
+  ${colors.cyan('localhost')}      A: 127.0.0.1, AAAA: ::1
+  ${colors.cyan('example.com')}    A, AAAA, NS, MX, TXT records
+  ${colors.cyan('test.local')}     A: 192.168.1.100
+`)
+    .action(async (options: { port: string; host: string; delay: string }) => {
+      const { MockDnsServer } = await import('../testing/mock-dns-server.js');
+
+      const server = await MockDnsServer.create({
+        port: parseInt(options.port),
+        host: options.host,
+        delay: parseInt(options.delay),
+      });
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Mock DNS Server')}                    │
+├─────────────────────────────────────────────┤
+│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
+│  Protocol: ${colors.yellow('UDP'.padEnd(32))}│
+├─────────────────────────────────────────────┤
+│  Test: dig @${options.host} -p ${options.port} example.com        │
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      server.on('query', (query: { domain: string; type: string }) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(query.type.padEnd(6)) + ` ${query.domain}`);
+      });
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        await server.stop();
+        process.exit(0);
+      });
+    });
+
+  serve
+    .command('whois')
+    .description('Start a mock WHOIS server')
+    .option('-p, --port <number>', 'Port to listen on', '4343')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve whois')}                    ${colors.gray('Start on port 4343')}
+  ${colors.green('$ whois -h 127.0.0.1 -p 4343 example.com')} ${colors.gray('Test with whois')}
+
+${colors.bold(colors.yellow('Default Domains:'))}
+  ${colors.cyan('example.com')}    IANA reserved domain
+  ${colors.cyan('google.com')}     MarkMonitor registrar
+  ${colors.cyan('test.local')}     Test domain
+`)
+    .action(async (options: { port: string; host: string; delay: string }) => {
+      const { MockWhoisServer } = await import('../testing/mock-whois-server.js');
+
+      const server = await MockWhoisServer.create({
+        port: parseInt(options.port),
+        host: options.host,
+        delay: parseInt(options.delay),
+      });
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Mock WHOIS Server')}                  │
+├─────────────────────────────────────────────┤
+│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
+│  Protocol: ${colors.yellow('TCP'.padEnd(32))}│
+├─────────────────────────────────────────────┤
+│  Test: whois -h ${options.host} -p ${options.port} example.com │
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      server.on('query', (query: string) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + `Query: ${colors.cyan(query)}`);
+      });
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        await server.stop();
+        process.exit(0);
+      });
+    });
+
+  serve
+    .command('telnet')
+    .description('Start a mock Telnet server')
+    .option('-p, --port <number>', 'Port to listen on', '2323')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('--echo', 'Echo input back (default: true)', true)
+    .option('--no-echo', 'Disable echo mode')
+    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve telnet')}                   ${colors.gray('Start on port 2323')}
+  ${colors.green('$ telnet localhost 2323')}              ${colors.gray('Connect to server')}
+
+${colors.bold(colors.yellow('Built-in Commands:'))}
+  ${colors.cyan('help')}        Show available commands
+  ${colors.cyan('echo <msg>')} Echo message back
+  ${colors.cyan('date')}        Show current date
+  ${colors.cyan('time')}        Show current time
+  ${colors.cyan('ping')}        Returns "pong"
+  ${colors.cyan('quit')}        Disconnect
+`)
+    .action(async (options: { port: string; host: string; echo: boolean; delay: string }) => {
+      const { MockTelnetServer } = await import('../testing/mock-telnet-server.js');
+
+      const server = await MockTelnetServer.create({
+        port: parseInt(options.port),
+        host: options.host,
+        echo: options.echo,
+        delay: parseInt(options.delay),
+      });
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Mock Telnet Server')}                 │
+├─────────────────────────────────────────────┤
+│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
+│  Echo: ${colors.yellow((options.echo ? 'Enabled' : 'Disabled').padEnd(36))}│
+├─────────────────────────────────────────────┤
+│  Connect: telnet ${options.host} ${options.port}               │
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      server.on('connect', (session: { id: string }) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.green('+ Connected: ') + colors.cyan(session.id));
+      });
+
+      server.on('disconnect', (session: { id: string }) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.red('- Disconnected: ') + colors.cyan(session.id));
+      });
+
+      server.on('command', (cmd: string, session: { id: string }) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(session.id) + ` $ ${cmd}`);
+      });
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        await server.stop();
+        process.exit(0);
+      });
+    });
+
+  serve
+    .command('ftp')
+    .description('Start a mock FTP server')
+    .option('-p, --port <number>', 'Port to listen on', '2121')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('-u, --username <user>', 'Username for auth', 'user')
+    .option('--password <pass>', 'Password for auth', 'pass')
+    .option('--anonymous', 'Allow anonymous login (default: true)', true)
+    .option('--no-anonymous', 'Disable anonymous login')
+    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve ftp')}                      ${colors.gray('Start on port 2121')}
+  ${colors.green('$ ftp localhost 2121')}                 ${colors.gray('Connect to server')}
+  ${colors.green('$ rek serve ftp --no-anonymous')}       ${colors.gray('Require authentication')}
+
+${colors.bold(colors.yellow('Default Files:'))}
+  ${colors.cyan('/welcome.txt')}        Welcome message
+  ${colors.cyan('/readme.md')}          README file
+  ${colors.cyan('/data/sample.json')}   Sample JSON data
+  ${colors.cyan('/public/index.html')}  HTML file
+
+${colors.bold(colors.yellow('Credentials:'))}
+  Username: ${colors.cyan('user')}  Password: ${colors.cyan('pass')}
+  Or use anonymous login with user: ${colors.cyan('anonymous')}
+`)
+    .action(async (options: { port: string; host: string; username: string; password: string; anonymous: boolean; delay: string }) => {
+      const { MockFtpServer } = await import('../testing/mock-ftp-server.js');
+
+      const server = await MockFtpServer.create({
+        port: parseInt(options.port),
+        host: options.host,
+        username: options.username,
+        password: options.password,
+        anonymous: options.anonymous,
+        delay: parseInt(options.delay),
+      });
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Mock FTP Server')}                    │
+├─────────────────────────────────────────────┤
+│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
+│  Anonymous: ${colors.yellow((options.anonymous ? 'Allowed' : 'Disabled').padEnd(31))}│
+│  User: ${colors.cyan(options.username.padEnd(36))}│
+├─────────────────────────────────────────────┤
+│  Connect: ftp ${options.host} ${options.port}                  │
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      server.on('connect', (session: { id: string }) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.green('+ Connected: ') + colors.cyan(session.id));
+      });
+
+      server.on('disconnect', (session: { id: string }) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.red('- Disconnected: ') + colors.cyan(session.id));
+      });
+
+      server.on('command', (cmd: string, _args: string, session: { id: string }) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(session.id) + ` ${cmd}`);
+      });
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        await server.stop();
+        process.exit(0);
+      });
+    });
+
   // MCP Server command
   program
     .command('mcp')

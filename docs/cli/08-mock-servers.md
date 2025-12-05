@@ -214,6 +214,171 @@ echo "hello" | nc -u localhost 9000
 # Server echoes: hello
 ```
 
+## DNS Server
+
+A mock DNS server for testing DNS queries without hitting real nameservers.
+
+```bash
+# Basic DNS server on port 5353
+rek serve dns
+
+# Standard DNS port (requires root/sudo)
+sudo rek serve dns -p 53
+
+# Add delay for testing timeout handling
+rek serve dns --delay 500
+```
+
+### Default Records
+
+The server comes with pre-configured records for common domains:
+
+| Domain | Records |
+|--------|---------|
+| `localhost` | A: 127.0.0.1, AAAA: ::1 |
+| `example.com` | A, AAAA, NS, MX, TXT |
+| `test.local` | A: 192.168.1.100 |
+
+### Example: Testing DNS Resolution
+
+```bash
+# Terminal 1: Start DNS server
+rek serve dns
+
+# Terminal 2: Query with dig
+dig @127.0.0.1 -p 5353 example.com A
+dig @127.0.0.1 -p 5353 example.com MX
+dig @127.0.0.1 -p 5353 localhost AAAA
+```
+
+## WHOIS Server
+
+A mock WHOIS server returning realistic domain registration data.
+
+```bash
+# Basic WHOIS server on port 4343
+rek serve whois
+
+# Standard WHOIS port (requires root)
+sudo rek serve whois -p 43
+
+# Add delay
+rek serve whois --delay 200
+```
+
+### Default Domains
+
+| Domain | Registrar |
+|--------|-----------|
+| `example.com` | IANA Reserved |
+| `google.com` | MarkMonitor Inc. |
+| `test.local` | Mock Registrar |
+
+### Example: Testing WHOIS Client
+
+```bash
+# Terminal 1: Start server
+rek serve whois
+
+# Terminal 2: Query domains
+whois -h 127.0.0.1 -p 4343 example.com
+whois -h 127.0.0.1 -p 4343 google.com
+```
+
+## Telnet Server
+
+A mock Telnet server with built-in commands and echo mode.
+
+```bash
+# Basic Telnet server on port 2323
+rek serve telnet
+
+# Disable echo
+rek serve telnet --no-echo
+
+# Add delay to commands
+rek serve telnet --delay 100
+```
+
+### Built-in Commands
+
+| Command | Description |
+|---------|-------------|
+| `help` | Show available commands |
+| `echo <msg>` | Echo message back |
+| `date` | Show current date |
+| `time` | Show current time |
+| `ping` | Returns "pong" |
+| `uptime` | Show server uptime |
+| `quit` / `exit` | Disconnect |
+
+### Example: Testing Telnet Client
+
+```bash
+# Terminal 1: Start server
+rek serve telnet
+
+# Terminal 2: Connect
+telnet localhost 2323
+
+# In telnet session:
+> help
+> ping
+pong
+> echo Hello World
+Hello World
+> quit
+```
+
+## FTP Server
+
+A mock FTP server with virtual filesystem and authentication.
+
+```bash
+# Basic FTP server on port 2121
+rek serve ftp
+
+# Require authentication (no anonymous)
+rek serve ftp --no-anonymous
+
+# Custom credentials
+rek serve ftp -u admin --password secret
+
+# Add delay
+rek serve ftp --delay 100
+```
+
+### Default Files
+
+| Path | Description |
+|------|-------------|
+| `/welcome.txt` | Welcome message |
+| `/readme.md` | README file |
+| `/data/sample.json` | Sample JSON data |
+| `/public/index.html` | HTML file |
+
+### Authentication
+
+- **Anonymous**: user `anonymous` or `ftp` (enabled by default)
+- **Authenticated**: user `user`, password `pass`
+
+### Example: Testing FTP Client
+
+```bash
+# Terminal 1: Start server
+rek serve ftp
+
+# Terminal 2: Connect with ftp
+ftp localhost 2121
+
+# In FTP session:
+> user anonymous
+> ls
+> cd data
+> get sample.json
+> quit
+```
+
 ## Use Cases
 
 ### CI/CD Testing
@@ -267,13 +432,23 @@ import {
   MockWebSocketServer,
   MockSSEServer,
   MockHlsServer,
-  MockUDPServer
+  MockUDPServer,
+  MockDnsServer,
+  MockWhoisServer,
+  MockTelnetServer,
+  MockFtpServer
 } from 'recker/testing';
 
 // Create and start servers
 const http = await MockHttpServer.create({ port: 3000 });
 const ws = await MockWebSocketServer.create({ port: 8080 });
 const hls = await MockHlsServer.create({ mode: 'live' });
+const dns = await MockDnsServer.create({ port: 5353 });
+const ftp = await MockFtpServer.create({ port: 2121 });
+
+// Add custom data
+dns.addRecord('myapp.local', 'A', '192.168.1.50');
+ftp.addFile('/custom.txt', 'Custom content');
 
 // Use in tests
 const response = await fetch('http://localhost:3000/test');
@@ -283,6 +458,8 @@ await ws.broadcast('Hello from test!');
 await http.stop();
 await ws.stop();
 await hls.stop();
+await dns.stop();
+await ftp.stop();
 ```
 
 See [Testing Reference](/reference/03-testing.md) for more details on programmatic usage.
@@ -297,6 +474,10 @@ See [Testing Reference](/reference/03-testing.md) for more details on programmat
 | `rek serve sse` | SSE server | 8081 |
 | `rek serve hls` | HLS streaming | 8082 |
 | `rek serve udp` | UDP server | 9000 |
+| `rek serve dns` | DNS server | 5353 |
+| `rek serve whois` | WHOIS server | 4343 |
+| `rek serve telnet` | Telnet server | 2323 |
+| `rek serve ftp` | FTP server | 2121 |
 
 ### Common Options
 
