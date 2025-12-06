@@ -2,6 +2,34 @@
 
 HTTP/2, connection pooling, compression, and optimizations.
 
+## Maximum Performance: Mini Client
+
+For absolute maximum performance, use `recker-mini` - a zero-overhead wrapper around undici:
+
+```typescript
+import { createMiniClient, miniGet } from 'recker/mini';
+
+// Client instance (~2% overhead vs raw undici)
+const fast = createMiniClient({ baseUrl: 'https://api.example.com' });
+const data = await fast.get('/users').then(r => r.json());
+
+// Direct function (even less overhead)
+const users = await miniGet('https://api.example.com/users').then(r => r.json());
+```
+
+### When to Use Mini vs Standard
+
+| Use Case | Recommendation |
+|----------|----------------|
+| Max throughput, no features needed | `recker-mini` |
+| Simple scripts, CLI tools | `recker-mini` |
+| Production API with retry/auth | Standard `recker` |
+| Repeated requests (cache helps) | Standard `recker` |
+
+See [Mini Client](/http/18-mini-client.md) for full documentation.
+
+---
+
 ## HTTP/2
 
 ### Enable HTTP/2
