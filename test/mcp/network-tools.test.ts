@@ -110,15 +110,16 @@ describe('MCP Network Tools', () => {
 
     it('should report failure for unreachable host', async () => {
       const result = await callTool('rek_network_ping', {
-        host: 'localhost',
-        port: 9998, // Unused port
+        host: '192.0.2.1', // TEST-NET-1 (RFC 5737) - guaranteed unreachable
+        port: 9998,
         count: 1,
-        timeout: 100,
+        timeout: 500,
       });
 
       expect(result.result.isError).toBeUndefined(); // The tool call succeeds, but reports ping failure
       const content = JSON.parse(result.result.content[0].text);
-      expect(content.loss).toContain('100');
+      // Should have packet loss (either timeout or connection refused)
+      expect(content.received).toBeLessThan(content.sent);
     });
   });
 
