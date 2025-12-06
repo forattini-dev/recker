@@ -8,13 +8,23 @@ Comprehensive benchmark suite for measuring Recker's performance.
 # Run all benchmarks
 pnpm bench
 
+# Run all benchmarks sequentially
+pnpm bench:all
+
+# Run averaged benchmarks (5 iterations for statistical reliability)
+pnpm bench:averaged
+
+# Run API simulation benchmark
+pnpm bench:api
+
 # Run specific benchmark
-pnpm bench:simple      # Simple GET requests
-pnpm bench:post        # POST with JSON
-pnpm bench:retry       # Retry scenarios
-pnpm bench:cache       # Cache & deduplication
-pnpm bench:streaming   # Streaming & SSE
-pnpm bench:realworld   # Real-world scenarios
+pnpm tsx benchmark/simple-get.ts
+pnpm tsx benchmark/post-json.ts
+pnpm tsx benchmark/retry-scenario.ts
+pnpm tsx benchmark/cache-dedup.ts
+pnpm tsx benchmark/streaming.ts
+pnpm tsx benchmark/real-world.ts
+pnpm tsx benchmark/api-simulation.ts
 ```
 
 ## Benchmark Suites
@@ -68,6 +78,28 @@ Tests realistic API scenarios with simulated network latency.
 - Performance with realistic latency (10-50ms)
 - Sequential vs parallel requests
 - Cache/dedup benefits in real scenarios
+
+### 7. API Simulation (`api-simulation.ts`)
+Comprehensive API workflow simulation with realistic patterns.
+
+**What it measures:**
+- Authentication flows (login + authenticated requests)
+- CRUD operations (Create, Read, Update, Delete)
+- Paginated listing (5 pages of results)
+- Custom headers handling (10 requests with varied headers)
+- Mixed workload (realistic SPA session)
+- Large response handling (~500KB JSON)
+
+**Expected results:** Recker should beat axios, got, and ky in all scenarios.
+
+### 8. Averaged Runner (`averaged-runner.ts`)
+Multi-iteration benchmark runner for statistical reliability.
+
+**Features:**
+- Runs each benchmark 5 times (configurable via BENCH_ITERATIONS)
+- Sequential execution to avoid performance interference
+- Calculates avg, min, max, and standard deviation
+- Shows winner and Recker vs competitors summary
 
 ## Understanding Results
 
