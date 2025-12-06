@@ -20,13 +20,13 @@ const [users1, users2, users3] = await Promise.all([
 With deduplication, only one request is made and the result is shared:
 
 ```typescript
-import { createClient, dedup } from 'recker';
+import { createClient, dedupPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-client.use(dedup());
+client.use(dedupPlugin());
 
 // With dedup - only 1 request to API!
 const [users1, users2, users3] = await Promise.all([
@@ -70,7 +70,7 @@ interface DedupOptions {
 By default, the key is `method:url`:
 
 ```typescript
-client.use(dedup());
+client.use(dedupPlugin());
 
 // These are deduplicated (same key)
 client.get('/users');
@@ -84,7 +84,7 @@ client.get('/users?page=2');
 ### Custom Key Generator
 
 ```typescript
-client.use(dedup({
+client.use(dedupPlugin({
   keyGenerator: (req) => {
     // Ignore query params
     const url = new URL(req.url);
@@ -103,7 +103,7 @@ client.get('/users?page=2');
 By default, only GET and HEAD are deduplicated:
 
 ```typescript
-client.use(dedup());
+client.use(dedupPlugin());
 
 // ✅ Deduplicated
 client.get('/users');
@@ -189,8 +189,8 @@ async function aggregate() {
 **Use both together for maximum efficiency:**
 
 ```typescript
-client.use(dedup());  // Avoids simultaneous duplicates
-client.use(cache({ ttl: 60000 }));  // Caches for 1 minute
+client.use(dedupPlugin());  // Avoids simultaneous duplicates
+client.use(cachePlugin({ ttl: 60000 }));  // Caches for 1 minute
 ```
 
 ## Plugin Order
@@ -199,12 +199,12 @@ Dedup should come **before** cache:
 
 ```typescript
 // ✅ Correct
-client.use(dedup());
-client.use(cache());
+client.use(dedupPlugin());
+client.use(cachePlugin());
 
 // ❌ Wrong - dedup won't work correctly
-client.use(cache());
-client.use(dedup());
+client.use(cachePlugin());
+client.use(dedupPlugin());
 ```
 
 ## Error Behavior
@@ -212,7 +212,7 @@ client.use(dedup());
 If the request fails, all callers receive the same error:
 
 ```typescript
-client.use(dedup());
+client.use(dedupPlugin());
 
 // If /users fails, both receive the error
 const results = await Promise.allSettled([

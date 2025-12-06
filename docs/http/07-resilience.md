@@ -433,12 +433,12 @@ Prevent cascading failures by stopping requests to failing services.
 ### Using the Plugin
 
 ```typescript
-import { createClient, circuitBreaker } from 'recker';
+import { createClient, circuitBreakerPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.fragile-service.com',
   plugins: [
-    circuitBreaker({
+    circuitBreakerPlugin({
       threshold: 5,             // Trip after 5 failures
       resetTimeout: 30000,      // Wait 30s before testing
       shouldTrip: (err, res) => {
@@ -486,7 +486,7 @@ For full control, implement manually:
 ```typescript
 import { Plugin } from 'recker';
 
-function circuitBreaker(options: {
+function circuitBreakerPlugin(options: {
   threshold: number;
   timeout: number;
 }): Plugin {
@@ -562,7 +562,7 @@ Limit total retry time instead of attempt count:
 function retryWithBudget(budgetMs: number) {
   const startTime = Date.now();
 
-  return retry({
+  return retryPlugin({
     maxAttempts: Infinity,
     shouldRetry: (error) => {
       const elapsed = Date.now() - startTime;
@@ -592,7 +592,7 @@ Enable safe retries for mutations:
 ```typescript
 const client = createClient({
   plugins: [
-    retry({
+    retryPlugin({
       maxAttempts: 3,
       shouldRetry: (error, request) => {
         // Only retry mutations with idempotency key
@@ -619,7 +619,7 @@ await client.post('/payments', {
 ```typescript
 // Global retry config
 const client = createClient({
-  plugins: [retry({ maxAttempts: 3 })]
+  plugins: [retryPlugin({ maxAttempts: 3 })]
 });
 
 // Disable retry for specific request
@@ -655,17 +655,17 @@ async function fetchWithFallback(primaryUrl: string, fallbackUrl: string) {
 Combine for comprehensive resilience:
 
 ```typescript
-import { createClient, retry, circuitBreaker } from 'recker';
+import { createClient, retryPlugin, circuitBreakerPlugin } from 'recker';
 
 const client = createClient({
   plugins: [
     // Circuit breaker first - fails fast when service is down
-    circuitBreaker({
+    circuitBreakerPlugin({
       threshold: 5,
       resetTimeout: 30000
     }),
     // Retry only if circuit is closed
-    retry({
+    retryPlugin({
       maxAttempts: 3,
       backoff: 'exponential'
     })
@@ -680,7 +680,7 @@ const client = createClient({
 Don't retry validation or authentication errors:
 
 ```typescript
-retry({
+retryPlugin({
   statusCodes: [408, 429, 500, 502, 503, 504],
   shouldRetry: (error) => {
     if (error instanceof HttpError) {
@@ -710,7 +710,7 @@ await client.post('/orders', {
 ### Time-Sensitive Operations
 
 ```typescript
-retry({
+retryPlugin({
   maxAttempts: 2,
   delay: 100,
   maxDelay: 500,

@@ -5,13 +5,13 @@ The **Logger** plugin provides detailed logging of HTTP requests and responses, 
 ## Quick Start
 
 ```typescript
-import { createClient, logger } from 'recker';
+import { createClient, loggerPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-client.use(logger());
+client.use(loggerPlugin());
 
 await client.get('/users').json();
 // [16:30:45] GET https://api.example.com/users
@@ -56,7 +56,7 @@ interface LoggerOptions {
 ### Basic (Default)
 
 ```typescript
-client.use(logger());
+client.use(loggerPlugin());
 
 // GET https://api.example.com/users
 // 200 OK (145ms)
@@ -65,7 +65,7 @@ client.use(logger());
 ### With Headers
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   logHeaders: true,
 }));
 
@@ -78,7 +78,7 @@ client.use(logger({
 ### With Body
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   logBody: true,
 }));
 
@@ -91,7 +91,7 @@ client.use(logger({
 ### Full
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   logHeaders: true,
   logBody: true,
   logTimings: true,
@@ -107,7 +107,7 @@ import pino from 'pino';
 
 const log = pino();
 
-client.use(logger({
+client.use(loggerPlugin({
   log: (message) => log.info(message),
 }));
 ```
@@ -119,7 +119,7 @@ import winston from 'winston';
 
 const winstonLogger = winston.createLogger({ /* config */ });
 
-client.use(logger({
+client.use(loggerPlugin({
   log: (...args) => winstonLogger.info(args.join(' ')),
 }));
 ```
@@ -127,7 +127,7 @@ client.use(logger({
 ### Structured
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   log: (entry) => {
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),
@@ -145,7 +145,7 @@ client.use(logger({
 ### By URL
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   filter: (req) => !req.url.includes('/health'),
 }));
 
@@ -155,7 +155,7 @@ client.use(logger({
 ### By Method
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   filter: (req) => req.method !== 'OPTIONS',
 }));
 
@@ -165,7 +165,7 @@ client.use(logger({
 ### Errors Only
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   logRequest: false,
   logResponse: false,
   logErrors: true,
@@ -177,7 +177,7 @@ client.use(logger({
 ## Custom Formatter
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   formatter: (entry) => {
     const emoji = entry.status >= 400 ? '❌' : '✅';
     return `${emoji} ${entry.method} ${entry.url} → ${entry.status} (${entry.duration}ms)`;
@@ -197,7 +197,7 @@ import { trace } from '@opentelemetry/api';
 
 const tracer = trace.getTracer('http-client');
 
-client.use(logger({
+client.use(loggerPlugin({
   log: (entry) => {
     const span = tracer.startSpan(`HTTP ${entry.method}`);
     span.setAttribute('http.method', entry.method);
@@ -213,7 +213,7 @@ client.use(logger({
 ```typescript
 import { tracer } from 'dd-trace';
 
-client.use(logger({
+client.use(loggerPlugin({
   log: (entry) => {
     const span = tracer.startSpan('http.request');
     span.setTag('http.method', entry.method);
@@ -245,7 +245,7 @@ const client = createClient({
 ```typescript
 const isDev = process.env.NODE_ENV === 'development';
 
-client.use(logger({
+client.use(loggerPlugin({
   logHeaders: isDev,
   logBody: isDev,
   log: isDev ? console.log : () => {},
@@ -261,7 +261,7 @@ const metrics = {
   totalDuration: 0,
 };
 
-client.use(logger({
+client.use(loggerPlugin({
   logRequest: false,
   logResponse: false,
   log: (entry) => {
@@ -286,7 +286,7 @@ app.get('/metrics', (req, res) => {
 ```typescript
 import { randomUUID } from 'node:crypto';
 
-client.use(logger({
+client.use(loggerPlugin({
   formatter: (entry) => {
     const correlationId = entry.headers?.['x-correlation-id'] || randomUUID();
     return JSON.stringify({

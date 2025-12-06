@@ -41,13 +41,13 @@ const client = createClient({
 ### Basic Logging
 
 ```typescript
-import { logger } from 'recker/plugins/logger';
+import { loggerPlugin } from 'recker/plugins/logger';
 
 const client = createClient({
   baseUrl: 'https://api.example.com'
 });
 
-client.use(logger());
+client.use(loggerPlugin());
 
 // Output:
 // → GET https://api.example.com/users
@@ -58,7 +58,7 @@ client.use(logger());
 
 ```typescript
 import pino from 'pino';
-import { logger } from 'recker/plugins/logger';
+import { loggerPlugin } from 'recker/plugins/logger';
 
 const log = pino({ level: 'debug' });
 
@@ -66,14 +66,14 @@ const client = createClient({
   baseUrl: 'https://api.example.com'
 });
 
-client.use(logger({ logger: log }));
+client.use(loggerPlugin({ logger: log }));
 ```
 
 ### With Winston
 
 ```typescript
 import winston from 'winston';
-import { logger } from 'recker/plugins/logger';
+import { loggerPlugin } from 'recker/plugins/logger';
 
 const log = winston.createLogger({
   level: 'debug',
@@ -84,13 +84,13 @@ const client = createClient({
   baseUrl: 'https://api.example.com'
 });
 
-client.use(logger({ logger: log }));
+client.use(loggerPlugin({ logger: log }));
 ```
 
 ### Logger Options
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   logger: pino(),
   level: 'debug',        // 'debug' | 'info'
   showHeaders: true,     // Log request/response headers
@@ -266,7 +266,7 @@ import { createClient, harRecorder } from 'recker';
 const client = createClient({
   baseUrl: 'https://api.example.com',
   plugins: [
-    harRecorder({ path: './session.har' })
+    harRecorderPlugin({ path: './session.har' })
   ]
 });
 
@@ -280,7 +280,7 @@ await client.post('/users', { json: { name: 'John' } });
 ### HAR Recorder Options
 
 ```typescript
-harRecorder({
+harRecorderPlugin({
   path: './session.har',       // Output file path
   includeTimings: true,        // Include timing data
   includeCookies: true,        // Include cookies
@@ -336,7 +336,7 @@ import { createClient, harPlayer } from 'recker';
 const client = createClient({
   baseUrl: 'https://api.example.com',
   plugins: [
-    harPlayer({
+    harPlayerPlugin({
       path: './session.har',
       strict: true  // Throw if no matching entry found
     })
@@ -352,7 +352,7 @@ const users = await client.get('/users').json();
 In non-strict mode, unmatched requests pass through to the network:
 
 ```typescript
-harPlayer({
+harPlayerPlugin({
   path: './session.har',
   strict: false,     // Pass through if no match
   onMiss: (req) => { // Callback when no match found
@@ -367,7 +367,7 @@ harPlayer({
 // 1. Deterministic CI tests
 describe('API Integration', () => {
   const client = createClient({
-    plugins: [harPlayer({ path: './fixtures/api.har', strict: true })]
+    plugins: [harPlayerPlugin({ path: './fixtures/api.har', strict: true })]
   });
 
   it('fetches users', async () => {
@@ -378,12 +378,12 @@ describe('API Integration', () => {
 
 // 2. Offline development
 const devClient = createClient({
-  plugins: [harPlayer({ path: './dev-session.har', strict: false })]
+  plugins: [harPlayerPlugin({ path: './dev-session.har', strict: false })]
 });
 
 // 3. Performance testing (no network latency)
 const perfClient = createClient({
-  plugins: [harPlayer({ path: './benchmark.har' })]
+  plugins: [harPlayerPlugin({ path: './benchmark.har' })]
 });
 ```
 
@@ -398,7 +398,7 @@ import { createClient, serverTiming } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
-  plugins: [serverTiming()]
+  plugins: [serverTimingPlugin()]
 });
 
 const response = await client.get('/dashboard');
@@ -416,7 +416,7 @@ console.log(response.serverTimings);
 ```typescript
 function serverMetricsPlugin(metrics: MetricsClient): Plugin {
   return (client) => {
-    client.use(serverTiming());
+    client.use(serverTimingPlugin());
 
     client.afterResponse((req, res) => {
       for (const timing of res.serverTimings || []) {
@@ -927,7 +927,7 @@ const logger = pino({
     : undefined
 });
 
-client.use(logger({ logger, showTimings: true }));
+client.use(loggerPlugin({ logger, showTimings: true }));
 ```
 
 ### 2. Redact Sensitive Data

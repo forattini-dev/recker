@@ -89,16 +89,16 @@ Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 ### Basic Installation
 
 ```typescript
-import { createClient, retry, cache, dedup } from 'recker';
+import { createClient, retryPlugin, cachePlugin, dedupPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
 // Add plugins
-client.use(retry({ maxAttempts: 3 }));
-client.use(cache({ ttl: 60000 }));
-client.use(dedup());
+client.use(retryPlugin({ maxAttempts: 3 }));
+client.use(cachePlugin({ ttl: 60000 }));
+client.use(dedupPlugin());
 ```
 
 ### Via Configuration
@@ -117,16 +117,16 @@ Order matters! Plugins are executed in the order they are added:
 
 ```typescript
 // ✅ Recommended order
-client.use(circuitBreaker()); // 1. Fail fast if circuit is open
-client.use(retry());          // 2. Retry failures
-client.use(dedup());          // 3. Deduplicate requests
-client.use(cache());          // 4. Check cache
+client.use(circuitBreakerPlugin()); // 1. Fail fast if circuit is open
+client.use(retryPlugin());          // 2. Retry failures
+client.use(dedupPlugin());          // 3. Deduplicate requests
+client.use(cachePlugin());          // 4. Check cache
 client.use(auth());           // 5. Add authentication
-client.use(logger());         // 6. Log everything
+client.use(loggerPlugin());         // 6. Log everything
 
 // ❌ Problematic order
-client.use(retry());          // Will retry even with circuit open!
-client.use(circuitBreaker());
+client.use(retryPlugin());          // Will retry even with circuit open!
+client.use(circuitBreakerPlugin());
 ```
 
 ## Creating Plugins
@@ -218,27 +218,27 @@ Combine plugins for complex scenarios:
 ### Resilient API
 
 ```typescript
-client.use(circuitBreaker({ threshold: 5 }));
-client.use(retry({ maxAttempts: 3, backoff: 'exponential' }));
-client.use(cache({ strategy: 'stale-while-revalidate' }));
-client.use(dedup());
+client.use(circuitBreakerPlugin({ threshold: 5 }));
+client.use(retryPlugin({ maxAttempts: 3, backoff: 'exponential' }));
+client.use(cachePlugin({ strategy: 'stale-while-revalidate' }));
+client.use(dedupPlugin());
 ```
 
 ### Scraping
 
 ```typescript
-client.use(cookieJar({ jar: new MemoryCookieJar() }));
-client.use(retry({ maxAttempts: 2 }));
-client.use(logger({ filter: (req) => !req.url.includes('/static/') }));
+client.use(cookieJarPlugin({ jar: new MemoryCookieJar() }));
+client.use(retryPlugin({ maxAttempts: 2 }));
+client.use(loggerPlugin({ filter: (req) => !req.url.includes('/static/') }));
 ```
 
 ### Microservices
 
 ```typescript
 client.use(auth({ type: 'bearer', token: getServiceToken }));
-client.use(circuitBreaker({ threshold: 3 }));
-client.use(retry({ statusCodes: [502, 503, 504] }));
-client.use(logger({ log: structuredLog }));
+client.use(circuitBreakerPlugin({ threshold: 3 }));
+client.use(retryPlugin({ statusCodes: [502, 503, 504] }));
+client.use(loggerPlugin({ log: structuredLog }));
 ```
 
 ## Best Practices

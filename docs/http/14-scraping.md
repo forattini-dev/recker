@@ -542,7 +542,7 @@ const client = createClient({
     'User-Agent': 'MyScraper/1.0 (+https://mysite.com/bot)'
   },
   plugins: [
-    cache({ ttl: 3600000 })  // Cache for 1 hour
+    cachePlugin({ ttl: 3600000 })  // Cache for 1 hour
   ],
   concurrency: {
     requestsPerInterval: 10,

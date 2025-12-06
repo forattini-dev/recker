@@ -5,13 +5,13 @@ The **Cookie Jar** plugin automatically manages cookies between requests, simula
 ## Quick Start
 
 ```typescript
-import { createClient, cookieJar, MemoryCookieJar } from 'recker';
+import { createClient, cookieJarPlugin, MemoryCookieJar } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-client.use(cookieJar({
+client.use(cookieJarPlugin({
   jar: new MemoryCookieJar(),
 }));
 
@@ -65,7 +65,7 @@ import { MemoryCookieJar } from 'recker';
 
 const jar = new MemoryCookieJar();
 
-client.use(cookieJar({ jar }));
+client.use(cookieJarPlugin({ jar }));
 ```
 
 ### FileCookieJar
@@ -77,7 +77,7 @@ import { FileCookieJar } from 'recker';
 
 const jar = new FileCookieJar('./cookies.json');
 
-client.use(cookieJar({ jar }));
+client.use(cookieJarPlugin({ jar }));
 ```
 
 ### Custom Cookie Jar
@@ -171,7 +171,7 @@ const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-client.use(cookieJar({ jar }));
+client.use(cookieJarPlugin({ jar }));
 
 // Login
 await client.post('/auth/login', {
@@ -193,7 +193,7 @@ jar.clear(); // Clear local cookies
 const jar = new MemoryCookieJar();
 
 const client = createClient();
-client.use(cookieJar({ jar }));
+client.use(cookieJarPlugin({ jar }));
 
 // Site 1 - separate cookies
 await client.get('https://site1.com/login');
@@ -217,7 +217,7 @@ const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-client.use(cookieJar({ jar }));
+client.use(cookieJarPlugin({ jar }));
 
 // If session already exists, continues logged in
 const isLoggedIn = await client.get('/me')
@@ -236,12 +236,12 @@ if (!isLoggedIn) {
 Many sites use cookies for CSRF:
 
 ```typescript
-import { cookieJar, xsrf } from 'recker';
+import { cookieJarPlugin, xsrfPlugin } from 'recker';
 
 const jar = new MemoryCookieJar();
 
-client.use(cookieJar({ jar }));
-client.use(xsrf({
+client.use(cookieJarPlugin({ jar }));
+client.use(xsrfPlugin({
   cookieName: 'XSRF-TOKEN',
   headerName: 'X-XSRF-TOKEN',
 }));
@@ -260,7 +260,7 @@ await client.post('/action', { body: data });
 ```typescript
 const jar = new MemoryCookieJar();
 
-client.use(cookieJar({ jar }));
+client.use(cookieJarPlugin({ jar }));
 
 await client.get('https://example.com/page');
 
@@ -274,11 +274,11 @@ console.log(jar.getCookies('https://example.com/page'));
 ### Cookie Logging
 
 ```typescript
-client.use(logger({
+client.use(loggerPlugin({
   logHeaders: true, // Shows Cookie header in requests
 }));
 
-client.use(cookieJar({ jar }));
+client.use(cookieJarPlugin({ jar }));
 ```
 
 ## Security
