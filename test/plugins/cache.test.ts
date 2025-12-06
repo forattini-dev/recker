@@ -751,6 +751,49 @@ describe('Cache Plugin', () => {
       expect(mockTransport.getCallCount('GET', '/network-first')).toBe(2);
     });
 
+    it('should fallback to cache when network fails', async () => {
+      const mockTransport = new MockTransport();
+
+      // First request succeeds
+      mockTransport.setMockResponse('GET', '/network-fail', 200, { data: 'cached-value' }, undefined, { times: 1 });
+
+      const storage = new MemoryStorage();
+      const client = createClient({
+        baseUrl,
+        transport: mockTransport,
+        plugins: [cache({ storage, ttl: 60000, strategy: 'network-first' })]
+      });
+
+      // First request - hits network and caches
+      const res1 = await client.get('/network-fail').json<{ data: string }>();
+      expect(res1.data).toBe('cached-value');
+      expect(mockTransport.getCallCount('GET', '/network-fail')).toBe(1);
+
+      // Setup network failure for second request
+      mockTransport.setMockError('GET', '/network-fail', new Error('Network error'));
+
+      // Second request - network fails, should fallback to cache
+      const res2 = await client.get('/network-fail').json<{ data: string }>();
+      expect(res2.data).toBe('cached-value');
+    });
+
+    it('should throw error when network fails and no cache available', async () => {
+      const mockTransport = new MockTransport();
+
+      // Setup network failure
+      mockTransport.setMockError('GET', '/no-cache-fail', new Error('Network error'));
+
+      const storage = new MemoryStorage();
+      const client = createClient({
+        baseUrl,
+        transport: mockTransport,
+        plugins: [cache({ storage, ttl: 60000, strategy: 'network-first' })]
+      });
+
+      // Request without cache - should throw
+      await expect(client.get('/no-cache-fail')).rejects.toThrow('Network error');
+    });
+
     it('should cache network response even if not accessed again', async () => {
       const mockTransport = new MockTransport();
       mockTransport.setMockResponse('GET', '/cache-store', 200, { data: 'stored' });
