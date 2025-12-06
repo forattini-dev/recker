@@ -95,7 +95,7 @@ function parseRateLimitHeaders(headers: Headers): { remaining?: number; reset?: 
   return result;
 }
 
-export function rateLimit(options: RateLimitOptions): Plugin {
+export function rateLimitPlugin(options: RateLimitOptions): Plugin {
   const limit = options.limit;
   const windowMs = options.window || 1000;
   const strategy = options.strategy || 'queue';

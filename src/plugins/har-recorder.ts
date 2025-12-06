@@ -6,7 +6,7 @@ export interface HarOptions {
   onEntry?: (entry: any) => void; // Callback for each entry
 }
 
-export function harRecorder(options: HarOptions = {}): Plugin {
+export function harRecorderPlugin(options: HarOptions = {}): Plugin {
   const entries: any[] = [];
   const startTime = new Date().toISOString();
 

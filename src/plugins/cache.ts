@@ -353,7 +353,7 @@ function createCachedResponse(entry: CacheEntry, cacheStatus: 'hit' | 'stale' | 
   return httpResponse;
 }
 
-export function cache(options: CacheOptions = {}): Plugin {
+export function cachePlugin(options: CacheOptions = {}): Plugin {
   const storage = options.storage || new MemoryStorage();
   const strategy = options.strategy || 'cache-first';
   const ttl = options.ttl || 60 * 1000; // 1 minute default

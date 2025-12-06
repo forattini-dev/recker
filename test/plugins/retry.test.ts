@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createClient } from '../../src/index.js';
-import { retry } from '../../src/plugins/retry.js';
+import { retryPlugin } from '../../src/plugins/retry.js';
 import { NetworkError } from '../../src/core/errors.js';
 import { MockTransport } from '../helpers/mock-transport.js';
 
@@ -16,7 +16,7 @@ describe('Advanced Retry Logic', () => {
       baseUrl,
       transport: mockTransport,
       plugins: [
-        retry({ maxAttempts: 3, delay: 10 }),
+        retryPlugin({ maxAttempts: 3, delay: 10 }),
         // Middleware to simulate network error inside the stack
         (client) => {
           client.use(async (req, next) => {
@@ -40,7 +40,7 @@ describe('Advanced Retry Logic', () => {
     const client = createClient({
       baseUrl,
       plugins: [
-        retry({ maxAttempts: 3, delay: 10 }),
+        retryPlugin({ maxAttempts: 3, delay: 10 }),
         (client) => {
           client.use(async (req, next) => {
             attempts++;
@@ -93,7 +93,7 @@ describe('Advanced Retry Logic', () => {
       baseUrl,
       transport: mockTransport,
       plugins: [
-        retry({
+        retryPlugin({
           maxAttempts: 3,
           delay: 10,
           onRetry: (attempt, error, delay) => {
@@ -127,7 +127,7 @@ describe('Advanced Retry Logic', () => {
       baseUrl,
       transport: mockTransport,
       throwHttpErrors: false,
-      plugins: [retry({ maxAttempts: 3, delay: 10 })]
+      plugins: [retryPlugin({ maxAttempts: 3, delay: 10 })]
     });
 
     const res = await client.get('/').json();
@@ -143,7 +143,7 @@ describe('Advanced Retry Logic', () => {
       baseUrl,
       transport: mockTransport,
       plugins: [
-        retry({ maxAttempts: 3, delay: 10 }),
+        retryPlugin({ maxAttempts: 3, delay: 10 }),
         (client) => {
           client.use(async (req, next) => {
             attempts++;
@@ -172,7 +172,7 @@ describe('Advanced Retry Logic', () => {
       baseUrl,
       transport: mockTransport,
       plugins: [
-        retry({ maxAttempts: 3, delay: 10 }),
+        retryPlugin({ maxAttempts: 3, delay: 10 }),
         (client) => {
           client.use(async (req, next) => {
             attempts++;
@@ -202,7 +202,7 @@ describe('Advanced Retry Logic', () => {
       baseUrl,
       transport: mockTransport,
       plugins: [
-        retry({
+        retryPlugin({
           maxAttempts: 4,
           delay: 10,
           backoff: 'linear',
@@ -237,7 +237,7 @@ describe('Advanced Retry Logic', () => {
       baseUrl,
       transport: mockTransport,
       plugins: [
-        retry({
+        retryPlugin({
           maxAttempts: 3,
           delay: 10,
           backoff: 'decorrelated',
@@ -274,7 +274,7 @@ describe('Advanced Retry Logic', () => {
       baseUrl,
       transport: mockTransport,
       plugins: [
-        retry({
+        retryPlugin({
           maxAttempts: 5,
           delay: 1000,
           maxDelay: 100,
@@ -312,7 +312,7 @@ describe('Advanced Retry Logic', () => {
     const client = createClient({
       baseUrl,
       transport: mockTransport,
-      plugins: [retry({ maxAttempts: 3, delay: 10 })]
+      plugins: [retryPlugin({ maxAttempts: 3, delay: 10 })]
     });
 
     // Add global onRetry hook
@@ -341,7 +341,7 @@ describe('Advanced Retry Logic', () => {
       transport: mockTransport,
       throwHttpErrors: false,
       plugins: [
-        retry({
+        retryPlugin({
           maxAttempts: 3,
           delay: 10,
           onRetry: (attempt, error, delay) => {
@@ -371,7 +371,7 @@ describe('Advanced Retry Logic', () => {
       transport: mockTransport,
       throwHttpErrors: false,
       plugins: [
-        retry({
+        retryPlugin({
           maxAttempts: 3,
           delay: 10,
           jitter: false,
@@ -401,7 +401,7 @@ describe('Advanced Retry Logic', () => {
       transport: mockTransport,
       throwHttpErrors: false,
       plugins: [
-        retry({
+        retryPlugin({
           maxAttempts: 3,
           delay: 50,
           jitter: false,

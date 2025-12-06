@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createClient, cache, parseCacheControl, MemoryStorage } from '../../src/index.js';
+import { createClient, cachePlugin, parseCacheControl, MemoryStorage } from '../../src/index.js';
 import { MockTransport } from '../helpers/mock-transport.js';
 
 describe('RFC-Compliant Cache', () => {
@@ -58,7 +58,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'revalidate' })]
+        plugins: [cachePlugin({ storage, strategy: 'revalidate' })]
       });
 
       // First request - caches with ETag
@@ -82,7 +82,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'revalidate' })]
+        plugins: [cachePlugin({ storage, strategy: 'revalidate' })]
       });
 
       // First request - gets 200
@@ -108,7 +108,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'revalidate' })]
+        plugins: [cachePlugin({ storage, strategy: 'revalidate' })]
       });
 
       // First request
@@ -146,7 +146,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'revalidate' })]
+        plugins: [cachePlugin({ storage, strategy: 'revalidate' })]
       });
 
       await client.get('/api/data').json();
@@ -169,7 +169,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // First request
@@ -190,7 +190,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       await client.get('/api/private').json();
@@ -206,7 +206,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // Request with no-store
@@ -229,7 +229,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       await client.get('/api/data').json();
@@ -256,7 +256,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant', forceRevalidate: true })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant', forceRevalidate: true })]
       });
 
       await client.get('/api/data').json();
@@ -286,7 +286,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'revalidate' })]
+        plugins: [cachePlugin({ storage, strategy: 'revalidate' })]
       });
 
       await client.get('/api/data').json();
@@ -310,7 +310,7 @@ describe('RFC-Compliant Cache', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'stale-while-revalidate' })]
+        plugins: [cachePlugin({ storage, strategy: 'stale-while-revalidate' })]
       });
 
       // First request

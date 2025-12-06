@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { rateLimit, RateLimitExceededError } from '../../src/plugins/rate-limit.js';
+import { rateLimitPlugin, RateLimitExceededError } from '../../src/plugins/rate-limit.js';
 import { HttpRequest } from '../../src/core/request.ts'; // Changed from ReckerRequest
 
 describe('Rate Limit Plugin', () => {
@@ -23,7 +23,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should allow requests within limit', async () => {
-    rateLimit({ limit: 2, window: 1000 })(clientMock);
+    rateLimitPlugin({ limit: 2, window: 1000 })(clientMock);
     const middleware = clientMock.middleware;
     const req = new HttpRequest('http://example.com');
 
@@ -34,7 +34,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should throw when limit exceeded (throw strategy)', async () => {
-    rateLimit({ limit: 1, window: 1000, strategy: 'throw' })(clientMock);
+    rateLimitPlugin({ limit: 1, window: 1000, strategy: 'throw' })(clientMock);
     const middleware = clientMock.middleware;
     const req = new HttpRequest('http://example.com');
 
@@ -44,7 +44,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should queue requests (queue strategy)', async () => {
-    rateLimit({ limit: 1, window: 1000, strategy: 'queue' })(clientMock);
+    rateLimitPlugin({ limit: 1, window: 1000, strategy: 'queue' })(clientMock);
     const middleware = clientMock.middleware;
     const req = new HttpRequest('http://example.com');
 
@@ -65,7 +65,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should rate limit per host by default', async () => {
-    rateLimit({ limit: 1, window: 1000, strategy: 'throw' })(clientMock);
+    rateLimitPlugin({ limit: 1, window: 1000, strategy: 'throw' })(clientMock);
     const middleware = clientMock.middleware;
 
     const reqA = new HttpRequest('http://a.com');
@@ -99,7 +99,7 @@ describe('Rate Limit Plugin', () => {
 
 
     // Client with adaptive rate limit
-    rateLimit({ limit: 1000, window: 60000, adaptive: true })(clientMock); // High internal limit
+    rateLimitPlugin({ limit: 1000, window: 60000, adaptive: true })(clientMock); // High internal limit
     const middleware = clientMock.middleware;
 
     const req = new HttpRequest(`${baseUrl}/limited`);
@@ -147,7 +147,7 @@ describe('Rate Limit Plugin', () => {
 
 
     // Client with adaptive rate limit
-    rateLimit({ limit: 1000, window: 60000, adaptive: true })(clientMock); // High internal limit
+    rateLimitPlugin({ limit: 1000, window: 60000, adaptive: true })(clientMock); // High internal limit
     const middleware = clientMock.middleware;
 
     const req = new HttpRequest(`${baseUrl}/overloaded`);
@@ -178,7 +178,7 @@ describe('Rate Limit Plugin', () => {
   }, 10000); // Increase timeout for this test
 
   it('should use drop strategy and throw error', async () => {
-    rateLimit({ limit: 1, window: 1000, strategy: 'drop' })(clientMock);
+    rateLimitPlugin({ limit: 1, window: 1000, strategy: 'drop' })(clientMock);
     const middleware = clientMock.middleware;
     const req = new HttpRequest('http://example.com');
 
@@ -189,7 +189,7 @@ describe('Rate Limit Plugin', () => {
 
   it('should use custom keyGenerator', async () => {
     const customKeyGenerator = vi.fn().mockReturnValue('custom-key');
-    rateLimit({ limit: 1, window: 1000, strategy: 'throw', keyGenerator: customKeyGenerator })(clientMock);
+    rateLimitPlugin({ limit: 1, window: 1000, strategy: 'throw', keyGenerator: customKeyGenerator })(clientMock);
     const middleware = clientMock.middleware;
 
     const req = new HttpRequest('http://example.com');
@@ -199,7 +199,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should handle invalid URL in default keyGenerator', async () => {
-    rateLimit({ limit: 1, window: 1000 })(clientMock);
+    rateLimitPlugin({ limit: 1, window: 1000 })(clientMock);
     const middleware = clientMock.middleware;
 
     const req = new HttpRequest('invalid-url');
@@ -220,7 +220,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should process queue when requests are waiting', async () => {
-    rateLimit({ limit: 1, window: 500, strategy: 'queue' })(clientMock);
+    rateLimitPlugin({ limit: 1, window: 500, strategy: 'queue' })(clientMock);
     const middleware = clientMock.middleware;
     const req = new HttpRequest('http://queue-test.com');
 
@@ -245,7 +245,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should handle adaptive mode with Retry-After header', async () => {
-    rateLimit({ limit: 10, window: 1000, adaptive: true })(clientMock);
+    rateLimitPlugin({ limit: 10, window: 1000, adaptive: true })(clientMock);
     const middleware = clientMock.middleware;
 
     // Mock response with Retry-After header
@@ -263,7 +263,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should handle adaptive mode with RateLimit-Reset header as epoch', async () => {
-    rateLimit({ limit: 10, window: 1000, adaptive: true })(clientMock);
+    rateLimitPlugin({ limit: 10, window: 1000, adaptive: true })(clientMock);
     const middleware = clientMock.middleware;
 
     // Mock response with X-RateLimit headers (epoch timestamp)
@@ -284,7 +284,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should handle adaptive mode with RateLimit-Reset header as seconds', async () => {
-    rateLimit({ limit: 10, window: 1000, adaptive: true })(clientMock);
+    rateLimitPlugin({ limit: 10, window: 1000, adaptive: true })(clientMock);
     const middleware = clientMock.middleware;
 
     // Mock response with small reset value (interpreted as seconds from now)
@@ -304,7 +304,7 @@ describe('Rate Limit Plugin', () => {
   });
 
   it('should handle Retry-After as a date string', async () => {
-    rateLimit({ limit: 10, window: 1000, adaptive: true })(clientMock);
+    rateLimitPlugin({ limit: 10, window: 1000, adaptive: true })(clientMock);
     const middleware = clientMock.middleware;
 
     const futureDate = new Date(Date.now() + 5000).toUTCString();

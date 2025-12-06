@@ -6,7 +6,7 @@ export interface ServerTiming {
   description?: string;
 }
 
-export function serverTiming(): Plugin {
+export function serverTimingPlugin(): Plugin {
   return (client: any) => {
     client.afterResponse((req: ReckerRequest, res: ReckerResponse) => {
       const header = res.headers.get('server-timing');

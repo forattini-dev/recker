@@ -97,7 +97,7 @@ function getXSRFToken(cookieName: string, cookies?: string): string | null {
  * }));
  * ```
  */
-export function xsrf(options: XSRFPluginOptions = {}): Middleware {
+export function xsrfPlugin(options: XSRFPluginOptions = {}): Middleware {
   const {
     cookieName = 'XSRF-TOKEN',
     headerName = 'X-XSRF-TOKEN',
@@ -131,8 +131,8 @@ export function createXSRFMiddleware(config: boolean | XSRFPluginOptions): Middl
   }
 
   if (config === true) {
-    return xsrf(); // Use defaults
+    return xsrfPlugin(); // Use defaults
   }
 
-  return xsrf(config);
+  return xsrfPlugin(config);
 }

@@ -6,7 +6,7 @@ vi.mock('node:os', () => ({
 }));
 
 import { networkInterfaces } from 'node:os';
-import { interfaceRotator } from '../../src/plugins/interface-rotator.js';
+import { interfaceRotatorPlugin } from '../../src/plugins/interface-rotator.js';
 
 describe('Interface Rotator Plugin', () => {
   const mockedNetworkInterfaces = vi.mocked(networkInterfaces);
@@ -31,7 +31,7 @@ describe('Interface Rotator Plugin', () => {
         ],
       } as any);
 
-      const plugin = interfaceRotator();
+      const plugin = interfaceRotatorPlugin();
       expect(typeof plugin).toBe('function');
     });
 
@@ -55,7 +55,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator();
+      const plugin = interfaceRotatorPlugin();
       plugin(mockClient);
 
       expect(requests.length).toBe(1);
@@ -78,7 +78,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator({ excludeInternal: false });
+      const plugin = interfaceRotatorPlugin({ excludeInternal: false });
       plugin(mockClient);
 
       expect(requests.length).toBe(1);
@@ -104,7 +104,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator({ interface: 'eth0' });
+      const plugin = interfaceRotatorPlugin({ interface: 'eth0' });
       plugin(mockClient);
 
       expect((requests[0] as any)._localAddress).toBe('192.168.1.100');
@@ -129,7 +129,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator({ interface: /^eth/ });
+      const plugin = interfaceRotatorPlugin({ interface: /^eth/ });
       plugin(mockClient);
 
       expect((requests[0] as any)._localAddress).toBe('192.168.1.100');
@@ -152,7 +152,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator({ family: 'IPv6' });
+      const plugin = interfaceRotatorPlugin({ family: 'IPv6' });
       plugin(mockClient);
 
       expect((requests[0] as any)._localAddress).toBe('fe80::1');
@@ -177,7 +177,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator({ family: 'both' });
+      const plugin = interfaceRotatorPlugin({ family: 'both' });
       plugin(mockClient);
 
       const addresses = requests.map((r: any) => r._localAddress);
@@ -188,7 +188,7 @@ describe('Interface Rotator Plugin', () => {
     it('should return no-op plugin when no interfaces found', () => {
       mockedNetworkInterfaces.mockReturnValue({});
 
-      const plugin = interfaceRotator();
+      const plugin = interfaceRotatorPlugin();
       
       // no-op plugin should do nothing
       const mockClient = {
@@ -204,7 +204,7 @@ describe('Interface Rotator Plugin', () => {
         eth0: []
       } as any);
 
-      const plugin = interfaceRotator();
+      const plugin = interfaceRotatorPlugin();
       
       const mockClient = {
         beforeRequest: vi.fn()
@@ -219,7 +219,7 @@ describe('Interface Rotator Plugin', () => {
         eth0: undefined
       } as any);
 
-      const plugin = interfaceRotator();
+      const plugin = interfaceRotatorPlugin();
       
       const mockClient = {
         beforeRequest: vi.fn()
@@ -241,7 +241,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator({ ips: ['10.0.0.1'] });
+      const plugin = interfaceRotatorPlugin({ ips: ['10.0.0.1'] });
       plugin(mockClient);
 
       expect((requests[0] as any)._localAddress).toBe('10.0.0.1');
@@ -252,7 +252,7 @@ describe('Interface Rotator Plugin', () => {
         beforeRequest: vi.fn()
       };
 
-      const plugin = interfaceRotator({ ips: ['10.0.0.1'] });
+      const plugin = interfaceRotatorPlugin({ ips: ['10.0.0.1'] });
       plugin(mockClient);
 
       expect(mockedNetworkInterfaces).not.toHaveBeenCalled();
@@ -269,7 +269,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator({ ips: ['10.0.0.1', '10.0.0.2', '10.0.0.3'] });
+      const plugin = interfaceRotatorPlugin({ ips: ['10.0.0.1', '10.0.0.2', '10.0.0.3'] });
       plugin(mockClient);
 
       // Call hook multiple times
@@ -295,7 +295,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator({ 
+      const plugin = interfaceRotatorPlugin({ 
         ips: ['10.0.0.1', '10.0.0.2', '10.0.0.3'],
         strategy: 'random'
       });
@@ -325,7 +325,7 @@ describe('Interface Rotator Plugin', () => {
         }
       };
 
-      const plugin = interfaceRotator({ ips: ['10.0.0.1'] });
+      const plugin = interfaceRotatorPlugin({ ips: ['10.0.0.1'] });
       plugin(mockClient);
 
       const mockReq: any = {};

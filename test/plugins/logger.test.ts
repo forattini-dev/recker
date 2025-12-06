@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createClient } from '../../src/core/client.js';
-import { logger, toCurl, Logger } from '../../src/plugins/logger.js';
+import { loggerPlugin, toCurl, Logger } from '../../src/plugins/logger.js';
 import { ReckerRequest } from '../../src/types/index.js';
 
 // Simple Mock Transport
@@ -39,7 +39,7 @@ describe('Logger Plugin & Utilities', () => {
       baseUrl: 'http://test.com',
       transport: new LocalMockTransport(),
       plugins: [
-        logger({ logger: mockLogger, level: 'info' })
+        loggerPlugin({ logger: mockLogger, level: 'info' })
       ]
     });
 
@@ -78,7 +78,7 @@ describe('Logger Plugin & Utilities', () => {
       baseUrl: 'http://test.com',
       transport: new LocalMockTransport(),
       plugins: [
-        logger({ logger: mockLogger, level: 'debug' })
+        loggerPlugin({ logger: mockLogger, level: 'debug' })
       ]
     });
 
@@ -103,7 +103,7 @@ describe('Logger Plugin & Utilities', () => {
       baseUrl: 'http://test.com',
       transport: new LocalMockTransport(),
       plugins: [
-        logger({ logger: mockLogger, showHeaders: true })
+        loggerPlugin({ logger: mockLogger, showHeaders: true })
       ]
     });
 
@@ -167,7 +167,7 @@ describe('Logger Plugin & Utilities', () => {
       baseUrl: 'http://test.com',
       transport: new ErrorTransport() as any,
       plugins: [
-        logger({ logger: mockLogger })
+        loggerPlugin({ logger: mockLogger })
       ]
     });
 
@@ -195,7 +195,7 @@ describe('Logger Plugin & Utilities', () => {
       baseUrl: 'http://test.com',
       transport: new LocalMockTransport(),
       plugins: [
-        logger({ logger: mockLogger, showBody: true })
+        loggerPlugin({ logger: mockLogger, showBody: true })
       ]
     });
 
@@ -220,7 +220,7 @@ describe('Logger Plugin & Utilities', () => {
       baseUrl: 'http://test.com',
       transport: new LocalMockTransport(),
       plugins: [
-        logger({ logger: mockLogger, showBody: true })
+        loggerPlugin({ logger: mockLogger, showBody: true })
       ]
     });
 
@@ -244,7 +244,7 @@ describe('Logger Plugin & Utilities', () => {
       baseUrl: 'http://test.com',
       transport: new LocalMockTransport(),
       plugins: [
-        logger({ logger: mockLogger, showBody: true })
+        loggerPlugin({ logger: mockLogger, showBody: true })
       ]
     });
 
@@ -317,7 +317,7 @@ describe('Logger Plugin & Utilities', () => {
       baseUrl: 'http://test.com',
       transport: new TimingsTransport() as any,
       plugins: [
-        logger({ logger: mockLogger, showTimings: true })
+        loggerPlugin({ logger: mockLogger, showTimings: true })
       ]
     });
 

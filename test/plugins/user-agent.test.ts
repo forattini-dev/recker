@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createClient } from '../../src/core/client.js';
-import { userAgentRotator, browserHeaders } from '../../src/plugins/user-agent.js';
+import { userAgentRotatorPlugin, browserHeaders } from '../../src/plugins/user-agent.js';
 
 describe('User Agent Tools', () => {
     it('should rotate user agents', async () => {
@@ -17,7 +17,7 @@ describe('User Agent Tools', () => {
                     } as any;
                 }
             },
-            plugins: [userAgentRotator({ userAgents: uas, strategy: 'round-robin' })]
+            plugins: [userAgentRotatorPlugin({ userAgents: uas, strategy: 'round-robin' })]
         });
 
         const res1 = await client.get('/');
@@ -56,7 +56,7 @@ describe('User Agent Tools', () => {
                     } as any;
                 }
             },
-            plugins: [userAgentRotator({ userAgents: uas, strategy: 'random' })]
+            plugins: [userAgentRotatorPlugin({ userAgents: uas, strategy: 'random' })]
         });
 
         const receivedUAs: string[] = [];

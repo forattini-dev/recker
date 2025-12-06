@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, TimeoutError } from '../../src/index.js';
-import { retry } from '../../src/plugins/retry.js';
+import { retryPlugin } from '../../src/plugins/retry.js';
 import { MockTransport } from '../helpers/mock-transport.js';
 
 describe('Recker Client', () => {
@@ -28,7 +28,7 @@ describe('Recker Client', () => {
     const client = createClient({
       baseUrl,
       transport: mockTransport,
-      plugins: [retry({ maxAttempts: 3, delay: 10 })]
+      plugins: [retryPlugin({ maxAttempts: 3, delay: 10 })]
     });
 
     const res = await client.get('/retry').json();

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createClient } from '../../src/index.js';
-import { cache } from '../../src/plugins/cache.js';
+import { cachePlugin } from '../../src/plugins/cache.js';
 import { MockTransport } from '../helpers/mock-transport.js';
 import { MemoryStorage } from '../../src/cache/memory-storage.js';
 
@@ -17,7 +17,7 @@ describe('Cache Plugin', () => {
     const client = createClient({
       baseUrl,
       transport: mockTransport,
-      plugins: [cache({ storage, ttl: 1000 })]
+      plugins: [cachePlugin({ storage, ttl: 1000 })]
     });
 
     // First request: Network
@@ -42,7 +42,7 @@ describe('Cache Plugin', () => {
     const client = createClient({
       baseUrl,
       transport: mockTransport,
-      plugins: [cache({ storage, ttl: 100 })] // 100ms TTL
+      plugins: [cachePlugin({ storage, ttl: 100 })] // 100ms TTL
     });
 
     await client.get('/ttl'); // v: 1
@@ -77,7 +77,7 @@ describe('Cache Plugin', () => {
     const client = createClient({
       baseUrl,
       transport: mockTransport,
-      plugins: [cache({ storage, strategy: 'stale-while-revalidate', ttl: 5000 })]
+      plugins: [cachePlugin({ storage, strategy: 'stale-while-revalidate', ttl: 5000 })]
     });
 
     // Should return stale value (v:1) immediately
@@ -109,7 +109,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, ttl: 5000 })]
+        plugins: [cachePlugin({ storage, ttl: 5000 })]
       });
 
       // Request with gzip encoding
@@ -153,7 +153,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, ttl: 5000 })]
+        plugins: [cachePlugin({ storage, ttl: 5000 })]
       });
 
       const res1 = await client.get('/vary-star').json<{ call: number }>();
@@ -178,7 +178,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, ttl: 5000 })]
+        plugins: [cachePlugin({ storage, ttl: 5000 })]
       });
 
       // First request
@@ -230,7 +230,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, ttl: 5000, respectVary: false })]
+        plugins: [cachePlugin({ storage, ttl: 5000, respectVary: false })]
       });
 
       const res1 = await client.get('/no-vary-respect', {
@@ -264,7 +264,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // First request
@@ -300,7 +300,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // First request - cache with expired Expires
@@ -332,7 +332,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // First request
@@ -359,7 +359,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, ttl: 5000 })]
+        plugins: [cachePlugin({ storage, ttl: 5000 })]
       });
 
       // First request without Pragma - should cache
@@ -391,7 +391,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'stale-while-revalidate', ttl: 5000 })]
+        plugins: [cachePlugin({ storage, strategy: 'stale-while-revalidate', ttl: 5000 })]
       });
 
       // First request - cache it
@@ -433,7 +433,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // First request - should cache with heuristic freshness (10% of 100 days = 10 days)
@@ -464,7 +464,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant', ttl: 10000 })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant', ttl: 10000 })]
       });
 
       // First request
@@ -494,7 +494,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant', ttl: 10000 })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant', ttl: 10000 })]
       });
 
       // First request
@@ -522,7 +522,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // First request - cache with 60s max-age
@@ -557,7 +557,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // First request
@@ -603,7 +603,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // Request with max-stale=10 (accept stale up to 10s old)
@@ -645,7 +645,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // Request with max-stale=1 (only accept stale up to 1s)
@@ -665,7 +665,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // Request with only-if-cached but no cache entry
@@ -704,7 +704,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, strategy: 'rfc-compliant' })]
+        plugins: [cachePlugin({ storage, strategy: 'rfc-compliant' })]
       });
 
       // First request - cache it
@@ -737,7 +737,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, ttl: 60000, strategy: 'network-first' })]
+        plugins: [cachePlugin({ storage, ttl: 60000, strategy: 'network-first' })]
       });
 
       // First request - hits network
@@ -761,7 +761,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, ttl: 60000, strategy: 'network-first' })]
+        plugins: [cachePlugin({ storage, ttl: 60000, strategy: 'network-first' })]
       });
 
       // First request - hits network and caches
@@ -787,7 +787,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, ttl: 60000, strategy: 'network-first' })]
+        plugins: [cachePlugin({ storage, ttl: 60000, strategy: 'network-first' })]
       });
 
       // Request without cache - should throw
@@ -802,7 +802,7 @@ describe('Cache Plugin', () => {
       const client = createClient({
         baseUrl,
         transport: mockTransport,
-        plugins: [cache({ storage, ttl: 60000, strategy: 'network-first' })]
+        plugins: [cachePlugin({ storage, ttl: 60000, strategy: 'network-first' })]
       });
 
       // Request to store in cache
