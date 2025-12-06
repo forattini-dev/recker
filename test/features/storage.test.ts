@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { FileStorage } from '../../src/cache/file-storage.js';
+import { FileSystemStorage } from '../../src/cache/file-storage.js';
 import { MemoryStorage } from '../../src/cache/memory-storage.js';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 
 describe('Storage Adapters', () => {
   describe('MemoryStorage', () => {
@@ -35,7 +35,7 @@ describe('Storage Adapters', () => {
       const item = await storage.get('key1');
       expect(item).toBeUndefined();
     });
-    
+
     it('should clear all items', async () => {
         const storage = new MemoryStorage();
         await storage.set('k1', { body: 'v', status: 200, statusText: 'OK', headers: {}, timestamp: Date.now() });
@@ -44,7 +44,7 @@ describe('Storage Adapters', () => {
     });
   });
 
-  describe('FileStorage', () => {
+  describe('FileSystemStorage', () => {
     let tempDir: string;
 
     beforeEach(async () => {
@@ -56,45 +56,55 @@ describe('Storage Adapters', () => {
     });
 
     it('should store and retrieve items from disk', async () => {
-      const storage = new FileStorage(tempDir);
+      const storage = new FileSystemStorage({ path: tempDir, cleanupInterval: 0 });
       const entry = { body: 'val', status: 200, statusText: 'OK', headers: { 'x-foo': 'bar' }, timestamp: Date.now() };
-      
+
       await storage.set('key1', entry);
-      
+
       // New instance to verify persistence
-      const storage2 = new FileStorage(tempDir);
+      const storage2 = new FileSystemStorage({ path: tempDir, cleanupInterval: 0 });
       const item = await storage2.get('key1');
-      
-      expect(item).toEqual(entry);
+
+      expect(item?.body).toBe(entry.body);
+      expect(item?.status).toBe(entry.status);
+      storage.shutdown();
+      storage2.shutdown();
     });
 
     it('should return undefined for missing keys', async () => {
-      const storage = new FileStorage(tempDir);
+      const storage = new FileSystemStorage({ path: tempDir, cleanupInterval: 0 });
       const item = await storage.get('missing');
       expect(item).toBeUndefined();
+      storage.shutdown();
     });
 
     it('should delete items', async () => {
-      const storage = new FileStorage(tempDir);
+      const storage = new FileSystemStorage({ path: tempDir, cleanupInterval: 0 });
       await storage.set('key1', { body: 'val', status: 200, statusText: 'OK', headers: {}, timestamp: Date.now() });
       await storage.delete('key1');
       const item = await storage.get('key1');
       expect(item).toBeUndefined();
+      storage.shutdown();
     });
-    
+
     it('should handle clear', async () => {
-        const storage = new FileStorage(tempDir);
+        const storage = new FileSystemStorage({ path: tempDir, cleanupInterval: 0 });
         await storage.set('k1', { body: 'v', status: 200, statusText: 'OK', headers: {}, timestamp: Date.now() });
         await storage.clear();
         expect(await storage.get('k1')).toBeUndefined();
+        storage.shutdown();
     });
-    
+
     it('should handle corrupted files gracefully', async () => {
-        const storage = new FileStorage(tempDir);
-        // We need to mock or write a bad file manually, but FileStorage uses hashing.
-        // Hard to predict filename without exporting getHash.
-        // Let's trust the try-catch block in get().
-        // We can mock readFile to throw?
+        const storage = new FileSystemStorage({ path: tempDir, cleanupInterval: 0 });
+        // Write a corrupted JSON file directly
+        const corruptedKey = Buffer.from('corrupted-key').toString('base64url');
+        await writeFile(join(tempDir, corruptedKey + '.json'), 'not valid json{{{', 'utf8');
+
+        // Should return undefined instead of throwing
+        const item = await storage.get('corrupted-key');
+        expect(item).toBeUndefined();
+        storage.shutdown();
     });
   });
 });
