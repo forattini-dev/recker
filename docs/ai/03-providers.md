@@ -28,24 +28,31 @@ export OPENAI_API_KEY="sk-..."
 ### Models
 
 ```typescript
-// GPT-5.1 (default, flagship)
+// GPT-5.1 Instant (default, flagship with adaptive reasoning)
 await ai.chat({
   provider: 'openai',
   model: 'gpt-5.1',
   messages: [{ role: 'user', content: 'Hello' }]
 });
 
-// GPT-5.1 Codex (optimized for code)
+// GPT-5.1 Thinking (advanced reasoning)
 await ai.chat({
   provider: 'openai',
-  model: 'gpt-5.1-codex',
+  model: 'gpt-5.1-thinking',
+  messages: [{ role: 'user', content: 'Solve this complex problem...' }]
+});
+
+// GPT-5 (unified adaptive system)
+await ai.chat({
+  provider: 'openai',
+  model: 'gpt-5',
   messages: [{ role: 'user', content: 'Write a Python script...' }]
 });
 
-// O1 (reasoning models)
+// O3 (reasoning models)
 await ai.chat({
   provider: 'openai',
-  model: 'o1-preview',
+  model: 'o3',
   messages: [{ role: 'user', content: 'Solve this math problem...' }]
 });
 ```
@@ -150,24 +157,31 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 ### Models
 
 ```typescript
-// Claude Sonnet 4 (default, balanced)
+// Claude Opus 4.5 (most capable)
 await ai.chat({
   provider: 'anthropic',
-  model: 'claude-sonnet-4-20250514',
+  model: 'claude-opus-4-5-20251124',
   messages: [{ role: 'user', content: 'Hello' }]
 });
 
-// Claude Opus 4 (most capable)
+// Claude Sonnet 4.5 (best for agents/coding)
 await ai.chat({
   provider: 'anthropic',
-  model: 'claude-opus-4-20250514',
+  model: 'claude-sonnet-4-5-20250929',
   messages: [{ role: 'user', content: 'Hello' }]
 });
 
-// Claude Haiku (fastest)
+// Claude Haiku 4.5 (fastest, 1/3 cost)
 await ai.chat({
   provider: 'anthropic',
   model: 'claude-haiku-4-5',
+  messages: [{ role: 'user', content: 'Hello' }]
+});
+
+// Claude Opus 4.1 (agentic tasks)
+await ai.chat({
+  provider: 'anthropic',
+  model: 'claude-opus-4-1-20250805',
   messages: [{ role: 'user', content: 'Hello' }]
 });
 ```
@@ -387,7 +401,7 @@ const client = createAIClient({
 
 await ai.chat({
   provider: 'openai',
-  model: 'anthropic/claude-opus-4-5',  // OpenRouter model ID
+  model: 'anthropic/claude-opus-4-5-20251124',  // OpenRouter model ID
   messages: [{ role: 'user', content: 'Hello' }]
 });
 ```

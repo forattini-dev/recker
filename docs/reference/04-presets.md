@@ -178,7 +178,7 @@ import { azureOpenai } from 'recker/presets';
 const client = createClient(azureOpenai({
   apiKey: process.env.AZURE_OPENAI_KEY,
   resourceName: 'my-resource',
-  deploymentName: 'gpt-5-1',
+  deploymentName: 'gpt-5.1',
   apiVersion: '2024-02-01'
 }));
 ```

@@ -41,7 +41,9 @@ Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 |--------|-------------|
 | [Cache](./04-cache.md) | HTTP caching with multiple strategies |
 | [Memory Cache](./01-memory-cache.md) | High-performance in-memory cache storage |
-| Compression | Automatic request compression |
+| Compression | Automatic request/response compression (gzip, br, deflate) |
+| HTTP/2 Push | HTTP/2 server push handling |
+| HTTP/3 | HTTP/3 (QUIC) protocol support |
 
 ### Security
 
@@ -58,6 +60,7 @@ Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 | [Logger](./07-logger.md) | Request and response logging |
 | Server Timing | Server-Timing header parsing |
 | HAR Recorder | Request recording in HAR format |
+| HAR Player | Replay HAR-recorded requests |
 
 ### Protocols
 
@@ -65,6 +68,7 @@ Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 |--------|-------------|
 | GraphQL | Integrated GraphQL client |
 | SOAP | SOAP/XML client |
+| XML | XML parsing and building |
 | JSON-RPC | JSON-RPC 2.0 client |
 | gRPC-Web | gRPC-Web client |
 | OData | OData client |
@@ -75,7 +79,8 @@ Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 |--------|-------------|
 | Pagination | Automatic pagination |
 | Scrape | Web scraping with CSS selectors |
-| HLS | HLS streaming |
+| HLS | HLS streaming support |
+| User Agent | Custom user agent generation |
 | Proxy Rotator | Proxy rotation |
 | Interface Rotator | Network interface rotation |
 

@@ -148,7 +148,7 @@ npm install recker
 
 ```typescript
 for await (const event of recker.ai.stream({
-  model: 'gpt-4',
+  model: 'gpt-5.1',
   messages: [{ role: 'user', content: 'Hello!' }]
 })) {
   process.stdout.write(event.choices[0]?.delta?.content || '');

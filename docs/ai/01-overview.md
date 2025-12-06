@@ -25,7 +25,7 @@ console.log(response);
 
 // Streaming
 for await (const event of recker.ai.stream({
-  model: 'gpt-4',
+  model: 'gpt-5',
   messages: [{ role: 'user', content: 'Write a poem' }]
 })) {
   process.stdout.write(event.choices[0]?.delta?.content || '');
@@ -64,7 +64,7 @@ console.log(response);
 // With options
 const ai = recker.aiClient();
 const response = await ai.chat({
-  model: 'gpt-4',
+  model: 'gpt-5',
   messages: [{ role: 'user', content: 'Hello!' }],
   temperature: 0.7
 });
@@ -79,7 +79,7 @@ console.log(response.usage); // { inputTokens, outputTokens, totalTokens }
 import { recker } from 'recker';
 
 for await (const event of recker.ai.stream({
-  model: 'gpt-4',
+  model: 'gpt-5',
   messages: [{ role: 'user', content: 'Write a poem' }]
 })) {
   if (event.type === 'text') {
@@ -98,7 +98,7 @@ const ai = createAI();
 // OpenAI (default)
 await ai.chat({
   provider: 'openai',
-  model: 'gpt-4',
+  model: 'gpt-5',
   messages: [{ role: 'user', content: 'Hello' }]
 });
 
@@ -282,20 +282,47 @@ try {
 
 | Model | Description |
 |-------|-------------|
-| `gpt-5.1` | GPT-5.1 (default, flagship) |
-| `gpt-5.1-codex` | GPT-5.1 Codex (optimized for code) |
-| `gpt-5.1-mini` | GPT-5.1 Mini (fast/cheap) |
-| `o1-preview` | O1 Preview |
-| `o1-mini` | O1 Mini |
-| `text-embedding-3-large` | Embeddings |
+| `gpt-5.1` | GPT-5.1 Instant (flagship, adaptive reasoning) |
+| `gpt-5.1-thinking` | GPT-5.1 Thinking (advanced reasoning) |
+| `gpt-5` | GPT-5 (unified adaptive system) |
+| `gpt-5-mini` | GPT-5 Mini (fast/cheap) |
+| `gpt-5-nano` | GPT-5 Nano (smallest) |
+| `o3` | O3 (reasoning) |
+| `o3-mini` | O3 Mini (fast reasoning) |
+| `text-embedding-3-large` | Embeddings (3072 dimensions) |
+| `text-embedding-3-small` | Embeddings (1536 dimensions) |
 
 ### Anthropic
 
 | Model | Description |
 |-------|-------------|
-| `claude-sonnet-4-5-20250514` | Claude Sonnet 4.5 (default) |
-| `claude-opus-4-5-20250514` | Claude Opus 4.5 |
-| `claude-haiku-4-5` | Claude Haiku 4.5 |
+| `claude-opus-4-5-20251124` | Claude Opus 4.5 (most capable) |
+| `claude-sonnet-4-5-20250929` | Claude Sonnet 4.5 (best for agents/coding) |
+| `claude-haiku-4-5` | Claude Haiku 4.5 (fastest, 1/3 cost) |
+| `claude-opus-4-1-20250805` | Claude Opus 4.1 (agentic tasks) |
+| `claude-sonnet-4-20250522` | Claude Sonnet 4 |
+| `claude-opus-4-20250522` | Claude Opus 4 |
+
+### Google (Vertex AI / AI Studio)
+
+| Model | Description |
+|-------|-------------|
+| `gemini-3-pro` | Gemini 3.0 Pro (SOTA, beats GPT-5 Pro) |
+| `gemini-3-deep-think` | Gemini 3.0 Deep Think (advanced reasoning) |
+| `gemini-2.5-pro` | Gemini 2.5 Pro (thinking model) |
+| `gemini-2.5-flash` | Gemini 2.5 Flash (fast, efficient) |
+| `gemini-2.5-flash-lite` | Gemini 2.5 Flash-Lite (most cost-efficient) |
+| `gemini-2.0-flash` | Gemini 2.0 Flash (1M context, tool use) |
+| `text-embedding-005` | Embeddings |
+
+### Other Providers
+
+| Provider | Models |
+|----------|--------|
+| **Groq** | `llama-4-70b`, `llama-4-8b`, `mixtral-8x7b` |
+| **Ollama** | Any local model (llama3, mistral, etc.) |
+| **Together** | `llama-4-405b`, `mixtral-8x22b` |
+| **Mistral** | `mistral-large`, `mistral-medium` |
 
 ## Next Steps
 

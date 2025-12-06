@@ -1,22 +1,22 @@
 # Plugin System
 
-Este documento cobre a arquitetura de plugins do Recker e como criar plugins customizados.
+This document covers Recker's plugin architecture and how to create custom plugins.
 
-> **Documentação Detalhada de Plugins**
+> **Detailed Plugin Documentation**
 >
-> Para documentação completa de cada plugin built-in, veja a seção [Plugins](/plugins/00-overview.md):
-> - [Memory Cache](/plugins/01-memory-cache.md) - Cache em memória de alta performance
-> - [Retry](/plugins/02-retry.md) - Retentativas com backoff exponencial
-> - [Circuit Breaker](/plugins/03-circuit-breaker.md) - Proteção contra falhas em cascata
-> - [Cache](/plugins/04-cache.md) - Caching HTTP com múltiplas estratégias
-> - [Dedup](/plugins/05-dedup.md) - Deduplicação de requests simultâneos
-> - [Auth](/plugins/06-auth.md) - Autenticação (Bearer, Basic, API Key)
-> - [Logger](/plugins/07-logger.md) - Logging de requests
-> - [Cookie Jar](/plugins/08-cookie-jar.md) - Gerenciamento de cookies
+> For complete documentation of each built-in plugin, see the [Plugins](/plugins/00-overview.md) section:
+> - [Memory Cache](/plugins/01-memory-cache.md) - High-performance in-memory cache
+> - [Retry](/plugins/02-retry.md) - Retries with exponential backoff
+> - [Circuit Breaker](/plugins/03-circuit-breaker.md) - Protection against cascading failures
+> - [Cache](/plugins/04-cache.md) - HTTP caching with multiple strategies
+> - [Dedup](/plugins/05-dedup.md) - Deduplication of simultaneous requests
+> - [Auth](/plugins/06-auth.md) - Authentication (Bearer, Basic, API Key)
+> - [Logger](/plugins/07-logger.md) - Request logging
+> - [Cookie Jar](/plugins/08-cookie-jar.md) - Cookie management
 
-## Arquitetura
+## Architecture
 
-Plugins são funções que configuram o client com middleware, hooks ou outros comportamentos.
+Plugins are functions that configure the client with middleware, hooks, or other behaviors.
 
 ### Plugin Interface
 
@@ -26,27 +26,27 @@ type Plugin = (client: Client) => void;
 
 ### Middleware vs Hooks
 
-Existem dois mecanismos para estender o Recker:
+There are two mechanisms for extending Recker:
 
-| Mecanismo | Use Case | Modelo de Execução |
+| Mechanism | Use Case | Execution Model |
 |-----------|----------|-----------------|
-| **Middleware** | Controlar fluxo, retry, short-circuit | Modelo Onion (wraps `next()`) |
-| **Hooks** | Reagir a eventos, mutations leves | Callbacks sequenciais |
+| **Middleware** | Control flow, retry, short-circuit | Onion Model (wraps `next()`) |
+| **Hooks** | React to events, light mutations | Sequential callbacks |
 
-**Use Middleware quando precisar:**
-- Modificar request antes do dispatch
-- Modificar response após recebimento
-- Retry de requests
-- Short-circuit (retornar response sem rede)
-- Wrap da execução inteira
+**Use Middleware when you need to:**
+- Modify request before dispatch
+- Modify response after receiving
+- Retry requests
+- Short-circuit (return response without network)
+- Wrap the entire execution
 
-**Use Hooks quando precisar:**
-- Reagir a eventos de lifecycle
-- Mutations leves
-- Logging ou métricas
-- Não precisar wrap do stack inteiro
+**Use Hooks when you need to:**
+- React to lifecycle events
+- Light mutations
+- Logging or metrics
+- Don't need to wrap the entire stack
 
-### Usando Plugins
+### Using Plugins
 
 ```typescript
 import { createClient } from 'recker';
@@ -93,7 +93,7 @@ const client = createClient({
   dedup: { enabled: true }
 });
 
-// Estas compartilham um único request HTTP
+// These share a single HTTP request
 const [a, b, c] = await Promise.all([
   client.get('/users').json(),
   client.get('/users').json(),
