@@ -74,6 +74,10 @@
       "types": "./dist/presets/index.d.ts",
       "import": "./dist/presets/index.js"
     },
+    "./plugins": {
+      "types": "./dist/plugins/index.d.ts",
+      "import": "./dist/plugins/index.js"
+    },
     "./plugins/*": {
       "types": "./dist/plugins/*.d.ts",
       "import": "./dist/plugins/*.js"
@@ -113,10 +117,13 @@
     "build:embeddings": "tsx scripts/build-embeddings.ts",
     "prepare": "husky",
     "prepublishOnly": "pnpm build",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test": "NODE_OPTIONS='--max-old-space-size=512' vitest run",
+    "test:coverage": "NODE_OPTIONS='--max-old-space-size=512' vitest run --coverage",
+    "test:light": "NODE_OPTIONS='--max-old-space-size=256' vitest run --poolOptions.forks.maxForks=1",
     "bench": "tsx benchmark/index.ts",
     "bench:all": "tsx benchmark/run-all.ts",
+    "bench:averaged": "BENCH_ITERATIONS=5 tsx benchmark/averaged-runner.ts",
+    "bench:api": "tsx benchmark/api-simulation.ts",
     "docs": "pnpm serve docs -p 3000",
     "lint": "echo \"No linting configured for this project.\" && exit 0",
     "cli": "tsx src/cli/index.ts",
