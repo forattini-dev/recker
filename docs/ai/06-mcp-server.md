@@ -185,9 +185,22 @@ curl -X POST http://localhost:3100 \
 
 ## Available Tools
 
-The MCP Server provides 2 focused tools to minimize context usage:
+The MCP Server provides **6 tools** organized in two categories:
 
-### search_docs
+| Tool | Category | Description |
+|------|----------|-------------|
+| `search_docs` | Documentation | Search Recker docs by keyword |
+| `get_doc` | Documentation | Get full content of a doc file |
+| `rek_http_request` | Network | Perform HTTP requests (GET, POST, etc.) |
+| `rek_dns_lookup` | Network | Resolve DNS records (A, MX, TXT, etc.) |
+| `rek_whois_lookup` | Network | WHOIS lookup for domains/IPs |
+| `rek_network_ping` | Network | TCP ping with latency measurement |
+
+### Documentation Tools
+
+Tools for searching and reading Recker documentation.
+
+#### search_docs
 
 Search documentation by keyword:
 
@@ -207,7 +220,7 @@ Search documentation by keyword:
 - `category` (optional): Filter by category (http, cli, ai, protocols, reference, guides)
 - `limit` (optional): Max results (default: 5, max: 10)
 
-### get_doc
+#### get_doc
 
 Get full content of a documentation file:
 
@@ -223,9 +236,111 @@ Get full content of a documentation file:
 **Parameters:**
 - `path` (required): Documentation file path from search results
 
+### Network Tools
+
+Tools for performing network operations directly from the AI agent.
+
+#### rek_http_request
+
+Perform an HTTP request to any URL:
+
+```json
+{
+  "name": "rek_http_request",
+  "arguments": {
+    "url": "https://api.example.com/users",
+    "method": "GET",
+    "headers": { "Authorization": "Bearer token" },
+    "timeout": 10000
+  }
+}
+```
+
+**Parameters:**
+- `url` (required): Target URL
+- `method` (optional): HTTP method - GET, POST, PUT, DELETE, PATCH, HEAD (default: GET)
+- `headers` (optional): Request headers object
+- `body` (optional): JSON body for POST/PUT/PATCH
+- `timeout` (optional): Timeout in milliseconds (default: 10000)
+- `retries` (optional): Number of retries (default: 0)
+
+#### rek_dns_lookup
+
+Resolve DNS records for a domain:
+
+```json
+{
+  "name": "rek_dns_lookup",
+  "arguments": {
+    "domain": "example.com",
+    "type": "MX"
+  }
+}
+```
+
+**Parameters:**
+- `domain` (required): Domain name to resolve
+- `type` (optional): Record type - A, AAAA, MX, TXT, NS, CNAME, SOA, ALL (default: A)
+
+#### rek_whois_lookup
+
+Perform a WHOIS lookup for domain registration info:
+
+```json
+{
+  "name": "rek_whois_lookup",
+  "arguments": {
+    "query": "github.com"
+  }
+}
+```
+
+**Parameters:**
+- `query` (required): Domain name or IP address to lookup
+
+#### rek_network_ping
+
+Check TCP connectivity and measure latency:
+
+```json
+{
+  "name": "rek_network_ping",
+  "arguments": {
+    "host": "google.com",
+    "port": 443,
+    "count": 5
+  }
+}
+```
+
+**Parameters:**
+- `host` (required): Hostname or IP address
+- `port` (optional): Target port (default: 80)
+- `count` (optional): Number of pings (default: 3)
+- `timeout` (optional): Timeout per ping in milliseconds (default: 5000)
+
+**Response:**
+```json
+{
+  "host": "google.com",
+  "port": 443,
+  "sent": 5,
+  "received": 5,
+  "loss": "0.0%",
+  "avgLatency": "12.45ms",
+  "details": [
+    { "seq": 1, "time": 11 },
+    { "seq": 2, "time": 13 },
+    { "seq": 3, "time": 12 }
+  ]
+}
+```
+
 ## How It Works
 
-Once configured, your AI assistant can search and read Recker documentation:
+Once configured, your AI assistant can use these tools autonomously.
+
+### Documentation Example
 
 ```
 User: How do I implement retry logic with recker?
@@ -246,6 +361,36 @@ const client = createClient({
     delay: 1000
   }
 });
+```
+
+### Network Tools Example
+
+```
+User: Check if api.github.com is reachable and get its DNS records
+
+AI: Let me check the connectivity and DNS...
+[Uses rek_network_ping with host "api.github.com", port 443]
+[Uses rek_dns_lookup with domain "api.github.com", type "A"]
+
+Results:
+- TCP ping to api.github.com:443 - 5/5 successful, avg latency 15.2ms
+- DNS A records: 140.82.121.6
+
+The API is reachable with low latency.
+```
+
+```
+User: Make a GET request to https://httpbin.org/json
+
+AI: [Uses rek_http_request with url "https://httpbin.org/json"]
+
+Response (200 OK):
+{
+  "slideshow": {
+    "author": "Yours Truly",
+    "title": "Sample Slideshow"
+  }
+}
 ```
 
 ## Configuration Options
