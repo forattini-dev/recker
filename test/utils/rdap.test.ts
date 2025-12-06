@@ -262,4 +262,201 @@ describe('RDAP Utils', () => {
       expect(Array.isArray(tlds)).toBe(true);
     });
   });
+
+  describe('IANA Bootstrap', () => {
+    it('should handle IPv6 addresses', async () => {
+      const client = createClient({
+        transport: {
+          dispatch: async (req) => {
+            // IPv6 detection uses colon check
+            expect(req.url).toContain('rdap.arin.net/registry/ip/');
+            const newUrl = req.url.replace(/https?:\/\/[^\/]+/, baseUrl);
+            const response = await fetch(newUrl);
+            return {
+              ok: response.ok,
+              status: response.status,
+              statusText: response.statusText,
+              headers: new Headers(response.headers),
+              json: () => response.json(),
+              text: () => response.text(),
+              blob: () => response.blob(),
+              read: () => null,
+              timings: {},
+              connection: {},
+              url: newUrl
+            } as any;
+          }
+        }
+      });
+
+      // IPv6 lookup - will fail with 404 but tests the path
+      await expect(rdap(client, '2001:4860:4860::8888')).rejects.toThrow();
+    });
+
+    it('should query known TLDs from hardcoded list', async () => {
+      const client = createClient({
+        transport: {
+          dispatch: async (req) => {
+            // Should use hardcoded server for .org
+            expect(req.url).toContain('rdap.publicinterestregistry.net');
+            const newUrl = req.url.replace(/https?:\/\/[^\/]+/, baseUrl);
+            const response = await fetch(newUrl);
+            return {
+              ok: response.ok,
+              status: response.status,
+              statusText: response.statusText,
+              headers: new Headers(response.headers),
+              json: () => response.json(),
+              text: () => response.text(),
+              blob: () => response.blob(),
+              read: () => null,
+              timings: {},
+              connection: {},
+              url: newUrl
+            } as any;
+          }
+        }
+      });
+
+      const result = await rdap(client, 'test.org');
+      expect(result.handle).toBe('TEST-ORG');
+    });
+
+    it('should use IANA bootstrap for unknown TLDs', async () => {
+      // Mock IANA bootstrap response
+      let ianaRequested = false;
+      const client = createClient({
+        transport: {
+          dispatch: async (req) => {
+            if (req.url.includes('data.iana.org/rdap/dns.json')) {
+              ianaRequested = true;
+              return {
+                ok: true,
+                status: 200,
+                statusText: 'OK',
+                headers: new Headers({ 'Content-Type': 'application/json' }),
+                json: () => Promise.resolve({
+                  version: '1.0',
+                  services: [
+                    [['unknowntld'], ['https://rdap.unknowntld.example/']]
+                  ]
+                }),
+                text: () => Promise.resolve(''),
+                blob: () => Promise.resolve(new Blob()),
+                read: () => null,
+                timings: {},
+                connection: {},
+                url: req.url
+              } as any;
+            }
+
+            // For the actual RDAP query
+            return {
+              ok: true,
+              status: 200,
+              statusText: 'OK',
+              headers: new Headers({ 'Content-Type': 'application/rdap+json' }),
+              json: () => Promise.resolve({
+                handle: 'TEST-UNKNOWN',
+                status: ['active']
+              }),
+              text: () => Promise.resolve(''),
+              blob: () => Promise.resolve(new Blob()),
+              read: () => null,
+              timings: {},
+              connection: {},
+              url: req.url
+            } as any;
+          }
+        }
+      });
+
+      const result = await rdap(client, 'test.unknowntld');
+      expect(result.handle).toBe('TEST-UNKNOWN');
+    });
+
+    it('should handle IANA bootstrap fetch failure', async () => {
+      const client = createClient({
+        transport: {
+          dispatch: async (req) => {
+            if (req.url.includes('data.iana.org/rdap/dns.json')) {
+              throw new Error('Network error');
+            }
+
+            throw new Error('Should not reach RDAP query');
+          }
+        }
+      });
+
+      // Should throw UnsupportedError for unknown TLD when IANA fails
+      await expect(rdap(client, 'test.reallyrandomtld123')).rejects.toThrow();
+    });
+
+    it('should handle servers with and without trailing slash', async () => {
+      const client = createClient({
+        transport: {
+          dispatch: async (req) => {
+            // Verify no double slash in URL
+            expect(req.url).not.toContain('//domain/');
+            const newUrl = req.url.replace(/https?:\/\/[^\/]+/, baseUrl);
+            const response = await fetch(newUrl);
+            return {
+              ok: response.ok,
+              status: response.status,
+              statusText: response.statusText,
+              headers: new Headers(response.headers),
+              json: () => response.json(),
+              text: () => response.text(),
+              blob: () => response.blob(),
+              read: () => null,
+              timings: {},
+              connection: {},
+              url: newUrl
+            } as any;
+          }
+        }
+      });
+
+      // .net server has trailing slash already
+      const result = await rdap(client, 'test.net');
+      expect(result.handle).toBe('TEST-NET');
+    });
+
+    it('should handle .br TLD', async () => {
+      const client = createClient({
+        transport: {
+          dispatch: async (req) => {
+            expect(req.url).toContain('rdap.registro.br');
+            const newUrl = req.url.replace(/https?:\/\/[^\/]+/, baseUrl);
+            const response = await fetch(newUrl);
+            return {
+              ok: response.ok,
+              status: response.status,
+              statusText: response.statusText,
+              headers: new Headers(response.headers),
+              json: () => response.json(),
+              text: () => response.text(),
+              blob: () => response.blob(),
+              read: () => null,
+              timings: {},
+              connection: {},
+              url: newUrl
+            } as any;
+          }
+        }
+      });
+
+      const result = await rdap(client, 'test.br');
+      expect(result.handle).toBe('TEST-BR');
+    });
+  });
+
+  describe('supportsRDAP edge cases', () => {
+    it('should return false for all known non-RDAP TLDs', () => {
+      const nonRdapTlds = ['ai', 'gg', 'im', 'je', 'sh', 'ac', 'cx', 'gs', 'ms', 'nf', 'pn', 'tc', 'vg'];
+      nonRdapTlds.forEach(tld => {
+        expect(supportsRDAP(tld)).toBe(false);
+      });
+    });
+  });
 });

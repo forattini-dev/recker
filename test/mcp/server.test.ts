@@ -7,7 +7,7 @@ describe('MCP Server', () => {
 
   describe('HTTP Transport', () => {
     let server: MCPServer;
-    const testPort = 3199;
+    const testPort = 3200;
 
     beforeAll(async () => {
       server = new MCPServer({
@@ -75,20 +75,36 @@ describe('MCP Server', () => {
         const result = await sendRequest('tools/list');
 
         expect(result.result.tools).toBeDefined();
-        expect(result.result.tools).toHaveLength(6);
+        expect(result.result.tools).toHaveLength(10);
 
         const toolNames = result.result.tools.map((t: any) => t.name);
-        expect(toolNames).toContain('search_docs');
-        expect(toolNames).toContain('get_doc');
-        expect(toolNames).toContain('code_examples');
-        expect(toolNames).toContain('api_schema');
-        expect(toolNames).toContain('suggest');
-        expect(toolNames).toContain('ip_lookup');
+        expect(toolNames).toContain('rek_search_docs');
+        expect(toolNames).toContain('rek_get_doc');
+        expect(toolNames).toContain('rek_code_examples');
+        expect(toolNames).toContain('rek_api_schema');
+        expect(toolNames).toContain('rek_suggest');
+        expect(toolNames).toContain('rek_ip_lookup');
       });
 
       it('should handle resources/list', async () => {
         const result = await sendRequest('resources/list');
-        expect(result.result.resources).toEqual([]);
+        expect(result.result.resources).toBeDefined();
+        expect(result.result.resources.length).toBeGreaterThan(0);
+        
+        const resourceUris = result.result.resources.map((r: any) => r.uri);
+        expect(resourceUris.some((u: string) => u.startsWith('docs://'))).toBe(true);
+      });
+
+      it('should handle resources/read for docs', async () => {
+        // First get a valid URI
+        const listResult = await sendRequest('resources/list');
+        const docResource = listResult.result.resources.find((r: any) => r.uri.startsWith('docs://'));
+        expect(docResource).toBeDefined();
+
+        const result = await sendRequest('resources/read', { uri: docResource.uri });
+        expect(result.result.contents).toBeDefined();
+        expect(result.result.contents[0].text).toBeDefined();
+        expect(result.result.contents[0].mimeType).toBe('text/markdown');
       });
 
       it('should handle prompts/list', async () => {
@@ -119,7 +135,7 @@ describe('MCP Server', () => {
       };
 
       it('should search for "http" and find results', async () => {
-        const result = await callTool('search_docs', { query: 'http' });
+        const result = await callTool('rek_search_docs', { query: 'http' });
 
         expect(result.result).toBeDefined();
         expect(result.result.content).toHaveLength(1);
@@ -128,14 +144,14 @@ describe('MCP Server', () => {
       });
 
       it('should search for "cache" and find results', async () => {
-        const result = await callTool('search_docs', { query: 'cache' });
+        const result = await callTool('rek_search_docs', { query: 'cache' });
 
         expect(result.result.content[0].text).toContain('Found');
         expect(result.result.content[0].text).toContain('cache');
       });
 
       it('should filter by category', async () => {
-        const result = await callTool('search_docs', {
+        const result = await callTool('rek_search_docs', {
           query: 'streaming',
           category: 'ai',
         });
@@ -144,7 +160,7 @@ describe('MCP Server', () => {
       });
 
       it('should limit results', async () => {
-        const result = await callTool('search_docs', {
+        const result = await callTool('rek_search_docs', {
           query: 'http',
           limit: 2,
         });
@@ -155,7 +171,7 @@ describe('MCP Server', () => {
       });
 
       it('should return helpful message for no results', async () => {
-        const result = await callTool('search_docs', {
+        const result = await callTool('rek_search_docs', {
           query: 'xyznonexistent123',
         });
 
@@ -164,7 +180,7 @@ describe('MCP Server', () => {
       });
 
       it('should return error without query', async () => {
-        const result = await callTool('search_docs', {});
+        const result = await callTool('rek_search_docs', {});
 
         expect(result.result.isError).toBe(true);
         expect(result.result.content[0].text).toContain('query is required');
@@ -187,7 +203,7 @@ describe('MCP Server', () => {
       };
 
       it('should get doc by full path', async () => {
-        const result = await callTool('get_doc', {
+        const result = await callTool('rek_get_doc', {
           path: 'http/01-quickstart.md',
         });
 
@@ -196,7 +212,7 @@ describe('MCP Server', () => {
       });
 
       it('should get doc by partial path', async () => {
-        const result = await callTool('get_doc', {
+        const result = await callTool('rek_get_doc', {
           path: '01-quickstart.md',
         });
 
@@ -204,7 +220,7 @@ describe('MCP Server', () => {
       });
 
       it('should return error for non-existent doc', async () => {
-        const result = await callTool('get_doc', {
+        const result = await callTool('rek_get_doc', {
           path: 'nonexistent/file.md',
         });
 
@@ -213,7 +229,7 @@ describe('MCP Server', () => {
       });
 
       it('should suggest alternatives for partial matches', async () => {
-        const result = await callTool('get_doc', {
+        const result = await callTool('rek_get_doc', {
           path: 'quickstart',
         });
 
@@ -221,7 +237,7 @@ describe('MCP Server', () => {
       });
 
       it('should return error without path', async () => {
-        const result = await callTool('get_doc', {});
+        const result = await callTool('rek_get_doc', {});
 
         expect(result.result.isError).toBe(true);
         expect(result.result.content[0].text).toContain('path is required');
@@ -244,21 +260,21 @@ describe('MCP Server', () => {
       };
 
       it('should return error without ip', async () => {
-        const result = await callTool('ip_lookup', {});
+        const result = await callTool('rek_ip_lookup', {});
 
         expect(result.result.isError).toBe(true);
         expect(result.result.content[0].text).toContain('ip is required');
       });
 
       it('should return error for invalid IP', async () => {
-        const result = await callTool('ip_lookup', { ip: 'not-an-ip' });
+        const result = await callTool('rek_ip_lookup', { ip: 'not-an-ip' });
 
         expect(result.result.isError).toBe(true);
         expect(result.result.content[0].text).toContain('not a valid IP address');
       });
 
       it('should identify bogon/private IPs', async () => {
-        const result = await callTool('ip_lookup', { ip: '192.168.1.1' });
+        const result = await callTool('rek_ip_lookup', { ip: '192.168.1.1' });
 
         expect(result.result.isError).toBeUndefined();
         expect(result.result.content[0].text).toContain('Private');
@@ -266,19 +282,19 @@ describe('MCP Server', () => {
       });
 
       it('should identify loopback', async () => {
-        const result = await callTool('ip_lookup', { ip: '127.0.0.1' });
+        const result = await callTool('rek_ip_lookup', { ip: '127.0.0.1' });
 
         expect(result.result.content[0].text).toContain('Loopback');
       });
 
       it('should identify IPv6 loopback', async () => {
-        const result = await callTool('ip_lookup', { ip: '::1' });
+        const result = await callTool('rek_ip_lookup', { ip: '::1' });
 
         expect(result.result.content[0].text).toContain('Loopback');
       });
 
       it('should handle public IPs (CLI suggestion)', async () => {
-        const result = await callTool('ip_lookup', { ip: '8.8.8.8' });
+        const result = await callTool('rek_ip_lookup', { ip: '8.8.8.8' });
 
         // Should either return geo info or CLI suggestion (depends on DB availability)
         expect(result.result.content[0].text).toMatch(/IP Intelligence|rek ip/);
@@ -319,7 +335,7 @@ describe('MCP Server', () => {
 
   describe('SSE Transport', () => {
     let server: MCPServer;
-    const testPort = 3197;
+    const testPort = 3201;
 
     beforeAll(async () => {
       server = new MCPServer({
@@ -361,7 +377,7 @@ describe('MCP Server', () => {
       });
 
       const result = await response.json();
-      expect(result.result.tools).toHaveLength(6);
+      expect(result.result.tools).toHaveLength(10);
     });
 
     it('should establish SSE connection', async () => {
@@ -409,8 +425,8 @@ describe('MCP Server', () => {
       });
     });
 
-    it('should handle notifications/initialized', () => {
-      const response = server.handleRequest({
+    it('should handle notifications/initialized', async () => {
+      const response = await server.handleRequest({
         jsonrpc: '2.0',
         id: 1,
         method: 'notifications/initialized',
@@ -419,17 +435,16 @@ describe('MCP Server', () => {
       expect(response.result).toEqual({});
     });
 
-    it('should handle unknown tool call', () => {
-      const response = server.handleRequest({
+    it('should handle unknown tool call', async () => {
+      const result = await server.handleRequest({
         jsonrpc: '2.0',
         id: 1,
         method: 'tools/call',
         params: { name: 'unknown_tool', arguments: {} },
       });
-
-      expect(response.result).toBeDefined();
-      expect((response.result as any).isError).toBe(true);
-      expect((response.result as any).content[0].text).toContain('Unknown tool');
+      
+      expect(result.error).toBeDefined();
+      expect(result.error?.message).toContain('Unknown tool');
     });
   });
 });
@@ -464,7 +479,7 @@ describe('createMCPServer factory', () => {
 
 describe('Additional Tool Tests', () => {
   let server: MCPServer;
-  const testPort = 3195;
+  const testPort = 3202;
   const docsPath = join(process.cwd(), 'docs');
 
   beforeAll(async () => {
@@ -497,83 +512,83 @@ describe('Additional Tool Tests', () => {
 
   describe('code_examples Tool', () => {
     it('should get code examples for a feature', async () => {
-      const result = await callTool('code_examples', { feature: 'retry' });
+      const result = await callTool('rek_code_examples', { feature: 'retry' });
       expect(result.result.isError).toBeUndefined();
       expect(result.result.content[0].text).toBeDefined();
     });
 
     it('should get examples with complexity filter', async () => {
-      const result = await callTool('code_examples', { feature: 'cache', complexity: 'basic' });
+      const result = await callTool('rek_code_examples', { feature: 'cache', complexity: 'basic' });
       expect(result.result.isError).toBeUndefined();
       expect(result.result.content[0].text).toBeDefined();
     });
 
     it('should return error without feature', async () => {
-      const result = await callTool('code_examples', {});
+      const result = await callTool('rek_code_examples', {});
       expect(result.result.isError).toBe(true);
       expect(result.result.content[0].text).toContain('feature is required');
     });
 
     it('should return message when no examples found', async () => {
-      const result = await callTool('code_examples', { feature: 'xyznonexistent123' });
+      const result = await callTool('rek_code_examples', { feature: 'xyznonexistent123' });
       expect(result.result.content[0].text).toContain('No examples found');
     });
   });
 
   describe('api_schema Tool', () => {
     it('should get schema for Client type', async () => {
-      const result = await callTool('api_schema', { type: 'Client' });
+      const result = await callTool('rek_api_schema', { type: 'Client' });
       expect(result.result.isError).toBeUndefined();
       expect(result.result.content[0].text).toBeDefined();
     });
 
     it('should get schema for RequestOptions', async () => {
-      const result = await callTool('api_schema', { type: 'RequestOptions' });
+      const result = await callTool('rek_api_schema', { type: 'RequestOptions' });
       expect(result.result.content[0].text).toBeDefined();
     });
 
     it('should get schema for Response', async () => {
-      const result = await callTool('api_schema', { type: 'Response' });
+      const result = await callTool('rek_api_schema', { type: 'Response' });
       expect(result.result.content[0].text).toBeDefined();
     });
 
     it('should return error without type', async () => {
-      const result = await callTool('api_schema', {});
+      const result = await callTool('rek_api_schema', {});
       expect(result.result.isError).toBe(true);
       expect(result.result.content[0].text).toContain('type is required');
     });
 
     it('should return message for unknown type', async () => {
-      const result = await callTool('api_schema', { type: 'UnknownType' });
+      const result = await callTool('rek_api_schema', { type: 'UnknownType' });
       expect(result.result.content[0].text).toContain('not found');
     });
   });
 
   describe('suggest Tool', () => {
     it('should suggest implementation for retry', async () => {
-      const result = await callTool('suggest', { useCase: 'retry' });
+      const result = await callTool('rek_suggest', { useCase: 'retry' });
       expect(result.result.isError).toBeUndefined();
       expect(result.result.content[0].text).toBeDefined();
     });
 
     it('should suggest implementation for caching', async () => {
-      const result = await callTool('suggest', { useCase: 'cache' });
+      const result = await callTool('rek_suggest', { useCase: 'cache' });
       expect(result.result.content[0].text).toBeDefined();
     });
 
     it('should suggest implementation for streaming', async () => {
-      const result = await callTool('suggest', { useCase: 'streaming' });
+      const result = await callTool('rek_suggest', { useCase: 'streaming' });
       expect(result.result.content[0].text).toBeDefined();
     });
 
     it('should return error without useCase', async () => {
-      const result = await callTool('suggest', {});
+      const result = await callTool('rek_suggest', {});
       expect(result.result.isError).toBe(true);
       expect(result.result.content[0].text).toContain('useCase is required');
     });
 
     it('should handle generic use case', async () => {
-      const result = await callTool('suggest', { useCase: 'authentication' });
+      const result = await callTool('rek_suggest', { useCase: 'authentication' });
       expect(result.result.content[0].text).toBeDefined();
     });
   });
@@ -581,22 +596,22 @@ describe('Additional Tool Tests', () => {
   describe('Edge Cases', () => {
     it('should handle concurrent requests', async () => {
       const requests = [
-        callTool('search_docs', { query: 'http' }),
-        callTool('search_docs', { query: 'cache' }),
-        callTool('search_docs', { query: 'retry' }),
+        callTool('rek_search_docs', { query: 'http' }),
+        callTool('rek_search_docs', { query: 'cache' }),
+        callTool('rek_search_docs', { query: 'retry' }),
       ];
       const results = await Promise.all(requests);
       expect(results.every(r => r.result && !r.result.isError)).toBe(true);
     });
 
     it('should handle empty string arguments', async () => {
-      const result = await callTool('search_docs', { query: '' });
+      const result = await callTool('rek_search_docs', { query: '' });
       expect(result.result.isError).toBe(true);
     });
 
     it('should handle very long search query', async () => {
       const longQuery = 'http client retry cache timeout headers '.repeat(10);
-      const result = await callTool('search_docs', { query: longQuery });
+      const result = await callTool('rek_search_docs', { query: longQuery });
       expect(result.result).toBeDefined();
     }, 30000);
   });
