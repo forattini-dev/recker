@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createClient } from '../../src/core/client.js';
-import { circuitBreaker, CircuitBreakerError } from '../../src/plugins/circuit-breaker.js';
+import { circuitBreakerPlugin, CircuitBreakerError } from '../../src/plugins/circuit-breaker.js';
 import { ReckerRequest } from '../../src/types/index.js';
 
 class FlakyTransport {
@@ -29,7 +29,7 @@ describe('Circuit Breaker Plugin', () => {
         baseUrl: 'http://flaky.com',
         transport: transport as any,
         plugins: [
-            circuitBreaker({
+            circuitBreakerPlugin({
                 threshold: 3, // Open after 3 failures
                 resetTimeout: 100, // Fast reset for test
                 onStateChange: stateChange
@@ -70,7 +70,7 @@ describe('Circuit Breaker Plugin', () => {
           baseUrl: 'http://recover.com',
           transport: transport as any,
           plugins: [
-              circuitBreaker({
+              circuitBreakerPlugin({
                   threshold: 3,
                   resetTimeout: 50,
                   onStateChange: stateChange
@@ -105,7 +105,7 @@ describe('Circuit Breaker Plugin', () => {
         baseUrl: 'http://error.com',
         transport: transport as any,
         plugins: [
-            circuitBreaker({
+            circuitBreakerPlugin({
                 threshold: 2,
                 resetTimeout: 50,
                 onStateChange: stateChange
@@ -138,7 +138,7 @@ describe('Circuit Breaker Plugin', () => {
         baseUrl: 'http://reset.com',
         transport: transport as any,
         plugins: [
-            circuitBreaker({
+            circuitBreakerPlugin({
                 threshold: 3,
                 resetTimeout: 50
             })
@@ -170,7 +170,7 @@ describe('Circuit Breaker Plugin', () => {
     const client = createClient({
       transport: transport as any,
       plugins: [
-        circuitBreaker({
+        circuitBreakerPlugin({
           threshold: 3,
           resetTimeout: 50,
           onStateChange: stateChange
@@ -197,7 +197,7 @@ describe('Circuit Breaker Plugin', () => {
       baseUrl: 'http://breaker-test.com',
       transport: transport as any,
       plugins: [
-        circuitBreaker({
+        circuitBreakerPlugin({
           threshold: 2,
           resetTimeout: 100
         })

@@ -12,9 +12,9 @@ import { getDefaultUserAgent } from '../utils/user-agent.js';
 
 // Plugins and Storage for auto-wiring
 import { paginate, PaginationOptions, streamPages } from '../plugins/pagination.js';
-import { retry, RetryOptions } from '../plugins/retry.js';
-import { cache, CacheOptions } from '../plugins/cache.js';
-import { dedup, DedupOptions } from '../plugins/dedup.js';
+import { retryPlugin, RetryOptions } from '../plugins/retry.js';
+import { cachePlugin, CacheOptions } from '../plugins/cache.js';
+import { dedupPlugin, DedupOptions } from '../plugins/dedup.js';
 import { createXSRFMiddleware, XSRFPluginOptions } from '../plugins/xsrf.js';
 import { createCompressionMiddleware } from '../plugins/compression.js';
 import { serializeXML } from '../plugins/xml.js';
@@ -131,7 +131,7 @@ export class Client {
 
     // 1. Auto-wire plugins based on config
     if (options.retry) {
-      retry(options.retry)(this);
+      retryPlugin(options.retry)(this);
     }
 
     // ========================================
@@ -158,7 +158,7 @@ export class Client {
     }
 
     if (options.dedup) {
-      dedup(options.dedup)(this);
+      dedupPlugin(options.dedup)(this);
     }
 
     if (options.cache) {
@@ -172,7 +172,7 @@ export class Client {
         storage = new MemoryStorage();
       }
 
-      cache({
+      cachePlugin({
         ...options.cache,
         storage
       })(this);

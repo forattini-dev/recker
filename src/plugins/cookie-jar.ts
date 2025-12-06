@@ -9,7 +9,7 @@ export interface CookieJarOptions {
  * Simple in-memory Cookie Jar implementation.
  * Includes basic domain scoping for security.
  */
-export function cookieJar(options: CookieJarOptions = {}): Plugin {
+export function cookieJarPlugin(options: CookieJarOptions = {}): Plugin {
   // Map<Domain, Map<Key, Value>>
   const store = new Map<string, Map<string, string>>();
 

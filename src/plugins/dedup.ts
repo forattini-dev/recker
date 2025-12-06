@@ -7,7 +7,7 @@ export interface DedupOptions {
 // Optimized: Pre-allocated key buffer to avoid string concatenation overhead
 const keyBuffer = { method: '', url: '' };
 
-export function dedup(options: DedupOptions = {}): Plugin {
+export function dedupPlugin(options: DedupOptions = {}): Plugin {
   const pendingRequests = new Map<string, Promise<any>>();
 
   // Optimized: Use custom key generator or fast default

@@ -84,7 +84,7 @@ export interface LoggerPluginOptions {
  * }));
  * ```
  */
-export function logger(options: LoggerPluginOptions = {}): Plugin {
+export function loggerPlugin(options: LoggerPluginOptions = {}): Plugin {
   const log = options.logger || consoleLogger;
   const level = options.level || 'info';
   const showHeaders = options.showHeaders || false;

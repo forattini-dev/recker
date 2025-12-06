@@ -13,7 +13,7 @@ export interface UserAgentOptions {
   strategy?: 'random' | 'round-robin';
 }
 
-export function userAgentRotator(options: UserAgentOptions = {}): Plugin {
+export function userAgentRotatorPlugin(options: UserAgentOptions = {}): Plugin {
   const uas = options.userAgents || DEFAULT_UAS;
   let index = 0;
 

@@ -8,7 +8,7 @@ export interface ProxyRotatorOptions {
   failover?: boolean; 
 }
 
-export function proxyRotator(options: ProxyRotatorOptions): Plugin {
+export function proxyRotatorPlugin(options: ProxyRotatorOptions): Plugin {
   const proxies = options.proxies.map(url => ({
     url,
     agent: new ProxyAgent(url),

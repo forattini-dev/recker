@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createClient } from '../../src/index.js';
-import { dedup } from '../../src/plugins/dedup.js';
+import { dedupPlugin } from '../../src/plugins/dedup.js';
 import { MockTransport } from '../helpers/mock-transport.js';
 
 describe('Dedup Plugin', () => {
@@ -15,7 +15,7 @@ describe('Dedup Plugin', () => {
     const client = createClient({
       baseUrl,
       transport: mockTransport,
-      plugins: [dedup()]
+      plugins: [dedupPlugin()]
     });
 
     // Launch 3 requests at once
@@ -42,7 +42,7 @@ describe('Dedup Plugin', () => {
     const client = createClient({
       baseUrl,
       transport: mockTransport,
-      plugins: [dedup()]
+      plugins: [dedupPlugin()]
     });
 
     // Launch 3 POST requests at once
@@ -66,7 +66,7 @@ describe('Dedup Plugin', () => {
     const client = createClient({
       baseUrl,
       transport: mockTransport,
-      plugins: [dedup()],
+      plugins: [dedupPlugin()],
       throwHttpErrors: true
     });
 
@@ -82,7 +82,7 @@ describe('Dedup Plugin', () => {
     const client = createClient({
       baseUrl,
       transport: mockTransport,
-      plugins: [dedup()]
+      plugins: [dedupPlugin()]
     });
 
     // Launch 2 HEAD requests at once

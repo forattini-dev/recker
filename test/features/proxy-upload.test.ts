@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createClient } from '../../src/core/client.js';
-import { proxyRotator } from '../../src/plugins/proxy-rotator.js';
+import { proxyRotatorPlugin } from '../../src/plugins/proxy-rotator.js';
 import { uploadParallel } from '../../src/utils/upload.js';
 import { ReckerRequest } from '../../src/types/index.js';
 import { Readable } from 'node:stream';
@@ -21,7 +21,7 @@ describe('Advanced Utils', () => {
                     } as any;
                 }
             },
-            plugins: [proxyRotator({ proxies, strategy: 'round-robin' })]
+            plugins: [proxyRotatorPlugin({ proxies, strategy: 'round-robin' })]
         });
 
         const res1 = await client.get('/');

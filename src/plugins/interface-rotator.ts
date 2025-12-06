@@ -34,7 +34,7 @@ export interface InterfaceRotatorOptions {
   ips?: string[];
 }
 
-export function interfaceRotator(options: InterfaceRotatorOptions = {}): Plugin {
+export function interfaceRotatorPlugin(options: InterfaceRotatorOptions = {}): Plugin {
   const strategy = options.strategy || 'round-robin';
   const familyFilter = options.family || 'IPv4';
   const excludeInternal = options.excludeInternal !== false;
