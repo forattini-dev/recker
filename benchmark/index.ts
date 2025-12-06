@@ -8,6 +8,8 @@ import { request as undiciRequest } from 'undici';
 import needle from 'needle';
 import superagent from 'superagent';
 
+const JSON_OUTPUT = process.env.BENCH_JSON === '1';
+
 // Setup server
 const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -23,7 +25,9 @@ const recker = createClient({ baseUrl: url });
 const reckerFast = createClient({ baseUrl: url, observability: false });
 
 // Main Benchmark
-console.log(`Running benchmark against server at ${url}\n`);
+if (!JSON_OUTPUT) {
+  console.log(`Running benchmark against server at ${url}\n`);
+}
 
 group('HTTP Clients (GET JSON)', () => {
 
@@ -68,12 +72,12 @@ group('HTTP Clients (GET JSON)', () => {
 });
 
 await run({
-  avg: true, // enable/disable avg column (default: true)
-  json: false, // enable/disable json output (default: false)
-  colors: true, // enable/disable colors (default: true)
-  min_max: true, // enable/disable min/max column (default: true)
-  collect: false, // enable/disable collecting returned values into an array during the benchmark (default: false)
-  percentiles: true, // enable/disable percentiles column (default: true)
+  avg: true,
+  format: JSON_OUTPUT ? 'json' : undefined,
+  colors: !JSON_OUTPUT,
+  min_max: true,
+  collect: false,
+  percentiles: true,
 });
 
 server.close();

@@ -4,6 +4,11 @@ import { createClient } from '../src/index.js';
 import axios from 'axios';
 import got from 'got';
 import ky from 'ky';
+import { request as undiciRequest } from 'undici';
+import needle from 'needle';
+import superagent from 'superagent';
+
+const JSON_OUTPUT = process.env.BENCH_JSON === '1';
 
 const testPayload = {
   name: 'John Doe',
@@ -43,11 +48,31 @@ const url = `http://localhost:${port}`;
 // Setup Clients
 const recker = createClient({ baseUrl: url });
 
-console.log('┌─────────────────────────────────────────────────────┐');
-console.log('│  Benchmark: POST with JSON serialization           │');
-console.log('└─────────────────────────────────────────────────────┘\n');
+if (!JSON_OUTPUT) {
+  console.log('┌─────────────────────────────────────────────────────┐');
+  console.log('│  Benchmark: POST with JSON serialization           │');
+  console.log('└─────────────────────────────────────────────────────┘\n');
+}
 
 group('POST JSON payload', () => {
+  bench('undici (raw)', async () => {
+    const { body } = await undiciRequest(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testPayload)
+    });
+    await body.json();
+  });
+
+  bench('fetch (native)', async () => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testPayload)
+    });
+    await res.json();
+  });
+
   bench('recker', async () => {
     await recker.post('/', testPayload).json();
   });
@@ -64,20 +89,19 @@ group('POST JSON payload', () => {
     await axios.post(url, testPayload);
   });
 
-  bench('fetch (native)', async () => {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(testPayload)
-    });
-    await res.json();
+  bench('needle', async () => {
+    await needle('post', url, testPayload, { json: true });
+  });
+
+  bench('superagent', async () => {
+    await superagent.post(url).send(testPayload);
   });
 });
 
 await run({
   avg: true,
-  json: false,
-  colors: true,
+  format: JSON_OUTPUT ? 'json' : undefined,
+  colors: !JSON_OUTPUT,
   min_max: true,
   percentiles: true,
 });

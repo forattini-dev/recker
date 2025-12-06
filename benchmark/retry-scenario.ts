@@ -4,6 +4,9 @@ import { createClient } from '../src/index.js';
 import axios from 'axios';
 import got from 'got';
 import ky from 'ky';
+import superagent from 'superagent';
+
+const JSON_OUTPUT = process.env.BENCH_JSON === '1';
 
 let requestCount = 0;
 
@@ -68,10 +71,27 @@ const kyRetry = ky.extend({
   }
 });
 
-console.log('┌─────────────────────────────────────────────────────┐');
-console.log('│  Benchmark: Retry on 503 errors (3 attempts)       │');
-console.log('│  Note: Server fails 2x then succeeds               │');
-console.log('└─────────────────────────────────────────────────────┘\n');
+if (!JSON_OUTPUT) {
+  console.log('┌─────────────────────────────────────────────────────┐');
+  console.log('│  Benchmark: Retry on 503 errors (3 attempts)       │');
+  console.log('│  Note: Server fails 2x then succeeds               │');
+  console.log('└─────────────────────────────────────────────────────┘\n');
+}
+
+// superagent with manual retry
+const superagentRetry = async (attempts = 3) => {
+  let lastError;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await superagent.get(url);
+    } catch (e: any) {
+      lastError = e;
+      if (e.status !== 503 || i === attempts - 1) throw e;
+      await new Promise(r => setTimeout(r, 10 * Math.pow(2, i)));
+    }
+  }
+  throw lastError;
+};
 
 group('Retry with exponential backoff', () => {
   bench('recker (exponential)', async () => {
@@ -105,12 +125,20 @@ group('Retry with exponential backoff', () => {
       // Expected some failures
     }
   });
+
+  bench('superagent (manual retry)', async () => {
+    try {
+      await superagentRetry();
+    } catch (e) {
+      // Expected some failures
+    }
+  });
 });
 
 await run({
   avg: true,
-  json: false,
-  colors: true,
+  format: JSON_OUTPUT ? 'json' : undefined,
+  colors: !JSON_OUTPUT,
   min_max: true,
   percentiles: true,
 });

@@ -68,6 +68,9 @@ export * as protocols from './protocols/index.js';
 export * from './mcp/client.js';
 export * from './mcp/contract.js';
 
+// Bare client (maximum performance mode)
+export * from './bare.js';
+
 // Branded alias for the Client class
 export { Client as Recker } from './core/client.js';
 

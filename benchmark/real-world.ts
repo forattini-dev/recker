@@ -4,6 +4,11 @@ import { createClient } from '../src/index.js';
 import axios from 'axios';
 import got from 'got';
 import ky from 'ky';
+import { request as undiciRequest } from 'undici';
+import needle from 'needle';
+import superagent from 'superagent';
+
+const JSON_OUTPUT = process.env.BENCH_JSON === '1';
 
 // Simulate realistic API latency
 const simulateLatency = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -60,12 +65,24 @@ const reckerOptimized = createClient({
   dedup: {}
 });
 
-console.log('┌─────────────────────────────────────────────────────┐');
-console.log('│  Benchmark: Real-world scenarios with latency      │');
-console.log('│  Note: Server adds 10-50ms latency per request     │');
-console.log('└─────────────────────────────────────────────────────┘\n');
+if (!JSON_OUTPUT) {
+  console.log('┌─────────────────────────────────────────────────────┐');
+  console.log('│  Benchmark: Real-world scenarios with latency      │');
+  console.log('│  Note: Server adds 10-50ms latency per request     │');
+  console.log('└─────────────────────────────────────────────────────┘\n');
+}
 
 group('GET with realistic latency', () => {
+  bench('undici (raw)', async () => {
+    const { body } = await undiciRequest(url + '/users');
+    await body.json();
+  });
+
+  bench('fetch (native)', async () => {
+    const res = await fetch(url + '/users');
+    await res.json();
+  });
+
   bench('recker', async () => {
     await recker.get('/users').json();
   });
@@ -85,9 +102,24 @@ group('GET with realistic latency', () => {
   bench('ky', async () => {
     await ky.get(url + '/users').json();
   });
+
+  bench('needle', async () => {
+    await needle('get', url + '/users', { json: true });
+  });
+
+  bench('superagent', async () => {
+    await superagent.get(url + '/users');
+  });
 });
 
 group('Sequential requests (5x)', () => {
+  bench('undici (raw)', async () => {
+    for (let i = 0; i < 5; i++) {
+      const { body } = await undiciRequest(`${url}/users/${i}`);
+      await body.json();
+    }
+  });
+
   bench('recker', async () => {
     for (let i = 0; i < 5; i++) {
       await recker.get(`/users/${i}`).json();
@@ -105,9 +137,36 @@ group('Sequential requests (5x)', () => {
       await got.get(`${url}/users/${i}`).json();
     }
   });
+
+  bench('ky', async () => {
+    for (let i = 0; i < 5; i++) {
+      await ky.get(`${url}/users/${i}`).json();
+    }
+  });
+
+  bench('needle', async () => {
+    for (let i = 0; i < 5; i++) {
+      await needle('get', `${url}/users/${i}`, { json: true });
+    }
+  });
+
+  bench('superagent', async () => {
+    for (let i = 0; i < 5; i++) {
+      await superagent.get(`${url}/users/${i}`);
+    }
+  });
 });
 
 group('Parallel requests (10x same endpoint)', () => {
+  bench('undici (raw)', async () => {
+    await Promise.all(
+      Array(10).fill(null).map(async () => {
+        const { body } = await undiciRequest(url + '/users');
+        return body.json();
+      })
+    );
+  });
+
   bench('recker (no dedup)', async () => {
     await Promise.all(
       Array(10).fill(null).map(() => recker.get('/users').json())
@@ -125,34 +184,76 @@ group('Parallel requests (10x same endpoint)', () => {
       Array(10).fill(null).map(() => axios.get(url + '/users'))
     );
   });
-});
 
-group('POST authentication flow', () => {
-  bench('recker', async () => {
-    await recker.post('/auth/login', {
-      username: 'test',
-      password: 'password'
-    }).json();
-  });
-
-  bench('axios', async () => {
-    await axios.post(url + '/auth/login', {
-      username: 'test',
-      password: 'password'
-    });
+  bench('got', async () => {
+    await Promise.all(
+      Array(10).fill(null).map(() => got.get(url + '/users').json())
+    );
   });
 
   bench('ky', async () => {
-    await ky.post(url + '/auth/login', {
-      json: { username: 'test', password: 'password' }
-    }).json();
+    await Promise.all(
+      Array(10).fill(null).map(() => ky.get(url + '/users').json())
+    );
+  });
+
+  bench('superagent', async () => {
+    await Promise.all(
+      Array(10).fill(null).map(() => superagent.get(url + '/users'))
+    );
+  });
+});
+
+group('POST authentication flow', () => {
+  const authPayload = { username: 'test', password: 'password' };
+
+  bench('undici (raw)', async () => {
+    const { body } = await undiciRequest(url + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(authPayload)
+    });
+    await body.json();
+  });
+
+  bench('fetch (native)', async () => {
+    const res = await fetch(url + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(authPayload)
+    });
+    await res.json();
+  });
+
+  bench('recker', async () => {
+    await recker.post('/auth/login', authPayload).json();
+  });
+
+  bench('axios', async () => {
+    await axios.post(url + '/auth/login', authPayload);
+  });
+
+  bench('got', async () => {
+    await got.post(url + '/auth/login', { json: authPayload }).json();
+  });
+
+  bench('ky', async () => {
+    await ky.post(url + '/auth/login', { json: authPayload }).json();
+  });
+
+  bench('needle', async () => {
+    await needle('post', url + '/auth/login', authPayload, { json: true });
+  });
+
+  bench('superagent', async () => {
+    await superagent.post(url + '/auth/login').send(authPayload);
   });
 });
 
 await run({
   avg: true,
-  json: false,
-  colors: true,
+  format: JSON_OUTPUT ? 'json' : undefined,
+  colors: !JSON_OUTPUT,
   min_max: true,
   percentiles: true,
 });
