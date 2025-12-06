@@ -28,7 +28,7 @@
 import { run, bench, group } from 'mitata';
 import { createServer } from 'node:http';
 import { createClient } from '../src/index.js';
-import { createBareClient } from '../src/bare.js';
+import { createMiniClient } from '../src/mini.js';
 
 // HTTP Clients
 import axios from 'axios';
@@ -90,8 +90,7 @@ const url = `http://localhost:${port}`;
 
 // Setup Clients
 const recker = createClient({ baseUrl: url });
-const reckerFast = createClient({ baseUrl: url, observability: false });
-const bareClient = createBareClient({ baseUrl: url });
+const miniClient = createMiniClient({ baseUrl: url });
 const bentGetJson = bent(url, 'GET', 'json', 200);
 const bentPostJson = bent(url, 'POST', 'json', 201);
 
@@ -109,7 +108,7 @@ if (!JSON_OUTPUT) {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
   console.log('║           HTTP Clients Comprehensive Comparison                   ║');
   console.log('║                                                                   ║');
-  console.log('║   Testing 23 HTTP libraries for Node.js                          ║');
+  console.log('║   Testing 22 HTTP libraries for Node.js                          ║');
   console.log('╚═══════════════════════════════════════════════════════════════════╝\n');
   console.log(`Server: ${url}\n`);
 }
@@ -125,9 +124,9 @@ group('GET JSON (simple)', () => {
     await body.json();
   });
 
-  // Recker bare client - zero overhead wrapper
-  bench('recker (bare)', async () => {
-    const res = await bareClient.get('/');
+  // Recker mini client - zero overhead wrapper
+  bench('recker-mini', async () => {
+    const res = await miniClient.get('/');
     await res.json();
   });
 
@@ -139,10 +138,6 @@ group('GET JSON (simple)', () => {
   // High-level clients
   bench('recker', async () => {
     await recker.get('/').json();
-  });
-
-  bench('recker (fast)', async () => {
-    await reckerFast.get('/').json();
   });
 
   bench('axios', async () => {
@@ -248,8 +243,8 @@ group('POST JSON (with body)', () => {
     await respBody.json();
   });
 
-  bench('recker (bare)', async () => {
-    const res = await bareClient.post('/', body);
+  bench('recker-mini', async () => {
+    const res = await miniClient.post('/', body);
     await res.json();
   });
 
@@ -264,10 +259,6 @@ group('POST JSON (with body)', () => {
 
   bench('recker', async () => {
     await recker.post('/', body).json();
-  });
-
-  bench('recker (fast)', async () => {
-    await reckerFast.post('/', body).json();
   });
 
   bench('axios', async () => {
@@ -408,9 +399,9 @@ group('Parallel GET (10 concurrent)', () => {
     }));
   });
 
-  bench('recker (bare)', async () => {
+  bench('recker-mini', async () => {
     await Promise.all(Array(10).fill(null).map(async () => {
-      const res = await bareClient.get('/');
+      const res = await miniClient.get('/');
       return res.json();
     }));
   });
@@ -425,12 +416,6 @@ group('Parallel GET (10 concurrent)', () => {
   bench('recker', async () => {
     await Promise.all(Array(10).fill(null).map(() =>
       recker.get('/').json()
-    ));
-  });
-
-  bench('recker (fast)', async () => {
-    await Promise.all(Array(10).fill(null).map(() =>
-      reckerFast.get('/').json()
     ));
   });
 
@@ -568,9 +553,9 @@ group('Sequential GET (5 requests)', () => {
     }
   });
 
-  bench('recker (bare)', async () => {
+  bench('recker-mini', async () => {
     for (let i = 0; i < 5; i++) {
-      const res = await bareClient.get('/');
+      const res = await miniClient.get('/');
       await res.json();
     }
   });
@@ -585,12 +570,6 @@ group('Sequential GET (5 requests)', () => {
   bench('recker', async () => {
     for (let i = 0; i < 5; i++) {
       await recker.get('/').json();
-    }
-  });
-
-  bench('recker (fast)', async () => {
-    for (let i = 0; i < 5; i++) {
-      await reckerFast.get('/').json();
     }
   });
 
@@ -727,14 +706,13 @@ server.close();
 
 if (!JSON_OUTPUT) {
   console.log('\n═══════════════════════════════════════════════════════════════════');
-  console.log('                         LEGEND (23 libraries)                      ');
+  console.log('                         LEGEND (22 libraries)                      ');
   console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
   console.log('undici            - Node.js official HTTP client (fastest baseline)');
-  console.log('recker (bare)     - Zero-overhead wrapper (~0% vs undici) ★');
+  console.log('recker-mini       - Zero-overhead wrapper (~2% vs undici) ★');
   console.log('fetch             - Native fetch API');
   console.log('recker            - Batteries-included (retries, cache, rate-limit)');
-  console.log('recker (fast)     - Recker with observability: false');
   console.log('axios             - Most popular, browser + Node');
   console.log('got               - Full-featured, Node-focused');
   console.log('ky                - Fetch-based, originally for browsers');

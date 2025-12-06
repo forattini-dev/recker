@@ -1,6 +1,6 @@
 # Performance Benchmarks
 
-Comprehensive performance analysis comparing Recker against 23 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
+Comprehensive performance analysis comparing Recker against 22 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
 
 > **Generated**: 2025-12-06 | **Node.js**: v23.8.0 | **Platform**: linux x64
 
@@ -9,20 +9,19 @@ Comprehensive performance analysis comparing Recker against 23 industry-standard
 | Library | Avg (µs) | Tests | Notes |
 |---------|----------|-------|-------|
 | **undici (raw)** | 142 | 4 | Fastest baseline |
-| **recker (bare)** ★ | 146 | 4 | **~2% overhead vs undici!** |
+| **recker-mini** ★ | 146 | 4 | **~2% overhead vs undici!** |
 | centra | 183 | 4 | Lightweight, minimal |
 | phin | 186 | 4 | Ultra-lightweight |
 | cross-fetch | 259 | 4 | Universal fetch |
 | fetch (native) | 260 | 4 | Node.js built-in |
 | recker | 265 | 4 | Full-featured |
-| recker (fast) | 273 | 4 | observability: false |
 | axios | 318 | 4 | Most popular |
 | node-fetch | 387 | 4 | Fetch polyfill |
 | got | 395 | 4 | Feature-rich |
 | ky | 453 | 4 | Tiny fetch wrapper |
 | superagent | 495 | 4 | Chainable API |
 
-> ★ **recker (bare)** matches undici's raw performance with a convenient API!
+> ★ **recker-mini** matches undici's raw performance with a convenient API!
 
 ---
 
@@ -39,41 +38,40 @@ Iterations:   Multiple samples until statistically significant
 Network:      localhost (eliminates network variance)
 ```
 
-### Compared Libraries (23)
+### Compared Libraries (22)
 
 | # | Library | npm Package | Category | Notes |
 |---|---------|-------------|----------|-------|
 | 1 | **undici** | `undici` | Raw/Low-level | Node.js official HTTP client, fastest baseline |
-| 2 | **recker (bare)** ★ | `recker/bare` | Zero-overhead | **~2% overhead vs undici** - use for max throughput |
+| 2 | **recker-mini** ★ | `recker/mini` | Zero-overhead | **~2% overhead vs undici** - use for max throughput |
 | 3 | **fetch (native)** | built-in | Raw/Low-level | Node.js 18+ native fetch (uses undici) |
 | 4 | **recker** | `recker` | Full-featured | This library - retry, cache, rate-limit, auth |
-| 5 | **recker (fast)** | `recker` | Full-featured | Recker with `observability: false` |
-| 6 | **axios** | `axios` | Full-featured | Most popular, browser + Node.js |
-| 7 | **got** | `got` | Full-featured | Feature-rich, Node.js only |
-| 8 | **ky** | `ky` | Full-featured | Tiny fetch wrapper by Sindre Sorhus |
-| 9 | **node-fetch** | `node-fetch` | Fetch-based | Fetch polyfill for Node.js |
-| 10 | **cross-fetch** | `cross-fetch` | Fetch-based | Universal fetch (browser + Node.js) |
-| 11 | **wretch** | `wretch` | Fetch-based | Fluent fetch wrapper |
-| 12 | **make-fetch-happen** | `make-fetch-happen` | Fetch-based | npm's fetch with caching |
-| 13 | **minipass-fetch** | `minipass-fetch` | Fetch-based | Lightweight fetch for npm |
-| 14 | **phin** | `phin` | Lightweight | Ultra-lightweight (~1KB) |
-| 15 | **centra** | `centra` | Lightweight | Core of phin, minimal overhead |
-| 16 | **bent** | `bent` | Lightweight | Functional HTTP client |
-| 17 | **simple-get** | `simple-get` | Lightweight | Simplest possible HTTP client |
-| 18 | **tiny-json-http** | `tiny-json-http` | Lightweight | JSON-focused, zero deps |
-| 19 | **superagent** | `superagent` | Legacy | Chainable API, callback-based |
-| 20 | **needle** | `needle` | Legacy | Streaming-focused |
-| 21 | **hyperquest** | `hyperquest` | Legacy | Substack's streaming client |
-| 22 | **wreck** | `@hapi/wreck` | Ecosystem | Hapi.js HTTP client |
-| 23 | **popsicle** | `popsicle` | Ecosystem | Composable HTTP transport |
+| 5 | **axios** | `axios` | Full-featured | Most popular, browser + Node.js |
+| 6 | **got** | `got` | Full-featured | Feature-rich, Node.js only |
+| 7 | **ky** | `ky` | Full-featured | Tiny fetch wrapper by Sindre Sorhus |
+| 8 | **node-fetch** | `node-fetch` | Fetch-based | Fetch polyfill for Node.js |
+| 9 | **cross-fetch** | `cross-fetch` | Fetch-based | Universal fetch (browser + Node.js) |
+| 10 | **wretch** | `wretch` | Fetch-based | Fluent fetch wrapper |
+| 11 | **make-fetch-happen** | `make-fetch-happen` | Fetch-based | npm's fetch with caching |
+| 12 | **minipass-fetch** | `minipass-fetch` | Fetch-based | Lightweight fetch for npm |
+| 13 | **phin** | `phin` | Lightweight | Ultra-lightweight (~1KB) |
+| 14 | **centra** | `centra` | Lightweight | Core of phin, minimal overhead |
+| 15 | **bent** | `bent` | Lightweight | Functional HTTP client |
+| 16 | **simple-get** | `simple-get` | Lightweight | Simplest possible HTTP client |
+| 17 | **tiny-json-http** | `tiny-json-http` | Lightweight | JSON-focused, zero deps |
+| 18 | **superagent** | `superagent` | Legacy | Chainable API, callback-based |
+| 19 | **needle** | `needle` | Legacy | Streaming-focused |
+| 20 | **hyperquest** | `hyperquest` | Legacy | Substack's streaming client |
+| 21 | **wreck** | `@hapi/wreck` | Ecosystem | Hapi.js HTTP client |
+| 22 | **popsicle** | `popsicle` | Ecosystem | Composable HTTP transport |
 
 ### By Category
 
 | Category | Libraries |
 |----------|-----------|
-| **Zero-overhead** | **recker (bare)** ★ |
+| **Zero-overhead** | **recker-mini** ★ |
 | **Raw/Low-level** | undici, fetch (native) |
-| **Full-featured** | recker, recker (fast), axios, got, ky |
+| **Full-featured** | recker, axios, got, ky |
 | **Fetch-based** | node-fetch, cross-fetch, wretch, make-fetch-happen, minipass-fetch |
 | **Lightweight** | phin, centra, bent, simple-get, tiny-json-http |
 | **Legacy/Callback** | superagent, needle, hyperquest |
@@ -116,20 +114,19 @@ await client.get('/api/user/123').json();
 | Library | Avg (µs) | Min (µs) | Max (µs) | p75 (µs) | p99 (µs) |
 |---------|----------|----------|----------|----------|----------|
 | **undici (raw)** | 142 | 94 | 1950 | 151 | 468 |
-| **recker (bare) ★** | **146** | 98 | 2150 | 156 | 444 |
+| **recker-mini** ★ | **146** | 98 | 2150 | 156 | 444 |
 | centra | 183 | 112 | 1780 | 193 | 521 |
 | phin | 186 | 115 | 1890 | 198 | 489 |
 | cross-fetch | 259 | 181 | 2340 | 281 | 687 |
 | fetch (native) | 260 | 175 | 2600 | 274 | 723 |
 | recker | 265 | 167 | 2120 | 290 | 864 |
-| recker (fast) | 273 | 186 | 3890 | 294 | 672 |
 | axios | 318 | 192 | 2830 | 353 | 1030 |
 | node-fetch | 387 | 253 | 2110 | 426 | 935 |
 | got | 395 | 236 | 2740 | 420 | 1410 |
 | ky | 453 | 273 | 2950 | 502 | 1360 |
 | superagent | 495 | 301 | 3420 | 538 | 1280 |
 
-> ★ **recker (bare)** has only ~2% overhead vs raw undici!
+> ★ **recker-mini** has only ~2% overhead vs raw undici!
 
 ---
 
@@ -152,7 +149,7 @@ await client.post('/api/users', {
 | Library | Avg (µs) | Min (µs) | Max (µs) | p75 (µs) | p99 (µs) |
 |---------|----------|----------|----------|----------|----------|
 | **undici (raw)** | 169 | 110 | 2310 | 181 | 523 |
-| **recker (bare) ★** | **173** | 115 | 2450 | 186 | 498 |
+| **recker-mini** ★ | **173** | 115 | 2450 | 186 | 498 |
 | centra | 220 | 142 | 2180 | 238 | 610 |
 | phin | 228 | 148 | 2350 | 243 | 578 |
 | recker | 298 | 189 | 2540 | 328 | 892 |
@@ -261,12 +258,11 @@ GET JSON (lower is better) - microseconds (µs)
 ══════════════════════════════════════════════════════════════════════
 
 undici (raw)     ██████                                         142µs
-recker (bare) ★  ██████                                         146µs  (~2% overhead!)
+recker-mini ★    ██████                                         146µs  (~2% overhead!)
 centra           ████████                                       183µs
 phin             ████████                                       186µs
 fetch (native)   ███████████                                    260µs
 recker           ███████████                                    265µs
-recker (fast)    ████████████                                   273µs
 axios            █████████████                                  318µs
 got              ████████████████                               395µs
 ky               ██████████████████                             453µs
@@ -276,7 +272,7 @@ POST JSON (lower is better) - microseconds (µs)
 ══════════════════════════════════════════════════════════════════════
 
 undici (raw)     ██████                                         169µs
-recker (bare) ★  ███████                                        173µs  (~2% overhead!)
+recker-mini ★    ███████                                        173µs  (~2% overhead!)
 centra           █████████                                      220µs
 recker           ████████████                                   298µs
 axios            ██████████████                                 352µs
@@ -289,20 +285,19 @@ ky               ████████████████████   
 
 ## Key Findings
 
-1. **recker (bare) ★** achieves ~2% overhead vs raw undici - effectively zero overhead!
+1. **recker-mini** ★ achieves ~2% overhead vs raw undici - effectively zero overhead!
 2. **undici** is the fastest baseline (Node.js official HTTP client)
-3. **recker (bare)** is faster than ALL other HTTP clients (centra, phin, axios, got, etc.)
+3. **recker-mini** is faster than ALL other HTTP clients (centra, phin, axios, got, etc.)
 4. **recker** (full-featured) adds ~86% overhead vs undici but includes retry, cache, rate-limiting
-5. **Lightweight clients** (centra, phin) are fast but can't match recker (bare)
+5. **Lightweight clients** (centra, phin) are fast but can't match recker-mini
 6. **Full-featured clients** (got, axios, ky) are 2-3x slower than recker
 
 ### When to Use Each Recker Mode
 
 | Mode | Speed | Features | Use Case |
 |------|-------|----------|----------|
-| **recker (bare)** | ★★★★★ | None | Max throughput, simple requests |
-| **recker (fast)** | ★★★☆☆ | Most | High throughput with features |
-| **recker** | ★★★☆☆ | All | Production apps with observability |
+| **recker-mini** | ★★★★★ | None | Max throughput, simple requests |
+| **recker** | ★★★☆☆ | All | Production apps with all features |
 
 ---
 

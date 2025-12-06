@@ -106,9 +106,13 @@
       "types": "./dist/ai/index.d.ts",
       "import": "./dist/ai/index.js"
     },
+    "./mini": {
+      "types": "./dist/mini.d.ts",
+      "import": "./dist/mini.js"
+    },
     "./bare": {
-      "types": "./dist/bare.d.ts",
-      "import": "./dist/bare.js"
+      "types": "./dist/mini.d.ts",
+      "import": "./dist/mini.js"
     },
     "./package.json": "./package.json"
   },

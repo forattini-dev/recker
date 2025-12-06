@@ -1,26 +1,26 @@
 /**
- * Bare Client - Maximum Performance Mode
+ * Mini Client - Maximum Performance Mode
  *
  * Zero-overhead HTTP client that wraps undici directly.
  * Use when you need raw speed and don't need middleware/plugins.
  *
  * @example
  * ```typescript
- * import { createBareClient } from 'recker/bare';
+ * import { createMiniClient } from 'recker/mini';
  *
- * const client = createBareClient({ baseUrl: 'https://api.example.com' });
+ * const client = createMiniClient({ baseUrl: 'https://api.example.com' });
  * const data = await client.get('/users').json();
  * ```
  */
 
 import { request as undiciRequest } from 'undici';
 
-export interface BareClientOptions {
+export interface MiniClientOptions {
   baseUrl: string;
   headers?: Record<string, string>;
 }
 
-export interface BareResponse<T = unknown> {
+export interface MiniResponse<T = unknown> {
   status: number;
   headers: Headers;
   json(): Promise<T>;
@@ -29,16 +29,16 @@ export interface BareResponse<T = unknown> {
   blob(): Promise<Blob>;
 }
 
-export interface BareClient {
-  get<T = unknown>(path: string): Promise<BareResponse<T>>;
-  post<T = unknown>(path: string, body?: unknown): Promise<BareResponse<T>>;
-  put<T = unknown>(path: string, body?: unknown): Promise<BareResponse<T>>;
-  patch<T = unknown>(path: string, body?: unknown): Promise<BareResponse<T>>;
-  delete<T = unknown>(path: string): Promise<BareResponse<T>>;
+export interface MiniClient {
+  get<T = unknown>(path: string): Promise<MiniResponse<T>>;
+  post<T = unknown>(path: string, body?: unknown): Promise<MiniResponse<T>>;
+  put<T = unknown>(path: string, body?: unknown): Promise<MiniResponse<T>>;
+  patch<T = unknown>(path: string, body?: unknown): Promise<MiniResponse<T>>;
+  delete<T = unknown>(path: string): Promise<MiniResponse<T>>;
 }
 
 /**
- * Create a bare (zero-overhead) HTTP client
+ * Create a mini (zero-overhead) HTTP client
  *
  * Features NOT included (for speed):
  * - No retry
@@ -53,7 +53,7 @@ export interface BareClient {
  * - Default headers
  * - JSON serialization
  */
-export function createBareClient(options: BareClientOptions): BareClient {
+export function createMiniClient(options: MiniClientOptions): MiniClient {
   // Pre-compute base URL (remove trailing slash)
   const base = options.baseUrl.endsWith('/')
     ? options.baseUrl.slice(0, -1)
@@ -67,7 +67,7 @@ export function createBareClient(options: BareClientOptions): BareClient {
   };
 
   // Shared response wrapper factory (inlined for speed)
-  const wrapResponse = <T>(statusCode: number, headers: any, body: any): BareResponse<T> => ({
+  const wrapResponse = <T>(statusCode: number, headers: any, body: any): MiniResponse<T> => ({
     status: statusCode,
     headers: new Headers(Object.fromEntries(
       Object.entries(headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)])
@@ -79,7 +79,7 @@ export function createBareClient(options: BareClientOptions): BareClient {
   });
 
   return {
-    async get<T>(path: string): Promise<BareResponse<T>> {
+    async get<T>(path: string): Promise<MiniResponse<T>> {
       const { statusCode, headers, body } = await undiciRequest(base + path, {
         method: 'GET',
         headers: defaultHeaders
@@ -87,7 +87,7 @@ export function createBareClient(options: BareClientOptions): BareClient {
       return wrapResponse<T>(statusCode, headers, body);
     },
 
-    async post<T>(path: string, data?: unknown): Promise<BareResponse<T>> {
+    async post<T>(path: string, data?: unknown): Promise<MiniResponse<T>> {
       const { statusCode, headers, body } = await undiciRequest(base + path, {
         method: 'POST',
         headers: jsonHeaders,
@@ -96,7 +96,7 @@ export function createBareClient(options: BareClientOptions): BareClient {
       return wrapResponse<T>(statusCode, headers, body);
     },
 
-    async put<T>(path: string, data?: unknown): Promise<BareResponse<T>> {
+    async put<T>(path: string, data?: unknown): Promise<MiniResponse<T>> {
       const { statusCode, headers, body } = await undiciRequest(base + path, {
         method: 'PUT',
         headers: jsonHeaders,
@@ -105,7 +105,7 @@ export function createBareClient(options: BareClientOptions): BareClient {
       return wrapResponse<T>(statusCode, headers, body);
     },
 
-    async patch<T>(path: string, data?: unknown): Promise<BareResponse<T>> {
+    async patch<T>(path: string, data?: unknown): Promise<MiniResponse<T>> {
       const { statusCode, headers, body } = await undiciRequest(base + path, {
         method: 'PATCH',
         headers: jsonHeaders,
@@ -114,7 +114,7 @@ export function createBareClient(options: BareClientOptions): BareClient {
       return wrapResponse<T>(statusCode, headers, body);
     },
 
-    async delete<T>(path: string): Promise<BareResponse<T>> {
+    async delete<T>(path: string): Promise<MiniResponse<T>> {
       const { statusCode, headers, body } = await undiciRequest(base + path, {
         method: 'DELETE',
         headers: defaultHeaders
@@ -129,13 +129,13 @@ export function createBareClient(options: BareClientOptions): BareClient {
  *
  * @example
  * ```typescript
- * import { bareGet, barePost } from 'recker/bare';
+ * import { miniGet, miniPost } from 'recker/mini';
  *
- * const data = await bareGet('https://api.example.com/users').json();
- * const created = await barePost('https://api.example.com/users', { name: 'John' }).json();
+ * const data = await miniGet('https://api.example.com/users').json();
+ * const created = await miniPost('https://api.example.com/users', { name: 'John' }).json();
  * ```
  */
-export async function bareGet<T = unknown>(url: string, headers?: Record<string, string>): Promise<BareResponse<T>> {
+export async function miniGet<T = unknown>(url: string, headers?: Record<string, string>): Promise<MiniResponse<T>> {
   const { statusCode, headers: resHeaders, body } = await undiciRequest(url, {
     method: 'GET',
     headers
@@ -152,7 +152,7 @@ export async function bareGet<T = unknown>(url: string, headers?: Record<string,
   };
 }
 
-export async function barePost<T = unknown>(url: string, data?: unknown, headers?: Record<string, string>): Promise<BareResponse<T>> {
+export async function miniPost<T = unknown>(url: string, data?: unknown, headers?: Record<string, string>): Promise<MiniResponse<T>> {
   const { statusCode, headers: resHeaders, body } = await undiciRequest(url, {
     method: 'POST',
     headers: {
@@ -172,3 +172,17 @@ export async function barePost<T = unknown>(url: string, data?: unknown, headers
     blob: async () => new Blob([await body.arrayBuffer()])
   };
 }
+
+// Backwards compatibility aliases
+/** @deprecated Use createMiniClient instead */
+export const createBareClient = createMiniClient;
+/** @deprecated Use MiniClientOptions instead */
+export type BareClientOptions = MiniClientOptions;
+/** @deprecated Use MiniResponse instead */
+export type BareResponse<T = unknown> = MiniResponse<T>;
+/** @deprecated Use MiniClient instead */
+export type BareClient = MiniClient;
+/** @deprecated Use miniGet instead */
+export const bareGet = miniGet;
+/** @deprecated Use miniPost instead */
+export const barePost = miniPost;
