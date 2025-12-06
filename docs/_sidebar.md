@@ -32,6 +32,8 @@
   - [Auth](/plugins/06-auth.md)
   - [Logger](/plugins/07-logger.md)
   - [Cookie Jar](/plugins/08-cookie-jar.md)
+  - [Rate Limit](/plugins/09-rate-limit.md)
+  - [Certificate Pinning](/plugins/10-certificate-pinning.md)
 
 - **AI & LLM**
   - [Overview](/ai/01-overview.md)

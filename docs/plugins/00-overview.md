@@ -29,60 +29,62 @@ Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 
 ### Resilience
 
-| Plugin | Description |
-|--------|-------------|
-| [Retry](./02-retry.md) | Automatic retries with exponential backoff |
-| [Circuit Breaker](./03-circuit-breaker.md) | Protection against cascading failures |
-| [Dedup](./05-dedup.md) | Deduplication of simultaneous requests |
+| Plugin | Function | Description |
+|--------|----------|-------------|
+| [Retry](./02-retry.md) | `retryPlugin` | Automatic retries with exponential backoff |
+| [Circuit Breaker](./03-circuit-breaker.md) | `circuitBreakerPlugin` | Protection against cascading failures |
+| [Dedup](./05-dedup.md) | `dedupPlugin` | Deduplication of simultaneous requests |
+| [Rate Limit](./09-rate-limit.md) | `rateLimitPlugin` | Token bucket rate limiting |
 
 ### Performance
 
-| Plugin | Description |
-|--------|-------------|
-| [Cache](./04-cache.md) | HTTP caching with multiple strategies |
-| [Memory Cache](./01-memory-cache.md) | High-performance in-memory cache storage |
-| Compression | Automatic request/response compression (gzip, br, deflate) |
-| HTTP/2 Push | HTTP/2 server push handling |
-| HTTP/3 | HTTP/3 (QUIC) protocol support |
+| Plugin | Function | Description |
+|--------|----------|-------------|
+| [Cache](./04-cache.md) | `cachePlugin` | HTTP caching with multiple strategies |
+| [Memory Cache](./01-memory-cache.md) | `MemoryCache` | High-performance in-memory cache storage |
+| Compression | `compressionPlugin` | Automatic request/response compression (gzip, br, deflate) |
+| HTTP/2 Push | `http2PushPlugin` | HTTP/2 server push handling |
+| HTTP/3 | `http3Plugin` | HTTP/3 (QUIC) protocol support |
 
 ### Security
 
-| Plugin | Description |
-|--------|-------------|
-| [Auth](./06-auth.md) | Authentication (Bearer, Basic, API Key) |
-| [Cookie Jar](./08-cookie-jar.md) | Automatic cookie management |
-| XSRF | CSRF protection |
+| Plugin | Function | Description |
+|--------|----------|-------------|
+| [Auth](./06-auth.md) | 15 auth methods | Authentication (15 methods including OAuth2, mTLS, IdPs) |
+| [Certificate Pinning](./10-certificate-pinning.md) | `certificatePinningPlugin` | Certificate pinning to prevent MITM |
+| [Cookie Jar](./08-cookie-jar.md) | `cookieJarPlugin` | Automatic cookie management |
+| XSRF | `xsrfPlugin` | CSRF protection |
 
 ### Observability
 
-| Plugin | Description |
-|--------|-------------|
-| [Logger](./07-logger.md) | Request and response logging |
-| Server Timing | Server-Timing header parsing |
-| HAR Recorder | Request recording in HAR format |
-| HAR Player | Replay HAR-recorded requests |
+| Plugin | Function | Description |
+|--------|----------|-------------|
+| [Logger](./07-logger.md) | `loggerPlugin` | Request and response logging |
+| Server Timing | `serverTimingPlugin` | Server-Timing header parsing |
+| HAR Recorder | `harRecorderPlugin` | Request recording in HAR format |
+| HAR Player | `harPlayerPlugin` | Replay HAR-recorded requests |
 
 ### Protocols
 
-| Plugin | Description |
-|--------|-------------|
-| GraphQL | Integrated GraphQL client |
-| SOAP | SOAP/XML client |
-| XML | XML parsing and building |
-| JSON-RPC | JSON-RPC 2.0 client |
-| gRPC-Web | gRPC-Web client |
-| OData | OData client |
+| Plugin | Function | Description |
+|--------|----------|-------------|
+| GraphQL | `graphqlPlugin` | Integrated GraphQL client |
+| SOAP | `soapPlugin` | SOAP/XML client |
+| XML | `xmlPlugin` | XML parsing and building |
+| JSON-RPC | `jsonrpcPlugin` | JSON-RPC 2.0 client |
+| gRPC-Web | `grpcWebPlugin` | gRPC-Web client |
+| OData | `odataPlugin` | OData client |
 
 ### Specialties
 
-| Plugin | Description |
-|--------|-------------|
-| Pagination | Automatic pagination |
-| Scrape | Web scraping with CSS selectors |
-| HLS | HLS streaming support |
-| User Agent | Custom user agent generation |
-| Proxy Rotator | Proxy rotation |
-| Interface Rotator | Network interface rotation |
+| Plugin | Function | Description |
+|--------|----------|-------------|
+| Pagination | `paginationPlugin` | Automatic pagination |
+| Scrape | `scrapePlugin` | Web scraping with CSS selectors |
+| HLS | `hlsPlugin` | HLS streaming support |
+| User Agent | `userAgentRotatorPlugin` | Custom user agent generation |
+| Proxy Rotator | `proxyRotatorPlugin` | Proxy rotation |
+| Interface Rotator | `interfaceRotatorPlugin` | Network interface rotation |
 
 ## Using Plugins
 

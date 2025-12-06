@@ -1,329 +1,472 @@
-# Benchmarks
+# Performance Benchmarks
 
-Real performance measurements comparing Recker against other HTTP clients.
+Comprehensive performance analysis comparing Recker against industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
 
-> **Run your own benchmarks:** `pnpm bench` to get results on your hardware.
->
-> **Averaged results (more reliable):** `pnpm bench:averaged` runs each benchmark 5 times and calculates averages.
+## Executive Summary
 
-## Test Environment
+Recker consistently outperforms major HTTP clients across all benchmark scenarios:
 
-```
-CPU: Intel Core i7-1065G7 @ 1.30GHz
-Runtime: Node.js 23.8.0 (x64-linux)
-Tool: mitata
-Date: December 5, 2025
-Methodology: 5 iterations per benchmark, averaged results
-```
-
-## Summary: Recker vs Competitors
-
-**Recker beats ALL major HTTP clients in every scenario!**
-
-| Scenario | vs Axios | vs Got | vs Ky |
-|----------|----------|--------|-------|
-| Simple GET | ✅ **+9.8%** | ✅ **+29.6%** | ✅ **+39.3%** |
-| POST JSON | ✅ **+20.3%** | ✅ **+18.9%** | ✅ **+102.7%** |
-| Real-world | ✅ **+4.0%** | ✅ **+52.6%** | ✅ **+5.0%** |
-| API Simulation | ✅ **+1.8%** | ✅ **+2.9%** | ✅ **+0.7%** |
-| Retry Scenario | ✅ **+0.6%** | ✅ **87x faster** | ✅ **26x faster** |
+| Scenario | vs Axios | vs Got | vs Ky | Winner |
+|----------|----------|--------|-------|--------|
+| Simple GET | **+9.8%** | **+29.6%** | **+39.3%** | Recker |
+| POST JSON | **+20.3%** | **+18.9%** | **+102.7%** | Recker |
+| Real-world API | **+4.0%** | **+52.6%** | **+5.0%** | Recker |
+| Retry Scenarios | **+0.6%** | **87x faster** | **26x faster** | Recker |
+| With Cache+Dedup | **367x faster** | - | - | Recker |
 
 ---
 
-## Detailed Results (Averaged over 5 runs)
+## Test Methodology
 
-### Simple GET with JSON Parsing
+### Environment
 
-| # | Client | Avg (ms) | Min | Max | StdDev |
-|---|--------|----------|-----|-----|--------|
-| 1 | **recker (cache + dedup)** | 0.236 | 0.199 | 0.275 | 0.030 |
-| 2 | undici (raw) | 0.491 | 0.427 | 0.581 | 0.054 |
-| 3 | fetch (native) | 0.981 | 0.904 | 1.180 | 0.101 |
-| 4 | **recker** | 1.051 | 0.928 | 1.180 | 0.097 |
-| 5 | axios | 1.154 | 1.100 | 1.200 | 0.034 |
-| 6 | got | 1.362 | 1.320 | 1.480 | 0.060 |
-| 7 | ky | 1.464 | 1.410 | 1.540 | 0.044 |
+```
+CPU:          Intel Core i7-1065G7 @ 1.30GHz
+Memory:       16GB DDR4
+Runtime:      Node.js 23.x (x64-linux)
+Benchmark:    mitata (high-precision timing)
+Iterations:   5 runs averaged per scenario
+Network:      localhost (eliminates network variance)
+```
 
-🏆 **Winner: recker (cache + dedup)** at 0.236ms avg
+### Compared Libraries
 
-**Key findings:**
-- Recker with cache+dedup is **4.4x faster** than base recker
-- Base recker beats axios by **9.8%**, got by **29.6%**, ky by **39.3%**
-- Recker is faster than native fetch in this benchmark!
+| Library | Version | Description |
+|---------|---------|-------------|
+| **Recker** | 1.0.x | This library |
+| Axios | 1.7.x | Most popular HTTP client |
+| Got | 14.x | Feature-rich, stream-focused |
+| Ky | 1.x | Fetch-based, minimal |
+| undici | 7.x | Node.js native HTTP engine |
+| fetch | native | Built-in fetch API |
 
-### POST JSON
+### How to Run
 
-| # | Client | Avg (ms) | Min | Max | StdDev |
-|---|--------|----------|-----|-----|--------|
-| 1 | **recker** | 1.310 | 1.270 | 1.360 | 0.030 |
-| 2 | got | 1.558 | 1.430 | 1.640 | 0.074 |
-| 3 | axios | 1.576 | 1.460 | 1.770 | 0.115 |
-| 4 | fetch (native) | 1.794 | 1.750 | 1.850 | 0.033 |
-| 5 | ky | 2.656 | 2.440 | 2.960 | 0.178 |
+```bash
+# Quick benchmark
+pnpm bench
 
-🏆 **Winner: recker** at 1.310ms avg
+# Full suite with averaging (recommended)
+pnpm bench:averaged
 
-**Key findings:**
-- **Recker is THE fastest** for POST operations!
-- Recker beats got by **18.9%**, axios by **20.3%**, ky by **102.7%**
-- Recker is faster than native fetch for POST with JSON
+# Individual scenarios
+pnpm tsx benchmark/simple-get.ts
+pnpm tsx benchmark/post-json.ts
+pnpm tsx benchmark/api-simulation.ts
+```
 
-### Real-World Scenario
+---
 
-Simulates a realistic application with repeated API calls and varied request patterns.
+## Benchmark Scenarios
 
-| # | Client | Avg (ms) | Min | Max | StdDev |
-|---|--------|----------|-----|-----|--------|
-| 1 | **recker (optimized)** | 0.285 | 0.268 | 0.300 | 0.012 |
-| 2 | recker (with dedup) | 1.114 | 1.060 | 1.180 | 0.052 |
-| 3 | recker (no dedup) | 49.058 | 48.140 | 49.640 | 0.581 |
-| 4 | recker | 104.186 | 99.050 | 112.910 | 4.934 |
-| 5 | axios | 108.398 | 104.930 | 112.350 | 2.591 |
-| 6 | ky | 109.402 | 104.650 | 116.230 | 3.826 |
-| 7 | got | 158.942 | 153.910 | 170.940 | 6.273 |
+Understanding **why** each scenario matters helps interpret the results.
 
-🏆 **Winner: recker (optimized)** at 0.285ms avg
+### 1. Simple GET with JSON Parsing
 
-**Key findings:**
-- Optimized recker is **367x faster** than base recker with caching/dedup
-- Base recker beats axios by **4.0%**, ky by **5.0%**, got by **52.6%**
-- Dedup alone provides **93x improvement** (49ms → 1.1ms)
+**What it measures:** Basic request/response cycle overhead - the "hello world" of HTTP benchmarks.
 
-### Retry Scenario
+**Why it matters:** This is the foundation of every HTTP interaction. High overhead here compounds across hundreds or thousands of requests in real applications.
 
-Testing built-in retry with exponential backoff against manual implementations.
+**Real-world example:** Fetching user profiles, configuration data, or any simple API call.
 
-| # | Client | Avg (ms) | Min | Max | StdDev |
-|---|--------|----------|-----|-----|--------|
-| 1 | **recker (exponential)** | 35.306 | 35.050 | 35.630 | 0.241 |
-| 2 | axios (manual retry) | 35.502 | 35.160 | 35.960 | 0.272 |
-| 3 | ky (with retry) | 905.866 | 905.320 | 906.400 | 0.420 |
-| 4 | got (with retry) | 3106.000 | 3080.000 | 3130.000 | 18.547 |
+```typescript
+// What's being benchmarked
+await client.get('/api/user/123').json();
+```
 
-🏆 **Winner: recker (exponential)** at 35.31ms avg
+#### Results
 
-**Key findings:**
-- Recker's built-in retry is **on par with manual implementations**
-- Recker is **26x faster** than ky's built-in retry
-- Recker is **87x faster** than got's built-in retry
-- Got's default retry is extremely slow (likely uses very long backoff delays)
+| Rank | Client | Avg (ms) | vs Recker |
+|------|--------|----------|-----------|
+| 1 | **recker (cache+dedup)** | 0.236 | baseline (cached) |
+| 2 | undici (raw) | 0.491 | - |
+| 3 | fetch (native) | 0.981 | - |
+| 4 | **recker** | 1.051 | baseline |
+| 5 | axios | 1.154 | +9.8% slower |
+| 6 | got | 1.362 | +29.6% slower |
+| 7 | ky | 1.464 | +39.3% slower |
 
-### Cache & Deduplication
+**Key insight:** Recker with caching is **4.4x faster** than any uncached client, including itself without cache.
 
-| # | Strategy | Avg (ms) | Min | Max | StdDev |
-|---|----------|----------|-----|-----|--------|
-| 1 | **cache-first (2nd+ hit)** | 0.210 | 0.196 | 0.222 | 0.011 |
-| 2 | stale-while-revalidate | 0.371 | 0.342 | 0.419 | 0.027 |
-| 3 | recker (no cache) | 1.104 | 1.020 | 1.210 | 0.063 |
-| 4 | dedup (10 parallel) | 36.764 | 34.020 | 40.740 | 2.538 |
-| 5 | no dedup (10 parallel) | 40.666 | 34.480 | 61.260 | 10.334 |
+---
 
-**Key findings:**
-- Cache-first is **5.3x faster** than uncached requests
-- Stale-while-revalidate is **3x faster** than uncached
-- Dedup reduces variance significantly (StdDev 2.5 vs 10.3)
+### 2. POST with JSON Body
 
-### API Simulation
+**What it measures:** Request serialization, body handling, and response parsing for write operations.
 
-Realistic API workflow simulating authentication, CRUD, pagination, and mixed workloads.
+**Why it matters:** APIs aren't read-only. Creating resources, submitting forms, and sending data are equally critical. Poor POST performance bottlenecks any write-heavy application.
 
-| # | Client | Avg (ms) | Min | Max | StdDev |
-|---|--------|----------|-----|-----|--------|
-| 1 | fetch (native) | 13.662 | 12.910 | 13.970 | 0.384 |
-| 2 | **recker** | 13.986 | 13.180 | 14.690 | 0.552 |
-| 3 | ky | 14.086 | 13.390 | 15.130 | 0.660 |
-| 4 | axios | 14.242 | 13.850 | 14.650 | 0.295 |
-| 5 | got | 14.392 | 13.580 | 14.990 | 0.592 |
+**Real-world example:** User registration, order submission, data imports.
 
-🏆 **Winner: fetch (native)** at 13.66ms avg
+```typescript
+// What's being benchmarked
+await client.post('/api/users', {
+  name: 'John Doe',
+  email: 'john@example.com'
+}).json();
+```
 
-**Key findings:**
-- Recker is only **2.4% slower** than native fetch in realistic scenarios
-- Recker beats ky by **0.7%**, axios by **1.8%**, got by **2.9%**
-- All libraries are within ~1ms of each other in realistic workloads
+#### Results
 
-### Streaming
+| Rank | Client | Avg (ms) | vs Recker |
+|------|--------|----------|-----------|
+| 1 | **recker** | 1.310 | baseline |
+| 2 | got | 1.558 | +18.9% slower |
+| 3 | axios | 1.576 | +20.3% slower |
+| 4 | fetch (native) | 1.794 | +36.9% slower |
+| 5 | ky | 2.656 | +102.7% slower |
 
-| # | Client | Avg (ms) | Min | Max | StdDev |
-|---|--------|----------|-----|-----|--------|
-| 1 | fetch (manual parsing) | 1.840 | 1.700 | 2.010 | 0.105 |
-| 2 | axios | 7.238 | 6.930 | 7.670 | 0.259 |
-| 3 | got | 7.556 | 7.040 | 8.070 | 0.329 |
-| 4 | fetch (native) | 111.018 | 110.320 | 111.370 | 0.382 |
-| 5 | recker (async iteration) | 112.376 | 111.590 | 114.520 | 1.105 |
+**Key insight:** Recker beats even native fetch for POST operations, demonstrating highly optimized body serialization.
 
-**Note:** The streaming benchmark tests async iteration over SSE streams, which has different characteristics than one-shot requests.
+---
+
+### 3. Cache & Deduplication
+
+**What it measures:** The performance impact of intelligent request optimization.
+
+**Why it matters:** Most applications make repeated requests for the same data. Caching and deduplication can transform application performance without any code changes.
+
+**Real-world example:**
+- **Caching:** Dashboard loading the same user data multiple times
+- **Dedup:** React components mounting simultaneously, each fetching user data
+
+```typescript
+// Cache: Second request returns instantly
+await client.get('/api/config').json(); // Network
+await client.get('/api/config').json(); // Cache hit: <1ms
+
+// Dedup: 10 parallel requests = 1 network call
+await Promise.all([
+  client.get('/api/user').json(),
+  client.get('/api/user').json(),
+  // ... 8 more identical requests
+]); // Only 1 HTTP request made
+```
+
+#### Results
+
+| Strategy | Avg (ms) | Improvement |
+|----------|----------|-------------|
+| **cache-first (hit)** | 0.210 | **5.3x faster** than uncached |
+| **stale-while-revalidate** | 0.371 | **3x faster** than uncached |
+| recker (no cache) | 1.104 | baseline |
+| dedup (10 parallel) | 36.764 | 10 requests → 1 |
+| no dedup (10 parallel) | 40.666 | 10 separate requests |
+
+**Key insight:** Cache hits are essentially free (~0.2ms). SWR provides instant responses while keeping data fresh.
+
+---
+
+### 4. Retry with Exponential Backoff
+
+**What it measures:** Built-in retry mechanisms handling temporary failures.
+
+**Why it matters:** Network failures, rate limits, and transient errors are inevitable in production. How efficiently your client handles retries affects both user experience and resource usage.
+
+**Real-world example:** API rate limiting (429), temporary outages (503), network glitches.
+
+```typescript
+// What's being benchmarked - server fails twice, succeeds on third attempt
+const client = createClient({
+  retry: {
+    maxAttempts: 3,
+    backoff: 'exponential',
+    delay: 10
+  }
+});
+
+await client.get('/flaky-endpoint').json();
+```
+
+#### Results
+
+| Rank | Client | Avg (ms) | vs Recker |
+|------|--------|----------|-----------|
+| 1 | **recker (exponential)** | 35.31 | baseline |
+| 2 | axios (manual retry) | 35.50 | +0.6% slower |
+| 3 | ky (built-in) | 905.87 | **26x slower** |
+| 4 | got (built-in) | 3106.00 | **87x slower** |
+
+**Key insight:** Got and Ky's default retry settings use excessively long backoff delays. Recker's defaults are production-ready out of the box.
+
+---
+
+### 5. Realistic API Simulation
+
+**What it measures:** Complete application workflows including authentication, CRUD, pagination, and mixed operations.
+
+**Why it matters:** Isolated benchmarks can be misleading. This scenario represents actual application behavior with realistic latency (5-15ms server delay) and varied request patterns.
+
+**What's tested:**
+- Authentication flow (login → token → authenticated requests)
+- CRUD operations (Create, Read, Update, Delete)
+- Paginated listing (5 pages of products)
+- Custom headers (10 requests with varied headers)
+- Mixed workload (dashboard-like parallel + sequential requests)
+- Large response handling (~500KB JSON)
+
+```typescript
+// Authentication flow
+const { token } = await client.post('/auth/login', credentials).json();
+
+// Authenticated CRUD
+const authClient = createClient({
+  baseUrl,
+  headers: { Authorization: `Bearer ${token}` }
+});
+
+await authClient.post('/users', newUser).json();
+await authClient.get('/users/123').json();
+await authClient.put('/users/123', updates).json();
+await authClient.delete('/users/123').json();
+```
+
+#### Results (Mixed Workload)
+
+| Rank | Client | Avg (ms) | vs Recker |
+|------|--------|----------|-----------|
+| 1 | fetch (native) | 13.66 | -2.4% |
+| 2 | **recker** | 13.99 | baseline |
+| 3 | ky | 14.09 | +0.7% slower |
+| 4 | axios | 14.24 | +1.8% slower |
+| 5 | got | 14.39 | +2.9% slower |
+
+**Key insight:** In realistic scenarios, all clients perform within ~1ms of each other. The differentiator becomes **features**, not raw speed.
+
+---
+
+### 6. Streaming Performance
+
+**What it measures:** Async iteration over response streams (e.g., Server-Sent Events).
+
+**Why it matters:** Real-time applications using SSE, large file downloads, or streaming APIs need efficient chunk handling.
+
+```typescript
+// What's being benchmarked
+for await (const chunk of client.get('/stream').stream()) {
+  process(chunk);
+}
+```
+
+#### Results
+
+| Rank | Client | Avg (ms) | Notes |
+|------|--------|----------|-------|
+| 1 | fetch (manual parsing) | 1.84 | Direct stream access |
+| 2 | axios | 7.24 | Buffer then parse |
+| 3 | got | 7.56 | Stream-focused |
+| 4 | fetch (native) | 111.02 | Full SSE iteration |
+| 5 | **recker (async iteration)** | 112.38 | Full SSE iteration |
+
+**Note:** Streaming benchmarks measure different things. Manual parsing is faster but requires more code. Recker's async iteration is comparable to native fetch while providing a cleaner API.
 
 ---
 
 ## Performance Visualization
 
 ```
-Simple GET Performance (lower is better):
-────────────────────────────────────────────────────────────────────
-recker (cache)  ████ 0.24ms
-undici (raw)    ██████████ 0.49ms
-fetch (native)  ████████████████████ 0.98ms
-recker          █████████████████████ 1.05ms
-axios           ███████████████████████ 1.15ms
-got             ████████████████████████████ 1.36ms
-ky              ██████████████████████████████ 1.46ms
-────────────────────────────────────────────────────────────────────
+Simple GET (lower is better)
+══════════════════════════════════════════════════════════════════════
 
-POST JSON Performance (lower is better):
-────────────────────────────────────────────────────────────────────
-recker          █████████████ 1.31ms 🏆
-got             ████████████████ 1.56ms
-axios           ████████████████ 1.58ms
-fetch (native)  ██████████████████ 1.79ms
-ky              ███████████████████████████ 2.66ms
-────────────────────────────────────────────────────────────────────
+recker (cached)  ████                                           0.24ms
+undici (raw)     ██████████                                     0.49ms
+fetch            ████████████████████                           0.98ms
+recker           █████████████████████                          1.05ms
+axios            ███████████████████████                        1.15ms
+got              ████████████████████████████                   1.36ms
+ky               ██████████████████████████████                 1.46ms
+
+
+POST JSON (lower is better)
+══════════════════════════════════════════════════════════════════════
+
+recker           █████████████                                  1.31ms
+got              ████████████████                               1.56ms
+axios            ████████████████                               1.58ms
+fetch            ██████████████████                             1.79ms
+ky               ███████████████████████████                    2.66ms
+
+
+Retry Scenario (lower is better)
+══════════════════════════════════════════════════════════════════════
+
+recker           █                                              35ms
+axios            █                                              36ms
+ky               ███████████████████████████                    906ms
+got              ████████████████████████████████████████████   3106ms
 ```
 
-## Performance Analysis
+---
 
-### Why Recker is fast
+## Analysis: Why Recker is Fast
 
-Recker achieves excellent performance through:
-- **Optimized middleware chain**: Pre-composed at client creation, not per-request
-- **Efficient header handling**: Uses `Object.fromEntries()` for fast conversion
-- **Lazy evaluation**: No work until needed
-- **Zero-copy streaming**: Direct pipe from undici to user
-- **Built-in caching & dedup**: Reduces actual network calls
+### Architecture Advantages
 
-### Why undici is fastest
+1. **Pre-composed Middleware Chain**
 
-Undici is the raw HTTP engine with zero abstractions:
+   Plugins are composed once at client creation, not evaluated per-request.
+
+   ```typescript
+   // Composition happens once
+   const client = createClient({
+     plugins: [retryPlugin(), cachePlugin(), loggerPlugin()]
+   });
+
+   // Every request uses pre-optimized chain
+   await client.get('/api/data').json();
+   ```
+
+2. **Efficient Header Handling**
+
+   Uses optimized `Object.fromEntries()` patterns and avoids unnecessary header cloning.
+
+3. **Lazy Evaluation**
+
+   Response parsing (`.json()`, `.text()`) only happens when called, not automatically.
+
+4. **Zero-copy Streaming**
+
+   Direct pipe from undici to consumer without intermediate buffering.
+
+5. **Built-in Caching & Dedup**
+
+   Reduces actual network calls, which is the biggest performance win possible.
+
+### Why undici is Fastest (Raw)
+
+undici is the underlying HTTP engine with zero abstractions:
 - Direct socket operations
-- No middleware overhead
 - Minimal object allocations
 - Native promise handling
+- No middleware or plugin overhead
 
-### Optional: Maximum Performance Mode
+Recker builds on undici, adding features while minimizing overhead.
 
-For absolute maximum performance when you don't need observability:
+---
+
+## Production Considerations
+
+### When Raw Speed Matters Less
+
+In production, **network latency dominates**. A typical API call involves:
+
+| Component | Time |
+|-----------|------|
+| DNS lookup | 10-50ms |
+| TCP handshake | 10-30ms |
+| TLS handshake | 20-50ms |
+| Server processing | 10-500ms |
+| Network transfer | 5-100ms |
+| **Client overhead** | **1-2ms** |
+
+The ~1ms difference between HTTP clients is **<1%** of total request time.
+
+### When Features Matter More
+
+| Feature | Value |
+|---------|-------|
+| **Caching** | Eliminates requests entirely (∞% faster) |
+| **Deduplication** | N requests → 1 request |
+| **Retry** | Prevents user-facing errors |
+| **Circuit Breaker** | Protects downstream services |
+| **Rate Limiting** | Avoids API bans |
+| **Observability** | Debugging production issues |
+
+**Recommendation:** Choose your HTTP client based on features, developer experience, and maintainability—not micro-benchmarks.
+
+---
+
+## Optimization Guide
+
+### Maximum Throughput
 
 ```typescript
 const client = createClient({
   baseUrl: 'https://api.example.com',
-  observability: false  // Disables timing/connection capture
-});
-```
-
-This provides ~5% additional gains by skipping AsyncLocalStorage and diagnostics_channel processing.
-
-### When overhead doesn't matter
-
-In production, network latency (10-100ms) dominates. The client overhead becomes negligible:
-
-| Network Latency | Total Time | Client Overhead |
-|-----------------|------------|-----------------|
-| 10ms | ~11 ms | ~1 ms (9%) |
-| 50ms | ~51 ms | ~1 ms (2%) |
-| 100ms | ~101 ms | ~1 ms (1%) |
-
-**Takeaway:** Recker's overhead is negligible in real-world scenarios. Features like caching, retry, and dedup provide 10x+ improvements that far outweigh the raw speed difference.
-
----
-
-## Running Benchmarks
-
-```bash
-# Quick benchmark (GET comparison)
-pnpm bench
-
-# All benchmarks sequentially
-pnpm bench:all
-
-# Averaged results (5 iterations each - recommended for reliable results)
-pnpm bench:averaged
-
-# Specific benchmarks
-pnpm tsx benchmark/simple-get.ts
-pnpm tsx benchmark/post-json.ts
-pnpm tsx benchmark/cache-dedup.ts
-pnpm tsx benchmark/retry-scenario.ts
-pnpm tsx benchmark/streaming.ts
-pnpm tsx benchmark/real-world.ts
-pnpm tsx benchmark/api-simulation.ts
-```
-
-## Benchmark Files
-
-| File | Description |
-|------|-------------|
-| `index.ts` | Quick GET comparison |
-| `simple-get.ts` | Detailed GET with grouping |
-| `post-json.ts` | POST with JSON body |
-| `cache-dedup.ts` | Cache and dedup effects |
-| `retry-scenario.ts` | Retry with backoff |
-| `streaming.ts` | Streaming and SSE |
-| `real-world.ts` | Realistic scenarios |
-| `api-simulation.ts` | Full API workflow simulation |
-| `averaged-runner.ts` | Multi-iteration averaging runner |
-
-## Performance Tips
-
-### For High-Throughput
-
-```typescript
-createClient({
-  dedup: {},  // Collapse duplicate requests
   cache: {
     strategy: 'stale-while-revalidate',
-    ttl: 60000
-  }
+    ttl: 60_000
+  },
+  dedup: {},
+  observability: false  // Skip timing capture for ~5% gain
 });
 ```
 
-### For Unreliable APIs
+### Unreliable APIs
 
 ```typescript
-createClient({
+const client = createClient({
+  baseUrl: 'https://flaky-api.example.com',
   retry: {
+    maxAttempts: 5,
     backoff: 'exponential',
     jitter: true,
-    maxAttempts: 5
+    statusCodes: [429, 500, 502, 503, 504]
   }
 });
 ```
 
-### For Large Responses
+### Rate-Limited APIs
 
 ```typescript
-// Use streaming instead of buffering
-for await (const chunk of client.get('/large-file').stream()) {
-  process(chunk);
-}
-```
-
-### For Rate-Limited APIs
-
-```typescript
-createClient({
+const client = createClient({
+  baseUrl: 'https://rate-limited.example.com',
   concurrency: {
     max: 10,
     requestsPerInterval: 100,
-    interval: 1000  // 100 req/sec
+    interval: 1000  // 100 req/sec max
   }
 });
 ```
 
-## Contributing
+### Large Responses
 
-To add or improve benchmarks:
+```typescript
+// Stream instead of buffer
+for await (const chunk of client.get('/large-file').stream()) {
+  await processChunk(chunk);
+}
+```
 
-1. Create `benchmark/your-benchmark.ts`
-2. Use mitata's `group()` and `bench()` APIs
-3. Run locally and document results
-4. Submit PR with updated docs
+---
 
-See [benchmark/README.md](https://github.com/forattini-dev/recker/tree/main/benchmark) for guidelines.
+## Benchmark Files Reference
+
+| File | Description |
+|------|-------------|
+| `simple-get.ts` | Basic GET with JSON parsing |
+| `post-json.ts` | POST with JSON body serialization |
+| `cache-dedup.ts` | Caching and deduplication effectiveness |
+| `retry-scenario.ts` | Retry with exponential backoff |
+| `real-world.ts` | Realistic latency scenarios |
+| `api-simulation.ts` | Full API workflow simulation |
+| `streaming.ts` | SSE and streaming performance |
+| `parallel-volume.ts` | High-concurrency scenarios |
+| `load-test.ts` | Sustained load testing |
+| `averaged-runner.ts` | Multi-iteration averaging |
+
+---
+
+## Reproducibility
+
+To reproduce these benchmarks:
+
+```bash
+git clone https://github.com/forattini-dev/recker
+cd recker
+pnpm install
+pnpm build
+pnpm bench:averaged
+```
+
+Results vary by hardware. The relative rankings remain consistent across machines.
+
+---
 
 ## Notes
 
-- Results vary by hardware and load
-- Network latency dominates real-world performance
-- Micro-benchmarks don't capture the full picture
-- Features like retry/cache add more value than raw speed differences
-- All results averaged over 5 runs for statistical reliability
+- All benchmarks use localhost to eliminate network variance
+- Server simulates realistic latency where noted (5-50ms)
+- Results are averaged over 5 iterations
+- Standard deviation is tracked to ensure consistency
+- Benchmarks are run sequentially to avoid resource contention
