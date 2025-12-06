@@ -118,7 +118,34 @@
 - **Iterations**: Multiple samples until statistically significant
 - **Metrics**: All times in milliseconds (ms)
 
-## Libraries Tested (21)
+## Libraries Tested (22)
+
+| # | Library | npm Package | Category | Notes |
+|---|---------|-------------|----------|-------|
+| 1 | **undici** | `undici` | Raw/Low-level | Node.js official HTTP client, fastest baseline |
+| 2 | **fetch (native)** | built-in | Raw/Low-level | Node.js 18+ native fetch (uses undici) |
+| 3 | **recker** | `recker` | Full-featured | This library - retry, cache, rate-limit, auth |
+| 4 | **recker (fast)** | `recker` | Full-featured | Recker with `observability: false` |
+| 5 | **axios** | `axios` | Full-featured | Most popular, browser + Node.js |
+| 6 | **got** | `got` | Full-featured | Feature-rich, Node.js only |
+| 7 | **ky** | `ky` | Full-featured | Tiny fetch wrapper by Sindre Sorhus |
+| 8 | **node-fetch** | `node-fetch` | Fetch-based | Fetch polyfill for Node.js |
+| 9 | **cross-fetch** | `cross-fetch` | Fetch-based | Universal fetch (browser + Node.js) |
+| 10 | **wretch** | `wretch` | Fetch-based | Fluent fetch wrapper |
+| 11 | **make-fetch-happen** | `make-fetch-happen` | Fetch-based | npm's fetch with caching |
+| 12 | **minipass-fetch** | `minipass-fetch` | Fetch-based | Lightweight fetch for npm |
+| 13 | **phin** | `phin` | Lightweight | Ultra-lightweight (~1KB) |
+| 14 | **centra** | `centra` | Lightweight | Core of phin, minimal overhead |
+| 15 | **bent** | `bent` | Lightweight | Functional HTTP client |
+| 16 | **simple-get** | `simple-get` | Lightweight | Simplest possible HTTP client |
+| 17 | **tiny-json-http** | `tiny-json-http` | Lightweight | JSON-focused, zero deps |
+| 18 | **superagent** | `superagent` | Legacy | Chainable API, callback-based |
+| 19 | **needle** | `needle` | Legacy | Streaming-focused |
+| 20 | **hyperquest** | `hyperquest` | Legacy | Substack's streaming client |
+| 21 | **wreck** | `@hapi/wreck` | Ecosystem | Hapi.js HTTP client |
+| 22 | **popsicle** | `popsicle` | Ecosystem | Composable HTTP transport |
+
+### By Category
 
 | Category | Libraries |
 |----------|-----------|

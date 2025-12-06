@@ -107,7 +107,7 @@ if (!JSON_OUTPUT) {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
   console.log('║           HTTP Clients Comprehensive Comparison                   ║');
   console.log('║                                                                   ║');
-  console.log('║   Testing 21 HTTP libraries for Node.js                          ║');
+  console.log('║   Testing 22 HTTP libraries for Node.js                          ║');
   console.log('╚═══════════════════════════════════════════════════════════════════╝\n');
   console.log(`Server: ${url}\n`);
 }
@@ -253,6 +253,10 @@ group('POST JSON (with body)', () => {
     await recker.post('/', body).json();
   });
 
+  bench('recker (fast)', async () => {
+    await reckerFast.post('/', body).json();
+  });
+
   bench('axios', async () => {
     await axios.post(url, body);
   });
@@ -267,6 +271,15 @@ group('POST JSON (with body)', () => {
 
   bench('node-fetch', async () => {
     const res = await nodeFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    await res.json();
+  });
+
+  bench('cross-fetch', async () => {
+    const res = await crossFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -306,6 +319,20 @@ group('POST JSON (with body)', () => {
 
   bench('bent', async () => {
     await bentPostJson('/', body);
+  });
+
+  bench('simple-get', async () => {
+    await new Promise((resolve, reject) => {
+      simpleGet.concat({
+        url,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }, (err: Error | null, _res: any, data: Buffer) => {
+        if (err) reject(err);
+        else resolve(JSON.parse(data.toString()));
+      });
+    });
   });
 
   bench('tiny-json-http', async () => {
@@ -381,6 +408,12 @@ group('Parallel GET (10 concurrent)', () => {
     ));
   });
 
+  bench('recker (fast)', async () => {
+    await Promise.all(Array(10).fill(null).map(() =>
+      reckerFast.get('/').json()
+    ));
+  });
+
   bench('axios', async () => {
     await Promise.all(Array(10).fill(null).map(() =>
       axios.get(url)
@@ -399,16 +432,107 @@ group('Parallel GET (10 concurrent)', () => {
     ));
   });
 
+  bench('node-fetch', async () => {
+    await Promise.all(Array(10).fill(null).map(async () => {
+      const res = await nodeFetch(url);
+      return res.json();
+    }));
+  });
+
+  bench('cross-fetch', async () => {
+    await Promise.all(Array(10).fill(null).map(async () => {
+      const res = await crossFetch(url);
+      return res.json();
+    }));
+  });
+
   bench('superagent', async () => {
     await Promise.all(Array(10).fill(null).map(() =>
       superagent.get(url)
     ));
   });
 
+  bench('needle', async () => {
+    await Promise.all(Array(10).fill(null).map(() =>
+      needle('get', url, { json: true })
+    ));
+  });
+
+  bench('phin', async () => {
+    await Promise.all(Array(10).fill(null).map(() =>
+      phin({ url, parse: 'json' })
+    ));
+  });
+
+  bench('centra', async () => {
+    await Promise.all(Array(10).fill(null).map(async () => {
+      const res = await centra(url).send();
+      return JSON.parse(res.body.toString());
+    }));
+  });
+
   bench('wretch', async () => {
     await Promise.all(Array(10).fill(null).map(() =>
       wretch(url).get().json()
     ));
+  });
+
+  bench('bent', async () => {
+    await Promise.all(Array(10).fill(null).map(() =>
+      bentGetJson('/')
+    ));
+  });
+
+  bench('simple-get', async () => {
+    await Promise.all(Array(10).fill(null).map(() =>
+      simpleGetAsync(url)
+    ));
+  });
+
+  bench('tiny-json-http', async () => {
+    await Promise.all(Array(10).fill(null).map(() =>
+      tinyJsonHttp.get({ url })
+    ));
+  });
+
+  bench('make-fetch-happen', async () => {
+    await Promise.all(Array(10).fill(null).map(async () => {
+      const res = await makeFetchHappen(url);
+      return res.json();
+    }));
+  });
+
+  bench('minipass-fetch', async () => {
+    await Promise.all(Array(10).fill(null).map(async () => {
+      const res = await minipassFetch(url);
+      return res.json();
+    }));
+  });
+
+  bench('popsicle', async () => {
+    await Promise.all(Array(10).fill(null).map(async () => {
+      const res = await popsicle(url);
+      return res.json();
+    }));
+  });
+
+  bench('hyperquest', async () => {
+    await Promise.all(Array(10).fill(null).map(() =>
+      new Promise((resolve, reject) => {
+        let data = '';
+        hyperquest(url)
+          .on('data', (chunk: Buffer) => { data += chunk.toString(); })
+          .on('end', () => resolve(JSON.parse(data)))
+          .on('error', reject);
+      })
+    ));
+  });
+
+  bench('wreck', async () => {
+    await Promise.all(Array(10).fill(null).map(async () => {
+      const { payload } = await Wreck.get(url, { json: true });
+      return payload;
+    }));
   });
 });
 
@@ -437,6 +561,12 @@ group('Sequential GET (5 requests)', () => {
     }
   });
 
+  bench('recker (fast)', async () => {
+    for (let i = 0; i < 5; i++) {
+      await reckerFast.get('/').json();
+    }
+  });
+
   bench('axios', async () => {
     for (let i = 0; i < 5; i++) {
       await axios.get(url);
@@ -455,6 +585,20 @@ group('Sequential GET (5 requests)', () => {
     }
   });
 
+  bench('node-fetch', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await nodeFetch(url);
+      await res.json();
+    }
+  });
+
+  bench('cross-fetch', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await crossFetch(url);
+      await res.json();
+    }
+  });
+
   bench('superagent', async () => {
     for (let i = 0; i < 5; i++) {
       await superagent.get(url);
@@ -464,6 +608,82 @@ group('Sequential GET (5 requests)', () => {
   bench('needle', async () => {
     for (let i = 0; i < 5; i++) {
       await needle('get', url, { json: true });
+    }
+  });
+
+  bench('phin', async () => {
+    for (let i = 0; i < 5; i++) {
+      await phin({ url, parse: 'json' });
+    }
+  });
+
+  bench('centra', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await centra(url).send();
+      JSON.parse(res.body.toString());
+    }
+  });
+
+  bench('wretch', async () => {
+    for (let i = 0; i < 5; i++) {
+      await wretch(url).get().json();
+    }
+  });
+
+  bench('bent', async () => {
+    for (let i = 0; i < 5; i++) {
+      await bentGetJson('/');
+    }
+  });
+
+  bench('simple-get', async () => {
+    for (let i = 0; i < 5; i++) {
+      await simpleGetAsync(url);
+    }
+  });
+
+  bench('tiny-json-http', async () => {
+    for (let i = 0; i < 5; i++) {
+      await tinyJsonHttp.get({ url });
+    }
+  });
+
+  bench('make-fetch-happen', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await makeFetchHappen(url);
+      await res.json();
+    }
+  });
+
+  bench('minipass-fetch', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await minipassFetch(url);
+      await res.json();
+    }
+  });
+
+  bench('popsicle', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await popsicle(url);
+      await res.json();
+    }
+  });
+
+  bench('hyperquest', async () => {
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve, reject) => {
+        let data = '';
+        hyperquest(url)
+          .on('data', (chunk: Buffer) => { data += chunk.toString(); })
+          .on('end', () => resolve(JSON.parse(data)))
+          .on('error', reject);
+      });
+    }
+  });
+
+  bench('wreck', async () => {
+    for (let i = 0; i < 5; i++) {
+      const { payload } = await Wreck.get(url, { json: true });
     }
   });
 });
@@ -480,12 +700,13 @@ server.close();
 
 if (!JSON_OUTPUT) {
   console.log('\n═══════════════════════════════════════════════════════════════════');
-  console.log('                         LEGEND (21 libraries)                      ');
+  console.log('                         LEGEND (22 libraries)                      ');
   console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
   console.log('undici            - Node.js official HTTP client (fastest baseline)');
   console.log('fetch             - Native fetch API');
   console.log('recker            - Batteries-included (retries, cache, rate-limit)');
+  console.log('recker (fast)     - Recker with observability: false');
   console.log('axios             - Most popular, browser + Node');
   console.log('got               - Full-featured, Node-focused');
   console.log('ky                - Fetch-based, originally for browsers');
