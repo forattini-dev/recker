@@ -13,9 +13,14 @@ import type {
   MCPToolResult,
   MCPInitializeResponse,
   MCPToolsListResponse,
+  MCPResource,
+  MCPResourceContent,
 } from './types.js';
 import { UnsupportedError } from '../core/errors.js';
 import { getIpInfo, isValidIP, isGeoIPAvailable, isBogon, isIPv6, type IpInfo } from './ip-intel.js';
+import { networkTools, networkToolHandlers } from './tools/network.js';
+import { ToolRegistry } from './tools/registry.js';
+import { loadToolModules } from './tools/loader.js';
 
 export type MCPTransportMode = 'stdio' | 'http' | 'sse';
 
@@ -30,6 +35,8 @@ export interface MCPServerOptions {
   debug?: boolean;
   /** Enable specific tools only (glob patterns supported) */
   toolsFilter?: string[];
+  /** Paths to external tool modules to load */
+  toolPaths?: string[];
 }
 
 interface CodeExample {
@@ -71,6 +78,10 @@ interface TypeDefinition {
  * - `recker_code_examples`: Get runnable code examples
  * - `recker_api_schema`: Get TypeScript types and interfaces
  * - `recker_suggest`: Get implementation suggestions
+ * - `http_request`: Perform HTTP requests
+ * - `dns_lookup`: Resolve DNS records
+ * - `whois_lookup`: Query WHOIS databases
+ * - `network_ping`: Check TCP connectivity
  */
 export class MCPServer {
   private options: Required<MCPServerOptions>;
@@ -81,6 +92,7 @@ export class MCPServer {
   private typeDefinitions: TypeDefinition[] = [];
   private sseClients: Set<ServerResponse> = new Set();
   private initialized = false;
+  private toolRegistry: ToolRegistry;
 
   constructor(options: MCPServerOptions = {}) {
     this.options = {
@@ -93,13 +105,22 @@ export class MCPServer {
       transport: options.transport || 'stdio',
       debug: options.debug || false,
       toolsFilter: options.toolsFilter || [],
+      toolPaths: options.toolPaths || [],
     };
 
     this.hybridSearch = createHybridSearch({ debug: this.options.debug });
+    this.toolRegistry = new ToolRegistry();
+    
+    // Register built-in tools
+    this.registerInternalTools();
+    this.toolRegistry.registerModule({
+      tools: networkTools,
+      handlers: networkToolHandlers
+    });
+
     // Note: buildIndex is async but constructor can't await.
     // Index is built lazily - guaranteed ready before handling requests via start() or ensureIndexReady()
   }
-
   /**
    * Promise that resolves when the index is ready.
    * Used to ensure index is built before handling search requests.
@@ -576,125 +597,149 @@ export class MCPServer {
     return Array.from(keywords).slice(0, 50);
   }
 
+  private getResources(): MCPResource[] {
+    const resources: MCPResource[] = [];
+
+    // Add documentation files
+    for (const doc of this.docsIndex) {
+      resources.push({
+        uri: `docs://${doc.path}`,
+        name: doc.title,
+        description: `Documentation: ${doc.category} - ${doc.title}`,
+        mimeType: 'text/markdown',
+      });
+    }
+
+    // Add code examples
+    for (const example of this.codeExamples) {
+      resources.push({
+        uri: `example://${example.id}`,
+        name: example.title,
+        description: `Example: ${example.feature} (${example.complexity})`,
+        mimeType: 'text/x-typescript',
+      });
+    }
+
+    return resources;
+  }
+
+  private readResource(uri: string): MCPResourceContent[] {
+    if (uri.startsWith('docs://')) {
+      const path = uri.slice(7);
+      const doc = this.docsIndex.find(d => d.path === path);
+      if (!doc) {
+        throw new Error(`Documentation not found: ${path}`);
+      }
+      return [{
+        uri,
+        mimeType: 'text/markdown',
+        text: doc.content,
+        type: 'resource',
+      }];
+    }
+
+    if (uri.startsWith('example://')) {
+      const id = uri.slice(10);
+      const example = this.codeExamples.find(e => e.id === id);
+      if (!example) {
+        throw new Error(`Example not found: ${id}`);
+      }
+      return [{
+        uri,
+        mimeType: 'text/x-typescript',
+        text: example.code,
+        type: 'resource',
+      }];
+    }
+
+    throw new Error(`Unknown resource scheme: ${uri}`);
+  }
+
+  private registerInternalTools(): void {
+    // We register these manually since they depend on class instance methods (this.*)
+    
+    this.toolRegistry.registerTool({
+      name: 'rek_search_docs',
+      description: 'Search Recker documentation using hybrid search (fuzzy + semantic). Returns matching docs with relevance scores and snippets. Use this first to find relevant documentation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query' },
+          category: { type: 'string', description: 'Optional: filter by category' },
+          limit: { type: 'number', description: 'Max results (default: 5)' },
+          mode: { type: 'string', enum: ['hybrid', 'fuzzy', 'semantic'], description: 'Search mode' },
+        },
+        required: ['query'],
+      },
+    }, (args) => Promise.resolve(this.searchDocs(args)));
+
+    this.toolRegistry.registerTool({
+      name: 'rek_get_doc',
+      description: 'Get the full content of a specific documentation file. Use the path from search_docs results.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Documentation file path' },
+        },
+        required: ['path'],
+      },
+    }, (args) => Promise.resolve(this.getDoc(args)));
+
+    this.toolRegistry.registerTool({
+      name: 'rek_code_examples',
+      description: 'Get runnable code examples for Recker features.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          feature: { type: 'string', description: 'Feature to get examples for' },
+          complexity: { type: 'string', enum: ['basic', 'intermediate', 'advanced'], description: 'Complexity level' },
+          limit: { type: 'number', description: 'Max examples' },
+        },
+        required: ['feature'],
+      },
+    }, (args) => Promise.resolve(this.getCodeExamples(args)));
+
+    this.toolRegistry.registerTool({
+      name: 'rek_api_schema',
+      description: 'Get TypeScript types, interfaces, and API schemas for Recker.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', description: 'Type/interface to look up' },
+          include: { type: 'string', enum: ['definition', 'properties', 'both'], description: 'What to include' },
+        },
+        required: ['type'],
+      },
+    }, (args) => Promise.resolve(this.getApiSchema(args)));
+
+    this.toolRegistry.registerTool({
+      name: 'rek_suggest',
+      description: 'Get implementation suggestions based on use case description.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          useCase: { type: 'string', description: 'Describe what you want to achieve' },
+          constraints: { type: 'array', items: { type: 'string' }, description: 'Any constraints' },
+        },
+        required: ['useCase'],
+      },
+    }, (args) => Promise.resolve(this.getSuggestions(args)));
+
+    this.toolRegistry.registerTool({
+      name: 'rek_ip_lookup',
+      description: 'Get geolocation and network information for an IP address.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ip: { type: 'string', description: 'IPv4 or IPv6 address' },
+        },
+        required: ['ip'],
+      },
+    }, (args) => Promise.resolve(this.ipLookup(args)));
+  }
+
   private getTools(): MCPTool[] {
-    const allTools: MCPTool[] = [
-      {
-        name: 'search_docs',
-        description: 'Search Recker documentation using hybrid search (fuzzy + semantic). Returns matching docs with relevance scores and snippets. Use this first to find relevant documentation.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'Search query (e.g., "retry with exponential backoff", "streaming SSE responses", "cache strategies")',
-            },
-            category: {
-              type: 'string',
-              description: 'Optional: filter by category (http, cli, ai, protocols, reference, guides)',
-            },
-            limit: {
-              type: 'number',
-              description: 'Max results to return (default: 5, max: 10)',
-            },
-            mode: {
-              type: 'string',
-              enum: ['hybrid', 'fuzzy', 'semantic'],
-              description: 'Search mode: hybrid (default), fuzzy (text matching), or semantic (meaning-based)',
-            },
-          },
-          required: ['query'],
-        },
-      },
-      {
-        name: 'get_doc',
-        description: 'Get the full content of a specific documentation file. Use the path from search_docs results.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            path: {
-              type: 'string',
-              description: 'Documentation file path (e.g., "http/07-resilience.md", "cli/01-overview.md")',
-            },
-          },
-          required: ['path'],
-        },
-      },
-      {
-        name: 'code_examples',
-        description: 'Get runnable code examples for Recker features. Returns complete, working examples with explanations.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            feature: {
-              type: 'string',
-              description: 'Feature to get examples for (e.g., "retry", "cache", "streaming", "websocket", "mcp", "batch", "pagination", "middleware")',
-            },
-            complexity: {
-              type: 'string',
-              enum: ['basic', 'intermediate', 'advanced'],
-              description: 'Complexity level of the example (default: all levels)',
-            },
-            limit: {
-              type: 'number',
-              description: 'Max examples to return (default: 3)',
-            },
-          },
-          required: ['feature'],
-        },
-      },
-      {
-        name: 'api_schema',
-        description: 'Get TypeScript types, interfaces, and API schemas for Recker. Useful for generating type-safe code.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            type: {
-              type: 'string',
-              description: 'Type/interface to look up (e.g., "Client", "RequestOptions", "RetryOptions", "CacheOptions", "MCPServer")',
-            },
-            include: {
-              type: 'string',
-              enum: ['definition', 'properties', 'both'],
-              description: 'What to include: just definition, properties breakdown, or both (default: both)',
-            },
-          },
-          required: ['type'],
-        },
-      },
-      {
-        name: 'suggest',
-        description: 'Get implementation suggestions based on use case description. Analyzes requirements and suggests the best Recker patterns.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            useCase: {
-              type: 'string',
-              description: 'Describe what you want to achieve (e.g., "call an API with retry and cache", "stream AI responses", "scrape multiple sites in parallel")',
-            },
-            constraints: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Any constraints or requirements (e.g., ["must handle rate limits", "need progress tracking"])',
-            },
-          },
-          required: ['useCase'],
-        },
-      },
-      {
-        name: 'ip_lookup',
-        description: 'Get geolocation and network information for an IP address using the local MaxMind GeoLite2 database. Returns city, country, coordinates, timezone, and more. Works offline after first download.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            ip: {
-              type: 'string',
-              description: 'IPv4 or IPv6 address to lookup (e.g., "8.8.8.8", "2001:4860:4860::8888")',
-            },
-          },
-          required: ['ip'],
-        },
-      },
-    ];
+    const allTools = this.toolRegistry.listTools();
 
     // Filter tools if filter is specified
     if (this.options.toolsFilter.length > 0) {
@@ -733,26 +778,8 @@ export class MCPServer {
     return name === pattern;
   }
 
-  private handleToolCall(name: string, args: Record<string, unknown>): MCPToolResult {
-    switch (name) {
-      case 'search_docs':
-        return this.searchDocs(args);
-      case 'get_doc':
-        return this.getDoc(args);
-      case 'code_examples':
-        return this.getCodeExamples(args);
-      case 'api_schema':
-        return this.getApiSchema(args);
-      case 'suggest':
-        return this.getSuggestions(args);
-      case 'ip_lookup':
-        return this.ipLookup(args);
-      default:
-        return {
-          content: [{ type: 'text', text: `Unknown tool: ${name}` }],
-          isError: true,
-        };
-    }
+  private async handleToolCall(name: string, args: Record<string, unknown>): Promise<MCPToolResult> {
+    return this.toolRegistry.callTool(name, args);
   }
 
   private searchDocs(args: Record<string, unknown>): MCPToolResult {
@@ -819,7 +846,7 @@ export class MCPServer {
 
     const output = results.map((r, i) =>
       `${i + 1}. **${r.title}** (${(r.score * 100).toFixed(0)}% match)\n   Path: \`${r.path}\`\n   ${r.snippet}`
-    ).join('\n\n');
+    ).join('\\n\\n');
 
     return {
       content: [{
@@ -931,7 +958,7 @@ export class MCPServer {
 
     const output = examples.map((ex, i) => {
       return `## ${i + 1}. ${ex.title}\n\n**Complexity:** ${ex.complexity}\n**Path:** \`${ex.path}\`\n\n${ex.description ? `${ex.description}\n\n` : ''}\`\`\`typescript\n${ex.code}\n\`\`\``;
-    }).join('\n\n---\n\n');
+    }).join('\\n\\n---\\n\\n');
 
     return {
       content: [{
@@ -982,7 +1009,7 @@ export class MCPServer {
       result += `**Path:** \`${td.path}\`\n\n`;
 
       if (include === 'definition' || include === 'both') {
-        result += `### Definition\n\n\`\`\`typescript\n${td.definition}\n\`\`\`\n\n`;
+        result += `### Definition\n\n\u0060\u0060\u0060typescript\n${td.definition}\n\u0060\u0060\u0060\n\n`;
       }
 
       if ((include === 'properties' || include === 'both') && td.properties && td.properties.length > 0) {
@@ -1020,7 +1047,7 @@ export class MCPServer {
     }
 
     // Analyze use case and suggest features
-    const suggestions: Array<{
+    const suggestions: Array<{ 
       feature: string;
       reason: string;
       config: string;
@@ -1078,7 +1105,7 @@ export class MCPServer {
     }
 
     const output = suggestions.map((s, i) => {
-      return `### ${i + 1}. ${s.feature.charAt(0).toUpperCase() + s.feature.slice(1)}\n\n**Why:** ${s.reason}\n\n**Configuration:**\n\`\`\`typescript\n${s.config}\n\`\`\``;
+      return `### ${i + 1}. ${s.feature.charAt(0).toUpperCase() + s.feature.slice(1)}\n\n**Why:** ${s.reason}\n\n**Configuration:**\n\u0060\u0060\u0060typescript\n${s.config}\n\u0060\u0060\u0060`;
     }).join('\n\n');
 
     const combinedConfig = this.getCombinedConfig(suggestions.map(s => s.feature));
@@ -1086,7 +1113,7 @@ export class MCPServer {
     return {
       content: [{
         type: 'text',
-        text: `# Suggested Implementation for: "${useCase}"\n\n${output}\n\n---\n\n## Combined Configuration\n\n\`\`\`typescript\n${combinedConfig}\n\`\`\``,
+        text: `# Suggested Implementation for: "${useCase}"\n\n${output}\n\n---\n\n## Combined Configuration\n\n\u0060\u0060\u0060typescript\n${combinedConfig}\n\u0060\u0060\u0060`,
       }],
     };
   }
@@ -1138,7 +1165,7 @@ export class MCPServer {
       return {
         content: [{
           type: 'text',
-          text: `# GeoIP Database Required\n\nThe MaxMind GeoLite2 database is being downloaded (~70MB).\n\nPlease try again in a few seconds, or use the CLI:\n\n\`\`\`bash\nrek ip ${ip}\n\`\`\``,
+          text: `# GeoIP Database Required\n\nThe MaxMind GeoLite2 database is being downloaded (~70MB).\n\nPlease try again in a few seconds, or use the CLI:\n\n\u0060\u0060\u0060bash\nrek ip ${ip}\n\u0060\u0060\u0060`,
         }],
       };
     }
@@ -1152,7 +1179,7 @@ export class MCPServer {
     return {
       content: [{
         type: 'text',
-        text: `# IP Intelligence: ${ip}\n\n**Status:** Public ${ipv6 ? 'IPv6' : 'IPv4'} Address\n\nFor detailed geolocation data (city, country, coordinates, timezone), use the CLI:\n\n\`\`\`bash\nrek ip ${ip}\n\`\`\`\n\n_Note: The MCP server uses a synchronous protocol. Full GeoIP lookups are available via CLI._`,
+        text: `# IP Intelligence: ${ip}\n\n**Status:** Public ${ipv6 ? 'IPv6' : 'IPv4'} Address\n\nFor detailed geolocation data (city, country, coordinates, timezone), use the CLI:\n\n\u0060\u0060\u0060bash\nrek ip ${ip}\n\u0060\u0060\u0060\n\n_Note: The MCP server uses a synchronous protocol. Full GeoIP lookups are available via CLI._`,
       }],
     };
   }
@@ -1249,8 +1276,7 @@ client.beforeRequest((req) => {
 })`,
       progress: `const response = await client.get('/large-file', {
   onDownloadProgress: ({ percent, rate }) => {
-    console.log(\`\${percent}% at \${rate} bytes/sec\`);
-  }
+          console.log(\`\${percent}% at \${rate} bytes/sec\`);  }
 });`,
       timeout: `timeout: 30000, // 30 seconds`,
       scraping: `const $ = await client.get('/page').scrape();
@@ -1270,7 +1296,8 @@ for await (const chunk of client.get('/chat/completions').sse()) {
       `import { createClient } from 'recker';
 
 const client = createClient({
-  baseUrl: 'https://api.example.com',`,
+  baseUrl: 'https://api.example.com',
+`,
     ];
 
     if (features.includes('retry')) {
@@ -1278,25 +1305,29 @@ const client = createClient({
     attempts: 3,
     backoff: 'exponential',
     delay: 1000
-  },`);
+  },
+`);
     }
 
     if (features.includes('cache')) {
       parts.push(`  cache: {
     ttl: 60000,
     strategy: 'stale-while-revalidate'
-  },`);
+  },
+`);
     }
 
     if (features.includes('rate-limiting')) {
       parts.push(`  concurrency: {
     requestsPerInterval: 100,
     interval: 1000
-  },`);
+  },
+`);
     }
 
     if (features.includes('timeout')) {
-      parts.push(`  timeout: 30000,`);
+      parts.push(`  timeout: 30000,
+`);
     }
 
     parts.push(`});`);
@@ -1304,7 +1335,7 @@ const client = createClient({
     return parts.join('\n');
   }
 
-  handleRequest(req: JsonRpcRequest): JsonRpcResponse {
+  async handleRequest(req: JsonRpcRequest): Promise<JsonRpcResponse> {
     const { method, params, id } = req;
 
     this.log(`Request: ${method}`, params);
@@ -1340,12 +1371,28 @@ const client = createClient({
 
         case 'tools/call': {
           const { name, arguments: args } = params as { name: string; arguments?: Record<string, unknown> };
-          const result = this.handleToolCall(name, args || {});
+          const result = await this.handleToolCall(name, args || {});
           return { jsonrpc: '2.0', id: id!, result };
         }
 
-        case 'resources/list':
-          return { jsonrpc: '2.0', id: id!, result: { resources: [] } };
+        case 'resources/list': {
+          const resources = this.getResources();
+          return { jsonrpc: '2.0', id: id!, result: { resources } };
+        }
+
+        case 'resources/read': {
+          const { uri } = params as { uri: string };
+          try {
+            const contents = this.readResource(uri);
+            return { jsonrpc: '2.0', id: id!, result: { contents } };
+          } catch (error) {
+            return {
+              jsonrpc: '2.0',
+              id: id!,
+              error: { code: -32602, message: (error as Error).message },
+            };
+          }
+        }
 
         case 'prompts/list':
           return { jsonrpc: '2.0', id: id!, result: { prompts: [] } };
@@ -1382,12 +1429,12 @@ const client = createClient({
 
     this.log('Starting in stdio mode');
 
-    rl.on('line', (line) => {
+    rl.on('line', async (line) => {
       if (!line.trim()) return;
 
       try {
         const request = JSON.parse(line) as JsonRpcRequest;
-        const response = this.handleRequest(request);
+        const response = await this.handleRequest(request);
         process.stdout.write(JSON.stringify(response) + '\n');
       } catch (err) {
         const errorResponse: JsonRpcResponse = {
@@ -1418,6 +1465,22 @@ const client = createClient({
           return;
         }
 
+        if (req.method === 'GET' && req.url === '/health') {
+          const stats = this.hybridSearch.getStats();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: 'ok',
+            name: this.options.name,
+            version: this.options.version,
+            docsCount: stats.documents,
+            examplesCount: this.codeExamples.length,
+            typesCount: this.typeDefinitions.length,
+            embeddingsLoaded: stats.embeddings > 0,
+            sseClients: this.sseClients.size,
+          }));
+          return;
+        }
+
         if (req.method !== 'POST') {
           res.writeHead(405);
           res.end('Method not allowed');
@@ -1426,10 +1489,10 @@ const client = createClient({
 
         let body = '';
         req.on('data', chunk => body += chunk);
-        req.on('end', () => {
+        req.on('end', async () => {
           try {
             const request = JSON.parse(body) as JsonRpcRequest;
-            const response = this.handleRequest(request);
+            const response = await this.handleRequest(request);
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(response));
@@ -1489,10 +1552,10 @@ const client = createClient({
         if (req.method === 'POST') {
           let body = '';
           req.on('data', chunk => body += chunk);
-          req.on('end', () => {
+          req.on('end', async () => {
             try {
               const request = JSON.parse(body) as JsonRpcRequest;
-              const response = this.handleRequest(request);
+              const response = await this.handleRequest(request);
 
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify(response));
@@ -1541,6 +1604,15 @@ const client = createClient({
   async start(): Promise<void> {
     // Ensure index is built before accepting requests
     await this.ensureIndexReady();
+
+    // Load external tools
+    if (this.options.toolPaths.length > 0) {
+      const modules = await loadToolModules(this.options.toolPaths);
+      for (const mod of modules) {
+        this.toolRegistry.registerModule(mod);
+        this.log(`Loaded external tools from module: ${mod.tools.map(t => t.name).join(', ')}`);
+      }
+    }
 
     switch (this.options.transport) {
       case 'stdio':
