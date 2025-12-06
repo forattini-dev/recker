@@ -21,6 +21,8 @@ import type {
 import { BaseAIProvider, AIError, RateLimitError, ContextLengthError, OverloadedError } from './providers/base.js';
 import { OpenAIProvider } from './providers/openai.js';
 import { AnthropicProvider } from './providers/anthropic.js';
+import { GoogleProvider } from './providers/google.js';
+import { OllamaProvider } from './providers/ollama.js';
 
 /**
  * Internal metrics storage
@@ -266,7 +268,15 @@ export class UnifiedAIClient implements AIClient {
     const anthropicConfig = this.config.providers?.anthropic || {};
     this.providers.set('anthropic', new AnthropicProvider(anthropicConfig));
 
-    // TODO: Add more providers (Google, Replicate, etc.)
+    // Google
+    const googleConfig = this.config.providers?.google || {};
+    this.providers.set('google', new GoogleProvider(googleConfig));
+
+    // Ollama
+    const ollamaConfig = this.config.providers?.ollama || {};
+    this.providers.set('ollama', new OllamaProvider(ollamaConfig));
+
+    // TODO: Add more providers (Replicate, etc.)
   }
 
   /**
