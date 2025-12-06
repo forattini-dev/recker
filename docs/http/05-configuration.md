@@ -271,7 +271,7 @@ client.afterResponse((req, res) => {
 ```typescript
 client.onError(async (error, req) => {
   if (error.status === 429 && req.url.includes('gpt-5.1')) {
-    console.log('GPT-5.1 rate limited, falling back to GPT-5.1-mini');
+    console.log('GPT-5.1 rate limited, falling back to GPT-5.1 Mini');
     const body = JSON.parse(await req.text());
     body.model = 'gpt-5.1-mini';
     return client.post(req.url, { json: body });
