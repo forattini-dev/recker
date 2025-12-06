@@ -7,6 +7,7 @@ interface MockResponse {
   headers?: Record<string, string>;
   times?: number; // How many times this response can be used
   delay?: number; // Delay in ms before responding
+  error?: Error; // If set, throw this error instead of returning a response
 }
 
 export class MockTransport implements Transport {
@@ -29,6 +30,18 @@ export class MockTransport implements Transport {
   getCallCount(method: string, path: string): number {
     const key = `${method}:${path}`;
     return this.callCounts.get(key) || 0;
+  }
+
+  setMockError(method: string, path: string, error: Error, options?: { times?: number }) {
+    const key = `${method}:${path}`;
+    const existing = this.mockResponses.get(key) || [];
+    existing.push({
+      status: 0,
+      body: null,
+      error,
+      times: options?.times
+    });
+    this.mockResponses.set(key, existing);
   }
 
   reset() {
@@ -80,6 +93,11 @@ export class MockTransport implements Transport {
 
     if (!mockResponse) {
       throw new Error(`No more mock responses available for ${key} (called ${count} times)`);
+    }
+
+    // Check if this mock should throw an error
+    if (mockResponse.error) {
+      throw mockResponse.error;
     }
 
     // Add delay if specified (supports abort signal via AbortSignal.timeout style)
