@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest';
-import { harPlayer } from '../../src/plugins/har-player.js';
+import { harPlayerPlugin } from '../../src/plugins/har-player.js';
 import { createClient } from '../../src/core/client.js';
 import { MockTransport } from '../helpers/mock-transport.js';
 import { writeFileSync, unlinkSync, mkdirSync, rmSync } from 'node:fs';
@@ -53,13 +53,13 @@ describe('HAR Player Plugin', () => {
       ]);
 
       // Should not throw
-      const plugin = harPlayer({ path: harPath });
+      const plugin = harPlayerPlugin({ path: harPath });
       expect(plugin).toBeDefined();
     });
 
     it('should throw error for non-existent HAR file', () => {
       expect(() => {
-        harPlayer({ path: '/non/existent/file.har' });
+        harPlayerPlugin({ path: '/non/existent/file.har' });
       }).toThrow('Failed to load HAR file');
     });
 
@@ -68,7 +68,7 @@ describe('HAR Player Plugin', () => {
       writeFileSync(path, 'not valid json');
 
       expect(() => {
-        harPlayer({ path });
+        harPlayerPlugin({ path });
       }).toThrow('Failed to load HAR file');
     });
 
@@ -78,7 +78,7 @@ describe('HAR Player Plugin', () => {
 
       // The plugin doesn't throw during loading if entries is undefined
       // It will just have no matches
-      const plugin = harPlayer({ path });
+      const plugin = harPlayerPlugin({ path });
       expect(plugin).toBeDefined();
     });
   });
@@ -100,7 +100,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       const response = await client.get('https://api.example.com/users');
@@ -129,7 +129,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       // POST should not match GET in HAR
@@ -158,7 +158,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       // Different URL should not match
@@ -188,7 +188,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       const response = await client.post('https://api.example.com/users', {
@@ -222,7 +222,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       // Same JSON with same key order will match
@@ -256,7 +256,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       // Different body should not match
@@ -290,7 +290,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       // Different non-JSON body should fall through to network
@@ -320,7 +320,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath, strict: true })]
+        plugins: [harPlayerPlugin({ path: harPath, strict: true })]
       });
 
       await expect(
@@ -334,7 +334,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath, strict: true })]
+        plugins: [harPlayerPlugin({ path: harPath, strict: true })]
       });
 
       await expect(
@@ -362,7 +362,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath, strict: false })]
+        plugins: [harPlayerPlugin({ path: harPath, strict: false })]
       });
 
       // Request not in HAR should go to network
@@ -390,7 +390,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       // Request in HAR should return HAR response
@@ -423,7 +423,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       const response = await client.get('https://api.example.com/data');
@@ -449,7 +449,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       const response = await client.post('https://api.example.com/users');
@@ -474,7 +474,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       // HAR player returns the response with 404 status
@@ -502,7 +502,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       const response = await client.get('https://api.example.com/text');
@@ -528,7 +528,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       const response = await client.get('https://api.example.com/page');
@@ -564,7 +564,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       const response = await client.get('https://api.example.com/users');
@@ -608,7 +608,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       const usersRes = await client.get('https://api.example.com/users');
@@ -631,7 +631,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       // Should pass through to network
@@ -665,7 +665,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       // Request without body still matches HAR entry (body check is skipped when req.body is falsy)
@@ -694,7 +694,7 @@ describe('HAR Player Plugin', () => {
       const client = createClient({
         baseUrl: 'https://api.example.com',
         transport: mockTransport,
-        plugins: [harPlayer({ path: harPath })]
+        plugins: [harPlayerPlugin({ path: harPath })]
       });
 
       const response = await client.delete('https://api.example.com/users/1');

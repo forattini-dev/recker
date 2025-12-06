@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createClient } from '../../src/core/client.js';
-import { cookieJar } from '../../src/plugins/cookie-jar.js';
+import { cookieJarPlugin } from '../../src/plugins/cookie-jar.js';
 import { ReckerRequest } from '../../src/types/index.js';
 
 // Simple Mock Transport that handles cookies
@@ -55,7 +55,7 @@ describe('Cookie Jar Plugin', () => {
     const client = createClient({
       baseUrl: 'http://test.com',
       transport: new CookieMockTransport(),
-      plugins: [cookieJar()]
+      plugins: [cookieJarPlugin()]
     });
 
     // 1. Login (Server sets cookies)
@@ -70,7 +70,7 @@ describe('Cookie Jar Plugin', () => {
      const client = createClient({
       baseUrl: 'http://test.com',
       transport: new CookieMockTransport(),
-      plugins: [cookieJar()]
+      plugins: [cookieJarPlugin()]
     });
 
     await client.post('/login');
@@ -80,7 +80,7 @@ describe('Cookie Jar Plugin', () => {
     const clientWithStore = createClient({
         baseUrl: 'http://test.com',
         transport: new CookieMockTransport(),
-        plugins: [cookieJar({ store })]
+        plugins: [cookieJarPlugin({ store })]
     });
 
     await clientWithStore.post('/login');
@@ -119,7 +119,7 @@ describe('Cookie Jar Plugin', () => {
     const client = createClient({
       baseUrl: 'http://sub.example.com',
       transport: transport,
-      plugins: [cookieJar()]
+      plugins: [cookieJarPlugin()]
     });
 
     // Set a domain cookie
@@ -162,7 +162,7 @@ describe('Cookie Jar Plugin', () => {
     const client = createClient({
       baseUrl: 'http://www.example.com',
       transport: transport,
-      plugins: [cookieJar()]
+      plugins: [cookieJarPlugin()]
     });
 
     // First set a cookie on parent domain

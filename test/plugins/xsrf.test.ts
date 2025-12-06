@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { xsrf, createXSRFMiddleware } from '../../src/plugins/xsrf.js';
+import { xsrfPlugin, createXSRFMiddleware } from '../../src/plugins/xsrf.js';
 import { ReckerRequest } from '../../src/types/index.js';
 
 // Mock request helper
@@ -24,7 +24,7 @@ function createMockRequest(headers: Record<string, string> = {}): ReckerRequest 
 describe('XSRF Plugin', () => {
   describe('xsrf middleware', () => {
     it('should add XSRF token from manual option', async () => {
-      const middleware = xsrf({ token: 'test-token-123' });
+      const middleware = xsrfPlugin({ token: 'test-token-123' });
       const req = createMockRequest();
 
       let capturedReq: ReckerRequest | null = null;
@@ -39,7 +39,7 @@ describe('XSRF Plugin', () => {
     });
 
     it('should use custom header name', async () => {
-      const middleware = xsrf({
+      const middleware = xsrfPlugin({
         token: 'test-token',
         headerName: 'X-CSRF-TOKEN'
       });
@@ -57,7 +57,7 @@ describe('XSRF Plugin', () => {
     });
 
     it('should read token from cookie string', async () => {
-      const middleware = xsrf({
+      const middleware = xsrfPlugin({
         cookies: 'XSRF-TOKEN=cookie-token-456; Path=/; Secure'
       });
       const req = createMockRequest();
@@ -74,7 +74,7 @@ describe('XSRF Plugin', () => {
     });
 
     it('should use custom cookie name', async () => {
-      const middleware = xsrf({
+      const middleware = xsrfPlugin({
         cookieName: 'CSRF-TOKEN',
         cookies: 'CSRF-TOKEN=custom-token; Path=/'
       });
@@ -92,7 +92,7 @@ describe('XSRF Plugin', () => {
     });
 
     it('should not override existing header', async () => {
-      const middleware = xsrf({ token: 'new-token' });
+      const middleware = xsrfPlugin({ token: 'new-token' });
       const req = createMockRequest({ 'X-XSRF-TOKEN': 'existing-token' });
 
       let capturedReq: ReckerRequest | null = null;
@@ -107,7 +107,7 @@ describe('XSRF Plugin', () => {
     });
 
     it('should handle missing token gracefully', async () => {
-      const middleware = xsrf(); // No token provided
+      const middleware = xsrfPlugin(); // No token provided
       const req = createMockRequest();
 
       let capturedReq: ReckerRequest | null = null;
@@ -122,7 +122,7 @@ describe('XSRF Plugin', () => {
     });
 
     it('should handle complex cookie strings', async () => {
-      const middleware = xsrf({
+      const middleware = xsrfPlugin({
         cookies: 'session=abc123; XSRF-TOKEN=my-token; user_id=456; Path=/; HttpOnly'
       });
       const req = createMockRequest();
@@ -139,7 +139,7 @@ describe('XSRF Plugin', () => {
     });
 
     it('should decode URL-encoded cookie values', async () => {
-      const middleware = xsrf({
+      const middleware = xsrfPlugin({
         cookies: 'XSRF-TOKEN=hello%20world%21; Path=/'
       });
       const req = createMockRequest();

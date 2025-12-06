@@ -23,7 +23,7 @@ interface HarEntry {
   };
 }
 
-export function harPlayer(options: HarPlayerOptions): Plugin {
+export function harPlayerPlugin(options: HarPlayerOptions): Plugin {
   let entries: HarEntry[] = [];
 
   try {

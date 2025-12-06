@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createClient } from '../../src/core/client.js';
 import { graphql, graphqlPlugin, GraphQLError } from '../../src/plugins/graphql.js';
-import { harRecorder } from '../../src/plugins/har-recorder.js';
-import { harPlayer } from '../../src/plugins/har-player.js';
-import { serverTiming } from '../../src/plugins/server-timing.js';
+import { harRecorderPlugin } from '../../src/plugins/har-recorder.js';
+import { harPlayerPlugin } from '../../src/plugins/har-player.js';
+import { serverTimingPlugin } from '../../src/plugins/server-timing.js';
 import { ReckerRequest } from '../../src/types/index.js';
 import { writeFileSync, readFileSync } from 'node:fs';
 
@@ -82,7 +82,7 @@ describe('New Plugins', () => {
         const client = createClient({
             baseUrl: 'http://test',
             transport: new MockTransport(),
-            plugins: [serverTiming()]
+            plugins: [serverTimingPlugin()]
         });
 
         const res: any = await client.get('/timing');
@@ -94,7 +94,7 @@ describe('New Plugins', () => {
         const client = createClient({
             baseUrl: 'http://test',
             transport: new MockTransport(),
-            plugins: [harRecorder({ path: 'test.har' })]
+            plugins: [harRecorderPlugin({ path: 'test.har' })]
         });
 
         await client.get('/test');
@@ -125,7 +125,7 @@ describe('New Plugins', () => {
         const client = createClient({
             baseUrl: 'http://replay.com', // Satisfy constructor
             transport: new MockTransport(), // Dummy transport (should be bypassed)
-            plugins: [harPlayer({ path: 'test.har' })]
+            plugins: [harPlayerPlugin({ path: 'test.har' })]
         });
 
         const res = await client.get('http://replay.com/');

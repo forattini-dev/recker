@@ -94,7 +94,7 @@ function parseRetryAfter(headerValue: string | null): number | undefined {
   return undefined;
 }
 
-export function retry(options: RetryOptions = {}): Plugin {
+export function retryPlugin(options: RetryOptions = {}): Plugin {
   const maxAttempts = options.maxAttempts || 3;
   const baseDelay = options.delay || 1000;
   const maxDelay = options.maxDelay || 30000;

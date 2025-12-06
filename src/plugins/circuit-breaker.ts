@@ -26,7 +26,7 @@ export class CircuitBreakerError extends Error {
   }
 }
 
-export function circuitBreaker(options: CircuitBreakerOptions = {}): Plugin {
+export function circuitBreakerPlugin(options: CircuitBreakerOptions = {}): Plugin {
   const threshold = options.threshold || 5;
   const resetTimeout = options.resetTimeout || 30 * 1000; // 30s
   
