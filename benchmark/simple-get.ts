@@ -5,6 +5,10 @@ import axios from 'axios';
 import got from 'got';
 import ky from 'ky';
 import { request as undiciRequest } from 'undici';
+import needle from 'needle';
+import superagent from 'superagent';
+
+const JSON_OUTPUT = process.env.BENCH_JSON === '1';
 
 // Setup server
 const server = createServer((req, res) => {
@@ -29,9 +33,11 @@ const reckerWithFeatures = createClient({
   dedup: {}
 });
 
-console.log('┌─────────────────────────────────────────────────────┐');
-console.log('│  Benchmark: Simple GET with JSON parsing           │');
-console.log('└─────────────────────────────────────────────────────┘\n');
+if (!JSON_OUTPUT) {
+  console.log('┌─────────────────────────────────────────────────────┐');
+  console.log('│  Benchmark: Simple GET with JSON parsing           │');
+  console.log('└─────────────────────────────────────────────────────┘\n');
+}
 
 group('Baseline (no overhead)', () => {
   bench('undici (raw)', async () => {
@@ -61,6 +67,14 @@ group('HTTP Clients (minimal config)', () => {
   bench('axios', async () => {
     await axios.get(url);
   });
+
+  bench('needle', async () => {
+    await needle('get', url, { json: true });
+  });
+
+  bench('superagent', async () => {
+    await superagent.get(url);
+  });
 });
 
 group('Recker with features', () => {
@@ -71,8 +85,8 @@ group('Recker with features', () => {
 
 await run({
   avg: true,
-  json: false,
-  colors: true,
+  format: JSON_OUTPUT ? 'json' : undefined,
+  colors: !JSON_OUTPUT,
   min_max: true,
   percentiles: true,
 });

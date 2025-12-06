@@ -3,6 +3,12 @@ import { createServer } from 'node:http';
 import { createClient } from '../src/index.js';
 import axios from 'axios';
 import got from 'got';
+import ky from 'ky';
+import { request as undiciRequest } from 'undici';
+import needle from 'needle';
+import superagent from 'superagent';
+
+const JSON_OUTPUT = process.env.BENCH_JSON === '1';
 
 // Large response (1MB of JSON)
 const largeData = {
@@ -68,11 +74,23 @@ const url = `http://localhost:${port}`;
 
 const recker = createClient({ baseUrl: url });
 
-console.log('┌─────────────────────────────────────────────────────┐');
-console.log('│  Benchmark: Streaming & Large responses            │');
-console.log('└─────────────────────────────────────────────────────┘\n');
+if (!JSON_OUTPUT) {
+  console.log('┌─────────────────────────────────────────────────────┐');
+  console.log('│  Benchmark: Streaming & Large responses            │');
+  console.log('└─────────────────────────────────────────────────────┘\n');
+}
 
 group('Large JSON response (1MB)', () => {
+  bench('undici (raw)', async () => {
+    const { body } = await undiciRequest(url + '/large');
+    await body.json();
+  });
+
+  bench('fetch (native)', async () => {
+    const res = await fetch(url + '/large');
+    await res.json();
+  });
+
   bench('recker (.json())', async () => {
     await recker.get('/large').json();
   });
@@ -85,9 +103,16 @@ group('Large JSON response (1MB)', () => {
     await got.get(url + '/large').json();
   });
 
-  bench('fetch (native)', async () => {
-    const res = await fetch(url + '/large');
-    await res.json();
+  bench('ky', async () => {
+    await ky.get(url + '/large').json();
+  });
+
+  bench('needle', async () => {
+    await needle('get', url + '/large', { json: true });
+  });
+
+  bench('superagent', async () => {
+    await superagent.get(url + '/large');
   });
 });
 
@@ -128,8 +153,8 @@ group('Server-Sent Events (50 events)', () => {
 
 await run({
   avg: true,
-  json: false,
-  colors: true,
+  format: JSON_OUTPUT ? 'json' : undefined,
+  colors: !JSON_OUTPUT,
   min_max: true,
   percentiles: true,
 });
