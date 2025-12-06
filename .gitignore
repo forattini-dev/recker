@@ -49,3 +49,9 @@ local_cache/
 
 # MCP Embeddings (downloaded at runtime from GitHub Releases)
 src/mcp/data/embeddings.json
+
+# Agents
+.agent/
+.claude/
+.gemini/
+openspec/
