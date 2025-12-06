@@ -77,6 +77,28 @@ const api = createClient({
 const user = await api.get('/users/:id', { params: { id: '123' } }).json();
 ```
 
+### Mini Client (Maximum Performance)
+
+Need raw speed? Use `recker-mini` for ~2% overhead vs raw undici:
+
+```typescript
+import { createMiniClient, miniGet } from 'recker/mini';
+
+// Client instance
+const fast = createMiniClient({ baseUrl: 'https://api.example.com' });
+const data = await fast.get('/users').then(r => r.json());
+
+// Or direct function (even faster)
+const users = await miniGet('https://api.example.com/users').then(r => r.json());
+```
+
+| Mode | Speed | Features |
+|------|-------|----------|
+| `recker-mini` | ~146µs (2% overhead) | Base URL, headers, JSON |
+| `recker` | ~265µs (86% overhead) | Retry, cache, auth, hooks, plugins |
+
+See [Mini Client documentation](./docs/http/18-mini-client.md) for more.
+
 ## Features
 
 | Feature | Description |
@@ -163,6 +185,7 @@ See [CLI Documentation](./docs/cli/01-overview.md) for more.
 ## Documentation
 
 - **[Quick Start](./docs/http/01-quickstart.md)** - Get running in 2 minutes
+- **[Mini Client](./docs/http/18-mini-client.md)** - Maximum performance mode
 - **[CLI Guide](./docs/cli/01-overview.md)** - Terminal client documentation
 - **[API Reference](./docs/reference/01-api.md)** - Complete API documentation
 - **[Configuration](./docs/http/05-configuration.md)** - Client options
@@ -170,6 +193,7 @@ See [CLI Documentation](./docs/cli/01-overview.md) for more.
 - **[AI Integration](./docs/ai/01-overview.md)** - OpenAI, Anthropic, and more
 - **[Protocols](./docs/protocols/01-websocket.md)** - WebSocket, DNS, WHOIS
 - **[Mock Servers](./docs/cli/08-mock-servers.md)** - Built-in test servers
+- **[Benchmarks](./docs/benchmarks.md)** - Performance comparisons
 
 ## License
 

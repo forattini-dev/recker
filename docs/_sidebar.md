@@ -9,6 +9,7 @@
   - [Responses & Data](/http/03-responses.md)
   - [Validation & Contracts](/http/04-validation.md)
   - [Configuration & Hooks](/http/05-configuration.md)
+  - [Mini Client (Fast Mode)](/http/18-mini-client.md)
   - [Performance](/http/06-performance.md)
   - [Resilience](/http/07-resilience.md)
   - [Concurrency & Batch](/http/08-concurrency.md)
