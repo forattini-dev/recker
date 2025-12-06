@@ -402,15 +402,15 @@ type Plugin = (client: Client) => void;
 type Middleware = (request: ReckerRequest, next: Next) => Promise<ReckerResponse>;
 
 // Using plugins
-import { retry, cache, dedup, circuitBreaker } from 'recker';
+import { retryPlugin, cachePlugin, dedupPlugin, circuitBreakerPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
   plugins: [
-    retry({ maxAttempts: 3, backoff: 'exponential' }),
-    cache({ ttl: 60000 }),
-    dedup(),
-    circuitBreaker({ threshold: 5 })
+    retryPlugin({ maxAttempts: 3, backoff: 'exponential' }),
+    cachePlugin({ ttl: 60000 }),
+    dedupPlugin(),
+    circuitBreakerPlugin({ threshold: 5 })
   ]
 });
 ```

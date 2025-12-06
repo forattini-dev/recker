@@ -660,11 +660,11 @@ const client = createClient({
 ### Using cookieJar Plugin
 
 ```typescript
-import { createClient, cookieJar } from 'recker';
+import { createClient, cookieJarPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
-  plugins: [cookieJar()]
+  plugins: [cookieJarPlugin()]
 });
 
 // 1. Login (Server sends Set-Cookie: session=abc)
@@ -681,7 +681,7 @@ const myStore = new Map();
 myStore.set('session_id', 'secret-token');
 
 const client = createClient({
-  plugins: [cookieJar({ store: myStore })]
+  plugins: [cookieJarPlugin({ store: myStore })]
 });
 ```
 

@@ -19,12 +19,12 @@ Handling flaky APIs or unstable networks requires more than just a simple retry 
 **Scenario:** You want to retry on specific error codes (like 503 or 429) but fail fast on 404. You also want exponential backoff with jitter to avoid thundering herds.
 
 ```typescript
-import { createClient, retry } from 'recker';
+import { createClient, retryPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://unstable-api.com',
   plugins: [
-    retry({
+    retryPlugin({
       maxAttempts: 5,
       // Only retry these status codes
       statusCodes: [408, 429, 500, 502, 503, 504],
@@ -138,7 +138,7 @@ const client = createClient({
   baseUrl: 'https://shop.example.com',
   plugins: [
     // Rotate user agent on every request
-    userAgentRotator({ strategy: 'random' })
+    userAgentRotatorPlugin({ strategy: 'random' })
   ]
 });
 
