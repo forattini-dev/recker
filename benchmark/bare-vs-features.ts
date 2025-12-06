@@ -1,8 +1,8 @@
 /**
- * Bare Client vs Recker with Features Benchmark
+ * Mini Client vs Recker with Features Benchmark
  *
  * Shows the trade-offs:
- * - bare: fastest, but no features
+ * - mini: fastest, but no features
  * - recker: slower per-request, but cache/dedup save network calls
  *
  * Key insight: Features pay for themselves when they reduce network calls
@@ -11,7 +11,7 @@
 import { run, bench, group } from 'mitata';
 import { createServer } from 'node:http';
 import { request as undiciRequest } from 'undici';
-import { createBareClient } from '../src/bare.js';
+import { createMiniClient } from '../src/mini.js';
 import { createClient } from '../src/index.js';
 
 const JSON_OUTPUT = process.env.BENCH_JSON === '1';
@@ -49,7 +49,7 @@ const port = (server.address() as any).port;
 const url = `http://localhost:${port}`;
 
 // Setup clients
-const bareClient = createBareClient({ baseUrl: url });
+const miniClient = createMiniClient({ baseUrl: url });
 const standardClient = createClient({ baseUrl: url });
 const cachedClient = createClient({
   baseUrl: url,
@@ -75,19 +75,19 @@ const fullClient = createClient({
 
 if (!JSON_OUTPUT) {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
-  console.log('║        Bare Client vs Recker with Features (Cache/Dedup)          ║');
+  console.log('║        Mini Client vs Recker with Features (Cache/Dedup)          ║');
   console.log('║                                                                   ║');
   console.log('║  Server has 20ms simulated latency to show feature benefits       ║');
   console.log('╚═══════════════════════════════════════════════════════════════════╝\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scenario 1: Single request (bare wins)
+// Scenario 1: Single request (mini wins)
 // ─────────────────────────────────────────────────────────────────────────────
 
 group('Single request (20ms latency)', () => {
-  bench('bare client', async () => {
-    const res = await bareClient.get('/single');
+  bench('recker-mini', async () => {
+    const res = await miniClient.get('/single');
     await res.json();
   });
 
@@ -105,9 +105,9 @@ group('Single request (20ms latency)', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 group('Same endpoint 10x (cache shines)', () => {
-  bench('bare client (10 network calls)', async () => {
+  bench('recker-mini (10 network calls)', async () => {
     for (let i = 0; i < 10; i++) {
-      const res = await bareClient.get('/repeated');
+      const res = await miniClient.get('/repeated');
       await res.json();
     }
   });
@@ -132,9 +132,9 @@ group('Same endpoint 10x (cache shines)', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 group('10 parallel to same endpoint (dedup shines)', () => {
-  bench('bare client (10 network calls)', async () => {
+  bench('recker-mini (10 network calls)', async () => {
     await Promise.all(
-      Array(10).fill(null).map(() => bareClient.get('/parallel').then(r => r.json()))
+      Array(10).fill(null).map(() => miniClient.get('/parallel').then(r => r.json()))
     );
   });
 
@@ -165,15 +165,15 @@ group('10 parallel to same endpoint (dedup shines)', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 group('Real-world: 5 unique + 5 repeated endpoints', () => {
-  bench('bare client (10 network calls)', async () => {
+  bench('recker-mini (10 network calls)', async () => {
     // 5 unique endpoints
     for (let i = 0; i < 5; i++) {
-      const res = await bareClient.get(`/unique-${i}`);
+      const res = await miniClient.get(`/unique-${i}`);
       await res.json();
     }
     // 5 repeated calls to same endpoint
     for (let i = 0; i < 5; i++) {
-      const res = await bareClient.get('/common');
+      const res = await miniClient.get('/common');
       await res.json();
     }
   });
@@ -207,8 +207,8 @@ if (!JSON_OUTPUT) {
   console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
   console.log('┌─────────────────────────────────────────────────────────────────┐');
-  console.log('│  BARE CLIENT                                                    │');
-  console.log('│  ✓ Fastest per-request (~0% overhead vs undici)                 │');
+  console.log('│  MINI CLIENT                                                    │');
+  console.log('│  ✓ Fastest per-request (~2% overhead vs undici)                 │');
   console.log('│  ✗ No cache - every request hits the network                    │');
   console.log('│  ✗ No dedup - parallel requests multiply network calls          │');
   console.log('│  ✗ No retry - failures are your problem                         │');
@@ -227,7 +227,7 @@ if (!JSON_OUTPUT) {
   console.log('└─────────────────────────────────────────────────────────────────┘');
   console.log('');
   console.log('💡 Rule of thumb:');
-  console.log('   - 1 request to 1 endpoint? → Use bare client');
+  console.log('   - 1 request to 1 endpoint? → Use recker-mini');
   console.log('   - Same data requested multiple times? → Use cache');
   console.log('   - Parallel requests to same endpoint? → Use dedup');
   console.log('   - Production API client? → Use recker with features');

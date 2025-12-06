@@ -1,17 +1,16 @@
 /**
- * Bare Client vs Standard Client Benchmark
+ * Mini Client vs Standard Client Benchmark
  *
  * Compares:
  * - undici (raw) - baseline
- * - recker bare - minimal overhead wrapper
+ * - recker-mini - minimal overhead wrapper
  * - recker standard - full featured
- * - recker (fast) - with observability disabled
  */
 
 import { run, bench, group } from 'mitata';
 import { createServer } from 'node:http';
 import { request as undiciRequest } from 'undici';
-import { createBareClient, bareGet } from '../src/bare.js';
+import { createMiniClient, miniGet } from '../src/mini.js';
 import { createClient } from '../src/index.js';
 
 const JSON_OUTPUT = process.env.BENCH_JSON === '1';
@@ -44,13 +43,12 @@ const port = (server.address() as any).port;
 const url = `http://localhost:${port}`;
 
 // Setup clients
-const bareClient = createBareClient({ baseUrl: url });
+const miniClient = createMiniClient({ baseUrl: url });
 const standardClient = createClient({ baseUrl: url });
-const fastClient = createClient({ baseUrl: url, observability: false });
 
 if (!JSON_OUTPUT) {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
-  console.log('║           Bare Client vs Standard Client Benchmark                ║');
+  console.log('║           Mini Client vs Standard Client Benchmark                ║');
   console.log('╚═══════════════════════════════════════════════════════════════════╝\n');
 }
 
@@ -60,18 +58,14 @@ group('GET JSON (minimal overhead comparison)', () => {
     await body.json();
   });
 
-  bench('bareGet()', async () => {
-    const res = await bareGet(url);
+  bench('miniGet()', async () => {
+    const res = await miniGet(url);
     await res.json();
   });
 
-  bench('bare client', async () => {
-    const res = await bareClient.get('/');
+  bench('recker-mini', async () => {
+    const res = await miniClient.get('/');
     await res.json();
-  });
-
-  bench('recker (fast)', async () => {
-    await fastClient.get('/').json();
   });
 
   bench('recker (standard)', async () => {
@@ -91,13 +85,9 @@ group('POST JSON', () => {
     await respBody.json();
   });
 
-  bench('bare client', async () => {
-    const res = await bareClient.post('/', body);
+  bench('recker-mini', async () => {
+    const res = await miniClient.post('/', body);
     await res.json();
-  });
-
-  bench('recker (fast)', async () => {
-    await fastClient.post('/', body).json();
   });
 
   bench('recker (standard)', async () => {
@@ -113,16 +103,10 @@ group('Sequential GET (5 requests)', () => {
     }
   });
 
-  bench('bare client', async () => {
+  bench('recker-mini', async () => {
     for (let i = 0; i < 5; i++) {
-      const res = await bareClient.get('/');
+      const res = await miniClient.get('/');
       await res.json();
-    }
-  });
-
-  bench('recker (fast)', async () => {
-    for (let i = 0; i < 5; i++) {
-      await fastClient.get('/').json();
     }
   });
 
@@ -141,17 +125,11 @@ group('Parallel GET (10 concurrent)', () => {
     }));
   });
 
-  bench('bare client', async () => {
+  bench('recker-mini', async () => {
     await Promise.all(Array(10).fill(null).map(async () => {
-      const res = await bareClient.get('/');
+      const res = await miniClient.get('/');
       return res.json();
     }));
-  });
-
-  bench('recker (fast)', async () => {
-    await Promise.all(Array(10).fill(null).map(() =>
-      fastClient.get('/').json()
-    ));
   });
 
   bench('recker (standard)', async () => {
@@ -177,9 +155,8 @@ if (!JSON_OUTPUT) {
   console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
   console.log('undici (raw)     - Direct undici.request() - baseline');
-  console.log('bareGet()        - Single function, no client object');
-  console.log('bare client      - createBareClient() - minimal wrapper');
-  console.log('recker (fast)    - createClient({ observability: false })');
+  console.log('miniGet()        - Single function, no client object');
+  console.log('recker-mini      - createMiniClient() - minimal wrapper');
   console.log('recker (standard)- createClient() - full featured');
   console.log('');
 }

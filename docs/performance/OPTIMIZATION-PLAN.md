@@ -14,14 +14,14 @@ overhead:      0.53ms (~120% slower)
 
 The key insight is that **most overhead comes from things users don't always need**.
 
-### Phase 1: Bare Mode (Quick Win) ⚡
+### Phase 1: Mini Mode (Quick Win) ⚡
 
-Create a `createBareClient()` that skips everything:
+Create a `createMiniClient()` that skips everything:
 
 ```typescript
 // Fastest possible - direct undici with minimal wrapping
-const bare = createBareClient({ baseUrl: 'https://api.example.com' });
-await bare.get('/users'); // ~0.50ms (vs undici's 0.45ms)
+const mini = createMiniClient({ baseUrl: 'https://api.example.com' });
+await mini.get('/users'); // ~0.50ms (vs undici's 0.45ms)
 ```
 
 Implementation:
@@ -100,7 +100,7 @@ this._defaultHeaders.set('X-Custom', value);  // Mutate in place
 ## Implementation Priority
 
 ### Quick Wins (1-2 days)
-1. [ ] **Bare client mode** - New `createBareClient()` export
+1. [x] **Mini client mode** - New `createMiniClient()` export
 2. [ ] **Avoid Headers creation** - Reuse default Headers object
 3. [ ] **Skip middleware when empty** - Already partially done
 
@@ -128,11 +128,11 @@ Target metrics:
 
 ## Code Changes Required
 
-### 1. createBareClient() - New export
+### 1. createMiniClient() - New export
 
 ```typescript
-// src/bare.ts
-export function createBareClient(options: { baseUrl: string }) {
+// src/mini.ts
+export function createMiniClient(options: { baseUrl: string }) {
   const base = options.baseUrl.replace(/\/$/, '');
 
   return {
@@ -202,7 +202,7 @@ private isSimplePath(path: string, options: RequestOptions): boolean {
 
 | Mode | Target | vs undici |
 |------|--------|-----------|
-| Bare client | 0.50ms | +10% |
+| Mini client | 0.50ms | +10% |
 | Standard (no plugins) | 0.60ms | +30% |
 | Standard (with retry) | 0.70ms | +55% |
 | Standard (full stack) | 1.00ms | +120% |
