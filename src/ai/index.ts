@@ -31,7 +31,7 @@
  *
  * // Streaming
  * const stream = await ai.stream({
- *   model: 'gpt-4o',
+ *   model: 'gpt-5.1',
  *   messages: [{ role: 'user', content: 'Write a poem' }],
  * });
  *
@@ -49,7 +49,7 @@
  *
  * // Create specialized client
  * const codeClient = ai.extend({
- *   model: 'gpt-4o',
+ *   model: 'gpt-5.1',
  *   systemPrompt: 'You are a coding assistant.',
  *   temperature: 0,
  * });
@@ -63,6 +63,11 @@ export { UnifiedAIClient, createAI } from './client.js';
 export { BaseAIProvider, AIError, RateLimitError, ContextLengthError, OverloadedError, AuthenticationError } from './providers/base.js';
 export { OpenAIProvider } from './providers/openai.js';
 export { AnthropicProvider } from './providers/anthropic.js';
+export { GoogleProvider } from './providers/google.js';
+export { OllamaProvider } from './providers/ollama.js';
+
+// Vector Store
+export * from './vector/index.js';
 
 // Adaptive timeouts
 export { AdaptiveTimeoutManager, StreamTimeoutController, adaptiveTimeouts } from './adaptive-timeout.js';

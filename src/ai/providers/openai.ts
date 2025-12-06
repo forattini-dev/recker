@@ -1,7 +1,7 @@
 /**
  * OpenAI Provider
  *
- * Implementation for OpenAI API (GPT-4, GPT-3.5, embeddings, etc.)
+ * Implementation for OpenAI API (GPT-5.1, GPT-5, O3, embeddings, etc.)
  */
 
 import type {
