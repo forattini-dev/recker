@@ -2,6 +2,8 @@ import { run, bench, group } from 'mitata';
 import { createServer } from 'node:http';
 import { createClient } from '../src/index.js';
 
+const JSON_OUTPUT = process.env.BENCH_JSON === '1';
+
 let requestCount = 0;
 
 // Setup server
@@ -47,9 +49,11 @@ const reckerDedup = createClient({
   dedup: {}
 });
 
-console.log('┌─────────────────────────────────────────────────────┐');
-console.log('│  Benchmark: Cache & Deduplication                   │');
-console.log('└─────────────────────────────────────────────────────┘\n');
+if (!JSON_OUTPUT) {
+  console.log('┌─────────────────────────────────────────────────────┐');
+  console.log('│  Benchmark: Cache & Deduplication                   │');
+  console.log('└─────────────────────────────────────────────────────┘\n');
+}
 
 group('No cache (baseline)', () => {
   bench('recker (no cache)', async () => {
@@ -95,13 +99,15 @@ group('Request deduplication', () => {
 
 await run({
   avg: true,
-  json: false,
-  colors: true,
+  format: JSON_OUTPUT ? 'json' : undefined,
+  colors: !JSON_OUTPUT,
   min_max: true,
   percentiles: true,
 });
 
-console.log('\n📊 Server received ' + requestCount + ' total requests');
-console.log('   (Lower is better - shows cache/dedup effectiveness)\n');
+if (!JSON_OUTPUT) {
+  console.log('\nServer received ' + requestCount + ' total requests');
+  console.log('   (Lower is better - shows cache/dedup effectiveness)\n');
+}
 
 server.close();

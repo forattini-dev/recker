@@ -47,8 +47,8 @@ console.log('╚═════════════════════�
 
 // Strip ANSI escape codes from string
 function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+  // Remove all ANSI escape codes including color, bold, etc.
+  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\[[\d;]*m/g, '');
 }
 
 function parseResults(output: string): Record<string, number> {
@@ -183,11 +183,11 @@ async function runAveragedBenchmarks() {
       const reckerResult = sortedLibs.find(r => r.name.toLowerCase().includes('recker'));
 
       console.log('  ' + '─'.repeat(66));
-      console.log(`  🏆 Fastest: ${winner.name} (${winner.avg.toFixed(3)}ms avg)`);
+      console.log(`  Fastest: ${winner.name} (${winner.avg.toFixed(3)}ms avg)`);
 
       if (reckerResult && reckerResult !== winner) {
         const diff = ((reckerResult.avg / winner.avg - 1) * 100).toFixed(1);
-        console.log(`  📊 Recker vs winner: +${diff}%`);
+        console.log(`  Recker vs winner: +${diff}%`);
       }
     }
 

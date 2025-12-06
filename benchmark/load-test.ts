@@ -115,7 +115,7 @@ export async function runLoadTest(config: LoadTestConfig) {
   const p95 = stats.latencies[Math.floor(stats.latencies.length * 0.95)] || 0;
   const p99 = stats.latencies[Math.floor(stats.latencies.length * 0.99)] || 0;
 
-  console.log('\n\n' + pc.bold(pc.green('📊 Results:')));
+  console.log('\n\n' + pc.bold(pc.green('Results:')));
   console.log(`  Requests:    ${stats.total}`);
   console.log(`  RPS:         ${Math.round(stats.total / totalTime)}`);
   console.log(`  Success:     ${stats.success} (${((stats.success/stats.total)*100).toFixed(1)}%)`);
