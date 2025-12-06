@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createClient } from '../../src/index.js';
+import { createClient } from '../../src/index.js'; // Ensure correct import for createClient
+import { HttpRequest } from '../../src/core/request.ts'; // Explicitly import HttpRequest
 import {
   basicAuth,
   basicAuthPlugin,
@@ -13,9 +14,28 @@ import {
   oauth2Plugin,
   awsSignatureV4,
   awsSignatureV4Plugin
-} from '../../src/plugins/auth.js';
-import { MockTransport } from '../helpers/mock-transport.js';
-import { createHash } from 'node:crypto';
+} from '../../src/plugins/auth/index.js'; // Use plugins from barrel file
+import { MockTransport } from '../helpers/mock-transport.ts';
+
+// Helper to wrap a plain request object with `withHeader` method for testing
+const wrapRequestWithWithHeader = (req: any): HttpRequest => {
+    if (req.withHeader) return req; // Already wrapped or is HttpRequest
+    return {
+        ...req,
+        headers: req.headers || new Headers(),
+        withHeader: vi.fn(function(this: HttpRequest, name: string, value: string) {
+            const newHeaders = new Headers(this.headers);
+            newHeaders.set(name, value);
+            // Return a new mock request with updated headers
+            return wrapRequestWithWithHeader({ ...this, headers: newHeaders });
+        }) as any,
+        url: req.url || 'http://mock.com/default' // Ensure URL exists
+    } as HttpRequest;
+};
+
+// ============================================================================
+// Basic Authentication Tests
+// ============================================================================
 
 // Helper to compute MD5 hash (for digest auth verification)
 function md5(str: string): string {
