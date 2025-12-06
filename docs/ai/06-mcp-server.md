@@ -22,6 +22,57 @@ rek mcp -t sse -p 3100
 rek mcp --debug
 ```
 
+### Tool Filtering
+
+Control which tools are available to AI agents using command-line flags:
+
+```bash
+# Disable documentation tools (search, get, examples, schema, suggest)
+rek mcp --no-docs
+
+# Disable HTTP request tool
+rek mcp --no-http
+
+# Disable all network tools (http, dns, whois, ping)
+rek mcp --no-network
+
+# Disable specific tools
+rek mcp --no-dns --no-whois
+
+# Only enable specific tools (exclusive mode)
+rek mcp --only rek_search_docs,rek_get_doc
+
+# Custom filter patterns (glob-style)
+rek mcp --filter "rek_*_docs,!rek_http_*"
+```
+
+**Available Flags:**
+
+| Flag | Effect |
+|------|--------|
+| `--no-docs` | Disable `rek_search_docs`, `rek_get_doc`, `rek_code_examples`, `rek_api_schema`, `rek_suggest` |
+| `--no-http` | Disable `rek_http_request` |
+| `--no-dns` | Disable `rek_dns_lookup` |
+| `--no-whois` | Disable `rek_whois_lookup` |
+| `--no-ping` | Disable `rek_network_ping` |
+| `--no-ip` | Disable `rek_ip_lookup` |
+| `--no-network` | Disable all network tools (http, dns, whois, ping) |
+| `--only <tools>` | Only enable specified tools (comma-separated) |
+| `--filter <patterns>` | Custom glob patterns (prefix with `!` to exclude) |
+
+**Use Cases:**
+
+```bash
+# Documentation-only mode (no network operations)
+rek mcp --no-network --no-ip
+
+# Network tools only (no docs, for testing)
+rek mcp --no-docs
+
+# Minimal mode for security-conscious environments
+rek mcp --only rek_search_docs,rek_get_doc
+```
+
 ### Programmatic Usage
 
 ```typescript
@@ -483,12 +534,39 @@ interface MCPServerOptions {
   transport?: 'stdio' | 'http' | 'sse';  // Default: 'stdio'
   port?: number;        // Default: 3100 (for http/sse)
 
-  // Documentation
-  docsPath?: string;    // Default: auto-detected
+  // Documentation paths
+  docsPath?: string;      // Default: auto-detected
+  examplesPath?: string;  // Default: auto-detected
+  srcPath?: string;       // Default: auto-detected
+
+  // Tool filtering
+  toolsFilter?: string[];  // Glob patterns for tool filtering
+  toolPaths?: string[];    // External tool module paths
 
   // Debugging
   debug?: boolean;      // Default: false
 }
+```
+
+**Tool Filtering Examples (Programmatic):**
+
+```typescript
+import { createMCPServer } from 'recker/mcp';
+
+// Disable network tools
+const server = createMCPServer({
+  toolsFilter: ['!rek_http_request', '!rek_dns_lookup', '!rek_whois_lookup', '!rek_network_ping']
+});
+
+// Only enable documentation tools
+const docsOnly = createMCPServer({
+  toolsFilter: ['rek_search_docs', 'rek_get_doc', 'rek_code_examples']
+});
+
+// Exclude HTTP but keep DNS
+const customServer = createMCPServer({
+  toolsFilter: ['!rek_http_*']  // Glob pattern
+});
 ```
 
 ## Custom Documentation
