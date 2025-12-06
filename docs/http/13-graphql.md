@@ -467,12 +467,12 @@ const [user1, user2, posts] = responses;
 ### Request Deduplication
 
 ```typescript
-import { createClient, graphqlPlugin, dedup } from 'recker';
+import { createClient, graphqlPlugin, dedupPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com/graphql',
   plugins: [
-    dedup(),
+    dedupPlugin(),
     graphqlPlugin()
   ]
 });
@@ -488,12 +488,12 @@ const [a, b, c] = await Promise.all([
 ### Caching GraphQL
 
 ```typescript
-import { createClient, graphqlPlugin, cache, MemoryStorage } from 'recker';
+import { createClient, graphqlPlugin, cachePlugin, MemoryStorage } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com/graphql',
   plugins: [
-    cache({
+    cachePlugin({
       storage: new MemoryStorage(),
       methods: ['POST'],  // Cache POST requests (GraphQL)
       ttl: 60_000,
@@ -511,12 +511,12 @@ const client = createClient({
 ### Retry on Network Errors Only
 
 ```typescript
-import { createClient, graphqlPlugin, retry, GraphQLError } from 'recker';
+import { createClient, graphqlPlugin, retryPlugin, GraphQLError } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com/graphql',
   plugins: [
-    retry({
+    retryPlugin({
       attempts: 3,
       delay: 1000,
       // Only retry on network errors, not GraphQL errors

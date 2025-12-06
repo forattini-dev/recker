@@ -500,7 +500,7 @@ for await (const page of users) {
 
 ```typescript
 // Import only what you need
-import { retry } from 'recker/plugins/retry';
+import { retryPlugin } from 'recker/plugins/retry';
 import { whois } from 'recker/utils/whois';
 ```
 

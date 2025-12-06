@@ -278,14 +278,14 @@ await pipeline(response.stream(), dest);
 ### In-Memory Cache
 
 ```typescript
-import { cache } from 'recker/plugins/cache';
+import { cachePlugin } from 'recker/plugins/cache';
 import { MemoryStorage } from 'recker/cache';
 
 const client = createClient({
   baseUrl: 'https://api.example.com'
 });
 
-client.use(cache({
+client.use(cachePlugin({
   storage: new MemoryStorage(),
   ttl: 60000  // 1 minute
 }));
@@ -294,14 +294,14 @@ client.use(cache({
 ### File Cache
 
 ```typescript
-import { cache } from 'recker/plugins/cache';
+import { cachePlugin } from 'recker/plugins/cache';
 import { FileStorage } from 'recker/cache';
 
 const client = createClient({
   baseUrl: 'https://api.example.com'
 });
 
-client.use(cache({
+client.use(cachePlugin({
   storage: new FileStorage({ directory: './.cache' }),
   ttl: 3600000  // 1 hour
 }));
@@ -310,7 +310,7 @@ client.use(cache({
 ### Stale-While-Revalidate
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   storage: new MemoryStorage(),
   strategy: 'stale-while-revalidate',
   ttl: 60000

@@ -28,13 +28,13 @@ The circuit breaker has three states:
 ## Quick Start
 
 ```typescript
-import { createClient, circuitBreaker } from 'recker';
+import { createClient, circuitBreakerPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-client.use(circuitBreaker({
+client.use(circuitBreakerPlugin({
   threshold: 5,      // Open after 5 failures
   resetTimeout: 30000, // Try again after 30s
 }));
@@ -77,7 +77,7 @@ const client = createClient({
   // No baseUrl - multi-domain
 });
 
-client.use(circuitBreaker({ threshold: 3 }));
+client.use(circuitBreakerPlugin({ threshold: 3 }));
 
 // Failures on api1.com don't affect api2.com
 await client.get('https://api1.example.com/users'); // Failure 1
@@ -92,7 +92,7 @@ await client.get('https://api2.example.com/users'); // Still works!
 By default, only 5xx errors and network errors open the circuit. You can customize:
 
 ```typescript
-client.use(circuitBreaker({
+client.use(circuitBreakerPlugin({
   shouldTrip: (error, response) => {
     // Only open for server errors
     if (response) {
@@ -108,7 +108,7 @@ client.use(circuitBreaker({
 ### Include 429 (Rate Limit)
 
 ```typescript
-client.use(circuitBreaker({
+client.use(circuitBreakerPlugin({
   shouldTrip: (error, response) => {
     if (response) {
       return response.status >= 500 || response.status === 429;
@@ -123,7 +123,7 @@ client.use(circuitBreaker({
 ```typescript
 import { TimeoutError } from 'recker';
 
-client.use(circuitBreaker({
+client.use(circuitBreakerPlugin({
   shouldTrip: (error, response) => {
     // Timeouts don't open the circuit
     if (error instanceof TimeoutError) return false;
@@ -137,7 +137,7 @@ client.use(circuitBreaker({
 ## Monitoring
 
 ```typescript
-client.use(circuitBreaker({
+client.use(circuitBreakerPlugin({
   threshold: 5,
   resetTimeout: 30000,
   onStateChange: (state, service) => {
@@ -181,12 +181,12 @@ Plugin order matters! Circuit breaker should come **before** retry:
 
 ```typescript
 // ✅ Correct
-client.use(circuitBreaker({ threshold: 5 }));
-client.use(retry({ maxAttempts: 3 }));
+client.use(circuitBreakerPlugin({ threshold: 5 }));
+client.use(retryPlugin({ maxAttempts: 3 }));
 
 // ❌ Wrong - retry will try even with circuit open
-client.use(retry({ maxAttempts: 3 }));
-client.use(circuitBreaker({ threshold: 5 }));
+client.use(retryPlugin({ maxAttempts: 3 }));
+client.use(circuitBreakerPlugin({ threshold: 5 }));
 ```
 
 ## Examples
@@ -200,7 +200,7 @@ const client = createClient({
 });
 
 // Complete protection
-client.use(circuitBreaker({
+client.use(circuitBreakerPlugin({
   threshold: 5,
   resetTimeout: 30000,
   onStateChange: (state, service) => {
@@ -208,7 +208,7 @@ client.use(circuitBreaker({
   },
 }));
 
-client.use(retry({
+client.use(retryPlugin({
   maxAttempts: 2,
   backoff: 'exponential',
 }));
@@ -222,7 +222,7 @@ const circuits = new Map<string, CircuitState>();
 
 const client = createClient();
 
-client.use(circuitBreaker({
+client.use(circuitBreakerPlugin({
   threshold: 3,
   resetTimeout: 60000,
   onStateChange: (state, service) => {

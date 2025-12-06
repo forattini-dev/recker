@@ -173,12 +173,12 @@ const titles = doc.selectAll('h1').map(el => el.text());
 ### Circuit Breaker
 
 ```typescript
-import { createClient, circuitBreaker } from 'recker';
+import { createClient, circuitBreakerPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
   plugins: [
-    circuitBreaker({ threshold: 5, resetTimeout: 30000 })
+    circuitBreakerPlugin({ threshold: 5, resetTimeout: 30000 })
   ]
 });
 ```

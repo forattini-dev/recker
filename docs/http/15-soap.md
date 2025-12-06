@@ -424,13 +424,13 @@ const result = await soapClient.call('GetUser', { userId: 123 });
 ### Custom Logging
 
 ```typescript
-import { createClient, logger } from 'recker';
+import { createClient, loggerPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-client.use(logger({
+client.use(loggerPlugin({
   logBody: true, // Shows XML in log
 }));
 ```

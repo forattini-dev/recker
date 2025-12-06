@@ -726,11 +726,11 @@ const data = await client.get('/api')
 ### 5. "Rate limited (429)"
 
 ```typescript
-import { createClient, retry } from 'recker';
+import { createClient, retryPlugin } from 'recker';
 
 const client = createClient({
   plugins: [
-    retry({
+    retryPlugin({
       maxAttempts: 5,
       statusCodes: [429],
       respectRetryAfter: true,  // Wait for Retry-After header

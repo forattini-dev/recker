@@ -5,13 +5,13 @@ The **Cache** plugin implements HTTP caching with support for multiple strategie
 ## Quick Start
 
 ```typescript
-import { createClient, cache, MemoryStorage } from 'recker';
+import { createClient, cachePlugin, MemoryStorage } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-client.use(cache({
+client.use(cachePlugin({
   storage: new MemoryStorage({ maxMemoryBytes: 100 * 1024 * 1024 }),
   ttl: 60000, // 1 minute
 }));
@@ -63,7 +63,7 @@ interface CacheOptions {
 Returns from cache if available, otherwise fetches from network:
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   strategy: 'cache-first',
   ttl: 300000, // 5 minutes
 }));
@@ -78,7 +78,7 @@ client.use(cache({
 Returns cache immediately (even if stale), updates in background:
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   strategy: 'stale-while-revalidate',
   ttl: 60000,
   maxStale: 300000, // Accept up to 5 min stale
@@ -94,7 +94,7 @@ client.use(cache({
 Always fetches from network, ignores cache:
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   strategy: 'network-only',
 }));
 
@@ -106,7 +106,7 @@ client.use(cache({
 Full RFC 7234 implementation:
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   strategy: 'rfc-compliant',
   respectCacheControl: true,
   respectVary: true,
@@ -124,7 +124,7 @@ client.use(cache({
 Always revalidates with server before using cache:
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   strategy: 'revalidate',
 }));
 
@@ -139,7 +139,7 @@ client.use(cache({
 ```typescript
 import { MemoryStorage } from 'recker';
 
-client.use(cache({
+client.use(cachePlugin({
   storage: new MemoryStorage({
     maxMemoryBytes: 100 * 1024 * 1024,
     compression: { enabled: true },
@@ -155,7 +155,7 @@ See [Memory Cache](./01-memory-cache.md) for complete documentation.
 ```typescript
 import { FileStorage } from 'recker';
 
-client.use(cache({
+client.use(cachePlugin({
   storage: new FileStorage({
     directory: './cache',
     maxSize: 500 * 1024 * 1024, // 500MB
@@ -172,7 +172,7 @@ import { createClient as createRedisClient } from 'redis';
 const redis = createRedisClient({ url: 'redis://localhost:6379' });
 await redis.connect();
 
-client.use(cache({
+client.use(cachePlugin({
   storage: new RedisStorage({ client: redis }),
 }));
 ```
@@ -196,7 +196,7 @@ class MyStorage implements CacheStorage {
   async delete(key: string) { /* ... */ }
 }
 
-client.use(cache({ storage: new MyStorage() }));
+client.use(cachePlugin({ storage: new MyStorage() }));
 ```
 
 ## Cache-Control
@@ -204,7 +204,7 @@ client.use(cache({ storage: new MyStorage() }));
 The plugin respects Cache-Control headers from the server:
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   respectCacheControl: true, // default
 }));
 
@@ -226,7 +226,7 @@ client.use(cache({
 The plugin considers the Vary header to create cache variants:
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   respectVary: true, // default
 }));
 
@@ -243,7 +243,7 @@ client.use(cache({
 ## Custom Key Generator
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   keyGenerator: (req) => {
     // Include user in key
     const userId = req.headers.get('X-User-Id') || 'anonymous';
@@ -273,7 +273,7 @@ const noStore = await client.get('/users', {
 ```typescript
 const storage = new MemoryStorage();
 
-client.use(cache({ storage }));
+client.use(cachePlugin({ storage }));
 
 // After a POST/PUT/DELETE, invalidate
 await client.post('/users', { body: newUser });
@@ -285,7 +285,7 @@ storage.clearByPrefix('GET:https://api.example.com/users');
 ### Rate Limited API
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   storage: new MemoryStorage({ maxMemoryBytes: 50 * 1024 * 1024 }),
   strategy: 'cache-first',
   ttl: 300000, // 5 min
@@ -297,7 +297,7 @@ client.use(cache({
 ### Real-time with Fallback
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   strategy: 'stale-while-revalidate',
   ttl: 5000, // 5 seconds
   maxStale: 60000, // Accept up to 1 min stale
@@ -314,7 +314,7 @@ const assetClient = createClient({
   baseUrl: 'https://cdn.example.com',
 });
 
-assetClient.use(cache({
+assetClient.use(cachePlugin({
   storage: new FileStorage({ directory: './asset-cache' }),
   strategy: 'cache-first',
   ttl: 86400000, // 24 hours
@@ -324,7 +324,7 @@ assetClient.use(cache({
 ### Multi-tenant
 
 ```typescript
-client.use(cache({
+client.use(cachePlugin({
   keyGenerator: (req) => {
     const tenantId = req.headers.get('X-Tenant-Id') || 'default';
     return `tenant:${tenantId}:${req.method}:${req.url}`;
@@ -338,7 +338,7 @@ client.use(cache({
 ```typescript
 const storage = new MemoryStorage({ trackStats: true });
 
-client.use(cache({ storage }));
+client.use(cachePlugin({ storage }));
 
 // After some usage...
 const stats = storage.getStats();

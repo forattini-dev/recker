@@ -231,8 +231,8 @@ const data = await client.get('/admin', {
 ```typescript
 // Auth should come before plugins that need authentication
 client.use(auth({ type: 'bearer', token: getToken }));
-client.use(retry({ maxAttempts: 3 }));
-client.use(cache({ ttl: 60000 }));
+client.use(retryPlugin({ maxAttempts: 3 }));
+client.use(cachePlugin({ ttl: 60000 }));
 ```
 
 ## Security

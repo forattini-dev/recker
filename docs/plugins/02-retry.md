@@ -5,13 +5,13 @@ The **Retry** plugin implements automatic retries with exponential, linear, or d
 ## Quick Start
 
 ```typescript
-import { createClient, retry } from 'recker';
+import { createClient, retryPlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
-client.use(retry({
+client.use(retryPlugin({
   maxAttempts: 3,
   backoff: 'exponential',
 }));
@@ -60,7 +60,7 @@ interface RetryOptions {
 Delay grows exponentially: 1s → 2s → 4s → 8s...
 
 ```typescript
-client.use(retry({
+client.use(retryPlugin({
   backoff: 'exponential',
   delay: 1000,
   maxDelay: 30000,
@@ -77,7 +77,7 @@ client.use(retry({
 Delay grows linearly: 1s → 2s → 3s → 4s...
 
 ```typescript
-client.use(retry({
+client.use(retryPlugin({
   backoff: 'linear',
   delay: 1000,
 }));
@@ -88,7 +88,7 @@ client.use(retry({
 Random delay between `delay` and `previousDelay * 3`. Used by AWS.
 
 ```typescript
-client.use(retry({
+client.use(retryPlugin({
   backoff: 'decorrelated',
   delay: 1000,
 }));
@@ -100,13 +100,13 @@ Jitter adds ±25% randomness to the delay to prevent multiple clients from retry
 
 ```typescript
 // With jitter (default)
-client.use(retry({
+client.use(retryPlugin({
   delay: 1000,
   jitter: true, // delay will be between 750ms and 1250ms
 }));
 
 // Without jitter
-client.use(retry({
+client.use(retryPlugin({
   delay: 1000,
   jitter: false, // delay will be exactly 1000ms
 }));
@@ -117,7 +117,7 @@ client.use(retry({
 By default, the plugin retries on network errors and timeouts. You can specify status codes:
 
 ```typescript
-client.use(retry({
+client.use(retryPlugin({
   statusCodes: [408, 429, 500, 502, 503, 504],
 }));
 ```
@@ -127,7 +127,7 @@ client.use(retry({
 The plugin respects the `Retry-After` header from 429 (Too Many Requests) and 503 (Service Unavailable) responses:
 
 ```typescript
-client.use(retry({
+client.use(retryPlugin({
   respectRetryAfter: true, // default
 }));
 
@@ -145,7 +145,7 @@ Supported formats:
 ## Custom Retry Logic
 
 ```typescript
-client.use(retry({
+client.use(retryPlugin({
   shouldRetry: (error) => {
     // Only retry network errors
     if (error instanceof NetworkError) return true;
@@ -163,7 +163,7 @@ client.use(retry({
 ## Retry Logging
 
 ```typescript
-client.use(retry({
+client.use(retryPlugin({
   onRetry: (attempt, error, delay) => {
     console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
     console.log(`Error: ${error.message}`);
@@ -180,7 +180,7 @@ const client = createClient({
   baseUrl: 'https://api.github.com',
 });
 
-client.use(retry({
+client.use(retryPlugin({
   maxAttempts: 5,
   backoff: 'exponential',
   statusCodes: [429, 503],
@@ -194,7 +194,7 @@ client.use(retry({
 ### Resilient Microservices
 
 ```typescript
-client.use(retry({
+client.use(retryPlugin({
   maxAttempts: 3,
   delay: 500,
   backoff: 'decorrelated',
@@ -208,7 +208,7 @@ client.use(retry({
 ```typescript
 import { TimeoutError } from 'recker';
 
-client.use(retry({
+client.use(retryPlugin({
   maxAttempts: 2,
   delay: 2000,
   shouldRetry: (error) => error instanceof TimeoutError,
@@ -220,16 +220,16 @@ client.use(retry({
 Retry works well with other plugins:
 
 ```typescript
-import { createClient, retry, circuitBreaker, cache } from 'recker';
+import { createClient, retryPlugin, circuitBreakerPlugin, cachePlugin } from 'recker';
 
 const client = createClient({
   baseUrl: 'https://api.example.com',
 });
 
 // Order matters! Circuit breaker should come before retry
-client.use(circuitBreaker({ threshold: 5 }));
-client.use(retry({ maxAttempts: 3 }));
-client.use(cache({ ttl: 60000 }));
+client.use(circuitBreakerPlugin({ threshold: 5 }));
+client.use(retryPlugin({ maxAttempts: 3 }));
+client.use(cachePlugin({ ttl: 60000 }));
 ```
 
 ## Tips

@@ -323,7 +323,7 @@ describe('Circuit Breaker', () => {
       baseUrl: 'https://api.example.com',
       transport: mock,
       plugins: [
-        circuitBreaker({
+        circuitBreakerPlugin({
           threshold: 3,
           resetTimeout: 1000,
           onOpen
@@ -455,7 +455,7 @@ Record real API responses and replay them in tests for deterministic integration
 import { createClient, harRecorder } from 'recker';
 
 // Record all requests
-const recorder = harRecorder();
+const recorder = harRecorderPlugin();
 const client = createClient({
   baseUrl: 'https://api.example.com',
   plugins: [recorder]
@@ -477,7 +477,7 @@ import { createClient, harPlayer } from 'recker';
 
 describe('Integration', () => {
   it('should use recorded responses', async () => {
-    const player = await harPlayer('./fixtures/api-responses.har');
+    const player = await harPlayerPlugin('./fixtures/api-responses.har');
 
     const client = createClient({
       baseUrl: 'https://api.example.com',
@@ -494,7 +494,7 @@ describe('Integration', () => {
 ### HAR Matching Options
 
 ```typescript
-const player = await harPlayer('./fixtures/responses.har', {
+const player = await harPlayerPlugin('./fixtures/responses.har', {
   // Match by URL pattern only (ignore query params)
   matchBy: 'url',
 
@@ -691,7 +691,7 @@ describe('Unit: UserService', () => {
 // Integration test - uses recorded HAR
 describe('Integration: UserService', () => {
   it('uses HAR replay', async () => {
-    const player = await harPlayer('./fixtures/users.har');
+    const player = await harPlayerPlugin('./fixtures/users.har');
     // ...
   });
 });
