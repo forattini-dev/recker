@@ -19,7 +19,7 @@ import { createXSRFMiddleware, XSRFPluginOptions } from '../plugins/xsrf.js';
 import { createCompressionMiddleware } from '../plugins/compression.js';
 import { serializeXML } from '../plugins/xml.js';
 import { MemoryStorage } from '../cache/memory-storage.js';
-import { FileStorage } from '../cache/file-storage.js';
+import { FileStorage } from '../cache/basic-file-storage.js';
 import { RequestRunner } from '../runner/request-runner.js';
 import { ReckerWebSocket, type WebSocketOptions } from '../websocket/client.js';
 import { whois as performWhois, isDomainAvailable, type WhoisOptions, type WhoisResult } from '../utils/whois.js';
