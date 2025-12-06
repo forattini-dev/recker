@@ -2,6 +2,17 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    // Resource limits - prevent excessive RAM/CPU usage
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        maxForks: 2,
+        minForks: 1,
+      },
+    },
+    maxConcurrency: 3,
+    fileParallelism: false,
+
     include: ['test/**/*.test.ts'],
     exclude: ['docs/**', 'node_modules/**', 'benchmark/**'],
     coverage: {
