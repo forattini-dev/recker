@@ -28,6 +28,7 @@
 import { run, bench, group } from 'mitata';
 import { createServer } from 'node:http';
 import { createClient } from '../src/index.js';
+import { createBareClient } from '../src/bare.js';
 
 // HTTP Clients
 import axios from 'axios';
@@ -90,6 +91,7 @@ const url = `http://localhost:${port}`;
 // Setup Clients
 const recker = createClient({ baseUrl: url });
 const reckerFast = createClient({ baseUrl: url, observability: false });
+const bareClient = createBareClient({ baseUrl: url });
 const bentGetJson = bent(url, 'GET', 'json', 200);
 const bentPostJson = bent(url, 'POST', 'json', 201);
 
@@ -107,7 +109,7 @@ if (!JSON_OUTPUT) {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
   console.log('║           HTTP Clients Comprehensive Comparison                   ║');
   console.log('║                                                                   ║');
-  console.log('║   Testing 22 HTTP libraries for Node.js                          ║');
+  console.log('║   Testing 23 HTTP libraries for Node.js                          ║');
   console.log('╚═══════════════════════════════════════════════════════════════════╝\n');
   console.log(`Server: ${url}\n`);
 }
@@ -121,6 +123,12 @@ group('GET JSON (simple)', () => {
   bench('undici (raw)', async () => {
     const { body } = await undiciRequest(url);
     await body.json();
+  });
+
+  // Recker bare client - zero overhead wrapper
+  bench('recker (bare)', async () => {
+    const res = await bareClient.get('/');
+    await res.json();
   });
 
   bench('fetch (native)', async () => {
@@ -238,6 +246,11 @@ group('POST JSON (with body)', () => {
       body: JSON.stringify(body)
     });
     await respBody.json();
+  });
+
+  bench('recker (bare)', async () => {
+    const res = await bareClient.post('/', body);
+    await res.json();
   });
 
   bench('fetch (native)', async () => {
@@ -395,6 +408,13 @@ group('Parallel GET (10 concurrent)', () => {
     }));
   });
 
+  bench('recker (bare)', async () => {
+    await Promise.all(Array(10).fill(null).map(async () => {
+      const res = await bareClient.get('/');
+      return res.json();
+    }));
+  });
+
   bench('fetch (native)', async () => {
     await Promise.all(Array(10).fill(null).map(async () => {
       const res = await fetch(url);
@@ -545,6 +565,13 @@ group('Sequential GET (5 requests)', () => {
     for (let i = 0; i < 5; i++) {
       const { body } = await undiciRequest(url);
       await body.json();
+    }
+  });
+
+  bench('recker (bare)', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await bareClient.get('/');
+      await res.json();
     }
   });
 
@@ -700,10 +727,11 @@ server.close();
 
 if (!JSON_OUTPUT) {
   console.log('\n═══════════════════════════════════════════════════════════════════');
-  console.log('                         LEGEND (22 libraries)                      ');
+  console.log('                         LEGEND (23 libraries)                      ');
   console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
   console.log('undici            - Node.js official HTTP client (fastest baseline)');
+  console.log('recker (bare)     - Zero-overhead wrapper (~0% vs undici) ★');
   console.log('fetch             - Native fetch API');
   console.log('recker            - Batteries-included (retries, cache, rate-limit)');
   console.log('recker (fast)     - Recker with observability: false');

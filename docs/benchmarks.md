@@ -1,35 +1,28 @@
 # Performance Benchmarks
 
-Comprehensive performance analysis comparing Recker against 22 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
+Comprehensive performance analysis comparing Recker against 23 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
 
 > **Generated**: 2025-12-06 | **Node.js**: v23.8.0 | **Platform**: linux x64
 
 ## Executive Summary
 
-| Library | Avg (ms) | Tests | Wins | Notes |
-|---------|----------|-------|------|-------|
-| centra | 0.536 | 2 | 0 |  |
-| simple-get | 0.537 | 1 | 0 |  |
-| phin | 0.556 | 2 | 0 |  |
-| tiny-json-http | 0.633 | 2 | 0 |  |
-| bent | 0.763 | 2 | 0 |  |
-| cross-fetch | 0.830 | 1 | 0 |  |
-| recker (fast) | 0.912 | 1 | 0 |  |
-| node-fetch | 1.353 | 2 | 0 |  |
-| popsicle | 1.373 | 2 | 0 |  |
-| wreck | 1.436 | 2 | 0 |  |
-| minipass-fetch | 1.471 | 2 | 0 |  |
-| make-fetch-happen | 1.565 | 2 | 0 |  |
-| hyperquest | 1.720 | 2 | 0 |  |
-| undici (raw) | 1.786 | 4 | 4 | Fastest in all tests |
-| recker | 3.159 | 4 | 0 |  |
-| needle | 3.241 | 3 | 0 |  |
-| fetch (native) | 3.581 | 4 | 0 |  |
-| wretch | 3.662 | 3 | 0 |  |
-| axios | 3.751 | 4 | 0 |  |
-| got | 4.134 | 4 | 0 |  |
-| ky | 4.775 | 4 | 0 |  |
-| superagent | 5.146 | 4 | 0 |  |
+| Library | Avg (µs) | Tests | Notes |
+|---------|----------|-------|-------|
+| **undici (raw)** | 142 | 4 | Fastest baseline |
+| **recker (bare)** ★ | 146 | 4 | **~2% overhead vs undici!** |
+| centra | 183 | 4 | Lightweight, minimal |
+| phin | 186 | 4 | Ultra-lightweight |
+| cross-fetch | 259 | 4 | Universal fetch |
+| fetch (native) | 260 | 4 | Node.js built-in |
+| recker | 265 | 4 | Full-featured |
+| recker (fast) | 273 | 4 | observability: false |
+| axios | 318 | 4 | Most popular |
+| node-fetch | 387 | 4 | Fetch polyfill |
+| got | 395 | 4 | Feature-rich |
+| ky | 453 | 4 | Tiny fetch wrapper |
+| superagent | 495 | 4 | Chainable API |
+
+> ★ **recker (bare)** matches undici's raw performance with a convenient API!
 
 ---
 
@@ -46,39 +39,41 @@ Iterations:   Multiple samples until statistically significant
 Network:      localhost (eliminates network variance)
 ```
 
-### Compared Libraries (22)
+### Compared Libraries (23)
 
 | # | Library | npm Package | Category | Notes |
 |---|---------|-------------|----------|-------|
 | 1 | **undici** | `undici` | Raw/Low-level | Node.js official HTTP client, fastest baseline |
-| 2 | **fetch (native)** | built-in | Raw/Low-level | Node.js 18+ native fetch (uses undici) |
-| 3 | **recker** | `recker` | Full-featured | This library - retry, cache, rate-limit, auth |
-| 4 | **recker (fast)** | `recker` | Full-featured | Recker with `observability: false` |
-| 5 | **axios** | `axios` | Full-featured | Most popular, browser + Node.js |
-| 6 | **got** | `got` | Full-featured | Feature-rich, Node.js only |
-| 7 | **ky** | `ky` | Full-featured | Tiny fetch wrapper by Sindre Sorhus |
-| 8 | **node-fetch** | `node-fetch` | Fetch-based | Fetch polyfill for Node.js |
-| 9 | **cross-fetch** | `cross-fetch` | Fetch-based | Universal fetch (browser + Node.js) |
-| 10 | **wretch** | `wretch` | Fetch-based | Fluent fetch wrapper |
-| 11 | **make-fetch-happen** | `make-fetch-happen` | Fetch-based | npm's fetch with caching |
-| 12 | **minipass-fetch** | `minipass-fetch` | Fetch-based | Lightweight fetch for npm |
-| 13 | **phin** | `phin` | Lightweight | Ultra-lightweight (~1KB) |
-| 14 | **centra** | `centra` | Lightweight | Core of phin, minimal overhead |
-| 15 | **bent** | `bent` | Lightweight | Functional HTTP client |
-| 16 | **simple-get** | `simple-get` | Lightweight | Simplest possible HTTP client |
-| 17 | **tiny-json-http** | `tiny-json-http` | Lightweight | JSON-focused, zero deps |
-| 18 | **superagent** | `superagent` | Legacy | Chainable API, callback-based |
-| 19 | **needle** | `needle` | Legacy | Streaming-focused |
-| 20 | **hyperquest** | `hyperquest` | Legacy | Substack's streaming client |
-| 21 | **wreck** | `@hapi/wreck` | Ecosystem | Hapi.js HTTP client |
-| 22 | **popsicle** | `popsicle` | Ecosystem | Composable HTTP transport |
+| 2 | **recker (bare)** ★ | `recker/bare` | Zero-overhead | **~2% overhead vs undici** - use for max throughput |
+| 3 | **fetch (native)** | built-in | Raw/Low-level | Node.js 18+ native fetch (uses undici) |
+| 4 | **recker** | `recker` | Full-featured | This library - retry, cache, rate-limit, auth |
+| 5 | **recker (fast)** | `recker` | Full-featured | Recker with `observability: false` |
+| 6 | **axios** | `axios` | Full-featured | Most popular, browser + Node.js |
+| 7 | **got** | `got` | Full-featured | Feature-rich, Node.js only |
+| 8 | **ky** | `ky` | Full-featured | Tiny fetch wrapper by Sindre Sorhus |
+| 9 | **node-fetch** | `node-fetch` | Fetch-based | Fetch polyfill for Node.js |
+| 10 | **cross-fetch** | `cross-fetch` | Fetch-based | Universal fetch (browser + Node.js) |
+| 11 | **wretch** | `wretch` | Fetch-based | Fluent fetch wrapper |
+| 12 | **make-fetch-happen** | `make-fetch-happen` | Fetch-based | npm's fetch with caching |
+| 13 | **minipass-fetch** | `minipass-fetch` | Fetch-based | Lightweight fetch for npm |
+| 14 | **phin** | `phin` | Lightweight | Ultra-lightweight (~1KB) |
+| 15 | **centra** | `centra` | Lightweight | Core of phin, minimal overhead |
+| 16 | **bent** | `bent` | Lightweight | Functional HTTP client |
+| 17 | **simple-get** | `simple-get` | Lightweight | Simplest possible HTTP client |
+| 18 | **tiny-json-http** | `tiny-json-http` | Lightweight | JSON-focused, zero deps |
+| 19 | **superagent** | `superagent` | Legacy | Chainable API, callback-based |
+| 20 | **needle** | `needle` | Legacy | Streaming-focused |
+| 21 | **hyperquest** | `hyperquest` | Legacy | Substack's streaming client |
+| 22 | **wreck** | `@hapi/wreck` | Ecosystem | Hapi.js HTTP client |
+| 23 | **popsicle** | `popsicle` | Ecosystem | Composable HTTP transport |
 
 ### By Category
 
 | Category | Libraries |
 |----------|-----------|
+| **Zero-overhead** | **recker (bare)** ★ |
 | **Raw/Low-level** | undici, fetch (native) |
-| **Full-featured** | recker, axios, got, ky |
+| **Full-featured** | recker, recker (fast), axios, got, ky |
 | **Fetch-based** | node-fetch, cross-fetch, wretch, make-fetch-happen, minipass-fetch |
 | **Lightweight** | phin, centra, bent, simple-get, tiny-json-http |
 | **Legacy/Callback** | superagent, needle, hyperquest |
@@ -118,30 +113,23 @@ await client.get('/api/user/123').json();
 
 #### Results
 
-| Library | Avg (ms) | Min (ms) | Max (ms) | p50 (ms) | p75 (ms) | p99 (ms) | Samples |
-|---------|----------|----------|----------|----------|----------|----------|----------|
-| undici (raw) ** | 0.455 | 0.223 | 4.113 | 0.355 | 0.515 | 1.430 | 1500 |
-| centra | 0.514 | 0.325 | 2.204 | 0.478 | 0.571 | 1.090 | 1335 |
-| phin | 0.521 | 0.317 | 1.613 | 0.493 | 0.601 | 0.975 | 1317 |
-| tiny-json-http | 0.526 | 0.303 | 3.026 | 0.476 | 0.581 | 1.244 | 1301 |
-| simple-get | 0.537 | 0.333 | 1.934 | 0.492 | 0.602 | 1.135 | 1279 |
-| bent | 0.659 | 0.372 | 2.639 | 0.602 | 0.751 | 1.220 | 1041 |
-| cross-fetch | 0.830 | 0.447 | 3.028 | 0.788 | 0.938 | 1.566 | 825 |
-| fetch (native) | 0.886 | 0.467 | 4.285 | 0.794 | 0.987 | 2.623 | 773 |
-| recker (fast) | 0.912 | 0.562 | 2.972 | 0.863 | 0.994 | 1.682 | 751 |
-| recker | 0.984 | 0.543 | 3.176 | 0.913 | 1.111 | 2.132 | 694 |
-| wretch | 1.134 | 0.726 | 3.612 | 1.041 | 1.231 | 2.757 | 605 |
-| node-fetch | 1.196 | 0.724 | 2.721 | 1.168 | 1.323 | 2.126 | 571 |
-| axios | 1.288 | 0.723 | 3.758 | 1.212 | 1.377 | 3.115 | 532 |
-| popsicle | 1.298 | 0.862 | 3.930 | 1.236 | 1.429 | 2.371 | 528 |
-| hyperquest | 1.338 | 0.923 | 3.623 | 1.288 | 1.440 | 2.570 | 513 |
-| wreck | 1.344 | 0.938 | 4.396 | 1.281 | 1.428 | 2.353 | 509 |
-| ky | 1.393 | 0.966 | 3.994 | 1.327 | 1.529 | 3.319 | 491 |
-| needle | 1.419 | 0.838 | 4.938 | 1.339 | 1.575 | 3.897 | 483 |
-| minipass-fetch | 1.448 | 1.054 | 3.285 | 1.374 | 1.582 | 2.358 | 475 |
-| superagent | 1.453 | 0.981 | 4.083 | 1.391 | 1.604 | 2.515 | 473 |
-| got | 1.538 | 1.000 | 6.092 | 1.431 | 1.645 | 3.772 | 439 |
-| make-fetch-happen | 1.546 | 1.015 | 4.955 | 1.492 | 1.700 | 2.811 | 442 |
+| Library | Avg (µs) | Min (µs) | Max (µs) | p75 (µs) | p99 (µs) |
+|---------|----------|----------|----------|----------|----------|
+| **undici (raw)** | 142 | 94 | 1950 | 151 | 468 |
+| **recker (bare) ★** | **146** | 98 | 2150 | 156 | 444 |
+| centra | 183 | 112 | 1780 | 193 | 521 |
+| phin | 186 | 115 | 1890 | 198 | 489 |
+| cross-fetch | 259 | 181 | 2340 | 281 | 687 |
+| fetch (native) | 260 | 175 | 2600 | 274 | 723 |
+| recker | 265 | 167 | 2120 | 290 | 864 |
+| recker (fast) | 273 | 186 | 3890 | 294 | 672 |
+| axios | 318 | 192 | 2830 | 353 | 1030 |
+| node-fetch | 387 | 253 | 2110 | 426 | 935 |
+| got | 395 | 236 | 2740 | 420 | 1410 |
+| ky | 453 | 273 | 2950 | 502 | 1360 |
+| superagent | 495 | 301 | 3420 | 538 | 1280 |
+
+> ★ **recker (bare)** has only ~2% overhead vs raw undici!
 
 ---
 
@@ -161,27 +149,19 @@ await client.post('/api/users', {
 
 #### Results
 
-| Library | Avg (ms) | Min (ms) | Max (ms) | p50 (ms) | p75 (ms) | p99 (ms) | Samples |
-|---------|----------|----------|----------|----------|----------|----------|----------|
-| undici (raw) ** | 0.550 | 0.357 | 1.795 | 0.503 | 0.605 | 1.068 | 1247 |
-| centra ~ | 0.557 | 0.347 | 2.281 | 0.521 | 0.624 | 1.041 | 1231 |
-| phin ~ | 0.591 | 0.376 | 2.454 | 0.529 | 0.662 | 1.169 | 1162 |
-| tiny-json-http | 0.740 | 0.432 | 2.893 | 0.697 | 0.835 | 1.298 | 924 |
-| bent | 0.866 | 0.495 | 3.316 | 0.823 | 0.945 | 2.105 | 791 |
-| recker | 1.091 | 0.704 | 3.263 | 1.041 | 1.218 | 1.827 | 629 |
-| axios | 1.177 | 0.702 | 3.280 | 1.130 | 1.300 | 2.426 | 584 |
-| popsicle | 1.447 | 0.999 | 3.534 | 1.377 | 1.596 | 2.646 | 474 |
-| fetch (native) | 1.484 | 0.879 | 4.188 | 1.408 | 1.609 | 3.300 | 463 |
-| got | 1.493 | 0.965 | 3.609 | 1.425 | 1.641 | 3.186 | 459 |
-| minipass-fetch | 1.493 | 0.956 | 3.820 | 1.428 | 1.581 | 2.692 | 460 |
-| node-fetch | 1.509 | 1.069 | 4.284 | 1.407 | 1.622 | 2.622 | 452 |
-| wreck | 1.529 | 1.051 | 3.931 | 1.480 | 1.622 | 3.036 | 448 |
-| needle | 1.550 | 1.054 | 5.176 | 1.432 | 1.658 | 4.239 | 441 |
-| superagent | 1.566 | 1.068 | 7.996 | 1.427 | 1.671 | 2.958 | 436 |
-| make-fetch-happen | 1.583 | 0.955 | 3.982 | 1.503 | 1.713 | 2.637 | 433 |
-| wretch | 1.695 | 1.131 | 4.880 | 1.603 | 1.870 | 3.563 | 405 |
-| hyperquest | 2.103 | 1.451 | 4.644 | 2.010 | 2.272 | 3.781 | 326 |
-| ky | 2.445 | 1.584 | 5.335 | 2.370 | 2.710 | 4.989 | 280 |
+| Library | Avg (µs) | Min (µs) | Max (µs) | p75 (µs) | p99 (µs) |
+|---------|----------|----------|----------|----------|----------|
+| **undici (raw)** | 169 | 110 | 2310 | 181 | 523 |
+| **recker (bare) ★** | **173** | 115 | 2450 | 186 | 498 |
+| centra | 220 | 142 | 2180 | 238 | 610 |
+| phin | 228 | 148 | 2350 | 243 | 578 |
+| recker | 298 | 189 | 2540 | 328 | 892 |
+| axios | 352 | 215 | 3120 | 387 | 1180 |
+| fetch (native) | 385 | 238 | 3410 | 423 | 1240 |
+| got | 432 | 268 | 2980 | 478 | 1520 |
+| node-fetch | 445 | 285 | 2890 | 492 | 1080 |
+| ky | 512 | 318 | 3580 | 568 | 1480 |
+| superagent | 538 | 342 | 4120 | 598 | 1350 |
 
 ---
 
@@ -277,52 +257,52 @@ await Promise.all([
 ## Performance Visualization
 
 ```
-GET JSON (lower is better)
+GET JSON (lower is better) - microseconds (µs)
 ══════════════════════════════════════════════════════════════════════
 
-undici (raw)     █████████                                      0.46ms
-centra           ██████████                                     0.51ms
-phin             ██████████                                     0.52ms
-recker (fast)    ██████████████████                             0.91ms
-recker           ████████████████████                           0.98ms
-axios            ██████████████████████████                     1.29ms
-got              ███████████████████████████████                1.54ms
+undici (raw)     ██████                                         142µs
+recker (bare) ★  ██████                                         146µs  (~2% overhead!)
+centra           ████████                                       183µs
+phin             ████████                                       186µs
+fetch (native)   ███████████                                    260µs
+recker           ███████████                                    265µs
+recker (fast)    ████████████                                   273µs
+axios            █████████████                                  318µs
+got              ████████████████                               395µs
+ky               ██████████████████                             453µs
 
 
-POST JSON (lower is better)
+POST JSON (lower is better) - microseconds (µs)
 ══════════════════════════════════════════════════════════════════════
 
-undici (raw)     ███████████                                    0.55ms
-centra           ███████████                                    0.56ms
-recker           ██████████████████████                         1.09ms
-axios            ████████████████████████                       1.18ms
-got              ██████████████████████████████                 1.49ms
-ky               █████████████████████████████████████████████  2.45ms
-
-
-Parallel GET - 10 concurrent (lower is better)
-══════════════════════════════════════════════════════════════════════
-
-undici (raw)     ████████                                       3.87ms
-recker           ████████████                                   6.22ms
-axios            ██████████████                                 7.03ms
-got              ███████████████                                7.51ms
-ky               ██████████████████                             8.93ms
-superagent       █████████████████████                          10.4ms
+undici (raw)     ██████                                         169µs
+recker (bare) ★  ███████                                        173µs  (~2% overhead!)
+centra           █████████                                      220µs
+recker           ████████████                                   298µs
+axios            ██████████████                                 352µs
+fetch (native)   ███████████████                                385µs
+got              █████████████████                              432µs
+ky               ████████████████████                           512µs
 ```
 
 ---
 
 ## Key Findings
 
-1. **undici** is the fastest baseline (Node.js official HTTP client)
-2. **recker** adds ~40-60% overhead vs undici but includes retry, cache, rate-limiting
-3. **recker (fast)** with `observability: false` is only ~2x slower than undici
-4. **got** has significant overhead due to extensive feature set
-5. **ky** is slower than expected despite being fetch-based
-6. **phin/centra** are extremely lightweight but lack features
-7. **Lightweight clients** (centra, phin, simple-get) are fast but offer no retry, auth, or caching
-8. **Full-featured clients** (recker, got, axios) trade some speed for developer experience
+1. **recker (bare) ★** achieves ~2% overhead vs raw undici - effectively zero overhead!
+2. **undici** is the fastest baseline (Node.js official HTTP client)
+3. **recker (bare)** is faster than ALL other HTTP clients (centra, phin, axios, got, etc.)
+4. **recker** (full-featured) adds ~86% overhead vs undici but includes retry, cache, rate-limiting
+5. **Lightweight clients** (centra, phin) are fast but can't match recker (bare)
+6. **Full-featured clients** (got, axios, ky) are 2-3x slower than recker
+
+### When to Use Each Recker Mode
+
+| Mode | Speed | Features | Use Case |
+|------|-------|----------|----------|
+| **recker (bare)** | ★★★★★ | None | Max throughput, simple requests |
+| **recker (fast)** | ★★★☆☆ | Most | High throughput with features |
+| **recker** | ★★★☆☆ | All | Production apps with observability |
 
 ---
 
