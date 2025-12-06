@@ -185,12 +185,16 @@ curl -X POST http://localhost:3100 \
 
 ## Available Tools
 
-The MCP Server provides **6 tools** organized in two categories:
+The MCP Server provides **10 tools** organized in two categories. All tools use the `rek_` prefix for consistency.
 
 | Tool | Category | Description |
 |------|----------|-------------|
-| `search_docs` | Documentation | Search Recker docs by keyword |
-| `get_doc` | Documentation | Get full content of a doc file |
+| `rek_search_docs` | Documentation | Search Recker docs by keyword |
+| `rek_get_doc` | Documentation | Get full content of a doc file |
+| `rek_code_examples` | Documentation | Get runnable code examples |
+| `rek_api_schema` | Documentation | Get TypeScript types and interfaces |
+| `rek_suggest` | Documentation | Get implementation suggestions |
+| `rek_ip_lookup` | Network | IP geolocation lookup |
 | `rek_http_request` | Network | Perform HTTP requests (GET, POST, etc.) |
 | `rek_dns_lookup` | Network | Resolve DNS records (A, MX, TXT, etc.) |
 | `rek_whois_lookup` | Network | WHOIS lookup for domains/IPs |
@@ -200,17 +204,18 @@ The MCP Server provides **6 tools** organized in two categories:
 
 Tools for searching and reading Recker documentation.
 
-#### search_docs
+#### rek_search_docs
 
-Search documentation by keyword:
+Search documentation using hybrid search (fuzzy + semantic):
 
 ```json
 {
-  "name": "search_docs",
+  "name": "rek_search_docs",
   "arguments": {
     "query": "retry",
     "category": "http",
-    "limit": 5
+    "limit": 5,
+    "mode": "hybrid"
   }
 }
 ```
@@ -219,14 +224,15 @@ Search documentation by keyword:
 - `query` (required): Search keywords
 - `category` (optional): Filter by category (http, cli, ai, protocols, reference, guides)
 - `limit` (optional): Max results (default: 5, max: 10)
+- `mode` (optional): Search mode - hybrid, fuzzy, or semantic (default: hybrid)
 
-#### get_doc
+#### rek_get_doc
 
 Get full content of a documentation file:
 
 ```json
 {
-  "name": "get_doc",
+  "name": "rek_get_doc",
   "arguments": {
     "path": "http/07-resilience.md"
   }
@@ -235,6 +241,78 @@ Get full content of a documentation file:
 
 **Parameters:**
 - `path` (required): Documentation file path from search results
+
+#### rek_code_examples
+
+Get runnable code examples for Recker features:
+
+```json
+{
+  "name": "rek_code_examples",
+  "arguments": {
+    "feature": "retry",
+    "complexity": "intermediate",
+    "limit": 3
+  }
+}
+```
+
+**Parameters:**
+- `feature` (required): Feature to get examples for
+- `complexity` (optional): Complexity level - basic, intermediate, advanced
+- `limit` (optional): Max examples to return
+
+#### rek_api_schema
+
+Get TypeScript types, interfaces, and API schemas:
+
+```json
+{
+  "name": "rek_api_schema",
+  "arguments": {
+    "type": "ClientOptions",
+    "include": "both"
+  }
+}
+```
+
+**Parameters:**
+- `type` (required): Type/interface name to look up
+- `include` (optional): What to include - definition, properties, or both
+
+#### rek_suggest
+
+Get implementation suggestions based on use case:
+
+```json
+{
+  "name": "rek_suggest",
+  "arguments": {
+    "useCase": "I need to retry failed requests with exponential backoff",
+    "constraints": ["must support custom retry conditions", "need rate limiting"]
+  }
+}
+```
+
+**Parameters:**
+- `useCase` (required): Description of what you want to achieve
+- `constraints` (optional): Array of constraints or requirements
+
+#### rek_ip_lookup
+
+Get geolocation and network information for an IP address:
+
+```json
+{
+  "name": "rek_ip_lookup",
+  "arguments": {
+    "ip": "8.8.8.8"
+  }
+}
+```
+
+**Parameters:**
+- `ip` (required): IPv4 or IPv6 address
 
 ### Network Tools
 
@@ -346,10 +424,10 @@ Once configured, your AI assistant can use these tools autonomously.
 User: How do I implement retry logic with recker?
 
 AI: Let me search the documentation...
-[Uses search_docs tool with query "retry"]
+[Uses rek_search_docs with query "retry"]
 
 I found relevant documentation. Let me read the full content...
-[Uses get_doc tool with path "http/07-resilience.md"]
+[Uses rek_get_doc with path "http/07-resilience.md"]
 
 Based on the documentation, here's how to implement retry logic:
 
