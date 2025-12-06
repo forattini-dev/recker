@@ -249,7 +249,74 @@ ${colors.bold(colors.yellow('Available Presets:'))}
 
       // Protocol Switcher for UDP
       if (url.startsWith('udp://')) {
-        console.log(colors.yellow('UDP mode coming soon...'));
+        const dgram = await import('node:dgram');
+        const { Buffer } = await import('node:buffer');
+
+        const u = new URL(url);
+        const host = u.hostname;
+        const port = parseInt(u.port || '9000');
+        const client = dgram.createSocket('udp4');
+
+        // Determine payload
+        let payload: Buffer;
+        let bodyData: any = undefined;
+        
+        if (stdinData) {
+            bodyData = stdinData;
+        } else if (Object.keys(data).length > 0) {
+            bodyData = JSON.stringify(data);
+        } else {
+            // Default empty payload or from args if plain string was supported?
+            // The parser puts unknown args into 'url' usually, but we have url.
+            // Let's assume empty string if nothing else.
+            bodyData = '';
+        }
+
+        if (typeof bodyData === 'string') {
+            payload = Buffer.from(bodyData);
+        } else {
+            payload = Buffer.from(JSON.stringify(bodyData));
+        }
+
+        console.log(colors.gray(`Sending ${payload.length} bytes to ${host}:${port}...`));
+
+        // Listen for response
+        client.on('message', (msg, rinfo) => {
+            if (!options.quiet) {
+                console.log(colors.green(`\nResponse from ${rinfo.address}:${rinfo.port}:`));
+            }
+            console.log(msg.toString());
+            client.close();
+        });
+
+        client.on('error', (err) => {
+            console.error(colors.red(`UDP Error: ${err.message}`));
+            client.close();
+            process.exit(1);
+        });
+
+        // Send
+        client.send(payload, port, host, (err) => {
+            if (err) {
+                console.error(colors.red(`Send Error: ${err.message}`));
+                client.close();
+                process.exit(1);
+            }
+            
+            if (!options.quiet) {
+                console.log(colors.gray('Message sent. Waiting for response (2s timeout)...'));
+            }
+        });
+
+        // Timeout
+        setTimeout(() => {
+             if (!options.quiet) {
+                 console.log(colors.gray('\nNo response received (timeout).'));
+             }
+             client.close();
+             process.exit(0);
+        }, 2000);
+
         return;
       }
 
@@ -1616,6 +1683,7 @@ ${colors.bold(colors.yellow('Credentials:'))}
     .option('-t, --transport <mode>', 'Transport mode: stdio, http, sse', 'stdio')
     .option('-p, --port <number>', 'Server port (for http/sse modes)', '3100')
     .option('-d, --docs <path>', 'Path to documentation folder')
+    .option('-T, --tools <paths...>', 'Paths to external tool modules to load')
     .option('--debug', 'Enable debug logging')
     .addHelpText('after', `
 ${colors.bold(colors.yellow('Transport Modes:'))}
@@ -1643,7 +1711,7 @@ ${colors.bold(colors.yellow('Claude Code config (~/.claude.json):'))}
     }
   }`)}
 `)
-    .action(async (options: { transport: string; port: string; docs?: string; debug?: boolean }) => {
+    .action(async (options: { transport: string; port: string; docs?: string; debug?: boolean; tools?: string[] }) => {
       const { MCPServer } = await import('../mcp/server.js');
       const transport = options.transport as 'stdio' | 'http' | 'sse';
 
@@ -1652,6 +1720,7 @@ ${colors.bold(colors.yellow('Claude Code config (~/.claude.json):'))}
         port: parseInt(options.port),
         docsPath: options.docs,
         debug: options.debug,
+        toolPaths: options.tools,
       });
 
       // For stdio mode, start silently (output goes to stderr if debug)

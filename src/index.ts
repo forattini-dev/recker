@@ -9,6 +9,7 @@ export * from './core/client.js';
 export * from './core/request.js';
 export * from './core/response.js';
 export * from './plugins/retry.js';
+export * from './plugins/rate-limit.js';
 export * from './plugins/cache.js';
 export * from './plugins/dedup.js';
 export * from './plugins/logger.js';

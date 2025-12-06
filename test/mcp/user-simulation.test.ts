@@ -50,7 +50,7 @@ describe('MCP User Simulation Tests', () => {
 
   describe('Documentation Search Scenarios', () => {
     it('should find retry documentation when user asks "how do I retry failed requests?"', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'retry failed requests',
       });
 
@@ -60,7 +60,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should find cache documentation when user asks "how to cache HTTP responses?"', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'cache HTTP responses',
       });
 
@@ -70,7 +70,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should find streaming documentation when user asks "how to stream AI responses?"', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'stream AI responses',
       });
 
@@ -80,7 +80,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should find middleware documentation when user asks "how to add custom middleware?"', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'custom middleware hooks',
       });
 
@@ -90,7 +90,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should find timeout documentation when user asks "how to set request timeout?"', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'request timeout configuration',
       });
 
@@ -100,7 +100,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should find authentication documentation when user asks "how to add auth headers?"', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'authentication headers bearer token',
       });
 
@@ -112,7 +112,7 @@ describe('MCP User Simulation Tests', () => {
 
   describe('Category Filtering Scenarios', () => {
     it('should filter by HTTP category when user asks about HTTP features', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'client configuration',
         category: 'http',
       });
@@ -124,7 +124,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should filter by AI category when user asks about AI features', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'openai streaming',
         category: 'ai',
       });
@@ -137,7 +137,7 @@ describe('MCP User Simulation Tests', () => {
 
   describe('Get Documentation Scenarios', () => {
     it('should get full quickstart documentation', async () => {
-      const result = await callTool('get_doc', {
+      const result = await callTool('rek_get_doc', {
         path: 'http/01-quickstart.md',
       });
 
@@ -148,7 +148,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should get retry plugin documentation', async () => {
-      const result = await callTool('get_doc', {
+      const result = await callTool('rek_get_doc', {
         path: 'http/03-retry.md',
       });
 
@@ -158,7 +158,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should suggest alternatives for partial path', async () => {
-      const result = await callTool('get_doc', {
+      const result = await callTool('rek_get_doc', {
         path: 'quickstart',
       });
 
@@ -170,7 +170,7 @@ describe('MCP User Simulation Tests', () => {
 
   describe('Code Examples Scenarios', () => {
     it('should get basic usage examples when user asks for simple examples', async () => {
-      const result = await callTool('code_examples', {
+      const result = await callTool('rek_code_examples', {
         feature: 'basic',
         complexity: 'basic',
       });
@@ -182,7 +182,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should get retry examples when user asks for retry code', async () => {
-      const result = await callTool('code_examples', {
+      const result = await callTool('rek_code_examples', {
         feature: 'retry',
       });
 
@@ -192,7 +192,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should get cache examples when user asks for caching code', async () => {
-      const result = await callTool('code_examples', {
+      const result = await callTool('rek_code_examples', {
         feature: 'cache',
       });
 
@@ -202,7 +202,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should get streaming examples when user asks for SSE code', async () => {
-      const result = await callTool('code_examples', {
+      const result = await callTool('rek_code_examples', {
         feature: 'streaming',
       });
 
@@ -212,7 +212,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should limit examples when user specifies limit', async () => {
-      const result = await callTool('code_examples', {
+      const result = await callTool('rek_code_examples', {
         feature: 'general',
         limit: 2,
       });
@@ -225,7 +225,7 @@ describe('MCP User Simulation Tests', () => {
 
   describe('API Schema Scenarios', () => {
     it('should get Client type definition when user asks about Client API', async () => {
-      const result = await callTool('api_schema', {
+      const result = await callTool('rek_api_schema', {
         type: 'Client',
       });
 
@@ -236,7 +236,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should get RequestOptions type when user asks about request options', async () => {
-      const result = await callTool('api_schema', {
+      const result = await callTool('rek_api_schema', {
         type: 'RequestOptions',
       });
 
@@ -246,7 +246,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should get Response type when user asks about response handling', async () => {
-      const result = await callTool('api_schema', {
+      const result = await callTool('rek_api_schema', {
         type: 'Response',
       });
 
@@ -256,7 +256,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should return error when type not specified', async () => {
-      const result = await callTool('api_schema', {});
+      const result = await callTool('rek_api_schema', {});
 
       // API requires type parameter
       expect(result.result.isError).toBe(true);
@@ -266,7 +266,7 @@ describe('MCP User Simulation Tests', () => {
 
   describe('Suggestions Scenarios', () => {
     it('should suggest how to implement retry when user asks for retry help', async () => {
-      const result = await callTool('suggest', {
+      const result = await callTool('rek_suggest', {
         useCase: 'implement retry with exponential backoff',
       });
 
@@ -276,7 +276,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should suggest how to implement caching when user asks for cache help', async () => {
-      const result = await callTool('suggest', {
+      const result = await callTool('rek_suggest', {
         useCase: 'cache API responses',
       });
 
@@ -286,7 +286,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should suggest how to handle streaming when user asks for SSE help', async () => {
-      const result = await callTool('suggest', {
+      const result = await callTool('rek_suggest', {
         useCase: 'stream responses from OpenAI',
       });
 
@@ -296,7 +296,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should suggest how to handle errors when user asks for error handling', async () => {
-      const result = await callTool('suggest', {
+      const result = await callTool('rek_suggest', {
         useCase: 'handle HTTP errors gracefully with retry',
       });
 
@@ -306,7 +306,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should return error when useCase not provided', async () => {
-      const result = await callTool('suggest', {});
+      const result = await callTool('rek_suggest', {});
 
       expect(result.result.isError).toBe(true);
       expect(result.result.content[0].text).toContain('useCase is required');
@@ -315,7 +315,7 @@ describe('MCP User Simulation Tests', () => {
 
   describe('Complex Query Scenarios', () => {
     it('should handle multi-word query for authentication with retry', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'authentication bearer token retry on 401',
       });
 
@@ -326,7 +326,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should handle query about performance optimization', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'performance http2 connection pooling',
       });
 
@@ -336,7 +336,7 @@ describe('MCP User Simulation Tests', () => {
     });
 
     it('should handle query about testing and mocking', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'mock testing http requests',
       });
 
@@ -348,7 +348,7 @@ describe('MCP User Simulation Tests', () => {
 
   describe('Edge Cases', () => {
     it('should handle empty query gracefully', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: '',
       });
 
@@ -362,7 +362,7 @@ describe('MCP User Simulation Tests', () => {
       const longQuery =
         'I want to understand how to configure the HTTP client with retry policy and cache and timeout and headers and authentication all together in one configuration object';
 
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: longQuery,
       });
 
@@ -371,7 +371,7 @@ describe('MCP User Simulation Tests', () => {
     }, 15000);
 
     it('should handle special characters in query', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'async/await Promise.all() fetch()',
       });
 
@@ -380,7 +380,7 @@ describe('MCP User Simulation Tests', () => {
     }, 10000);
 
     it('should handle unicode characters in query', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'naïve café résumé',
       });
 
@@ -391,7 +391,7 @@ describe('MCP User Simulation Tests', () => {
 
   describe('Search Quality Verification', () => {
     it('should rank exact matches higher', async () => {
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'createClient',
         limit: 5,
       });
@@ -404,7 +404,7 @@ describe('MCP User Simulation Tests', () => {
 
     it('should find semantically related content', async () => {
       // "error handling" should find docs about HttpError, retries, etc.
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'error handling best practices',
       });
 
@@ -414,7 +414,7 @@ describe('MCP User Simulation Tests', () => {
 
     it('should find typo-tolerant matches', async () => {
       // "rety" should still find "retry" docs
-      const result = await callTool('search_docs', {
+      const result = await callTool('rek_search_docs', {
         query: 'rety plgin configration',
       });
 
