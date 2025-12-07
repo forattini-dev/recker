@@ -1,11 +1,10 @@
 import { createClient } from '../core/client.js';
 import { requireOptional } from '../utils/optional-require.js';
 import colors from '../utils/colors.js';
-import oraImport from 'ora';
+import { createSpinner } from './tui/spinner.js';
 
 // Lazy-loaded optional dependency
 let highlight: (code: string, opts?: any) => string;
-const ora = oraImport;
 
 /**
  * Initialize CLI dependencies dynamically
@@ -48,10 +47,9 @@ export async function handleRequest(options: RequestOptions) {
   }
 
   // In quiet mode, skip spinner entirely
-  const spinner = options.quiet ? null : ora({
+  const spinner = options.quiet ? null : createSpinner({
     text: `${colors.bold(options.method)} ${colors.cyan(options.url)}`,
-    color: 'cyan',
-    spinner: 'dots'
+    color: 'cyan'
   }).start();
 
   const start = performance.now();
