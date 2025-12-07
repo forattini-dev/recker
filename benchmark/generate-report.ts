@@ -165,7 +165,7 @@ function main() {
 - **Iterations**: Multiple samples until statistically significant
 - **Metrics**: All times in milliseconds (ms)
 
-## Libraries Tested (18)
+## Libraries Tested (16)
 
 | Category | Libraries |
 |----------|-----------|
@@ -173,7 +173,6 @@ function main() {
 | **Raw/Low-level** | undici, fetch (native) |
 | **Full-featured** | recker, axios, got, ky |
 | **Fetch-based** | node-fetch, cross-fetch, wretch, make-fetch-happen, minipass-fetch |
-| **Lightweight** | simple-get, tiny-json-http |
 | **Legacy/Callback** | superagent, needle |
 | **Ecosystem** | popsicle, wreck (Hapi) |
 

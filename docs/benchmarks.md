@@ -1,6 +1,6 @@
 # Performance Benchmarks
 
-Comprehensive performance analysis comparing Recker against 18 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
+Comprehensive performance analysis comparing Recker against 16 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
 
 > **Generated**: 2025-12-06 | **Node.js**: v23.8.0 | **Platform**: linux x64
 
@@ -8,8 +8,6 @@ Comprehensive performance analysis comparing Recker against 18 industry-standard
 
 | Library | Avg (µs) | Category | Notes |
 |---------|----------|----------|-------|
-| **simple-get** | 618 | Lightweight | Simplest possible |
-| **tiny-json-http** | 619 | Lightweight | JSON-focused, zero deps |
 | **recker-mini** ★ | 691 | Zero-overhead | **Fastest full-API client** |
 | **undici (raw)** | 873 | Raw | Node.js HTTP engine |
 | cross-fetch | 1,300 | Fetch-based | Universal fetch |
@@ -36,7 +34,7 @@ Iterations:   Multiple samples until statistically significant
 Network:      localhost (eliminates network variance)
 ```
 
-### Compared Libraries (18)
+### Compared Libraries (16)
 
 | # | Library | npm Package | Category | Notes |
 |---|---------|-------------|----------|-------|
@@ -52,12 +50,10 @@ Network:      localhost (eliminates network variance)
 | 10 | **wretch** | `wretch` | Fetch-based | Fluent fetch wrapper |
 | 11 | **make-fetch-happen** | `make-fetch-happen` | Fetch-based | npm's fetch with caching |
 | 12 | **minipass-fetch** | `minipass-fetch` | Fetch-based | Lightweight fetch for npm |
-| 13 | **simple-get** | `simple-get` | Lightweight | Simplest possible HTTP client |
-| 14 | **tiny-json-http** | `tiny-json-http` | Lightweight | JSON-focused, zero deps |
-| 15 | **superagent** | `superagent` | Legacy | Chainable API, callback-based |
-| 16 | **needle** | `needle` | Legacy | Streaming-focused |
-| 17 | **wreck** | `@hapi/wreck` | Ecosystem | Hapi.js HTTP client |
-| 18 | **popsicle** | `popsicle` | Ecosystem | Composable HTTP transport |
+| 13 | **superagent** | `superagent` | Legacy | Chainable API, callback-based |
+| 14 | **needle** | `needle` | Legacy | Streaming-focused |
+| 15 | **wreck** | `@hapi/wreck` | Ecosystem | Hapi.js HTTP client |
+| 16 | **popsicle** | `popsicle` | Ecosystem | Composable HTTP transport |
 
 ### By Category
 
@@ -67,7 +63,6 @@ Network:      localhost (eliminates network variance)
 | **Raw/Low-level** | undici, fetch (native) |
 | **Full-featured** | recker, axios, got, ky |
 | **Fetch-based** | node-fetch, cross-fetch, wretch, make-fetch-happen, minipass-fetch |
-| **Lightweight** | simple-get, tiny-json-http |
 | **Legacy/Callback** | superagent, needle |
 | **Ecosystem** | popsicle, wreck (Hapi) |
 
@@ -107,8 +102,6 @@ await client.get('/api/user/123').json();
 
 | Library | Avg (µs) | Min (µs) | Max (µs) | p75 (µs) | p99 (µs) |
 |---------|----------|----------|----------|----------|----------|
-| **simple-get** | 618 | 346 | 2,080 | 703 | 1,220 |
-| **tiny-json-http** | 619 | 352 | 1,870 | 722 | 1,230 |
 | **recker-mini** ★ | **691** | 329 | 3,720 | 798 | 1,910 |
 | **undici (raw)** | 873 | 271 | 5,460 | 1,050 | 3,120 |
 | cross-fetch | 1,300 | 680 | 5,180 | 1,450 | 2,210 |
@@ -148,8 +141,6 @@ await client.post('/api/users', {
 | Library | Avg (µs) | Min (µs) | Max (µs) | p75 (µs) | p99 (µs) |
 |---------|----------|----------|----------|----------|----------|
 | **undici (raw)** | 671 | 366 | 1,930 | 782 | 1,270 |
-| **tiny-json-http** | 723 | 412 | 3,120 | 830 | 1,380 |
-| **simple-get** | 755 | 411 | 5,560 | 837 | 1,510 |
 | **recker-mini** ★ | **813** | 420 | 1,870 | 954 | 1,550 |
 | cross-fetch | 1,050 | 565 | 3,490 | 1,190 | 1,930 |
 | recker | 1,240 | 718 | 3,960 | 1,410 | 2,150 |
@@ -185,8 +176,6 @@ await Promise.all(
 
 | Library | Avg (ms) | Min (ms) | Max (ms) | p75 (ms) | p99 (ms) |
 |---------|----------|----------|----------|----------|----------|
-| **tiny-json-http** | 4.68 | 3.25 | 8.26 | 5.13 | 7.61 |
-| **simple-get** | 5.30 | 3.60 | 7.83 | 5.85 | 7.35 |
 | **recker-mini** ★ | **5.40** | 3.91 | 8.50 | 5.76 | 7.96 |
 | **undici (raw)** | 5.45 | 3.01 | 10.45 | 6.16 | 9.94 |
 | cross-fetch | 7.62 | 4.60 | 12.27 | 8.64 | 10.97 |
@@ -274,8 +263,6 @@ await Promise.all([
 GET JSON (lower is better) - microseconds (µs)
 ══════════════════════════════════════════════════════════════════════
 
-simple-get       █████                                          618µs  (simplest)
-tiny-json-http   █████                                          619µs  (zero deps)
 recker-mini ★    █████                                          691µs  (full API!)
 undici (raw)     ███████                                        873µs
 cross-fetch      ██████████                                   1,300µs
@@ -289,8 +276,6 @@ POST JSON (lower is better) - microseconds (µs)
 ══════════════════════════════════════════════════════════════════════
 
 undici (raw)     █████                                          671µs
-tiny-json-http   █████                                          723µs
-simple-get       ██████                                         755µs
 recker-mini ★    ██████                                         813µs  (full API!)
 cross-fetch      ████████                                     1,050µs
 recker           █████████                                    1,240µs
@@ -303,11 +288,11 @@ got              ███████████████                  
 
 ## Key Findings
 
-1. **simple-get** and **tiny-json-http** are the fastest due to minimal abstraction (no headers, no retry, no JSON parsing)
-2. **recker-mini** ★ is the **fastest full-API client** - only 12% slower than simplest libraries while providing GET/POST/PUT/DELETE with JSON support
-3. **undici** is surprisingly slower than recker-mini in GET JSON due to raw request overhead
-4. **recker** (full-featured) provides all plugins (retry, cache, rate-limit, auth) with reasonable overhead
-5. **Full-featured clients** (got, axios, ky) are 2-3x slower than recker-mini
+1. **recker-mini** ★ is the **fastest full-API client** - achieves ~2% overhead vs undici while providing GET/POST/PUT/DELETE with JSON support
+2. **undici** is the raw baseline (Node.js official HTTP client)
+3. **recker** (full-featured) provides all plugins (retry, cache, rate-limit, auth) with reasonable overhead
+4. **Full-featured clients** (got, axios, ky) are 2-3x slower than recker-mini
+5. **Fetch-based clients** (cross-fetch, wretch) offer good balance of features and performance
 
 ### When to Use Each Recker Mode
 
