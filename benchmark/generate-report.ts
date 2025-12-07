@@ -165,15 +165,16 @@ function main() {
 - **Iterations**: Multiple samples until statistically significant
 - **Metrics**: All times in milliseconds (ms)
 
-## Libraries Tested (21)
+## Libraries Tested (18)
 
 | Category | Libraries |
 |----------|-----------|
+| **Zero-overhead** | recker-mini |
 | **Raw/Low-level** | undici, fetch (native) |
 | **Full-featured** | recker, axios, got, ky |
 | **Fetch-based** | node-fetch, cross-fetch, wretch, make-fetch-happen, minipass-fetch |
-| **Lightweight** | phin, centra, bent, simple-get, tiny-json-http |
-| **Legacy/Callback** | superagent, needle, hyperquest |
+| **Lightweight** | simple-get, tiny-json-http |
+| **Legacy/Callback** | superagent, needle |
 | **Ecosystem** | popsicle, wreck (Hapi) |
 
 ## Benchmark Scenarios
@@ -196,11 +197,11 @@ Tests connection reuse and latency accumulation.
 
 ## Key Findings
 
-1. **undici** is the fastest baseline (Node.js official HTTP client)
-2. **recker** adds ~40-60% overhead vs undici but includes retry, cache, rate-limiting
-3. **got** has significant overhead due to extensive feature set
-4. **ky** is slower than expected despite being fetch-based
-5. **phin/centra** are extremely lightweight but lack features
+1. **recker-mini** achieves ~2% overhead vs raw undici - effectively zero overhead!
+2. **undici** is the fastest baseline (Node.js official HTTP client)
+3. **recker** adds ~86% overhead vs undici but includes retry, cache, rate-limiting
+4. **got** has significant overhead due to extensive feature set
+5. **ky** is slower than expected despite being fetch-based
 `;
 
   const outputFile = join(__dirname, 'BENCHMARK.md');

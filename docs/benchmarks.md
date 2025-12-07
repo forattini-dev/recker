@@ -1,6 +1,6 @@
 # Performance Benchmarks
 
-Comprehensive performance analysis comparing Recker against 22 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
+Comprehensive performance analysis comparing Recker against 18 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
 
 > **Generated**: 2025-12-06 | **Node.js**: v23.8.0 | **Platform**: linux x64
 
@@ -10,8 +10,6 @@ Comprehensive performance analysis comparing Recker against 22 industry-standard
 |---------|----------|-------|-------|
 | **undici (raw)** | 142 | 4 | Fastest baseline |
 | **recker-mini** ★ | 146 | 4 | **~2% overhead vs undici!** |
-| centra | 183 | 4 | Lightweight, minimal |
-| phin | 186 | 4 | Ultra-lightweight |
 | cross-fetch | 259 | 4 | Universal fetch |
 | fetch (native) | 260 | 4 | Node.js built-in |
 | recker | 265 | 4 | Full-featured |
@@ -38,7 +36,7 @@ Iterations:   Multiple samples until statistically significant
 Network:      localhost (eliminates network variance)
 ```
 
-### Compared Libraries (22)
+### Compared Libraries (18)
 
 | # | Library | npm Package | Category | Notes |
 |---|---------|-------------|----------|-------|
@@ -54,16 +52,12 @@ Network:      localhost (eliminates network variance)
 | 10 | **wretch** | `wretch` | Fetch-based | Fluent fetch wrapper |
 | 11 | **make-fetch-happen** | `make-fetch-happen` | Fetch-based | npm's fetch with caching |
 | 12 | **minipass-fetch** | `minipass-fetch` | Fetch-based | Lightweight fetch for npm |
-| 13 | **phin** | `phin` | Lightweight | Ultra-lightweight (~1KB) |
-| 14 | **centra** | `centra` | Lightweight | Core of phin, minimal overhead |
-| 15 | **bent** | `bent` | Lightweight | Functional HTTP client |
-| 16 | **simple-get** | `simple-get` | Lightweight | Simplest possible HTTP client |
-| 17 | **tiny-json-http** | `tiny-json-http` | Lightweight | JSON-focused, zero deps |
-| 18 | **superagent** | `superagent` | Legacy | Chainable API, callback-based |
-| 19 | **needle** | `needle` | Legacy | Streaming-focused |
-| 20 | **hyperquest** | `hyperquest` | Legacy | Substack's streaming client |
-| 21 | **wreck** | `@hapi/wreck` | Ecosystem | Hapi.js HTTP client |
-| 22 | **popsicle** | `popsicle` | Ecosystem | Composable HTTP transport |
+| 13 | **simple-get** | `simple-get` | Lightweight | Simplest possible HTTP client |
+| 14 | **tiny-json-http** | `tiny-json-http` | Lightweight | JSON-focused, zero deps |
+| 15 | **superagent** | `superagent` | Legacy | Chainable API, callback-based |
+| 16 | **needle** | `needle` | Legacy | Streaming-focused |
+| 17 | **wreck** | `@hapi/wreck` | Ecosystem | Hapi.js HTTP client |
+| 18 | **popsicle** | `popsicle` | Ecosystem | Composable HTTP transport |
 
 ### By Category
 
@@ -73,8 +67,8 @@ Network:      localhost (eliminates network variance)
 | **Raw/Low-level** | undici, fetch (native) |
 | **Full-featured** | recker, axios, got, ky |
 | **Fetch-based** | node-fetch, cross-fetch, wretch, make-fetch-happen, minipass-fetch |
-| **Lightweight** | phin, centra, bent, simple-get, tiny-json-http |
-| **Legacy/Callback** | superagent, needle, hyperquest |
+| **Lightweight** | simple-get, tiny-json-http |
+| **Legacy/Callback** | superagent, needle |
 | **Ecosystem** | popsicle, wreck (Hapi) |
 
 ### How to Run
@@ -115,8 +109,6 @@ await client.get('/api/user/123').json();
 |---------|----------|----------|----------|----------|----------|
 | **undici (raw)** | 142 | 94 | 1950 | 151 | 468 |
 | **recker-mini** ★ | **146** | 98 | 2150 | 156 | 444 |
-| centra | 183 | 112 | 1780 | 193 | 521 |
-| phin | 186 | 115 | 1890 | 198 | 489 |
 | cross-fetch | 259 | 181 | 2340 | 281 | 687 |
 | fetch (native) | 260 | 175 | 2600 | 274 | 723 |
 | recker | 265 | 167 | 2120 | 290 | 864 |
@@ -150,8 +142,6 @@ await client.post('/api/users', {
 |---------|----------|----------|----------|----------|----------|
 | **undici (raw)** | 169 | 110 | 2310 | 181 | 523 |
 | **recker-mini** ★ | **173** | 115 | 2450 | 186 | 498 |
-| centra | 220 | 142 | 2180 | 238 | 610 |
-| phin | 228 | 148 | 2350 | 243 | 578 |
 | recker | 298 | 189 | 2540 | 328 | 892 |
 | axios | 352 | 215 | 3120 | 387 | 1180 |
 | fetch (native) | 385 | 238 | 3410 | 423 | 1240 |
@@ -259,8 +249,6 @@ GET JSON (lower is better) - microseconds (µs)
 
 undici (raw)     ██████                                         142µs
 recker-mini ★    ██████                                         146µs  (~2% overhead!)
-centra           ████████                                       183µs
-phin             ████████                                       186µs
 fetch (native)   ███████████                                    260µs
 recker           ███████████                                    265µs
 axios            █████████████                                  318µs
@@ -273,7 +261,6 @@ POST JSON (lower is better) - microseconds (µs)
 
 undici (raw)     ██████                                         169µs
 recker-mini ★    ███████                                        173µs  (~2% overhead!)
-centra           █████████                                      220µs
 recker           ████████████                                   298µs
 axios            ██████████████                                 352µs
 fetch (native)   ███████████████                                385µs
@@ -287,10 +274,9 @@ ky               ████████████████████   
 
 1. **recker-mini** ★ achieves ~2% overhead vs raw undici - effectively zero overhead!
 2. **undici** is the fastest baseline (Node.js official HTTP client)
-3. **recker-mini** is faster than ALL other HTTP clients (centra, phin, axios, got, etc.)
+3. **recker-mini** is faster than ALL other HTTP clients (axios, got, ky, etc.)
 4. **recker** (full-featured) adds ~86% overhead vs undici but includes retry, cache, rate-limiting
-5. **Lightweight clients** (centra, phin) are fast but can't match recker-mini
-6. **Full-featured clients** (got, axios, ky) are 2-3x slower than recker
+5. **Full-featured clients** (got, axios, ky) are 2-3x slower than recker
 
 ### When to Use Each Recker Mode
 
