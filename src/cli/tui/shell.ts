@@ -140,7 +140,7 @@ export class RekShell {
     console.clear();
     console.log(colors.bold(colors.cyan('Rek Console')));
     console.log(colors.gray('Chat with your APIs. Type "help" for magic.'));
-    console.log(colors.gray('Page Up/Down or mouse scroll to view history.'));
+    console.log(colors.gray('Use Page Up/Down to view history.'));
     console.log(colors.gray('--------------------------------------------\n'));
 
     this.prompt();
@@ -170,7 +170,7 @@ export class RekShell {
       this.scrollBuffer.updateViewport();
     });
 
-    // Set up raw mode key listener for Page Up/Down and mouse scroll
+    // Set up raw mode key listener for Page Up/Down
     this.setupScrollKeyHandler();
   }
 
@@ -216,8 +216,10 @@ export class RekShell {
    * Set up raw mode key handler for scroll navigation
    */
   private setupScrollKeyHandler(): void {
-    // Enable mouse reporting for scroll wheel
-    enableMouseReporting();
+    // NOTE: Mouse reporting disabled due to escape sequence leakage issues
+    // in certain terminal states (async operations, spinners).
+    // Users can use Page Up/Down keys instead.
+    // enableMouseReporting();
 
     // We need to intercept stdin BEFORE readline processes it
     if (process.stdin.isTTY) {
@@ -2687,7 +2689,6 @@ ${colors.bold('Network:')}
   ${colors.bold('Navigation:')}
     ${colors.green('Page Up/Down')}        Scroll through command history.
     ${colors.green('Home/End')}            Jump to top/bottom of history.
-    ${colors.green('Mouse Scroll')}        Scroll with mouse wheel.
     ${colors.green('Escape')}              Exit scroll mode.
 
   ${colors.bold('Examples:')}
