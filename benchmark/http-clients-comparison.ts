@@ -12,16 +12,12 @@
  * - cross-fetch
  * - superagent
  * - needle
- * - phin
- * - centra
  * - wretch
- * - bent
  * - simple-get
  * - tiny-json-http
  * - make-fetch-happen (npm ecosystem)
  * - minipass-fetch
  * - popsicle
- * - hyperquest
  * - wreck (Hapi)
  */
 
@@ -39,16 +35,12 @@ import needle from 'needle';
 import superagent from 'superagent';
 import nodeFetch from 'node-fetch';
 import crossFetch from 'cross-fetch';
-import phin from 'phin';
-import centra from 'centra';
 import wretch from 'wretch';
-import bent from 'bent';
 import simpleGet from 'simple-get';
 import tinyJsonHttp from 'tiny-json-http';
 import makeFetchHappen from 'make-fetch-happen';
 import minipassFetch from 'minipass-fetch';
 import { fetch as popsicle } from 'popsicle';
-import hyperquest from 'hyperquest';
 import Wreck from '@hapi/wreck';
 
 const JSON_OUTPUT = process.env.BENCH_JSON === '1';
@@ -91,8 +83,6 @@ const url = `http://localhost:${port}`;
 // Setup Clients
 const recker = createClient({ baseUrl: url });
 const miniClient = createMiniClient({ baseUrl: url });
-const bentGetJson = bent(url, 'GET', 'json', 200);
-const bentPostJson = bent(url, 'POST', 'json', 201);
 
 // Helper for simple-get (callback-based)
 const simpleGetAsync = (opts: any): Promise<any> => {
@@ -170,22 +160,8 @@ group('GET JSON (simple)', () => {
     await needle('get', url, { json: true });
   });
 
-  bench('phin', async () => {
-    const res = await phin({ url, parse: 'json' });
-    return res.body;
-  });
-
-  bench('centra', async () => {
-    const res = await centra(url).send();
-    return JSON.parse(res.body.toString());
-  });
-
   bench('wretch', async () => {
     await wretch(url).get().json();
-  });
-
-  bench('bent', async () => {
-    await bentGetJson('/');
   });
 
   bench('simple-get', async () => {
@@ -209,16 +185,6 @@ group('GET JSON (simple)', () => {
   bench('popsicle', async () => {
     const res = await popsicle(url);
     return res.json();
-  });
-
-  bench('hyperquest', async () => {
-    return new Promise((resolve, reject) => {
-      let data = '';
-      hyperquest(url)
-        .on('data', (chunk: Buffer) => { data += chunk.toString(); })
-        .on('end', () => resolve(JSON.parse(data)))
-        .on('error', reject);
-    });
   });
 
   bench('wreck', async () => {
@@ -299,30 +265,8 @@ group('POST JSON (with body)', () => {
     await needle('post', url, body, { json: true });
   });
 
-  bench('phin', async () => {
-    await phin({
-      url,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      data: JSON.stringify(body),
-      parse: 'json'
-    });
-  });
-
-  bench('centra', async () => {
-    const res = await centra(url, 'POST')
-      .header('Content-Type', 'application/json')
-      .body(body, 'json')
-      .send();
-    return JSON.parse(res.body.toString());
-  });
-
   bench('wretch', async () => {
     await wretch(url).post(body).json();
-  });
-
-  bench('bent', async () => {
-    await bentPostJson('/', body);
   });
 
   bench('simple-get', async () => {
@@ -368,17 +312,6 @@ group('POST JSON (with body)', () => {
       body: JSON.stringify(body)
     });
     return res.json();
-  });
-
-  bench('hyperquest', async () => {
-    return new Promise((resolve, reject) => {
-      let data = '';
-      const req = hyperquest(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-      req.on('data', (chunk: Buffer) => { data += chunk.toString(); });
-      req.on('end', () => resolve(JSON.parse(data)));
-      req.on('error', reject);
-      req.end(JSON.stringify(body));
-    });
   });
 
   bench('wreck', async () => {
@@ -463,28 +396,9 @@ group('Parallel GET (10 concurrent)', () => {
     ));
   });
 
-  bench('phin', async () => {
-    await Promise.all(Array(10).fill(null).map(() =>
-      phin({ url, parse: 'json' })
-    ));
-  });
-
-  bench('centra', async () => {
-    await Promise.all(Array(10).fill(null).map(async () => {
-      const res = await centra(url).send();
-      return JSON.parse(res.body.toString());
-    }));
-  });
-
   bench('wretch', async () => {
     await Promise.all(Array(10).fill(null).map(() =>
       wretch(url).get().json()
-    ));
-  });
-
-  bench('bent', async () => {
-    await Promise.all(Array(10).fill(null).map(() =>
-      bentGetJson('/')
     ));
   });
 
@@ -519,18 +433,6 @@ group('Parallel GET (10 concurrent)', () => {
       const res = await popsicle(url);
       return res.json();
     }));
-  });
-
-  bench('hyperquest', async () => {
-    await Promise.all(Array(10).fill(null).map(() =>
-      new Promise((resolve, reject) => {
-        let data = '';
-        hyperquest(url)
-          .on('data', (chunk: Buffer) => { data += chunk.toString(); })
-          .on('end', () => resolve(JSON.parse(data)))
-          .on('error', reject);
-      })
-    ));
   });
 
   bench('wreck', async () => {
@@ -617,28 +519,9 @@ group('Sequential GET (5 requests)', () => {
     }
   });
 
-  bench('phin', async () => {
-    for (let i = 0; i < 5; i++) {
-      await phin({ url, parse: 'json' });
-    }
-  });
-
-  bench('centra', async () => {
-    for (let i = 0; i < 5; i++) {
-      const res = await centra(url).send();
-      JSON.parse(res.body.toString());
-    }
-  });
-
   bench('wretch', async () => {
     for (let i = 0; i < 5; i++) {
       await wretch(url).get().json();
-    }
-  });
-
-  bench('bent', async () => {
-    for (let i = 0; i < 5; i++) {
-      await bentGetJson('/');
     }
   });
 
@@ -675,18 +558,6 @@ group('Sequential GET (5 requests)', () => {
     }
   });
 
-  bench('hyperquest', async () => {
-    for (let i = 0; i < 5; i++) {
-      await new Promise((resolve, reject) => {
-        let data = '';
-        hyperquest(url)
-          .on('data', (chunk: Buffer) => { data += chunk.toString(); })
-          .on('end', () => resolve(JSON.parse(data)))
-          .on('error', reject);
-      });
-    }
-  });
-
   bench('wreck', async () => {
     for (let i = 0; i < 5; i++) {
       const { payload } = await Wreck.get(url, { json: true });
@@ -706,7 +577,7 @@ server.close();
 
 if (!JSON_OUTPUT) {
   console.log('\n═══════════════════════════════════════════════════════════════════');
-  console.log('                         LEGEND (22 libraries)                      ');
+  console.log('                         LEGEND (18 libraries)                      ');
   console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
   console.log('undici            - Node.js official HTTP client (fastest baseline)');
@@ -720,16 +591,12 @@ if (!JSON_OUTPUT) {
   console.log('cross-fetch       - Universal fetch (browser + Node)');
   console.log('superagent        - Mature, callback + promise');
   console.log('needle            - Lightweight, streaming support');
-  console.log('phin              - Ultra-lightweight (~1kb)');
-  console.log('centra            - Core of phin, minimal');
   console.log('wretch            - Fluent fetch wrapper');
-  console.log('bent              - Functional HTTP client');
   console.log('simple-get        - Simplest callback-based');
   console.log('tiny-json-http    - Minimal JSON-only client');
   console.log('make-fetch-happen - npm ecosystem (caching, retry)');
   console.log('minipass-fetch    - Minipass-based fetch');
   console.log('popsicle          - Composable HTTP transport');
-  console.log('hyperquest        - Stream-based HTTP');
   console.log('wreck             - Hapi ecosystem client');
   console.log('');
 }

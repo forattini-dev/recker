@@ -18,7 +18,7 @@ GET JSON (lower is better)
 ═════════════════════════════════════════════════════════
 undici (raw)     ██████                              142µs
 recker-mini      ██████                              146µs  ← Only 2% overhead!
-centra           ████████                            183µs
+fetch (native)   ███████████                         260µs
 axios            █████████████                       318µs
 got              ████████████████                    395µs
 ```
