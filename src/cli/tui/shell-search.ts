@@ -13,7 +13,7 @@ import type { IndexedDoc, SearchResult } from '../../mcp/search/types.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative, extname, basename, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import ora, { type Ora } from 'ora';
+import { createSpinner, type Spinner } from './spinner.js';
 
 /** Progress callback for long-running operations */
 export type ProgressCallback = (stage: string, percent?: number) => void;
@@ -59,7 +59,7 @@ export class ShellSearch {
   private docsPath: string;
   private examplesPath: string;
   private srcPath: string;
-  private spinner: Ora | null = null;
+  private spinner: Spinner | null = null;
   private hasSemanticSearch = false;
 
   constructor() {
@@ -98,7 +98,7 @@ export class ShellSearch {
     }
 
     this.initializing = true;
-    this.spinner = ora({ text: 'Initializing search...', spinner: 'dots' }).start();
+    this.spinner = createSpinner({ text: 'Initializing search...' }).start();
 
     try {
       this.updateSpinner('Creating search index...');
@@ -167,9 +167,9 @@ export class ShellSearch {
     }
 
     // Show spinner during search (embedding generation can take time)
-    let searchSpinner: Ora | null = null;
+    let searchSpinner: Spinner | null = null;
     if (!silent && this.hasSemanticSearch) {
-      searchSpinner = ora({ text: 'Generating query embedding...', spinner: 'dots' }).start();
+      searchSpinner = createSpinner({ text: 'Generating query embedding...' }).start();
     }
 
     try {
@@ -196,7 +196,7 @@ export class ShellSearch {
    * Get implementation suggestions based on use case.
    */
   async suggest(useCase: string): Promise<string> {
-    const spinner = ora({ text: 'Generating suggestions...', spinner: 'dots' }).start();
+    const spinner = createSpinner({ text: 'Generating suggestions...' }).start();
 
     try {
       await this.ensureInitialized();
