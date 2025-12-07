@@ -323,6 +323,27 @@ export class MockHttpServer extends EventEmitter {
   }
 
   /**
+   * TRACE route
+   */
+  trace(path: string, handler: MockHttpResponse | MockHttpHandler, options?: { times?: number }): this {
+    return this.route('TRACE', path, handler, options);
+  }
+
+  /**
+   * CONNECT route
+   */
+  connect(path: string, handler: MockHttpResponse | MockHttpHandler, options?: { times?: number }): this {
+    return this.route('CONNECT', path, handler, options);
+  }
+
+  /**
+   * PURGE route (cache invalidation)
+   */
+  purge(path: string, handler: MockHttpResponse | MockHttpHandler, options?: { times?: number }): this {
+    return this.route('PURGE', path, handler, options);
+  }
+
+  /**
    * Match any method
    */
   any(path: string, handler: MockHttpResponse | MockHttpHandler, options?: { times?: number }): this {
@@ -601,4 +622,110 @@ export async function createMockHttpServer(
 
   await server.start();
   return server;
+}
+
+// ============================================
+// Webhook Preset
+// ============================================
+
+export interface WebhookServerOptions extends MockHttpServerOptions {
+  /**
+   * Log received webhooks to console
+   * @default true
+   */
+  log?: boolean;
+
+  /**
+   * Custom logger function
+   */
+  logger?: (webhook: WebhookPayload) => void;
+
+  /**
+   * Response status code (200 or 204)
+   * @default 204
+   */
+  status?: 200 | 204;
+}
+
+export interface WebhookPayload {
+  id: string | null;
+  timestamp: Date;
+  method: string;
+  path: string;
+  headers: Record<string, string | string[] | undefined>;
+  body: any;
+}
+
+/**
+ * Create a webhook receiver server
+ *
+ * Receives any HTTP method at `/` or `/:id` and logs the payload.
+ * Returns 204 No Content by default.
+ *
+ * @example
+ * ```typescript
+ * const server = await createWebhookServer({ port: 3000 });
+ * console.log(`Webhook URL: ${server.url}`);
+ * console.log(`Webhook URL with ID: ${server.url}/my-webhook-id`);
+ *
+ * // Webhooks are logged automatically
+ * // Access received webhooks programmatically:
+ * console.log(server.webhooks);
+ *
+ * await server.stop();
+ * ```
+ */
+export async function createWebhookServer(
+  options: WebhookServerOptions = {}
+): Promise<MockHttpServer & { webhooks: WebhookPayload[] }> {
+  const {
+    log = true,
+    logger,
+    status = 204,
+    ...serverOptions
+  } = options;
+
+  const server = new MockHttpServer(serverOptions);
+  const webhooks: WebhookPayload[] = [];
+
+  const handleWebhook = (req: MockHttpRequest, id: string | null): MockHttpResponse => {
+    const payload: WebhookPayload = {
+      id,
+      timestamp: new Date(),
+      method: req.method,
+      path: req.path,
+      headers: req.headers,
+      body: req.body,
+    };
+
+    webhooks.push(payload);
+
+    if (logger) {
+      logger(payload);
+    } else if (log) {
+      const idStr = id ? ` [${id}]` : '';
+      console.log(`\n📥 Webhook received${idStr} at ${payload.timestamp.toISOString()}`);
+      console.log(`   Path: ${req.path}`);
+      if (req.body !== undefined) {
+        console.log(`   Body:`, typeof req.body === 'object' ? JSON.stringify(req.body, null, 2) : req.body);
+      }
+    }
+
+    return { status };
+  };
+
+  // Any method on /
+  server.any('/', (req) => handleWebhook(req, null));
+
+  // Any method on /:id
+  server.any('/:id', (req) => {
+    const match = req.path.match(/^\/([^/]+)$/);
+    const id = match ? match[1] : null;
+    return handleWebhook(req, id);
+  });
+
+  await server.start();
+
+  // Attach webhooks array to server instance
+  return Object.assign(server, { webhooks });
 }

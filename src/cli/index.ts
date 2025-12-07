@@ -1184,6 +1184,65 @@ ${colors.bold(colors.yellow('Examples:'))}
     });
 
   serve
+    .command('webhook')
+    .alias('wh')
+    .description('Start a webhook receiver server')
+    .option('-p, --port <number>', 'Port to listen on', '3000')
+    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
+    .option('-s, --status <code>', 'Response status code (200 or 204)', '204')
+    .option('-q, --quiet', 'Disable logging', false)
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek serve webhook')}                 ${colors.gray('Start on port 3000')}
+  ${colors.green('$ rek serve wh -p 8080')}              ${colors.gray('Start on port 8080')}
+  ${colors.green('$ rek serve webhook --status 200')}    ${colors.gray('Return 200 instead of 204')}
+
+${colors.bold(colors.yellow('Endpoints:'))}
+  * /              ${colors.gray('Receive webhook without ID')}
+  * /:id           ${colors.gray('Receive webhook with custom ID')}
+
+${colors.bold(colors.yellow('Methods:'))}
+  ${colors.gray('GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS')}
+`)
+    .action(async (options: { port: string; host: string; status: string; quiet: boolean }) => {
+      const { createWebhookServer } = await import('../testing/mock-http-server.js');
+
+      const status = parseInt(options.status) as 200 | 204;
+      if (status !== 200 && status !== 204) {
+        console.error(colors.red('Status must be 200 or 204'));
+        process.exit(1);
+      }
+
+      const server = await createWebhookServer({
+        port: parseInt(options.port),
+        host: options.host,
+        status,
+        log: !options.quiet,
+      });
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Webhook Receiver')}                   │
+├─────────────────────────────────────────────┤
+│  URL: ${colors.cyan(server.url.padEnd(37))}│
+│  Status: ${colors.yellow(String(status).padEnd(34))}│
+├─────────────────────────────────────────────┤
+│  ${colors.cyan('*')} ${colors.cyan('/')}            ${colors.gray('Webhook without ID')}        │
+│  ${colors.cyan('*')} ${colors.cyan('/:id')}         ${colors.gray('Webhook with custom ID')}    │
+├─────────────────────────────────────────────┤
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘
+`));
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        console.log(colors.gray(`Total webhooks received: ${server.webhooks.length}`));
+        await server.stop();
+        process.exit(0);
+      });
+    });
+
+  serve
     .command('websocket')
     .alias('ws')
     .description('Start a mock WebSocket server')
