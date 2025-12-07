@@ -13,7 +13,7 @@
  * ```
  */
 
-import { request as undiciRequest } from 'undici';
+import { Client, request as undiciRequest } from 'undici';
 
 export interface MiniClientOptions {
   baseUrl: string;
@@ -35,6 +35,14 @@ export interface MiniClient {
   put<T = unknown>(path: string, body?: unknown): Promise<MiniResponse<T>>;
   patch<T = unknown>(path: string, body?: unknown): Promise<MiniResponse<T>>;
   delete<T = unknown>(path: string): Promise<MiniResponse<T>>;
+  head<T = unknown>(path: string): Promise<MiniResponse<T>>;
+  options<T = unknown>(path: string): Promise<MiniResponse<T>>;
+  trace<T = unknown>(path: string): Promise<MiniResponse<T>>;
+  purge<T = unknown>(path: string): Promise<MiniResponse<T>>;
+  /** Generic request method for any HTTP method (except CONNECT) */
+  request<T = unknown>(method: string, path: string, body?: unknown): Promise<MiniResponse<T>>;
+  /** Close the underlying connection pool */
+  close(): Promise<void>;
 }
 
 /**
@@ -52,12 +60,16 @@ export interface MiniClient {
  * - Base URL
  * - Default headers
  * - JSON serialization
+ * - All HTTP methods (including custom like PURGE)
  */
 export function createMiniClient(options: MiniClientOptions): MiniClient {
   // Pre-compute base URL (remove trailing slash)
   const base = options.baseUrl.endsWith('/')
     ? options.baseUrl.slice(0, -1)
     : options.baseUrl;
+
+  // Create undici Client for custom method support
+  const undiciClient = new Client(base);
 
   // Pre-create headers object for reuse
   const defaultHeaders = options.headers || {};
@@ -78,48 +90,60 @@ export function createMiniClient(options: MiniClientOptions): MiniClient {
     blob: async () => new Blob([await body.arrayBuffer()])
   });
 
+  // Generic request function using Client (supports all methods)
+  const doRequest = async <T>(method: string, path: string, body?: unknown, useJsonHeaders = false): Promise<MiniResponse<T>> => {
+    const { statusCode, headers, body: resBody } = await undiciClient.request({
+      path,
+      method,
+      headers: useJsonHeaders ? jsonHeaders : defaultHeaders,
+      body: body !== undefined ? JSON.stringify(body) : undefined
+    });
+    return wrapResponse<T>(statusCode, headers, resBody);
+  };
+
   return {
     async get<T>(path: string): Promise<MiniResponse<T>> {
-      const { statusCode, headers, body } = await undiciRequest(base + path, {
-        method: 'GET',
-        headers: defaultHeaders
-      });
-      return wrapResponse<T>(statusCode, headers, body);
+      return doRequest<T>('GET', path);
     },
 
     async post<T>(path: string, data?: unknown): Promise<MiniResponse<T>> {
-      const { statusCode, headers, body } = await undiciRequest(base + path, {
-        method: 'POST',
-        headers: jsonHeaders,
-        body: data !== undefined ? JSON.stringify(data) : undefined
-      });
-      return wrapResponse<T>(statusCode, headers, body);
+      return doRequest<T>('POST', path, data, true);
     },
 
     async put<T>(path: string, data?: unknown): Promise<MiniResponse<T>> {
-      const { statusCode, headers, body } = await undiciRequest(base + path, {
-        method: 'PUT',
-        headers: jsonHeaders,
-        body: data !== undefined ? JSON.stringify(data) : undefined
-      });
-      return wrapResponse<T>(statusCode, headers, body);
+      return doRequest<T>('PUT', path, data, true);
     },
 
     async patch<T>(path: string, data?: unknown): Promise<MiniResponse<T>> {
-      const { statusCode, headers, body } = await undiciRequest(base + path, {
-        method: 'PATCH',
-        headers: jsonHeaders,
-        body: data !== undefined ? JSON.stringify(data) : undefined
-      });
-      return wrapResponse<T>(statusCode, headers, body);
+      return doRequest<T>('PATCH', path, data, true);
     },
 
     async delete<T>(path: string): Promise<MiniResponse<T>> {
-      const { statusCode, headers, body } = await undiciRequest(base + path, {
-        method: 'DELETE',
-        headers: defaultHeaders
-      });
-      return wrapResponse<T>(statusCode, headers, body);
+      return doRequest<T>('DELETE', path);
+    },
+
+    async head<T>(path: string): Promise<MiniResponse<T>> {
+      return doRequest<T>('HEAD', path);
+    },
+
+    async options<T>(path: string): Promise<MiniResponse<T>> {
+      return doRequest<T>('OPTIONS', path);
+    },
+
+    async trace<T>(path: string): Promise<MiniResponse<T>> {
+      return doRequest<T>('TRACE', path);
+    },
+
+    async purge<T>(path: string): Promise<MiniResponse<T>> {
+      return doRequest<T>('PURGE', path);
+    },
+
+    async request<T>(method: string, path: string, body?: unknown): Promise<MiniResponse<T>> {
+      return doRequest<T>(method.toUpperCase(), path, body, body !== undefined);
+    },
+
+    async close(): Promise<void> {
+      await undiciClient.close();
     }
   };
 }

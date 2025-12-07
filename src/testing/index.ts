@@ -105,6 +105,7 @@ export type {
 export {
   MockHttpServer,
   createMockHttpServer,
+  createWebhookServer,
 } from './mock-http-server.js';
 
 export type {
@@ -113,6 +114,8 @@ export type {
   MockHttpRequest,
   MockHttpHandler,
   MockHttpStats,
+  WebhookServerOptions,
+  WebhookPayload,
 } from './mock-http-server.js';
 
 // DNS Testing
