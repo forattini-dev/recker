@@ -65,6 +65,12 @@ describe('MockWebSocketServer', () => {
       const ws1 = new WebSocket(server.url);
       const ws2 = new WebSocket(server.url);
 
+      // Wait for both connections to be fully open
+      await Promise.all([
+        new Promise<void>(resolve => ws1.onopen = () => resolve()),
+        new Promise<void>(resolve => ws2.onopen = () => resolve()),
+      ]);
+
       await server.waitForConnections(2);
 
       expect(server.allClients.length).toBe(2);
