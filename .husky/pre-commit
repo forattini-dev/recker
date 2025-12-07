@@ -1,3 +1,19 @@
+# Skip hooks for version bumps (npm version patch/minor/major)
+if [ "$npm_lifecycle_event" = "version" ]; then
+  echo "📦 Version bump detected, skipping pre-commit checks..."
+  exit 0
+fi
+
+# Also check if only package.json changed (fallback detection)
+STAGED_FILES=$(git diff --cached --name-only)
+if [ "$STAGED_FILES" = "package.json" ]; then
+  # Check if package.json version field changed
+  if git diff --cached package.json | grep -q '"version"'; then
+    echo "📦 Version bump detected, skipping pre-commit checks..."
+    exit 0
+  fi
+fi
+
 echo "🧪 Running tests before commit..."
 pnpm test
 
