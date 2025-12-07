@@ -13,8 +13,6 @@
  * - superagent
  * - needle
  * - wretch
- * - simple-get
- * - tiny-json-http
  * - make-fetch-happen (npm ecosystem)
  * - minipass-fetch
  * - popsicle
@@ -36,8 +34,6 @@ import superagent from 'superagent';
 import nodeFetch from 'node-fetch';
 import crossFetch from 'cross-fetch';
 import wretch from 'wretch';
-import simpleGet from 'simple-get';
-import tinyJsonHttp from 'tiny-json-http';
 import makeFetchHappen from 'make-fetch-happen';
 import minipassFetch from 'minipass-fetch';
 import { fetch as popsicle } from 'popsicle';
@@ -84,21 +80,11 @@ const url = `http://localhost:${port}`;
 const recker = createClient({ baseUrl: url });
 const miniClient = createMiniClient({ baseUrl: url });
 
-// Helper for simple-get (callback-based)
-const simpleGetAsync = (opts: any): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    simpleGet.concat(opts, (err: Error | null, _res: any, data: Buffer) => {
-      if (err) reject(err);
-      else resolve(JSON.parse(data.toString()));
-    });
-  });
-};
-
 if (!JSON_OUTPUT) {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
   console.log('║           HTTP Clients Comprehensive Comparison                   ║');
   console.log('║                                                                   ║');
-  console.log('║   Testing 18 HTTP libraries for Node.js                          ║');
+  console.log('║   Testing 16 HTTP libraries for Node.js                          ║');
   console.log('╚═══════════════════════════════════════════════════════════════════╝\n');
   console.log(`Server: ${url}\n`);
 }
@@ -162,14 +148,6 @@ group('GET JSON (simple)', () => {
 
   bench('wretch', async () => {
     await wretch(url).get().json();
-  });
-
-  bench('simple-get', async () => {
-    await simpleGetAsync(url);
-  });
-
-  bench('tiny-json-http', async () => {
-    await tinyJsonHttp.get({ url });
   });
 
   bench('make-fetch-happen', async () => {
@@ -267,24 +245,6 @@ group('POST JSON (with body)', () => {
 
   bench('wretch', async () => {
     await wretch(url).post(body).json();
-  });
-
-  bench('simple-get', async () => {
-    await new Promise((resolve, reject) => {
-      simpleGet.concat({
-        url,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      }, (err: Error | null, _res: any, data: Buffer) => {
-        if (err) reject(err);
-        else resolve(JSON.parse(data.toString()));
-      });
-    });
-  });
-
-  bench('tiny-json-http', async () => {
-    await tinyJsonHttp.post({ url, data: body });
   });
 
   bench('make-fetch-happen', async () => {
@@ -402,18 +362,6 @@ group('Parallel GET (10 concurrent)', () => {
     ));
   });
 
-  bench('simple-get', async () => {
-    await Promise.all(Array(10).fill(null).map(() =>
-      simpleGetAsync(url)
-    ));
-  });
-
-  bench('tiny-json-http', async () => {
-    await Promise.all(Array(10).fill(null).map(() =>
-      tinyJsonHttp.get({ url })
-    ));
-  });
-
   bench('make-fetch-happen', async () => {
     await Promise.all(Array(10).fill(null).map(async () => {
       const res = await makeFetchHappen(url);
@@ -525,18 +473,6 @@ group('Sequential GET (5 requests)', () => {
     }
   });
 
-  bench('simple-get', async () => {
-    for (let i = 0; i < 5; i++) {
-      await simpleGetAsync(url);
-    }
-  });
-
-  bench('tiny-json-http', async () => {
-    for (let i = 0; i < 5; i++) {
-      await tinyJsonHttp.get({ url });
-    }
-  });
-
   bench('make-fetch-happen', async () => {
     for (let i = 0; i < 5; i++) {
       const res = await makeFetchHappen(url);
@@ -577,7 +513,7 @@ server.close();
 
 if (!JSON_OUTPUT) {
   console.log('\n═══════════════════════════════════════════════════════════════════');
-  console.log('                         LEGEND (18 libraries)                      ');
+  console.log('                         LEGEND (16 libraries)                      ');
   console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
   console.log('undici            - Node.js official HTTP client (fastest baseline)');
@@ -592,8 +528,6 @@ if (!JSON_OUTPUT) {
   console.log('superagent        - Mature, callback + promise');
   console.log('needle            - Lightweight, streaming support');
   console.log('wretch            - Fluent fetch wrapper');
-  console.log('simple-get        - Simplest callback-based');
-  console.log('tiny-json-http    - Minimal JSON-only client');
   console.log('make-fetch-happen - npm ecosystem (caching, retry)');
   console.log('minipass-fetch    - Minipass-based fetch');
   console.log('popsicle          - Composable HTTP transport');
