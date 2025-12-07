@@ -2530,9 +2530,11 @@ ${colors.bold('Network:')}
 
       // Resume readline after panel closes
       this.rl.resume();
+      this.prompt();
     } catch (error: any) {
       console.error(colors.red(`Search failed: ${error.message}`));
       this.rl.resume();
+      this.prompt();
     }
   }
 

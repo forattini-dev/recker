@@ -68,6 +68,8 @@ export class SearchPanel {
   private rightPanelWidth = 0;
   private contentHeight = 0;
   private previewContent: string[] = [];
+  private keyHandler: ((data: Buffer) => void) | null = null;
+  private resizeHandler: (() => void) | null = null;
 
   constructor(options: SearchPanelOptions = {}) {
     this.state = {
@@ -115,14 +117,16 @@ export class SearchPanel {
       process.stdin.setRawMode(true);
     }
 
-    // Handle resize
-    process.stdout.on('resize', () => {
+    // Handle resize - store reference for cleanup
+    this.resizeHandler = () => {
       this.updateDimensions();
       this.render();
-    });
+    };
+    process.stdout.on('resize', this.resizeHandler);
 
-    // Handle key input
-    process.stdin.on('data', this.handleKeyInput.bind(this));
+    // Handle key input - store reference for cleanup
+    this.keyHandler = this.handleKeyInput.bind(this);
+    process.stdin.on('data', this.keyHandler);
 
     // Initial search if query provided
     if (this.state.query) {
@@ -163,9 +167,15 @@ export class SearchPanel {
       this.rl = null;
     }
 
-    // Remove listeners
-    process.stdin.removeAllListeners('data');
-    process.stdout.removeAllListeners('resize');
+    // Remove only our specific listeners (not all listeners!)
+    if (this.keyHandler) {
+      process.stdin.removeListener('data', this.keyHandler);
+      this.keyHandler = null;
+    }
+    if (this.resizeHandler) {
+      process.stdout.removeListener('resize', this.resizeHandler);
+      this.resizeHandler = null;
+    }
   }
 
   private updateDimensions(): void {
