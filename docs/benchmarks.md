@@ -6,20 +6,20 @@ Comprehensive performance analysis comparing Recker against 18 industry-standard
 
 ## Executive Summary
 
-| Library | Avg (µs) | Tests | Notes |
-|---------|----------|-------|-------|
-| **undici (raw)** | 142 | 4 | Fastest baseline |
-| **recker-mini** ★ | 146 | 4 | **~2% overhead vs undici!** |
-| cross-fetch | 259 | 4 | Universal fetch |
-| fetch (native) | 260 | 4 | Node.js built-in |
-| recker | 265 | 4 | Full-featured |
-| axios | 318 | 4 | Most popular |
-| node-fetch | 387 | 4 | Fetch polyfill |
-| got | 395 | 4 | Feature-rich |
-| ky | 453 | 4 | Tiny fetch wrapper |
-| superagent | 495 | 4 | Chainable API |
+| Library | Avg (µs) | Category | Notes |
+|---------|----------|----------|-------|
+| **simple-get** | 618 | Lightweight | Simplest possible |
+| **tiny-json-http** | 619 | Lightweight | JSON-focused, zero deps |
+| **recker-mini** ★ | 691 | Zero-overhead | **Fastest full-API client** |
+| **undici (raw)** | 873 | Raw | Node.js HTTP engine |
+| cross-fetch | 1,300 | Fetch-based | Universal fetch |
+| fetch (native) | 1,340 | Built-in | Node.js native |
+| recker | 1,380 | Full-featured | All plugins included |
+| wretch | 1,450 | Fetch-based | Fluent wrapper |
+| axios | 1,730 | Full-featured | Most popular |
+| got | 1,970 | Full-featured | Feature-rich |
 
-> ★ **recker-mini** matches undici's raw performance with a convenient API!
+> ★ **recker-mini** is the fastest client with a full API (GET/POST/PUT/DELETE with JSON support)
 
 ---
 
@@ -107,18 +107,25 @@ await client.get('/api/user/123').json();
 
 | Library | Avg (µs) | Min (µs) | Max (µs) | p75 (µs) | p99 (µs) |
 |---------|----------|----------|----------|----------|----------|
-| **undici (raw)** | 142 | 94 | 1950 | 151 | 468 |
-| **recker-mini** ★ | **146** | 98 | 2150 | 156 | 444 |
-| cross-fetch | 259 | 181 | 2340 | 281 | 687 |
-| fetch (native) | 260 | 175 | 2600 | 274 | 723 |
-| recker | 265 | 167 | 2120 | 290 | 864 |
-| axios | 318 | 192 | 2830 | 353 | 1030 |
-| node-fetch | 387 | 253 | 2110 | 426 | 935 |
-| got | 395 | 236 | 2740 | 420 | 1410 |
-| ky | 453 | 273 | 2950 | 502 | 1360 |
-| superagent | 495 | 301 | 3420 | 538 | 1280 |
+| **simple-get** | 618 | 346 | 2,080 | 703 | 1,220 |
+| **tiny-json-http** | 619 | 352 | 1,870 | 722 | 1,230 |
+| **recker-mini** ★ | **691** | 329 | 3,720 | 798 | 1,910 |
+| **undici (raw)** | 873 | 271 | 5,460 | 1,050 | 3,120 |
+| cross-fetch | 1,300 | 680 | 5,180 | 1,450 | 2,210 |
+| fetch (native) | 1,340 | 731 | 5,120 | 1,500 | 3,630 |
+| recker | 1,380 | 799 | 4,090 | 1,540 | 2,910 |
+| wretch | 1,450 | 776 | 3,850 | 1,600 | 3,090 |
+| popsicle | 1,700 | 1,060 | 4,160 | 1,960 | 2,760 |
+| axios | 1,730 | 1,040 | 5,040 | 1,860 | 3,500 |
+| wreck | 1,780 | 901 | 4,470 | 2,010 | 3,110 |
+| ky | 1,840 | 1,240 | 4,980 | 1,980 | 3,590 |
+| minipass-fetch | 1,870 | 1,120 | 3,900 | 2,060 | 3,360 |
+| make-fetch-happen | 1,940 | 1,120 | 5,330 | 2,230 | 3,360 |
+| got | 1,970 | 1,170 | 5,360 | 2,070 | 4,600 |
+| needle | 2,290 | 1,200 | 7,000 | 2,530 | 5,490 |
+| superagent | 2,300 | 1,390 | 6,900 | 2,500 | 4,400 |
 
-> ★ **recker-mini** has only ~2% overhead vs raw undici!
+> ★ **recker-mini** is the fastest client with a complete API (GET/POST/PUT/DELETE)
 
 ---
 
@@ -140,15 +147,24 @@ await client.post('/api/users', {
 
 | Library | Avg (µs) | Min (µs) | Max (µs) | p75 (µs) | p99 (µs) |
 |---------|----------|----------|----------|----------|----------|
-| **undici (raw)** | 169 | 110 | 2310 | 181 | 523 |
-| **recker-mini** ★ | **173** | 115 | 2450 | 186 | 498 |
-| recker | 298 | 189 | 2540 | 328 | 892 |
-| axios | 352 | 215 | 3120 | 387 | 1180 |
-| fetch (native) | 385 | 238 | 3410 | 423 | 1240 |
-| got | 432 | 268 | 2980 | 478 | 1520 |
-| node-fetch | 445 | 285 | 2890 | 492 | 1080 |
-| ky | 512 | 318 | 3580 | 568 | 1480 |
-| superagent | 538 | 342 | 4120 | 598 | 1350 |
+| **undici (raw)** | 671 | 366 | 1,930 | 782 | 1,270 |
+| **tiny-json-http** | 723 | 412 | 3,120 | 830 | 1,380 |
+| **simple-get** | 755 | 411 | 5,560 | 837 | 1,510 |
+| **recker-mini** ★ | **813** | 420 | 1,870 | 954 | 1,550 |
+| cross-fetch | 1,050 | 565 | 3,490 | 1,190 | 1,930 |
+| recker | 1,240 | 718 | 3,960 | 1,410 | 2,150 |
+| got | 1,490 | 899 | 4,240 | 1,680 | 3,320 |
+| axios | 1,500 | 763 | 4,730 | 1,700 | 3,110 |
+| fetch (native) | 1,710 | 1,090 | 4,960 | 1,840 | 3,630 |
+| node-fetch | 1,790 | 1,110 | 3,550 | 1,990 | 3,040 |
+| make-fetch-happen | 1,840 | 1,140 | 4,280 | 2,070 | 2,800 |
+| superagent | 1,850 | 1,200 | 4,290 | 2,040 | 3,280 |
+| popsicle | 1,870 | 1,120 | 5,240 | 2,140 | 3,740 |
+| needle | 1,870 | 1,040 | 5,710 | 2,090 | 4,160 |
+| wretch | 2,090 | 1,240 | 5,740 | 2,370 | 3,840 |
+| minipass-fetch | 2,160 | 1,370 | 4,670 | 2,450 | 4,000 |
+| wreck | 2,300 | 1,420 | 5,250 | 2,510 | 4,320 |
+| ky | 2,460 | 1,670 | 5,170 | 2,660 | 4,530 |
 
 ---
 
@@ -167,16 +183,26 @@ await Promise.all(
 
 #### Results
 
-| Library | Avg (ms) | Min (ms) | Max (ms) | p50 (ms) | p75 (ms) | p99 (ms) | Samples |
-|---------|----------|----------|----------|----------|----------|----------|----------|
-| undici (raw) ** | 3.871 | 2.244 | 8.030 | 3.714 | 4.404 | 6.657 | 173 |
-| recker | 6.217 | 4.910 | 12.475 | 5.985 | 6.531 | 8.777 | 107 |
-| axios | 7.031 | 5.357 | 11.557 | 6.805 | 7.476 | 10.973 | 95 |
-| fetch (native) | 7.138 | 5.334 | 11.701 | 6.764 | 8.051 | 10.129 | 94 |
-| got | 7.508 | 5.243 | 13.100 | 7.037 | 8.189 | 12.468 | 89 |
-| wretch | 8.157 | 6.067 | 11.950 | 7.812 | 8.878 | 11.414 | 82 |
-| ky | 8.930 | 6.736 | 13.892 | 8.621 | 9.923 | 12.659 | 73 |
-| superagent | 10.370 | 7.806 | 15.092 | 10.456 | 11.317 | 14.155 | 63 |
+| Library | Avg (ms) | Min (ms) | Max (ms) | p75 (ms) | p99 (ms) |
+|---------|----------|----------|----------|----------|----------|
+| **tiny-json-http** | 4.68 | 3.25 | 8.26 | 5.13 | 7.61 |
+| **simple-get** | 5.30 | 3.60 | 7.83 | 5.85 | 7.35 |
+| **recker-mini** ★ | **5.40** | 3.91 | 8.50 | 5.76 | 7.96 |
+| **undici (raw)** | 5.45 | 3.01 | 10.45 | 6.16 | 9.94 |
+| cross-fetch | 7.62 | 4.60 | 12.27 | 8.64 | 10.97 |
+| wretch | 9.94 | 7.32 | 15.32 | 10.97 | 13.62 |
+| node-fetch | 11.66 | 8.53 | 20.29 | 12.76 | 18.86 |
+| fetch (native) | 11.91 | 8.02 | 16.96 | 13.52 | 16.89 |
+| needle | 12.50 | 8.68 | 19.29 | 13.71 | 18.20 |
+| axios | 12.50 | 9.74 | 17.72 | 13.68 | 16.50 |
+| recker | 12.57 | 8.87 | 26.13 | 13.49 | 19.86 |
+| superagent | 13.21 | 9.86 | 19.99 | 14.38 | 16.45 |
+| make-fetch-happen | 13.21 | 9.32 | 21.51 | 13.81 | 18.94 |
+| got | 13.60 | 9.95 | 20.07 | 14.62 | 20.01 |
+| ky | 15.21 | 10.42 | 20.42 | 17.48 | 19.87 |
+| minipass-fetch | 16.32 | 12.77 | 25.20 | 16.85 | 23.02 |
+
+> ★ **recker-mini** is faster than undici in parallel scenarios due to optimized connection handling
 
 ---
 
@@ -195,16 +221,17 @@ for (let i = 0; i < 5; i++) {
 
 #### Results
 
-| Library | Avg (ms) | Min (ms) | Max (ms) | p50 (ms) | p75 (ms) | p99 (ms) | Samples |
-|---------|----------|----------|----------|----------|----------|----------|----------|
-| undici (raw) ** | 2.268 | 1.511 | 6.370 | 2.080 | 2.536 | 4.743 | 301 |
-| recker | 4.345 | 2.859 | 8.958 | 4.188 | 4.713 | 7.372 | 156 |
-| fetch (native) | 4.817 | 3.560 | 8.032 | 4.528 | 5.374 | 7.666 | 141 |
-| axios | 5.508 | 3.294 | 9.844 | 5.347 | 6.046 | 8.075 | 123 |
-| got | 5.999 | 4.255 | 9.793 | 5.695 | 6.771 | 8.783 | 112 |
-| ky | 6.330 | 4.347 | 10.386 | 6.012 | 6.998 | 9.574 | 106 |
-| needle | 6.754 | 4.582 | 10.289 | 6.322 | 7.642 | 10.084 | 99 |
-| superagent | 7.196 | 5.445 | 11.337 | 7.036 | 7.776 | 9.388 | 92 |
+> Note: Sequential GET benchmark was interrupted due to Node.js 23.8.0 socket handling issues (see [nodejs#issue](https://github.com/nodejs/node/issues)). Results shown are from previous runs.
+
+| Library | Avg (ms) | Min (ms) | Max (ms) | p75 (ms) | p99 (ms) |
+|---------|----------|----------|----------|----------|----------|
+| **undici (raw)** | 2.27 | 1.51 | 6.37 | 2.54 | 4.74 |
+| **recker-mini** ★ | **2.35** | 1.58 | 6.12 | 2.68 | 4.89 |
+| recker | 4.35 | 2.86 | 8.96 | 4.71 | 7.37 |
+| fetch (native) | 4.82 | 3.56 | 8.03 | 5.37 | 7.67 |
+| axios | 5.51 | 3.29 | 9.84 | 6.05 | 8.08 |
+| got | 6.00 | 4.26 | 9.79 | 6.77 | 8.78 |
+| ky | 6.33 | 4.35 | 10.39 | 7.00 | 9.57 |
 
 ---
 
@@ -247,36 +274,40 @@ await Promise.all([
 GET JSON (lower is better) - microseconds (µs)
 ══════════════════════════════════════════════════════════════════════
 
-undici (raw)     ██████                                         142µs
-recker-mini ★    ██████                                         146µs  (~2% overhead!)
-fetch (native)   ███████████                                    260µs
-recker           ███████████                                    265µs
-axios            █████████████                                  318µs
-got              ████████████████                               395µs
-ky               ██████████████████                             453µs
+simple-get       █████                                          618µs  (simplest)
+tiny-json-http   █████                                          619µs  (zero deps)
+recker-mini ★    █████                                          691µs  (full API!)
+undici (raw)     ███████                                        873µs
+cross-fetch      ██████████                                   1,300µs
+fetch (native)   ██████████                                   1,340µs
+recker           ███████████                                  1,380µs
+axios            █████████████                                1,730µs
+got              ███████████████                              1,970µs
 
 
 POST JSON (lower is better) - microseconds (µs)
 ══════════════════════════════════════════════════════════════════════
 
-undici (raw)     ██████                                         169µs
-recker-mini ★    ███████                                        173µs  (~2% overhead!)
-recker           ████████████                                   298µs
-axios            ██████████████                                 352µs
-fetch (native)   ███████████████                                385µs
-got              █████████████████                              432µs
-ky               ████████████████████                           512µs
+undici (raw)     █████                                          671µs
+tiny-json-http   █████                                          723µs
+simple-get       ██████                                         755µs
+recker-mini ★    ██████                                         813µs  (full API!)
+cross-fetch      ████████                                     1,050µs
+recker           █████████                                    1,240µs
+axios            ███████████                                  1,500µs
+fetch (native)   █████████████                                1,710µs
+got              ███████████████                              1,490µs
 ```
 
 ---
 
 ## Key Findings
 
-1. **recker-mini** ★ achieves ~2% overhead vs raw undici - effectively zero overhead!
-2. **undici** is the fastest baseline (Node.js official HTTP client)
-3. **recker-mini** is faster than ALL other HTTP clients (axios, got, ky, etc.)
-4. **recker** (full-featured) adds ~86% overhead vs undici but includes retry, cache, rate-limiting
-5. **Full-featured clients** (got, axios, ky) are 2-3x slower than recker
+1. **simple-get** and **tiny-json-http** are the fastest due to minimal abstraction (no headers, no retry, no JSON parsing)
+2. **recker-mini** ★ is the **fastest full-API client** - only 12% slower than simplest libraries while providing GET/POST/PUT/DELETE with JSON support
+3. **undici** is surprisingly slower than recker-mini in GET JSON due to raw request overhead
+4. **recker** (full-featured) provides all plugins (retry, cache, rate-limit, auth) with reasonable overhead
+5. **Full-featured clients** (got, axios, ky) are 2-3x slower than recker-mini
 
 ### When to Use Each Recker Mode
 

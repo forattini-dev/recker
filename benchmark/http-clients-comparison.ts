@@ -98,7 +98,7 @@ if (!JSON_OUTPUT) {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
   console.log('║           HTTP Clients Comprehensive Comparison                   ║');
   console.log('║                                                                   ║');
-  console.log('║   Testing 22 HTTP libraries for Node.js                          ║');
+  console.log('║   Testing 18 HTTP libraries for Node.js                          ║');
   console.log('╚═══════════════════════════════════════════════════════════════════╝\n');
   console.log(`Server: ${url}\n`);
 }
