@@ -5,6 +5,7 @@
  * - Loads embeddings only on first search (lazy loading)
  * - Auto-unloads after idle time to save memory
  * - Provides search, suggest, and example commands
+ * - Progress callbacks for UI feedback
  */
 
 import { HybridSearch, createHybridSearch, createEmbedder, isFastembedAvailable } from '../../mcp/search/index.js';
@@ -12,6 +13,10 @@ import type { IndexedDoc, SearchResult } from '../../mcp/search/types.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative, extname, basename, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import ora, { type Ora } from 'ora';
+
+/** Progress callback for long-running operations */
+export type ProgressCallback = (stage: string, percent?: number) => void;
 
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -49,10 +54,13 @@ export class ShellSearch {
   private codeExamples: CodeExample[] = [];
   private typeDefinitions: TypeDefinition[] = [];
   private initialized = false;
+  private initializing = false;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private docsPath: string;
   private examplesPath: string;
   private srcPath: string;
+  private spinner: Ora | null = null;
+  private hasSemanticSearch = false;
 
   constructor() {
     this.docsPath = this.findDocsPath();
@@ -61,7 +69,17 @@ export class ShellSearch {
   }
 
   /**
+   * Update spinner text with stage info
+   */
+  private updateSpinner(text: string): void {
+    if (this.spinner) {
+      this.spinner.text = text;
+    }
+  }
+
+  /**
    * Ensure the search engine is initialized (lazy loading).
+   * Shows spinner with progress for better UX.
    */
   private async ensureInitialized(): Promise<void> {
     this.resetIdleTimer();
@@ -70,16 +88,47 @@ export class ShellSearch {
       return;
     }
 
-    this.hybridSearch = createHybridSearch({ debug: false });
-
-    // Configure embedder for semantic search if fastembed is available
-    if (await isFastembedAvailable()) {
-      this.hybridSearch.setEmbedder(createEmbedder());
+    // Prevent multiple concurrent initializations
+    if (this.initializing) {
+      // Wait for ongoing initialization
+      while (this.initializing) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
     }
 
-    this.buildIndex();
-    await this.hybridSearch.initialize(this.docsIndex);
-    this.initialized = true;
+    this.initializing = true;
+    this.spinner = ora({ text: 'Initializing search...', spinner: 'dots' }).start();
+
+    try {
+      this.updateSpinner('Creating search index...');
+      this.hybridSearch = createHybridSearch({ debug: false });
+
+      // Configure embedder for semantic search if fastembed is available
+      this.updateSpinner('Checking semantic search availability...');
+      const fastembedAvailable = await isFastembedAvailable();
+
+      if (fastembedAvailable) {
+        this.updateSpinner('Loading AI embedding model (first time may take a while)...');
+        this.hybridSearch.setEmbedder(createEmbedder());
+        this.hasSemanticSearch = true;
+      }
+
+      this.updateSpinner('Indexing documentation...');
+      this.buildIndex();
+
+      this.updateSpinner('Finalizing search index...');
+      await this.hybridSearch.initialize(this.docsIndex);
+
+      this.initialized = true;
+      this.spinner.succeed(`Search ready (${this.docsIndex.length} docs${this.hasSemanticSearch ? ', semantic enabled' : ''})`);
+    } catch (error) {
+      this.spinner.fail(`Search initialization failed: ${error}`);
+      throw error;
+    } finally {
+      this.initializing = false;
+      this.spinner = null;
+    }
   }
 
   /**
@@ -106,40 +155,70 @@ export class ShellSearch {
   }
 
   /**
-   * Search documentation.
+   * Search documentation with visual feedback.
    */
-  async search(query: string, options: { limit?: number; category?: string } = {}): Promise<SearchResult[]> {
+  async search(query: string, options: { limit?: number; category?: string; silent?: boolean } = {}): Promise<SearchResult[]> {
     await this.ensureInitialized();
 
-    const { limit = 5, category } = options;
+    const { limit = 5, category, silent = false } = options;
 
     if (!this.hybridSearch) {
       return [];
     }
 
-    return this.hybridSearch.search(query, { limit, category, mode: 'hybrid' });
+    // Show spinner during search (embedding generation can take time)
+    let searchSpinner: Ora | null = null;
+    if (!silent && this.hasSemanticSearch) {
+      searchSpinner = ora({ text: 'Generating query embedding...', spinner: 'dots' }).start();
+    }
+
+    try {
+      if (searchSpinner) {
+        searchSpinner.text = 'Searching documentation...';
+      }
+
+      const results = await this.hybridSearch.search(query, { limit, category, mode: 'hybrid' });
+
+      if (searchSpinner) {
+        searchSpinner.succeed(`Found ${results.length} result${results.length !== 1 ? 's' : ''}`);
+      }
+
+      return results;
+    } catch (error) {
+      if (searchSpinner) {
+        searchSpinner.fail(`Search failed: ${error}`);
+      }
+      throw error;
+    }
   }
 
   /**
    * Get implementation suggestions based on use case.
    */
   async suggest(useCase: string): Promise<string> {
-    await this.ensureInitialized();
+    const spinner = ora({ text: 'Generating suggestions...', spinner: 'dots' }).start();
 
-    // Find relevant documentation
-    const results = await this.search(useCase, { limit: 3 });
+    try {
+      await this.ensureInitialized();
 
-    if (results.length === 0) {
-      return `No suggestions found for: "${useCase}"\n\nTry searching for specific features like:\n  - retry\n  - cache\n  - streaming\n  - websocket\n  - pagination`;
-    }
+      spinner.text = 'Finding relevant documentation...';
+      // Find relevant documentation (silent to avoid double spinner)
+      const results = await this.search(useCase, { limit: 3, silent: true });
 
-    // Analyze use case and build suggestion
-    const useCaseLower = useCase.toLowerCase();
-    const suggestions: string[] = [];
+      if (results.length === 0) {
+        spinner.info('No suggestions found');
+        return `No suggestions found for: "${useCase}"\n\nTry searching for specific features like:\n  - retry\n  - cache\n  - streaming\n  - websocket\n  - pagination`;
+      }
 
-    // Configuration suggestions based on keywords
-    if (useCaseLower.includes('retry') || useCaseLower.includes('fail') || useCaseLower.includes('error')) {
-      suggestions.push(`\n**Retry Configuration:**
+      spinner.text = 'Building suggestions...';
+
+      // Analyze use case and build suggestion
+      const useCaseLower = useCase.toLowerCase();
+      const suggestions: string[] = [];
+
+      // Configuration suggestions based on keywords
+      if (useCaseLower.includes('retry') || useCaseLower.includes('fail') || useCaseLower.includes('error')) {
+        suggestions.push(`\n**Retry Configuration:**
 \`\`\`typescript
 import { createClient } from 'recker';
 
@@ -153,10 +232,10 @@ const client = createClient({
   }
 });
 \`\`\``);
-    }
+      }
 
-    if (useCaseLower.includes('cache') || useCaseLower.includes('storage')) {
-      suggestions.push(`\n**Cache Configuration:**
+      if (useCaseLower.includes('cache') || useCaseLower.includes('storage')) {
+        suggestions.push(`\n**Cache Configuration:**
 \`\`\`typescript
 import { createClient } from 'recker';
 
@@ -169,10 +248,10 @@ const client = createClient({
   }
 });
 \`\`\``);
-    }
+      }
 
-    if (useCaseLower.includes('stream') || useCaseLower.includes('sse') || useCaseLower.includes('ai') || useCaseLower.includes('openai')) {
-      suggestions.push(`\n**Streaming Configuration:**
+      if (useCaseLower.includes('stream') || useCaseLower.includes('sse') || useCaseLower.includes('ai') || useCaseLower.includes('openai')) {
+        suggestions.push(`\n**Streaming Configuration:**
 \`\`\`typescript
 import { createClient } from 'recker';
 
@@ -183,10 +262,10 @@ for await (const event of client.post('/v1/chat/completions', { body, stream: tr
   console.log(event.data);
 }
 \`\`\``);
-    }
+      }
 
-    if (useCaseLower.includes('parallel') || useCaseLower.includes('batch') || useCaseLower.includes('concurrent')) {
-      suggestions.push(`\n**Batch/Parallel Requests:**
+      if (useCaseLower.includes('parallel') || useCaseLower.includes('batch') || useCaseLower.includes('concurrent')) {
+        suggestions.push(`\n**Batch/Parallel Requests:**
 \`\`\`typescript
 import { createClient } from 'recker';
 
@@ -201,24 +280,29 @@ const { results, stats } = await client.batch([
   { path: '/users/3' }
 ], { mapResponse: r => r.json() });
 \`\`\``);
-    }
-
-    // Add relevant documentation
-    let output = `**Suggestion for: "${useCase}"**\n`;
-
-    if (suggestions.length > 0) {
-      output += suggestions.join('\n');
-    }
-
-    output += `\n\n**Related Documentation:**\n`;
-    for (const result of results) {
-      output += `  - ${result.title} (${result.path})\n`;
-      if (result.snippet) {
-        output += `    ${result.snippet.slice(0, 100)}...\n`;
       }
-    }
 
-    return output;
+      // Add relevant documentation
+      let output = `**Suggestion for: "${useCase}"**\n`;
+
+      if (suggestions.length > 0) {
+        output += suggestions.join('\n');
+      }
+
+      output += `\n\n**Related Documentation:**\n`;
+      for (const result of results) {
+        output += `  - ${result.title} (${result.path})\n`;
+        if (result.snippet) {
+          output += `    ${result.snippet.slice(0, 100)}...\n`;
+        }
+      }
+
+      spinner.succeed('Suggestions ready');
+      return output;
+    } catch (error) {
+      spinner.fail(`Failed to generate suggestions: ${error}`);
+      throw error;
+    }
   }
 
   /**
