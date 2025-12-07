@@ -47,7 +47,7 @@ export class HybridSearch {
   private vectors: Map<string, number[]> = new Map();
   private embeddingsData: EmbeddingsData | null = null;
   private initialized = false;
-  private config: Required<HybridSearchConfig>;
+  private config: Required<Omit<HybridSearchConfig, 'embedder'>> & { embedder?: HybridSearchConfig['embedder'] };
 
   constructor(config: HybridSearchConfig = {}) {
     this.config = {
@@ -55,7 +55,16 @@ export class HybridSearch {
       fuzzyWeight: config.fuzzyWeight ?? 0.5,
       semanticWeight: config.semanticWeight ?? 0.5,
       debug: config.debug ?? false,
+      embedder: config.embedder,
     };
+  }
+
+  /**
+   * Set a custom embedder function for generating query vectors.
+   * The embedder should accept text and optionally a model name.
+   */
+  setEmbedder(embedder: (text: string, model?: string) => Promise<number[]>): void {
+    this.config.embedder = embedder;
   }
 
   /**
@@ -115,9 +124,15 @@ export class HybridSearch {
 
       if (this.embeddingsData) {
         // Populate vectors map for fast lookup (only non-empty vectors)
+        // Handle both array and object formats (embeddings may be stored as {0: val, 1: val, ...})
         for (const entry of this.embeddingsData.documents) {
-          if (entry.vector && entry.vector.length > 0) {
-            this.vectors.set(entry.id, entry.vector);
+          if (entry.vector) {
+            const vec = Array.isArray(entry.vector)
+              ? entry.vector
+              : Object.values(entry.vector as Record<string, number>);
+            if (vec.length > 0) {
+              this.vectors.set(entry.id, vec);
+            }
           }
         }
         this.log(
@@ -162,7 +177,7 @@ export class HybridSearch {
 
     // Semantic search (if embeddings available)
     if ((mode === 'hybrid' || mode === 'semantic') && this.vectors.size > 0) {
-      const semanticResults = this.semanticSearch(searchQuery, limit * 2, category);
+      const semanticResults = await this.semanticSearch(searchQuery, limit * 2, category);
       for (const result of semanticResults) {
         const existing = results.get(result.id);
         if (existing) {
@@ -255,18 +270,69 @@ export class HybridSearch {
   /**
    * Semantic search using pre-computed embeddings.
    *
-   * Since we don't have a runtime model, we use a term-based approximation:
-   * - Match query terms against document titles/keywords
-   * - Use pre-computed vectors for documents that match
-   * - Find similar documents based on vector similarity
-   *
-   * For full semantic search, users would need to install the model.
+   * If an embedder is provided, it generates a query vector and compares it against all docs.
+   * Otherwise, it uses a term-based approximation (synthetic vector) to find related content.
    */
-  private semanticSearch(query: string, limit: number, category?: string): SearchResult[] {
+  private async semanticSearch(query: string, limit: number, category?: string): Promise<SearchResult[]> {
     if (!this.embeddingsData || this.vectors.size === 0) {
       return [];
     }
 
+    // 1. Try using real embedder (True Semantic Search)
+    if (this.config.embedder) {
+      try {
+        const model = this.embeddingsData.model;
+        const queryVector = await this.config.embedder(query, model);
+        this.log(`Generated query vector using provided embedder (model: ${model})`);
+
+        const scores: { id: string; score: number }[] = [];
+
+        // Calculate similarity against all documents
+        for (const [id, vector] of this.vectors) {
+          // Check category if needed (optimization: check doc metadata map if we had one, or lookup)
+          if (category) {
+            const entry = this.embeddingsData.documents.find((e) => e.id === id);
+            if (!entry || !entry.category.toLowerCase().includes(category.toLowerCase())) {
+              continue;
+            }
+          }
+
+          // Skip vectors with different dimensions
+          if (vector.length !== queryVector.length) continue;
+
+          const score = cosineSimilarity(queryVector, vector);
+          if (score > 0.05) { // Lower threshold for real embeddings
+            scores.push({ id, score });
+          }
+        }
+
+        // Map to results
+        const results: SearchResult[] = [];
+        for (const s of scores.sort((a, b) => b.score - a.score).slice(0, limit)) {
+          const doc = this.docs.find((d) => d.id === s.id);
+          const entry = this.embeddingsData.documents.find((e) => e.id === s.id);
+
+          if (!doc && !entry) continue;
+
+          const content = doc?.content || '';
+          results.push({
+            id: s.id,
+            path: doc?.path || entry?.path || '',
+            title: doc?.title || entry?.title || 'Unknown',
+            content,
+            snippet: this.extractSnippet(content, query),
+            score: s.score,
+            source: 'semantic',
+          });
+        }
+
+        return results;
+      } catch (error) {
+        this.log(`Embedder failed: ${error}. Falling back to synthetic vectors.`);
+      }
+    }
+
+    // 2. Fallback: Synthetic Vector Search (Approximation)
     const queryTerms = this.tokenize(query);
     const scores: Array<{ id: string; score: number }> = [];
 

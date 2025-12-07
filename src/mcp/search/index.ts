@@ -25,6 +25,14 @@ export {
   reciprocalRankFusion,
   combineScores,
 } from './math.js';
+export {
+  embed,
+  embedBatch,
+  createEmbedder,
+  isFastembedAvailable,
+  getModelInfo,
+  unloadEmbedder,
+} from './embedder.js';
 export type {
   IndexedDoc,
   SearchResult,

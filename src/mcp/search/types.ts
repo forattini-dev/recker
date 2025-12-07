@@ -109,4 +109,6 @@ export interface HybridSearchConfig {
   semanticWeight?: number;
   /** Enable debug logging */
   debug?: boolean;
+  /** Optional embedder function for real-time query vectorization */
+  embedder?: (text: string, model?: string) => Promise<number[]>;
 }
