@@ -7,7 +7,7 @@
  * - Provides search, suggest, and example commands
  */
 
-import { HybridSearch, createHybridSearch } from '../../mcp/search/index.js';
+import { HybridSearch, createHybridSearch, createEmbedder, isFastembedAvailable } from '../../mcp/search/index.js';
 import type { IndexedDoc, SearchResult } from '../../mcp/search/types.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative, extname, basename, dirname } from 'path';
@@ -71,6 +71,12 @@ export class ShellSearch {
     }
 
     this.hybridSearch = createHybridSearch({ debug: false });
+
+    // Configure embedder for semantic search if fastembed is available
+    if (await isFastembedAvailable()) {
+      this.hybridSearch.setEmbedder(createEmbedder());
+    }
+
     this.buildIndex();
     await this.hybridSearch.initialize(this.docsIndex);
     this.initialized = true;

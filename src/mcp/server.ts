@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative, extname, basename, dirname } from 'path';
 import { createInterface } from 'readline';
 import { fileURLToPath } from 'url';
+import { createAI, type AIClient } from '../ai/index.js';
 import { HybridSearch, createHybridSearch } from './search/index.js';
 import type { IndexedDoc, SearchResult } from './search/types.js';
 import type {
@@ -93,6 +94,7 @@ export class MCPServer {
   private sseClients: Set<ServerResponse> = new Set();
   private initialized = false;
   private toolRegistry: ToolRegistry;
+  private aiClient?: AIClient;
 
   constructor(options: MCPServerOptions = {}) {
     this.options = {
@@ -108,7 +110,14 @@ export class MCPServer {
       toolPaths: options.toolPaths || [],
     };
 
-    this.hybridSearch = createHybridSearch({ debug: this.options.debug });
+    // Initialize AI client if available
+    this.aiClient = this.initAI();
+
+    this.hybridSearch = createHybridSearch({
+      debug: this.options.debug,
+      embedder: (text, model) => this.generateEmbedding(text, model || 'BGESmallENV15'),
+    });
+
     this.toolRegistry = new ToolRegistry();
     
     // Register built-in tools
@@ -135,6 +144,71 @@ export class MCPServer {
       this.indexReady = this.buildIndex();
     }
     await this.indexReady;
+  }
+
+  private initAI(): AIClient | undefined {
+    // Check for available keys or local configuration
+    // We prioritize OpenAI > Google > Ollama (local)
+    const hasKeys = process.env.OPENAI_API_KEY || process.env.GOOGLE_API_KEY;
+    const hasLocal = process.env.OLLAMA_HOST || true; // Always try Ollama if nothing else? No, only if requested or detected.
+    
+    // For now, only enable if explicitly configured via env for cloud, or if we want to default to Ollama?
+    // Let's be conservative: only if keys exist.
+    if (!hasKeys) {
+        // TODO: check if Ollama is running?
+        return undefined;
+    }
+
+    try {
+      return createAI({ debug: this.options.debug });
+    } catch (e) {
+      this.log('Failed to initialize AI client:', e);
+      return undefined;
+    }
+  }
+
+  private fastEmbedModel: any = null;
+
+  private async generateEmbedding(text: string, model: string): Promise<number[]> {
+    // 1. Try FastEmbed for BGE models (if installed)
+    if (model.toLowerCase().includes('bge')) {
+      if (!this.fastEmbedModel) {
+        try {
+          // Dynamic import to avoid hard dependency
+          const fastembed = await import('fastembed');
+          const { FlagEmbedding } = fastembed;
+          
+          this.fastEmbedModel = await FlagEmbedding.init({ 
+            model: model as any,
+            showDownloadProgress: false 
+          });
+        } catch (e) {
+          throw new Error(`FastEmbed required for model ${model}. Install with: pnpm add fastembed`);
+        }
+      }
+      
+      const vectors = this.fastEmbedModel.embed([text]);
+      for await (const v of vectors) return Array.from(v);
+      throw new Error('No vector generated');
+    }
+
+    // 2. Try AI Client (OpenAI, Google, Ollama)
+    if (!this.aiClient) {
+      throw new Error('No AI client available for external embeddings');
+    }
+
+    // Determine provider based on model name
+    let provider: any = 'openai';
+    if (model.includes('google') || model.includes('gecko')) provider = 'google';
+    else if (model.includes('nomic') || model.includes('llama')) provider = 'ollama';
+
+    const res = await this.aiClient.embed({ 
+      input: text, 
+      provider,
+      model 
+    });
+    
+    return res.embeddings[0];
   }
 
   private log(message: string, data?: unknown): void {
