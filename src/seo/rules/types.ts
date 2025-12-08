@@ -228,6 +228,113 @@ export interface RuleContext {
   htmlSize?: number; // HTML size in bytes (before decompression)
   compressedSize?: number; // Compressed size if gzip/br
   isCompressed?: boolean; // Whether response was compressed
+
+  // ==========================================================================
+  // E-commerce Context
+  // ==========================================================================
+  isProductPage?: boolean; // Detected as product page
+  productSchema?: {
+    name?: string;
+    image?: string | string[];
+    offers?: {
+      price?: number | string;
+      lowPrice?: number | string;
+      priceCurrency?: string;
+      availability?: string;
+      priceValidUntil?: string;
+      validFrom?: string;
+      validThrough?: string;
+    };
+    aggregateRating?: {
+      ratingValue?: number | string;
+      reviewCount?: number;
+      ratingCount?: number;
+    };
+    review?: unknown;
+    brand?: string | { name?: string };
+    sku?: string;
+    gtin?: string;
+    gtin13?: string;
+    gtin14?: string;
+    gtin8?: string;
+    mpn?: string;
+  };
+
+  // ==========================================================================
+  // Local Business Context
+  // ==========================================================================
+  hasLocalBusinessSignals?: boolean; // Page appears to be local business
+  localBusinessSchema?: {
+    '@type'?: string;
+    name?: string;
+    address?: {
+      streetAddress?: string;
+      addressLocality?: string;
+      addressRegion?: string;
+      postalCode?: string;
+      addressCountry?: string;
+    };
+    telephone?: string;
+    openingHoursSpecification?: unknown;
+    openingHours?: string | string[];
+    geo?: {
+      latitude?: number | string;
+      longitude?: number | string;
+    };
+    areaServed?: unknown;
+    priceRange?: string;
+  };
+  hasPhoneOnPage?: boolean;
+  hasAddressOnPage?: boolean;
+
+  // ==========================================================================
+  // Core Web Vitals Deep Context
+  // ==========================================================================
+  lcpCandidate?: {
+    element?: string;
+    src?: string;
+    loading?: string;
+    fetchpriority?: string;
+  };
+  hasLcpPreload?: boolean;
+  webFonts?: Array<{
+    family?: string;
+    hasSwap?: boolean;
+    hasOptional?: boolean;
+    hasSizeAdjust?: boolean;
+    hasAscentOverride?: boolean;
+  }>;
+  renderBlockingStylesheets?: number;
+  renderBlockingScripts?: number;
+  hasAspectRatioCss?: boolean;
+  hasResponsiveImages?: boolean;
+  hasAdsWithoutReservedSpace?: boolean;
+  hasBannersWithoutMinHeight?: boolean;
+  hasInfiniteScroll?: boolean;
+  largeInlineScripts?: number;
+  inlineEventHandlers?: number;
+  hasHeavyAnimations?: boolean;
+  externalOrigins?: number;
+  hasCriticalResources?: boolean;
+  hasInlineCriticalCss?: boolean;
+
+  // ==========================================================================
+  // Crawl & Indexing Context
+  // ==========================================================================
+  hasSitemapLink?: boolean;
+  sitemapUrl?: string;
+  robotsHasSitemap?: boolean;
+  isPaginatedPage?: boolean;
+  hasRelPrev?: boolean;
+  hasRelNext?: boolean;
+
+  // ==========================================================================
+  // Readability Context
+  // ==========================================================================
+  passiveVoicePercentage?: number;
+  transitionWordPercentage?: number;
+  consecutiveSentenceStarts?: number;
+  complexWordPercentage?: number;
 }
 
 export interface RuleEvidence {
