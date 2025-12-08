@@ -335,6 +335,51 @@ export interface RuleContext {
   transitionWordPercentage?: number;
   consecutiveSentenceStarts?: number;
   complexWordPercentage?: number;
+
+  // ==========================================================================
+  // PWA Context
+  // ==========================================================================
+  hasManifest?: boolean;
+  manifestUrl?: string;
+  themeColor?: string;
+  hasAppleTouchIcon?: boolean;
+  hasAppleMobileWebAppCapable?: boolean;
+  appleStatusBarStyle?: string;
+  hasMaskableIcon?: boolean;
+  manifestStartUrl?: string;
+  manifestDisplay?: string;
+  manifestScope?: string;
+  manifestIconSizes?: number[];
+  manifestShortName?: string;
+  manifestName?: string;
+  manifestBackgroundColor?: string;
+
+  // ==========================================================================
+  // Social Media Context
+  // ==========================================================================
+  ogImageDimensions?: { width: number; height: number };
+  ogLocaleAlternate?: string[];
+  ogArticleTags?: string[];
+  ogArticlePublishedTime?: string;
+  ogArticleAuthor?: string;
+  twitterCreator?: string;
+  twitterImageAlt?: string;
+  linkedinAuthor?: string;
+  pinterestRichPinSupport?: boolean;
+  hasPinterestNopin?: boolean;
+  fbAppId?: string;
+
+  // ==========================================================================
+  // Internal Linking Context
+  // ==========================================================================
+  navLinkCount?: number;
+  footerLinkCount?: number;
+  contextualLinkCount?: number;
+  incomingInternalLinks?: number;
+  selfReferencingLinks?: number;
+  brokenInternalLinks?: number;
+  redirectChainLinks?: number;
+  pageClickDepth?: number;
 }
 
 export interface RuleEvidence {

@@ -21,6 +21,9 @@ import { localRules } from './local.js';
 import { cwvRules } from './cwv.js';
 import { crawlRules } from './crawl.js';
 import { readabilityRules } from './readability.js';
+import { pwaRules } from './pwa.js';
+import { socialRules } from './social.js';
+import { internalLinkingRules } from './internal-linking.js';
 
 // Re-export types and thresholds
 export * from './types.js';
@@ -45,6 +48,9 @@ export const ALL_SEO_RULES: SeoRule[] = [
   ...cwvRules,
   ...crawlRules,
   ...readabilityRules,
+  ...pwaRules,
+  ...socialRules,
+  ...internalLinkingRules,
 ];
 
 // =============================================================================
