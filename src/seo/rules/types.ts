@@ -72,7 +72,7 @@ export interface RuleContext {
   imageFilenames?: string[]; // For image file naming conventions
   imagesWithAsyncDecoding?: number; // Count of images with decoding="async"
 
-  // Accessibility
+  // Accessibility - Basic
   buttonsWithoutAriaLabel?: number;
   linksWithoutAriaLabel?: number;
   inputsWithoutLabel?: number;
@@ -82,6 +82,28 @@ export interface RuleContext {
   svgsWithoutTitle?: number;
   interactiveElementsCount?: number;
   ariaLabelledByMissing?: number;
+
+  // Accessibility - Lighthouse Expanded
+  lowContrastElements?: number; // Elements with insufficient color contrast
+  elementsWithHighTabindex?: number; // Elements with tabindex > 0
+  invalidAriaAttributes?: number; // Invalid or misspelled aria-* attributes
+  invalidAriaValues?: number; // ARIA attributes with invalid values
+  invalidAriaRoles?: number; // Invalid ARIA role values
+  missingRequiredAriaAttrs?: number; // ARIA roles missing required attributes
+  hasAriaHiddenBody?: boolean; // Whether body has aria-hidden="true"
+  ariaHiddenFocusableCount?: number; // Focusable elements inside aria-hidden
+  deprecatedAriaRoles?: number; // Deprecated ARIA roles used
+  duplicateAriaIds?: number; // Duplicate IDs referenced by ARIA
+  dialogsWithoutName?: number; // Dialogs without accessible name
+  hasSkipLink?: boolean; // Whether page has skip to main content link
+  smallTouchTargets?: number; // Touch targets smaller than 48x48px
+  videosWithCaptions?: number; // Videos with captions/subtitles
+  videosWithoutCaptions?: number; // Videos missing captions
+  invalidListStructure?: number; // Lists with invalid structure
+  inputsPreventingPaste?: number; // Count of inputs that prevent paste
+  emptyHeadings?: number; // Headings with no text content
+  imagesWithRedundantAlt?: number; // Images with alt same as nearby text
+  imagesWithIncorrectAspectRatio?: number; // Images with distorted aspect ratio
 
   // Links
   allLinks?: ExtractedLink[];
@@ -327,6 +349,32 @@ export interface RuleContext {
   isPaginatedPage?: boolean;
   hasRelPrev?: boolean;
   hasRelNext?: boolean;
+
+  // ==========================================================================
+  // Best Practices Context (Lighthouse)
+  // ==========================================================================
+  deprecatedApisCount?: number; // Count of deprecated APIs used
+  thirdPartyCookiesCount?: number; // Third-party cookies detected
+  consoleErrorsCount?: number; // Console errors logged
+  hasSourceMaps?: boolean; // Whether source maps are available
+  invalidSourceMaps?: number; // Count of invalid source maps
+  detectedJsLibraries?: string[]; // Detected JS libraries
+  vulnerableLibrariesCount?: number; // Libraries with known vulnerabilities
+  hasDoctype?: boolean; // Whether page has DOCTYPE
+  requestsGeolocationOnLoad?: boolean; // Requests geolocation without user gesture
+  requestsNotificationOnLoad?: boolean; // Requests notification without user gesture
+  imagesWithLowResolution?: number; // Images with resolution lower than display
+  httpStatusCode?: number; // HTTP response status code
+  uncrawlableLinksCount?: number; // Links not crawlable by search engines
+  robotsTxtValid?: boolean; // Whether robots.txt is valid
+  robotsTxtError?: string; // robots.txt validation error
+  structuredDataErrors?: number; // Structured data validation errors
+  isIndexable?: boolean; // Whether page is indexable
+
+  // ==========================================================================
+  // Security Context (Lighthouse Trust & Safety)
+  // ==========================================================================
+  httpRedirectsToHttps?: boolean; // HTTP redirects to HTTPS
 
   // ==========================================================================
   // Readability Context
