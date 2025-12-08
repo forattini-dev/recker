@@ -149,10 +149,10 @@ export class SeoAnalyzer {
     twitter: ReturnType<typeof extractTwitterCard>;
     jsonLd: ReturnType<typeof extractJsonLd>;
     headings: HeadingAnalysis & { sectionWordCounts: number[] };
-    content: ContentMetrics & { 
-      paragraphWordCounts: number[]; 
-      avgSentenceLength: number; 
-      faqCount: number; 
+    content: ContentMetrics & {
+      paragraphWordCounts: number[];
+      avgSentenceLength: number;
+      faqCount: number;
       imagePerWordRatio: number;
       keywordDensity?: number;
     };
@@ -162,6 +162,20 @@ export class SeoAnalyzer {
   }): RuleContext {
     const { meta, og, twitter, jsonLd, headings, content, linkAnalysis, imageAnalysis, links } = data;
     const htmlLang = this.$('html').attr('lang');
+
+    // Extract hreflang tags for i18n
+    const hreflangTags: Array<{ lang: string; href: string }> = [];
+    this.$('link[rel="alternate"][hreflang]').each((_, el) => {
+      const $el = this.$(el);
+      const lang = $el.attr('hreflang');
+      const href = $el.attr('href');
+      if (lang && href) {
+        hreflangTags.push({ lang, href });
+      }
+    });
+
+    // Extract og:locale for i18n consistency check
+    const ogLocale = this.$('meta[property="og:locale"]').attr('content');
 
     // Find problematic links (store actual links, not just counts)
     const genericTexts = SEO_THRESHOLDS.links.genericTexts;
@@ -368,6 +382,10 @@ export class SeoAnalyzer {
     
           // JS Rendering hints
           ...this.analyzeJsRendering(content),
+
+          // Internationalization (i18n)
+          hreflangTags: hreflangTags.length > 0 ? hreflangTags : undefined,
+          ogLocale,
         };
       }
   /**
