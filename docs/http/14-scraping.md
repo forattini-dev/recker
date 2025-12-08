@@ -603,6 +603,7 @@ import type {
 
 ## Next Steps
 
+- **[SEO Analysis](19-seo.md)** - Analyze pages for 70+ SEO issues
 - **[GraphQL](13-graphql.md)** - GraphQL queries and mutations
 - **[Concurrency](08-concurrency.md)** - Batch requests and rate limiting
 - **[Caching](09-cache.md)** - Cache scraped responses
