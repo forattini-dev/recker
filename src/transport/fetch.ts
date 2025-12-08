@@ -1,24 +1,57 @@
 import { ReckerRequest, ReckerResponse, Transport, Timings, ProgressEvent } from '../types/index.js';
 
+export interface FetchTransportOptions {
+  /** Default credentials mode for all requests */
+  credentials?: RequestCredentials;
+  /** Default cache mode for all requests */
+  cache?: RequestCache;
+  /** Keep connections alive for reuse */
+  keepalive?: boolean;
+}
+
 export class FetchTransport implements Transport {
-  constructor() {}
+  private options: FetchTransportOptions;
+
+  constructor(options: FetchTransportOptions = {}) {
+    this.options = options;
+  }
 
   async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
     const start = performance.now();
-    
+
+    // Create AbortController for timeout if needed
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let abortController: AbortController | undefined;
+
+    // Extract timeout value (handle both number and TimeoutOptions)
+    const timeoutMs = typeof req.timeout === 'number'
+      ? req.timeout
+      : req.timeout?.request;
+
+    // Use provided signal or create one for timeout
+    let signal = req.signal;
+    if (timeoutMs && !signal) {
+      abortController = new AbortController();
+      signal = abortController.signal;
+      timeoutId = setTimeout(() => abortController!.abort(), timeoutMs);
+    }
+
     const requestInit: RequestInit = {
       method: req.method,
       headers: req.headers,
       body: req.body,
-      signal: req.signal,
+      signal,
+      credentials: this.options.credentials,
+      cache: this.options.cache,
+      keepalive: this.options.keepalive ?? true,
       // duplex: 'half' is required for streaming bodies in some fetch implementations (like Node/Chrome)
       // @ts-ignore - Types might not be up to date for 'duplex'
-      duplex: req.body ? 'half' : undefined 
+      duplex: req.body ? 'half' : undefined
     };
 
     try {
       const response = await globalThis.fetch(req.url, requestInit);
-      
+
       // Approximate timings since Fetch API doesn't give low-level timings
       const totalTime = performance.now() - start;
       const timings: Timings = {
@@ -26,105 +59,22 @@ export class FetchTransport implements Transport {
         firstByte: totalTime, // Rough approximation
       };
 
-      // Wrap native Response
-      // We need to implement ReckerResponse interface
-      
-      const reckerResponse: ReckerResponse = {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-        ok: response.ok,
-        url: response.url,
-        timings,
-        raw: response,
-        
-        json: () => response.json(),
-        text: () => response.text(),
-        blob: () => response.blob(),
-        cleanText: async () => {
-            const text = await response.text();
-            return text.replace(/<[^>]*>?/gm, ''); // Basic cleaner
-        },
-        
-        read: () => response.body, // Returns ReadableStream<Uint8Array>
-        
-        clone: () => {
-           // Native clone
-           const cloned = response.clone();
-           // We need to re-wrap it, which is tricky without recursive logic or a helper class.
-           // For now, we might fail to fully clone the *ReckerResponse* wrapper methods easily 
-           // without a dedicated class.
-           // But ReckerResponse is an interface. Let's return a new object.
-           return createReckerResponseWrapper(cloned, timings);
-        },
-
-        async *sse() {
-           if (!response.body) return;
-           const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-           while (true) {
-               const { done, value } = await reader.read();
-               if (done) break;
-               // Basic SSE parsing (naive)
-               const lines = value.split('\n');
-               for (const line of lines) {
-                   if (line.startsWith('data: ')) {
-                       yield { data: line.slice(6) };
-                   }
-               }
-           }
-        },
-
-        async *download(): AsyncGenerator<ProgressEvent> {
-            // Not fully implemented in fetch without Content-Length knowledge upfront and manual stream reading
-            if (!response.body) return;
-            const reader = response.body.getReader();
-            let loaded = 0;
-            const total = Number(response.headers.get('content-length')) || undefined;
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                loaded += value.length;
-                yield {
-                    loaded,
-                    transferred: loaded,
-                    total,
-                    percent: total ? (loaded / total) * 100 : undefined,
-                    direction: 'download'
-                };
-            }
-        },
-
-        async *[Symbol.asyncIterator]() {
-             if (!response.body) return;
-             // ReadableStream iterator support is recent, so we use getReader
-             const reader = response.body.getReader();
-             while (true) {
-                 const { done, value } = await reader.read();
-                 if (done) break;
-                 yield value;
-             }
-        }
-      };
-
-      return reckerResponse;
+      return new FetchResponseWrapper(response, timings);
 
     } catch (error: any) {
-        // Map common fetch errors if needed
-        throw error;
+      // Handle timeout abort
+      if (error.name === 'AbortError' && abortController) {
+        const timeoutError = new Error(`Request timeout after ${timeoutMs}ms`);
+        timeoutError.name = 'TimeoutError';
+        throw timeoutError;
+      }
+      throw error;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 }
 
-// Helper to create the wrapper (avoid code duplication in clone)
-function createReckerResponseWrapper(response: Response, timings: Timings): ReckerResponse {
-    // This effectively replicates the object literal above. 
-    // In a real refactor, we should probably have a class `FetchResponse implements ReckerResponse`.
-    // For brevity, I'm duplicating the logic structure slightly or I'd copy-paste the above.
-    // Let's keep it inline for now or move to a class if it gets complex.
-    // Actually, using a class is cleaner.
-    return new FetchResponseWrapper(response, timings);
-}
 
 class FetchResponseWrapper implements ReckerResponse {
     constructor(public raw: Response, public timings: Timings) {}
@@ -150,11 +100,41 @@ class FetchResponseWrapper implements ReckerResponse {
         // @ts-ignore - TextDecoderStream is standard in modern environments
         const stream = this.raw.body.pipeThrough(new TextDecoderStream());
         const reader = stream.getReader();
+        let buffer = '';
+
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            if (value.startsWith('data: ')) {
-                yield { data: value.slice(6) };
+
+            buffer += value;
+            const events = buffer.split('\n\n');
+            buffer = events.pop() || ''; // Keep incomplete event in buffer
+
+            for (const event of events) {
+                if (!event.trim()) continue;
+
+                let data = '';
+                let eventType: string | undefined;
+                let id: string | undefined;
+                let retry: number | undefined;
+                const lines = event.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        data = data ? data + '\n' + line.slice(6) : line.slice(6);
+                    } else if (line.startsWith('event: ')) {
+                        eventType = line.slice(7);
+                    } else if (line.startsWith('id: ')) {
+                        id = line.slice(4);
+                    } else if (line.startsWith('retry: ')) {
+                        retry = parseInt(line.slice(7), 10);
+                    }
+                }
+
+                // Only yield if we have data (required by SSEEvent)
+                if (data) {
+                    yield { data, event: eventType, id, retry };
+                }
             }
         }
     }

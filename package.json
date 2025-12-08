@@ -59,6 +59,24 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "node": {
+        "import": "./dist/index.js",
+        "require": "./dist/index.cjs"
+      },
+      "browser": {
+        "import": "./dist/browser/browser/index.js",
+        "default": "./dist/browser/browser/index.js"
+      },
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser/browser/index.d.ts",
+      "import": "./dist/browser/browser/index.js",
+      "default": "./dist/browser/browser/index.js"
+    },
+    "./node": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
@@ -114,20 +132,32 @@
       "types": "./dist/mini.d.ts",
       "import": "./dist/mini.js"
     },
+    "./presets/*": {
+      "types": "./dist/presets/*.d.ts",
+      "import": "./dist/presets/*.js"
+    },
     "./package.json": "./package.json"
   },
+  "browser": "./dist/browser/browser/index.js",
+  "unpkg": "./dist/browser/index.umd.min.js",
+  "jsdelivr": "./dist/browser/index.umd.min.js",
   "bin": {
     "rek": "./dist/cli/index.js",
     "recker": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "pnpm build:node && pnpm build:browser",
+    "build:node": "tsc",
+    "build:browser": "tsc -p tsconfig.browser.json",
+    "build:browser:bundle": "pnpm build:browser && node scripts/bundle-browser.js",
     "build:embeddings": "tsx scripts/build-embeddings.ts",
     "prepare": "husky",
     "prepublishOnly": "pnpm build",
     "test": "NODE_OPTIONS='--max-old-space-size=512' vitest run",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=512' vitest run --coverage",
     "test:light": "NODE_OPTIONS='--max-old-space-size=256' vitest run --poolOptions.forks.maxForks=1",
+    "test:browser": "vitest run --config vitest.config.browser.ts",
+    "test:browser:coverage": "vitest run --config vitest.config.browser.ts --coverage",
     "bench": "tsx benchmark/index.ts",
     "bench:compare": "tsx benchmark/http-clients-comparison.ts",
     "bench:all": "tsx benchmark/run-all.ts",
@@ -188,8 +218,10 @@
     "commander": "^14.0.0",
     "cross-fetch": "^4.1.0",
     "domhandler": "^5.0.3",
+    "esbuild": "^0.24.2",
     "fastembed": "^2.0.0",
     "got": "^14.6.5",
+    "happy-dom": "^20.0.11",
     "husky": "^9.1.7",
     "ky": "^1.14.0",
     "make-fetch-happen": "^15.0.3",

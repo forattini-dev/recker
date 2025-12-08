@@ -54,6 +54,10 @@
   - [Presets](/cli/07-presets.md)
   - [Mock Servers](/cli/08-mock-servers.md)
 
+- **Browser**
+  - [Quickstart](/browser/01-quickstart.md)
+  - [Node vs Browser](/browser/02-differences.md)
+
 - **Protocols**
   - [WebSocket](/protocols/01-websocket.md)
   - [FTP & SFTP](/protocols/02-ftp-sftp.md)

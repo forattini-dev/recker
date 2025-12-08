@@ -60,6 +60,51 @@ const client = createClient();
 console.log('Recker installed successfully!');
 ```
 
+## Browser Usage
+
+Recker also works in the browser with ~70% of features. See [Browser Guide](/browser/01-quickstart.md) for details.
+
+### With Bundlers (Vite, Webpack, etc.)
+
+```typescript
+import { recker } from 'recker/browser';
+
+const data = await recker.get('https://api.example.com/users').json();
+```
+
+### Via CDN
+
+```html
+<!-- UMD (recommended) -->
+<script src="https://unpkg.com/recker/dist/browser/index.umd.min.js"></script>
+<script>
+  const { recker } = Recker;
+  recker.get('https://api.example.com/users').json().then(console.log);
+</script>
+
+<!-- ESM -->
+<script type="module">
+  import { recker } from 'https://esm.sh/recker';
+  const data = await recker.get('https://api.example.com/users').json();
+</script>
+```
+
+### Browser Limitations
+
+Some features are **not available** in browser environments:
+
+| Feature | Reason |
+|---------|--------|
+| DNS/WHOIS | Requires raw socket access |
+| FTP/SFTP/Telnet | Requires raw socket access |
+| AI Layer | Node.js dependencies |
+| HAR Recording | File system access |
+| mTLS Auth | Client certificates |
+| Redis Cache | Server-side only |
+| CLI | Terminal access |
+
+See [Node vs Browser Differences](/browser/02-differences.md) for the complete comparison.
+
 ## What's Included
 
 When you install Recker, you get:
@@ -68,6 +113,7 @@ When you install Recker, you get:
 - ✅ **Built-in Plugins** - Retry, cache, dedup, compression
 - ✅ **TypeScript Types** - Full type definitions
 - ✅ **Lightweight** - Minimal dependencies
+- ✅ **Browser Build** - Works in modern browsers
 
 ## TypeScript Support
 
