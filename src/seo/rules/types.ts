@@ -197,6 +197,11 @@ export interface RuleContext {
   url?: string;
   urlLength?: number;
 
+  // Internationalization (i18n)
+  hreflangTags?: Array<{ lang: string; href: string }>;
+  ogLocale?: string;
+  alternateLanguages?: string[]; // Languages available on the site
+
   // SEO Quality Checks
   titleMatchesH1?: boolean;
   urlHasUppercase?: boolean;
