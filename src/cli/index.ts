@@ -3,6 +3,7 @@ import { program } from 'commander';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import colors from '../utils/colors.js';
+import { formatColumns } from '../utils/columns.js';
 
 /**
  * Read data from stdin if piped
@@ -169,8 +170,14 @@ async function main() {
     return { method, url, headers, data };
   }
 
-  // Filter out internal exports and 'registry'
-  const PRESET_NAMES = Object.keys(presets).filter(k => k !== 'registry' && !k.startsWith('_'));
+  // Filter to only actual preset factories (exclude utility functions and internal exports)
+  const utilityFunctions = [
+    'registry', 'presetRegistry', 'detectPreset', 'getPreset',
+    'listPresets', 'listAIPresets', 'listCloudPresets', 'listSaaSPresets', 'listDevToolsPresets'
+  ];
+  const PRESET_NAMES = Object.keys(presets)
+    .filter(k => !utilityFunctions.includes(k) && !k.startsWith('_') && typeof (presets as any)[k] === 'function')
+    .sort();
 
   program
     .name('rek')
@@ -182,7 +189,7 @@ async function main() {
     .option('-o, --output <file>', 'Write response body to file')
     .option('-j, --json', 'Force JSON content-type')
     .option('-e, --env [path]', 'Load .env file from current directory or specified path')
-    .addHelpText('after', `
+    .addHelpText('after', () => `
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek httpbin.org/json')}
   ${colors.green('$ rek post api.com/users name="Cyber" role="Admin"')}
@@ -190,7 +197,7 @@ ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek @openai/v1/chat/completions model="gpt-5.1"')}
 
 ${colors.bold(colors.yellow('Available Presets:'))}
-  ${colors.cyan(PRESET_NAMES.map(p => '@' + p).join(', '))}
+${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform: colors.cyan })}
 `)
     .action(async (args: string[], options: { verbose?: boolean; quiet?: boolean; output?: string; json?: boolean; env?: string | boolean }) => {
       if (args.length === 0) {
@@ -481,6 +488,107 @@ ${colors.bold('Details:')}`);
 
       } catch (error: any) {
         console.error(colors.red(`Analysis failed: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // SEO Analyzer
+  program
+    .command('seo')
+    .description('Analyze page SEO (title, meta, headings, links, images, structured data)')
+    .argument('<url>', 'URL to analyze')
+    .option('-a, --all', 'Show all checks including passed ones')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek seo example.com')}              ${colors.gray('Basic SEO analysis')}
+  ${colors.green('$ rek seo example.com -a')}           ${colors.gray('Show all checks')}
+
+${colors.bold(colors.yellow('Checks:'))}
+  ${colors.cyan('Title Tag')}          Length and presence
+  ${colors.cyan('Meta Description')}   Length and presence
+  ${colors.cyan('Headings')}           H1 presence and hierarchy
+  ${colors.cyan('Images')}             Alt text coverage
+  ${colors.cyan('Links')}              Internal/external distribution
+  ${colors.cyan('OpenGraph')}          Social sharing meta tags
+  ${colors.cyan('Twitter Card')}       Twitter sharing meta tags
+  ${colors.cyan('Structured Data')}    JSON-LD presence
+  ${colors.cyan('Technical')}          Canonical, viewport, lang
+`)
+    .action(async (url, options: { all?: boolean }) => {
+      if (!url.startsWith('http')) url = `https://${url}`;
+
+      const { createClient } = await import('../core/client.js');
+      const { analyzeSeo } = await import('../seo/analyzer.js');
+
+      console.log(colors.gray(`Analyzing SEO for ${url}...`));
+
+      try {
+        const client = createClient({ timeout: 30000 });
+        const res = await client.get(url);
+        const html = await res.text();
+
+        const report = await analyzeSeo(html, { baseUrl: url });
+
+        // Color grade
+        let gradeColor = colors.red;
+        if (report.grade === 'A') gradeColor = colors.green;
+        else if (report.grade === 'B') gradeColor = colors.blue;
+        else if (report.grade === 'C') gradeColor = colors.yellow;
+
+        console.log(`
+${colors.bold(colors.cyan('🔍 SEO Analysis Report'))}
+${colors.gray('URL:')} ${url}
+${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray('Score:')} ${report.score}/100
+`);
+
+        // Title & Description
+        if (report.title) {
+          console.log(`${colors.bold('Title:')} ${colors.gray(report.title.text.slice(0, 60))}${report.title.text.length > 60 ? '...' : ''} ${colors.gray(`(${report.title.length} chars)`)}`);
+        }
+        if (report.metaDescription) {
+          console.log(`${colors.bold('Description:')} ${colors.gray(report.metaDescription.text.slice(0, 80))}${report.metaDescription.text.length > 80 ? '...' : ''}`);
+        }
+        console.log('');
+
+        // Content metrics
+        console.log(`${colors.bold('Content Metrics:')}`);
+        console.log(`  ${colors.gray('Words:')} ${report.content.wordCount}  ${colors.gray('Reading time:')} ~${report.content.readingTimeMinutes} min`);
+        console.log(`  ${colors.gray('Headings:')} H1×${report.headings.h1Count}, total ${report.headings.structure.length}`);
+        console.log(`  ${colors.gray('Links:')} ${report.links.total} (${report.links.internal} internal, ${report.links.external} external)`);
+        console.log(`  ${colors.gray('Images:')} ${report.images.total} (${report.images.withAlt} with alt, ${report.images.withoutAlt} without)`);
+        console.log('');
+
+        // Checks
+        console.log(`${colors.bold('Checks:')}`);
+        const checksToShow = options.all
+          ? report.checks
+          : report.checks.filter(c => c.status !== 'pass' && c.status !== 'info');
+
+        if (checksToShow.length === 0 && !options.all) {
+          console.log(colors.green('  All checks passed! Use -a to see details.'));
+        } else {
+          for (const check of checksToShow) {
+            const icon = check.status === 'pass' ? colors.green('✔')
+              : check.status === 'warn' ? colors.yellow('⚠')
+              : check.status === 'fail' ? colors.red('✖')
+              : colors.gray('ℹ');
+            const name = colors.bold(check.name.padEnd(18));
+            console.log(`  ${icon} ${name} ${check.message}`);
+            if (check.recommendation && check.status !== 'pass') {
+              console.log(`      ${colors.gray('→')} ${colors.gray(check.recommendation)}`);
+            }
+          }
+        }
+        console.log('');
+
+        // Structured Data
+        if (report.jsonLd.count > 0) {
+          console.log(`${colors.bold('Structured Data:')} ${report.jsonLd.types.join(', ') || 'Present'}`);
+          console.log('');
+        }
+
+      } catch (error: any) {
+        console.error(colors.red(`SEO analysis failed: ${error.message}`));
         process.exit(1);
       }
     });

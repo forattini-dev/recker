@@ -42,6 +42,7 @@ export * from './plugins/graphql.js';
 export * from './plugins/xml.js';
 export * from './plugins/scrape.js';
 export * from './scrape/index.js';
+export * from './seo/index.js';
 export * from './plugins/server-timing.js';
 export * from './plugins/auth.js';
 export * from './plugins/proxy-rotator.js';
