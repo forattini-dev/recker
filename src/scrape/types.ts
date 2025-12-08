@@ -36,6 +36,8 @@ export interface ExtractedImage {
   srcset?: string;
   /** Loading strategy */
   loading?: 'lazy' | 'eager';
+  /** Decoding hint */
+  decoding?: 'async' | 'auto' | 'sync';
 }
 
 // === Meta Tags ===
@@ -49,7 +51,7 @@ export interface ExtractedMeta {
   /** Author meta tag */
   author?: string;
   /** Robots meta tag */
-  robots?: string;
+  robots?: string[]; // Changed to string[]
   /** Canonical URL */
   canonical?: string;
   /** Viewport meta tag */

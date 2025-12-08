@@ -17,6 +17,7 @@ import { ScrollBuffer, parseScrollKey, parseMouseScroll, enableMouseReporting, d
 import { analyzeSecurityHeaders, SecurityReport } from '../../utils/security-grader.js'; // Import security grader
 import { getIpInfo, IpInfo } from '../../mcp/ip-intel.js'; // Import IP Intel (MaxMind)
 import { checkPropagation, formatPropagationReport, PropagationResult } from '../../dns/propagation.js'; // Import DNS Propagation
+import { analyzeSeo, type SeoReport } from '../../seo/index.js'; // Import SEO Analyzer
 
 // Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
@@ -492,6 +493,13 @@ export class RekShell {
         return;
       case 'security':
         await this.runSecurityGrader(parts[1]);
+        return;
+      case 'seo':
+        await this.runSeo(
+          parts[1],
+          parts.includes('-a') || parts.includes('--all'),
+          parts.includes('--format') && parts[parts.indexOf('--format') + 1] === 'json'
+        );
         return;
       case 'ip':
         await this.runIpIntelligence(parts[1]);
@@ -1194,6 +1202,181 @@ ${colors.bold('Details:')}`);
 
     } catch (error: any) {
       console.error(colors.red(`Analysis failed: ${error.message}`));
+    }
+    console.log(''); // Spacer
+  }
+
+  private async runSeo(url?: string, showAll: boolean = false, jsonOutput: boolean = false) {
+    if (!url) {
+      // Try to use current document or base URL
+      url = this.currentDocUrl || this.baseUrl || '';
+      if (!url) {
+        console.log(colors.yellow('Usage: seo <url> [-a] [--format json]'));
+        console.log(colors.gray('  Examples: seo google.com | seo https://example.com -a'));
+        console.log(colors.gray('  -a, --all      Show all checks (including passed)'));
+        console.log(colors.gray('  --format json  Output raw JSON for programmatic use'));
+        console.log(colors.gray('  Or set a base URL first: url https://example.com'));
+        return;
+      }
+    } else if (!url.startsWith('http') && !url.startsWith('-')) {
+      url = `https://${url}`;
+    }
+
+    if (!jsonOutput) {
+      console.log(colors.gray(`Analyzing SEO for ${url}...`));
+    }
+    const startTime = performance.now();
+
+    try {
+      // Fetch the page
+      const res = await this.client.get(url);
+      const html = await res.text();
+      const duration = Math.round(performance.now() - startTime);
+
+      // Run SEO analysis
+      const report = await analyzeSeo(html, { baseUrl: url });
+
+      // JSON output mode for programmatic use
+      if (jsonOutput) {
+        const jsonResult = {
+          url,
+          analyzedAt: new Date().toISOString(),
+          durationMs: duration,
+          score: report.score,
+          grade: report.grade,
+          title: report.title,
+          metaDescription: report.metaDescription,
+          content: report.content,
+          headings: report.headings,
+          links: report.links,
+          images: report.images,
+          openGraph: report.social.openGraph,
+          twitterCard: report.social.twitterCard,
+          jsonLd: report.jsonLd,
+          technical: report.technical,
+          checks: report.checks,
+          summary: {
+            total: report.checks.length,
+            passed: report.checks.filter(c => c.status === 'pass').length,
+            warnings: report.checks.filter(c => c.status === 'warn').length,
+            errors: report.checks.filter(c => c.status === 'fail').length,
+            info: report.checks.filter(c => c.status === 'info').length,
+          },
+        };
+        console.log(JSON.stringify(jsonResult, null, 2));
+        this.lastResponse = jsonResult;
+        return;
+      }
+
+      // Color grade
+      let gradeColor = colors.red;
+      if (report.grade === 'A') gradeColor = colors.green;
+      else if (report.grade === 'B') gradeColor = colors.blue;
+      else if (report.grade === 'C') gradeColor = colors.yellow;
+      else if (report.grade === 'D') gradeColor = colors.magenta;
+
+      console.log(`
+${colors.bold(colors.cyan('🔍 SEO Analysis Report'))} ${colors.gray(`(${duration}ms)`)}
+Grade: ${gradeColor(colors.bold(report.grade))}  (${report.score}/100)
+`);
+
+      // Show title and description
+      if (report.title) {
+        console.log(colors.bold('Title:') + ` ${report.title.text} ` + colors.gray(`(${report.title.length} chars)`));
+      }
+      if (report.metaDescription) {
+        const desc = report.metaDescription.text.length > 80
+          ? report.metaDescription.text.slice(0, 77) + '...'
+          : report.metaDescription.text;
+        console.log(colors.bold('Description:') + ` ${desc} ` + colors.gray(`(${report.metaDescription.length} chars)`));
+      }
+
+      // Show content stats
+      if (report.content) {
+        console.log(colors.bold('Content:') + ` ${report.content.wordCount} words, ${report.content.paragraphCount} paragraphs, ~${report.content.readingTimeMinutes} min read`);
+      }
+
+      console.log('');
+      console.log(colors.bold('Checks:'));
+
+      // Filter checks based on showAll flag
+      const checksToShow = showAll
+        ? report.checks
+        : report.checks.filter(c => c.status !== 'pass');
+
+      // Group by status
+      const failed = checksToShow.filter(c => c.status === 'fail');
+      const warnings = checksToShow.filter(c => c.status === 'warn');
+      const info = checksToShow.filter(c => c.status === 'info');
+      const passed = showAll ? checksToShow.filter(c => c.status === 'pass') : [];
+
+      // Display checks
+      const displayCheck = (check: typeof report.checks[0]) => {
+        let icon: string;
+        let nameColor: (s: string) => string;
+        switch (check.status) {
+          case 'pass':
+            icon = colors.green('✔');
+            nameColor = colors.green;
+            break;
+          case 'warn':
+            icon = colors.yellow('⚠');
+            nameColor = colors.yellow;
+            break;
+          case 'fail':
+            icon = colors.red('✖');
+            nameColor = colors.red;
+            break;
+          default:
+            icon = colors.blue('ℹ');
+            nameColor = colors.blue;
+        }
+        console.log(`  ${icon} ${nameColor(check.name.padEnd(22))} ${check.message}`);
+        if (check.recommendation && check.status !== 'pass') {
+          console.log(`     ${colors.gray('→')} ${colors.gray(check.recommendation)}`);
+        }
+        // Show evidence details for errors/warnings (same as CLI)
+        const evidence = (check as any).evidence;
+        if (evidence && check.status !== 'pass') {
+          if (evidence.found && Array.isArray(evidence.found) && evidence.found.length > 0) {
+            const items = evidence.found.slice(0, 3);
+            console.log(`      ${colors.gray('Found:')} ${colors.red(items.join(', '))}${evidence.found.length > 3 ? ` (+${evidence.found.length - 3} more)` : ''}`);
+          }
+          if (evidence.example) {
+            console.log(`      ${colors.gray('Example:')} ${colors.cyan(evidence.example.split('\n')[0])}`);
+          }
+        }
+      };
+
+      if (failed.length > 0) {
+        console.log(colors.red(`\n  Errors (${failed.length}):`));
+        failed.forEach(displayCheck);
+      }
+
+      if (warnings.length > 0) {
+        console.log(colors.yellow(`\n  Warnings (${warnings.length}):`));
+        warnings.forEach(displayCheck);
+      }
+
+      if (info.length > 0) {
+        console.log(colors.blue(`\n  Info (${info.length}):`));
+        info.forEach(displayCheck);
+      }
+
+      if (passed.length > 0) {
+        console.log(colors.green(`\n  Passed (${passed.length}):`));
+        passed.forEach(displayCheck);
+      }
+
+      if (!showAll && report.checks.filter(c => c.status === 'pass').length > 0) {
+        console.log(colors.gray(`\n  ${report.checks.filter(c => c.status === 'pass').length} checks passed. Use -a to show all.`));
+      }
+
+      console.log('');
+      this.lastResponse = report;
+
+    } catch (error: any) {
+      console.error(colors.red(`SEO analysis failed: ${error.message}`));
     }
     console.log(''); // Spacer
   }
@@ -2663,6 +2846,9 @@ ${colors.bold('Network:')}
     ${colors.green('dns <domain>')}        Full DNS lookup (A, AAAA, MX, NS, SPF, DMARC).
     ${colors.green('rdap <domain>')}       RDAP lookup (modern WHOIS).
     ${colors.green('ping <host>')}         Quick TCP connectivity check.
+    ${colors.green('seo <url> [-a] [--format json]')} SEO analysis (70+ rules).
+                             ${colors.gray('-a, --all      Show all checks including passed')}
+                             ${colors.gray('--format json  Output raw JSON for programmatic use')}
 
   ${colors.bold('Web Scraping:')}
     ${colors.green('scrap <url>')}         Fetch and parse HTML document.

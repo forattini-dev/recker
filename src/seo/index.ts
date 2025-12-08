@@ -1,29 +1,45 @@
 /**
- * SEO Analysis Module
+ * SEO Module
  *
- * Comprehensive SEO analysis for web pages.
+ * Comprehensive SEO analysis with 40+ rules across 13 categories.
  *
  * @example
  * ```typescript
- * import { analyzeSeo, SeoAnalyzer } from 'recker/seo';
+ * import { analyzeSeo, SEO_THRESHOLDS, createRulesEngine } from 'recker/seo';
  *
- * // Quick analysis
+ * // Basic analysis
  * const report = await analyzeSeo(html, { baseUrl: 'https://example.com' });
  * console.log(`Score: ${report.score}/100 (${report.grade})`);
  *
- * // With more control
- * const analyzer = await SeoAnalyzer.fromHtml(html, { baseUrl: 'https://example.com' });
- * const fullReport = analyzer.analyze();
+ * // Filter by categories
+ * const report = await analyzeSeo(html, {
+ *   rules: { categories: ['og', 'twitter'] }
+ * });
+ *
+ * // Custom rules engine
+ * const engine = createRulesEngine({ minSeverity: 'error' });
+ * const results = engine.evaluate(context);
  * ```
  */
 
+// Main analyzer
 export { SeoAnalyzer, analyzeSeo } from './analyzer.js';
+
+// Rules engine
+export {
+  SeoRulesEngine,
+  createRulesEngine,
+  SEO_THRESHOLDS,
+  ALL_SEO_RULES,
+} from './rules/index.js';
+
+// Types
 export type {
   SeoReport,
   SeoCheckResult,
   SeoStatus,
-  HeadingInfo,
   HeadingAnalysis,
+  HeadingInfo,
   ContentMetrics,
   LinkAnalysis,
   ImageAnalysis,
@@ -31,3 +47,15 @@ export type {
   TechnicalSeo,
   SeoAnalyzerOptions,
 } from './types.js';
+
+export type {
+  SeoRule,
+  RuleContext,
+  RuleResult,
+  RuleEvidence,
+  RuleCategory,
+  RuleSeverity,
+  RulesEngineOptions,
+} from './rules/index.js';
+
+export type { SeoAnalyzerFullOptions } from './analyzer.js';
