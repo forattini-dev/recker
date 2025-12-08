@@ -16,6 +16,11 @@ import { schemaRules } from './schema.js';
 import { accessibilityRules } from './accessibility.js';
 import { mobileRules } from './mobile.js';
 import { i18nRules } from './i18n.js';
+import { ecommerceRules } from './ecommerce.js';
+import { localRules } from './local.js';
+import { cwvRules } from './cwv.js';
+import { crawlRules } from './crawl.js';
+import { readabilityRules } from './readability.js';
 
 // Re-export types and thresholds
 export * from './types.js';
@@ -35,6 +40,11 @@ export const ALL_SEO_RULES: SeoRule[] = [
   ...accessibilityRules,
   ...mobileRules,
   ...i18nRules,
+  ...ecommerceRules,
+  ...localRules,
+  ...cwvRules,
+  ...crawlRules,
+  ...readabilityRules,
 ];
 
 // =============================================================================
