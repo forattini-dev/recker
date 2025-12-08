@@ -39,6 +39,12 @@ export default defineConfig({
         'src/transport/undici.ts', // Requires undici diagnostics runtime
       ],
       all: true,
+      thresholds: {
+        lines: 88,
+        functions: 90,
+        branches: 86,
+        statements: 88,
+      },
     },
   },
 });

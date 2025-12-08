@@ -1,0 +1,108 @@
+/**
+ * Recker Browser Build
+ *
+ * This is the browser-compatible entry point for Recker.
+ * It exports only the features that work in browser environments.
+ *
+ * Features included:
+ * - HTTP client with FetchTransport
+ * - 18 portable plugins (retry, rate-limit, auth, graphql, etc.)
+ * - 15 auth methods (all except mTLS)
+ * - WebSocket (native browser)
+ * - All 38 API presets
+ * - AI layer
+ *
+ * Features excluded (Node.js only):
+ * - UndiciTransport
+ * - FTP/SFTP/Telnet protocols
+ * - DNS/WHOIS utilities
+ * - File-based cache
+ * - HAR recording/playback
+ * - mTLS authentication
+ * - CLI
+ */
+
+// ============================================================================
+// Core
+// ============================================================================
+export * from '../core/request-promise.js';
+export * from '../core/errors.js';
+export * from '../core/client.js';
+export * from '../core/request.js';
+export * from '../core/response.js';
+
+// ============================================================================
+// Transport (Fetch only for browser)
+// ============================================================================
+export * from '../transport/fetch.js';
+
+// ============================================================================
+// Portable Plugins
+// ============================================================================
+export * from '../plugins/retry.js';
+export * from '../plugins/rate-limit.js';
+export * from '../plugins/dedup.js';
+export * from '../plugins/logger.js';
+export * from '../plugins/circuit-breaker.js';
+export * from '../plugins/cookie-jar.js';
+export * from '../plugins/xsrf.js';
+export * from '../plugins/graphql.js';
+export * from '../plugins/xml.js';
+export * from '../plugins/server-timing.js';
+export * from '../plugins/jsonrpc.js';
+export * from '../plugins/grpc-web.js';
+export * from '../plugins/soap.js';
+export * from '../plugins/odata.js';
+
+// ============================================================================
+// Authentication (15/16 methods - all except mTLS)
+// ============================================================================
+export * from '../plugins/auth.js';
+
+// ============================================================================
+// Cache (Memory only for browser)
+// ============================================================================
+export * from '../cache/memory-storage.js';
+// NOTE: memory-limits.js uses Node.js APIs - excluded from browser
+
+// ============================================================================
+// Utilities (Browser-safe only)
+// ============================================================================
+export * from '../utils/body.js';
+export * from '../utils/header-parser.js';
+export * from '../utils/link-header.js';
+// NOTE: user-agent.js uses Node.js fs - excluded from browser
+export * from '../utils/charset.js';
+
+// ============================================================================
+// Constants
+// ============================================================================
+export * from '../constants/http-status.js';
+
+// NOTE: The following are excluded from browser build:
+// - websocket/client.js - uses Node.js EventEmitter and streams
+// - contract/index.js - uses Node.js streaming
+// - events/request-events.js - uses Node.js EventEmitter
+
+// ============================================================================
+// Presets (all 38 API clients)
+// NOTE: Presets may have dependencies on Node.js modules via AI layer
+// Users should import individual presets that don't depend on Node.js
+// ============================================================================
+// export * as presets from '../presets/index.js';
+
+// ============================================================================
+// Browser-specific utilities
+// ============================================================================
+export * from './crypto.js';
+export * from './cache.js';
+
+// ============================================================================
+// Unified API - Browser version
+// ============================================================================
+export * from './recker.js';
+
+// ============================================================================
+// Branded alias
+// ============================================================================
+export { Client as Recker } from '../core/client.js';
