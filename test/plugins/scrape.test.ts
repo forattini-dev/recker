@@ -530,7 +530,7 @@ describe('Extractors', () => {
       expect(meta.description).toBe('A sample page for testing');
       expect(meta.keywords).toEqual(['test', 'sample', 'html']);
       expect(meta.author).toBe('Test Author');
-      expect(meta.robots).toBe('index, follow');
+      expect(meta.robots).toEqual(['index', 'follow']);
       expect(meta.viewport).toBe('width=device-width, initial-scale=1.0');
       expect(meta.charset).toBe('UTF-8');
       expect(meta.canonical).toBe('https://example.com/page');

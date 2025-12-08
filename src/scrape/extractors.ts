@@ -130,6 +130,7 @@ export function extractImages(
       height: height ? parseInt(height, 10) : undefined,
       srcset: $el.attr('srcset'),
       loading: $el.attr('loading') as 'lazy' | 'eager' | undefined,
+      decoding: $el.attr('decoding') as 'async' | 'auto' | 'sync' | undefined,
     });
   });
 
@@ -185,7 +186,7 @@ export function extractMeta($: CheerioAPI): ExtractedMeta {
         meta.author = content;
         break;
       case 'robots':
-        meta.robots = content;
+        meta.robots = content.split(',').map((r) => r.trim().toLowerCase());
         break;
       case 'viewport':
         meta.viewport = content;

@@ -498,10 +498,13 @@ ${colors.bold('Details:')}`);
     .description('Analyze page SEO (title, meta, headings, links, images, structured data)')
     .argument('<url>', 'URL to analyze')
     .option('-a, --all', 'Show all checks including passed ones')
+    .option('--format <format>', 'Output format: text (default) or json', 'text')
     .addHelpText('after', `
 ${colors.bold(colors.yellow('Examples:'))}
-  ${colors.green('$ rek seo example.com')}              ${colors.gray('Basic SEO analysis')}
-  ${colors.green('$ rek seo example.com -a')}           ${colors.gray('Show all checks')}
+  ${colors.green('$ rek seo example.com')}                    ${colors.gray('Basic SEO analysis')}
+  ${colors.green('$ rek seo example.com -a')}                 ${colors.gray('Show all checks')}
+  ${colors.green('$ rek seo example.com --format json')}      ${colors.gray('Output as JSON')}
+  ${colors.green('$ rek seo example.com --format json | jq')} ${colors.gray('Pipe to jq for processing')}
 
 ${colors.bold(colors.yellow('Checks:'))}
   ${colors.cyan('Title Tag')}          Length and presence
@@ -514,13 +517,16 @@ ${colors.bold(colors.yellow('Checks:'))}
   ${colors.cyan('Structured Data')}    JSON-LD presence
   ${colors.cyan('Technical')}          Canonical, viewport, lang
 `)
-    .action(async (url, options: { all?: boolean }) => {
+    .action(async (url, options: { all?: boolean; format?: string }) => {
       if (!url.startsWith('http')) url = `https://${url}`;
+      const isJson = options.format === 'json';
 
       const { createClient } = await import('../core/client.js');
       const { analyzeSeo } = await import('../seo/analyzer.js');
 
-      console.log(colors.gray(`Analyzing SEO for ${url}...`));
+      if (!isJson) {
+        console.log(colors.gray(`Analyzing SEO for ${url}...`));
+      }
 
       try {
         const client = createClient({ timeout: 30000 });
@@ -528,6 +534,36 @@ ${colors.bold(colors.yellow('Checks:'))}
         const html = await res.text();
 
         const report = await analyzeSeo(html, { baseUrl: url });
+
+        // JSON output mode for programmatic use
+        if (isJson) {
+          const jsonOutput = {
+            url,
+            analyzedAt: new Date().toISOString(),
+            score: report.score,
+            grade: report.grade,
+            title: report.title,
+            metaDescription: report.metaDescription,
+            content: report.content,
+            headings: report.headings,
+            links: report.links,
+            images: report.images,
+            openGraph: report.social.openGraph,
+            twitterCard: report.social.twitterCard,
+            jsonLd: report.jsonLd,
+            technical: report.technical,
+            checks: report.checks,
+            summary: {
+              total: report.checks.length,
+              passed: report.checks.filter(c => c.status === 'pass').length,
+              warnings: report.checks.filter(c => c.status === 'warn').length,
+              errors: report.checks.filter(c => c.status === 'fail').length,
+              info: report.checks.filter(c => c.status === 'info').length,
+            },
+          };
+          console.log(JSON.stringify(jsonOutput, null, 2));
+          return;
+        }
 
         // Color grade
         let gradeColor = colors.red;
@@ -576,6 +612,17 @@ ${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray
             console.log(`  ${icon} ${name} ${check.message}`);
             if (check.recommendation && check.status !== 'pass') {
               console.log(`      ${colors.gray('→')} ${colors.gray(check.recommendation)}`);
+            }
+            // Show evidence details for errors/warnings
+            const evidence = (check as any).evidence;
+            if (evidence && check.status !== 'pass') {
+              if (evidence.found && Array.isArray(evidence.found) && evidence.found.length > 0) {
+                const items = evidence.found.slice(0, 3);
+                console.log(`      ${colors.gray('Found:')} ${colors.red(items.join(', '))}${evidence.found.length > 3 ? ` (+${evidence.found.length - 3} more)` : ''}`);
+              }
+              if (evidence.example) {
+                console.log(`      ${colors.gray('Example:')} ${colors.cyan(evidence.example.split('\n')[0])}`);
+              }
             }
           }
         }
