@@ -74,7 +74,7 @@ importers:
         version: 9.1.7
       ky:
         specifier: ^1.14.0
-        version: 1.14.0
+        version: 1.14.1
       make-fetch-happen:
         specifier: ^15.0.3
         version: 15.0.3
@@ -1391,8 +1391,8 @@ packages:
   keyv@5.5.4:
     resolution: {integrity: sha512-eohl3hKTiVyD1ilYdw9T0OiB4hnjef89e3dMYKz+mVKDzj+5IteTseASUsOB+EU9Tf6VNTCjDePcP6wkDGmLKQ==}
 
-  ky@1.14.0:
-    resolution: {integrity: sha512-Rczb6FMM6JT0lvrOlP5WUOCB7s9XKxzwgErzhKlKde1bEV90FXplV1o87fpt4PU/asJFiqjYJxAJyzJhcrxOsQ==}
+  ky@1.14.1:
+    resolution: {integrity: sha512-hYje4L9JCmpEQBtudo+v52X5X8tgWXUYyPcxKSuxQNboqufecl9VMWjGiucAFH060AwPXHZuH+WB2rrqfkmafw==}
     engines: {node: '>=18'}
 
   lodash.defaults@4.2.0:
@@ -3398,7 +3398,7 @@ snapshots:
     dependencies:
       '@keyv/serialize': 1.1.1
 
-  ky@1.14.0: {}
+  ky@1.14.1: {}
 
   lodash.defaults@4.2.0: {}
 
