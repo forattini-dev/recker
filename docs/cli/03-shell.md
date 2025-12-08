@@ -396,6 +396,51 @@ function initApp() {
 ✔ Saved to ./beautified.js
 ```
 
+### SEO Analysis
+
+Analyze web pages for SEO issues directly from the shell:
+
+```bash
+# Run SEO analysis on a URL
+› seo https://example.com
+
+╭──────────────────────────────────────────────────────────────╮
+│                      SEO Analysis                            │
+│  https://example.com                                         │
+├──────────────────────────────────────────────────────────────┤
+│  Score: 85/100  Grade: B                                     │
+│  Checks: 47 pass │ 8 warn │ 2 fail │ 5 info                 │
+├──────────────────────────────────────────────────────────────┤
+│  ✗ Title Tag                                                 │
+│    Missing title tag                                         │
+│    → Add a unique, descriptive title (50-60 chars)           │
+╰──────────────────────────────────────────────────────────────╯
+
+# JSON output (for scripting)
+› seo https://example.com --format json
+{
+  "url": "https://example.com",
+  "score": 85,
+  "grade": "B",
+  "checks": [...]
+}
+
+# Verbose mode (show all checks including passed)
+› seo https://example.com -v
+```
+
+The SEO analyzer checks 70+ rules across 13 categories:
+- **Meta**: Title, description, keywords
+- **OpenGraph**: og:title, og:image, og:description
+- **Twitter**: Card type, title, image
+- **Content**: H1, headings hierarchy, word count
+- **Links**: Anchor text, noopener/noreferrer
+- **Images**: Alt text, dimensions, lazy loading
+- **Technical**: Canonical, charset, viewport
+- **And more**: Security, Performance, Accessibility, Schema
+
+See **[SEO Analysis](/http/19-seo.md)** for full documentation.
+
 ## Request Syntax in Shell
 
 The shell uses the same syntax as the CLI:

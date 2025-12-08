@@ -382,6 +382,28 @@ bash install.sh  # then execute
 rek -q -o backup.json api.com/export
 ```
 
+## SEO Analysis
+
+Analyze web pages for SEO issues:
+
+```bash
+# Basic SEO analysis
+rek seo https://example.com
+
+# JSON output (for CI/CD)
+rek seo https://example.com --format json
+
+# Verbose (show all checks)
+rek seo https://example.com -v
+
+# Save report
+rek seo https://example.com --format json -o report.json
+```
+
+The SEO analyzer checks 70+ rules across 13 categories including meta tags, OpenGraph, headings, links, images, and more.
+
+See **[SEO Analysis](/http/19-seo.md)** for full documentation.
+
 ## Next Steps
 
 - **[Interactive Shell](03-shell.md)** - Session management and variables
