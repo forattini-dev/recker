@@ -24,6 +24,7 @@ import { readabilityRules } from './readability.js';
 import { pwaRules } from './pwa.js';
 import { socialRules } from './social.js';
 import { internalLinkingRules } from './internal-linking.js';
+import { bestPracticesRules } from './best-practices.js';
 
 // Re-export types and thresholds
 export * from './types.js';
@@ -51,6 +52,7 @@ export const ALL_SEO_RULES: SeoRule[] = [
   ...pwaRules,
   ...socialRules,
   ...internalLinkingRules,
+  ...bestPracticesRules,
 ];
 
 // =============================================================================
