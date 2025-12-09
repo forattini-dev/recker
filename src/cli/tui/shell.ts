@@ -257,25 +257,47 @@ export class RekShell {
           }
 
           // Check for scroll keys (Page Up/Down, Home/End, Q to quit)
-          const scrollKey = parseScrollKey(data);
-          if (scrollKey) {
-            // Handle quit: exit scroll mode if in it, otherwise pass through
-            if (scrollKey === 'quit') {
-              if (self.inScrollMode) {
+          // Wrapped in try-catch to prevent crashes from scroll handling errors
+          try {
+            const scrollKey = parseScrollKey(data);
+            if (scrollKey) {
+              // Handle quit: exit scroll mode if in it, otherwise pass through
+              if (scrollKey === 'quit') {
+                if (self.inScrollMode) {
+                  self.exitScrollMode();
+                  return true;
+                }
+                // Not in scroll mode - pass 'q' through to readline
+                return originalEmit(event, ...args);
+              }
+              // Handle other scroll keys (pageUp, pageDown, home, end, scrollUp, scrollDown)
+              self.handleScrollKey(scrollKey);
+              return true; // Consume the event
+            }
+
+            // In scroll mode: use arrow keys for scrolling
+            if (self.inScrollMode) {
+              // Up arrow: \x1b[A
+              if (str === '\x1b[A') {
+                self.handleScrollKey('scrollUp');
+                return true;
+              }
+              // Down arrow: \x1b[B
+              if (str === '\x1b[B') {
+                self.handleScrollKey('scrollDown');
+                return true;
+              }
+              // Escape: exit scroll mode
+              if (str === '\x1b' || str === '\x1b\x1b') {
                 self.exitScrollMode();
                 return true;
               }
-              // Not in scroll mode - pass 'q' through to readline
-              return originalEmit(event, ...args);
+              // Consume all other input to prevent garbage
+              return true;
             }
-            // Handle other scroll keys (pageUp, pageDown, home, end, scrollUp, scrollDown)
-            self.handleScrollKey(scrollKey);
-            return true; // Consume the event
-          }
-
-          // In scroll mode, consume all other input to prevent garbage
-          if (self.inScrollMode) {
-            return true;
+          } catch {
+            // If scroll handling fails, just pass through to readline
+            // This prevents crashes from terminal compatibility issues
           }
         }
 
@@ -289,6 +311,11 @@ export class RekShell {
    * Handle scroll key input
    */
   private handleScrollKey(key: string): void {
+    // Safety check: don't try to scroll if stdout capture isn't set up
+    if (!this.originalStdoutWrite) {
+      return;
+    }
+
     let needsRedraw = false;
 
     switch (key) {
@@ -356,16 +383,21 @@ export class RekShell {
    * Enter scroll mode (freeze output, show scroll view)
    */
   private enterScrollMode(): void {
+    // Safety checks: don't enter scroll mode if not ready
     if (this.inScrollMode) return;
+    if (!this.originalStdoutWrite) return;
+
     this.inScrollMode = true;
 
     // Pause readline to prevent input during scroll
-    this.rl.pause();
+    try {
+      this.rl.pause();
+    } catch {
+      // Ignore readline errors
+    }
 
     // Hide cursor
-    if (this.originalStdoutWrite) {
-      this.originalStdoutWrite('\x1b[?25l');
-    }
+    this.originalStdoutWrite('\x1b[?25l');
 
     // Render scroll view
     this.renderScrollView();
@@ -425,7 +457,7 @@ export class RekShell {
     const scrollInfo = this.scrollBuffer.isScrolledUp
       ? colors.yellow(`↑ ${this.scrollBuffer.position} lines | ${info.percent}% | `)
       : '';
-    const helpText = colors.gray('Page Up/Down • Home/End • Q to exit');
+    const helpText = colors.gray('↑↓/PgUp/PgDn • Home/End • Esc/Q to exit');
     const statusBar = `\x1b[${rows};1H\x1b[7m ${scrollInfo}${helpText} \x1b[0m`;
     this.originalStdoutWrite(statusBar);
   }
