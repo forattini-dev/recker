@@ -109,6 +109,8 @@ See [Mini Client documentation](./docs/http/18-mini-client.md) for more.
 | **Type-Safe** | Full TypeScript with Zod schema validation. |
 | **Observable** | DNS/TCP/TLS/TTFB timing breakdown per request. |
 | **Resilient** | Retry, circuit breaker, rate limiting, deduplication. |
+| **SEO Analysis** | 250+ rules across 21 categories. Site-wide crawling with duplicate detection. |
+| **Spider Crawler** | Web crawler with URL deduplication, depth control, and concurrency. |
 | **GeoIP (Offline)** | MaxMind GeoLite2 database with bogon detection. |
 | **RDAP Support** | Modern WHOIS with IANA Bootstrap and TLD detection. |
 
@@ -133,11 +135,31 @@ console.log(response.timings);
 // { dns: 12, tcp: 8, tls: 45, firstByte: 23, total: 156 }
 ```
 
-### Scraping
+### Scraping & Spider
 
 ```typescript
+// Scrape single page
 const doc = await client.scrape('https://example.com');
 const titles = doc.selectAll('h1').map(el => el.text());
+
+// Crawl entire site
+import { spider } from 'recker/scrape';
+const result = await spider('https://example.com', { maxPages: 50 });
+console.log(`Crawled ${result.pages.length} pages`);
+```
+
+### SEO Analysis
+
+```typescript
+import { analyzeSeo, seoSpider } from 'recker/seo';
+
+// Single page analysis - 250+ checks across 21 categories
+const report = await analyzeSeo(html, { baseUrl: 'https://example.com' });
+console.log(`Score: ${report.score}/100 (${report.grade})`);
+
+// Site-wide analysis - detect duplicates and orphan pages
+const siteReport = await seoSpider('https://example.com', { seo: true });
+console.log(`Duplicate titles: ${siteReport.summary.duplicateTitles}`);
 ```
 
 ### Circuit Breaker
@@ -174,6 +196,9 @@ rek -o data.json api.com/export
 # Interactive shell
 rek shell
 
+# SEO analysis
+rek seo https://example.com
+
 # Mock servers for testing
 rek serve http    # HTTP on :3000
 rek serve ws      # WebSocket on :8080
@@ -187,6 +212,8 @@ See [CLI Documentation](./docs/cli/01-overview.md) for more.
 - **[Quick Start](./docs/http/01-quickstart.md)** - Get running in 2 minutes
 - **[Mini Client](./docs/http/18-mini-client.md)** - Maximum performance mode
 - **[CLI Guide](./docs/cli/01-overview.md)** - Terminal client documentation
+- **[SEO Analysis](./docs/http/19-seo.md)** - 250+ rules, site-wide crawling
+- **[Web Scraping](./docs/http/14-scraping.md)** - HTML parsing and Spider crawler
 - **[API Reference](./docs/reference/01-api.md)** - Complete API documentation
 - **[Configuration](./docs/http/05-configuration.md)** - Client options
 - **[Plugins](./docs/http/10-plugins.md)** - Extend functionality

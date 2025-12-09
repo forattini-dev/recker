@@ -1,16 +1,18 @@
 # SEO Analyzer
 
-Comprehensive SEO analysis for web pages using a rules-based engine with 70+ checks across 13 categories.
+Comprehensive SEO analysis for web pages using a rules-based engine with **250+ checks across 21 categories**.
 
 ## Features
 
-- **70+ SEO Rules** - Comprehensive checks across all important SEO aspects
-- **13 Categories** - Meta, Content, Links, Images, Technical, Security, Performance, Mobile, Accessibility, Schema, Structural, OpenGraph, Twitter
+- **250+ SEO Rules** - The most comprehensive SEO checker available
+- **21 Categories** - Meta, Content, Links, Images, Technical, Security, Performance, Mobile, Accessibility, Schema, Structural, i18n, PWA, Social, E-commerce, Local SEO, Core Web Vitals, Readability, Crawlability, Internal Linking, Best Practices
+- **Site-Wide Analysis** - SEO Spider crawls entire sites detecting duplicates and orphan pages
+- **Request Timing** - Full timing waterfall (DNS, TCP, TLS, TTFB, Download)
 - **Detailed Evidence** - Each issue includes found value, expected value, impact, and code examples
-- **Score & Grade** - Overall SEO score (0-100) and letter grade (A-F)
+- **Score & Grade** - Weighted SEO score (0-100) and letter grade (A-F)
 - **CLI & Shell** - Analyze pages directly from terminal
 - **JSON Output** - Machine-readable output for CI/CD pipelines
-- **Customizable** - Enable/disable rules, adjust thresholds
+- **Customizable** - Enable/disable rules, filter by category, adjust thresholds
 
 ## Quick Start
 
@@ -72,7 +74,13 @@ seo https://example.com --format json
 │  https://example.com                                         │
 ├──────────────────────────────────────────────────────────────┤
 │  Score: 85/100  Grade: B                                     │
-│  Checks: 47 pass │ 8 warn │ 2 fail │ 5 info                 │
+│  Checks: 180 pass │ 15 warn │ 3 fail │ 12 info              │
+├──────────────────────────────────────────────────────────────┤
+│  Timing: DNS 12ms → TCP 8ms → TLS 25ms → TTFB 85ms → Total 175ms
+├──────────────────────────────────────────────────────────────┤
+│  OpenGraph:                                                  │
+│    Title: Example Site - Your Tagline                        │
+│    Image: https://example.com/og-image.jpg                   │
 ├──────────────────────────────────────────────────────────────┤
 │  ✗ Title Tag                                                 │
 │    Missing title tag                                         │
@@ -92,6 +100,20 @@ seo https://example.com --format json
   "timestamp": "2024-01-15T10:30:00.000Z",
   "score": 85,
   "grade": "B",
+  "timing": {
+    "dns": 12,
+    "tcp": 8,
+    "tls": 25,
+    "ttfb": 85,
+    "download": 45,
+    "total": 175
+  },
+  "openGraph": {
+    "title": "Example Site - Your Tagline",
+    "description": "A great description",
+    "image": "https://example.com/og-image.jpg",
+    "url": "https://example.com"
+  },
   "checks": [
     {
       "name": "Title Tag",
@@ -109,115 +131,148 @@ seo https://example.com --format json
 }
 ```
 
-## Rule Categories
+## Rule Categories (21)
 
-### Meta Tags
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `title-exists` | error | Page must have a title tag |
-| `title-length` | warning | Title should be 50-60 characters |
-| `title-no-caps` | warning | Title should not be ALL CAPS |
-| `meta-description-exists` | error | Page must have a meta description |
-| `meta-description-length` | warning | Description should be 120-155 characters |
+### 1. Meta Tags (`meta`)
+Title, description, keywords, author, robots directives.
 
-### OpenGraph (Social)
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `og-title-exists` | error | og:title must be defined |
-| `og-description-exists` | error | og:description must be defined |
-| `og-image-exists` | error | og:image must be defined |
-| `og-image-https` | error | og:image URL must use HTTPS |
-| `og-url-exists` | warning | og:url should be defined |
-| `og-type-exists` | warning | og:type should be defined |
-| `og-meta-complete` | warning | All 5 required OG tags for Meta/Facebook |
+### 2. Content (`content`)
+H1, headings hierarchy, word count, paragraph structure, lists.
 
-### Twitter Card
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `twitter-card-exists` | warning | twitter:card should be defined |
-| `twitter-title-length` | warning | twitter:title should be 55-70 characters |
-| `twitter-description-length` | warning | twitter:description max 200 characters |
+### 3. Links (`links`)
+Anchor text quality, noopener/noreferrer, broken links, sponsored/ugc.
 
-### Content
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `h1-exists` | error | Page must have exactly one H1 |
-| `h1-length` | warning | H1 should be 20-70 characters |
-| `heading-hierarchy` | warning | Headings should not skip levels |
-| `word-count` | warning | Content should have adequate word count |
-| `paragraph-length` | info | Paragraphs should be readable length |
+### 4. Images (`images`)
+Alt text, dimensions, lazy loading, modern formats, async decoding.
 
-### Links
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `links-text` | warning | Links should have descriptive text |
-| `links-generic-text` | warning | Avoid "click here", "read more" |
-| `external-links-noopener` | warning | External links need rel="noopener" |
-| `external-links-noreferrer` | info | External links should have rel="noreferrer" |
+### 5. Technical (`technical`)
+Canonical, charset, viewport, lang, favicon, URL structure.
 
-### Images
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `images-alt` | warning | Images should have alt text |
-| `images-alt-length` | warning | Alt text should be descriptive (10-125 chars) |
-| `images-dimensions` | warning | Images should have width/height to prevent CLS |
-| `images-lazy-loading` | info | Below-fold images should use lazy loading |
-| `images-modern-formats` | info | Consider using WebP/AVIF formats |
+### 6. Security (`security`)
+HTTPS, CSP, HSTS, X-Frame-Options, mixed content, COOP/COEP/CORP.
 
-### Technical
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `canonical-exists` | warning | Page should have a canonical URL |
-| `lang-exists` | warning | HTML should have lang attribute |
-| `charset-exists` | warning | Page should declare UTF-8 charset |
-| `robots-noindex` | warning | Check if page is set to noindex |
-| `favicon-exists` | warning | Page should have a favicon |
-| `url-lowercase` | warning | URLs should be lowercase |
-| `url-clean` | warning | URLs should not contain special characters |
+### 7. Performance (`performance`)
+Render-blocking resources, preconnect, dns-prefetch, preload, async/defer.
 
-### Security
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `https` | error | Page must use HTTPS |
-| `mixed-content` | error | No HTTP resources on HTTPS pages |
+### 8. Mobile (`mobile`)
+Viewport configuration, touch targets, responsive images.
 
-### Performance
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `render-blocking` | warning | Minimize render-blocking resources |
-| `preconnect` | info | Use preconnect for critical third-party origins |
-| `dns-prefetch` | info | Use dns-prefetch for external domains |
-| `preload` | info | Preload critical resources |
+### 9. Accessibility (`accessibility`)
+ARIA attributes, button labels, form labels, heading order, skip links.
 
-### Mobile
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `viewport-exists` | error | Page must have viewport meta tag |
-| `viewport-width` | warning | Viewport should include width=device-width |
-| `touch-targets` | info | Touch targets should be at least 48x48px |
+### 10. Schema/Structured Data (`schema`)
+JSON-LD presence and validity, breadcrumbs, rich snippets.
 
-### Accessibility
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `buttons-aria` | warning | Buttons should have accessible names |
-| `inputs-labels` | warning | Form inputs should have labels |
-| `iframes-title` | warning | Iframes should have titles |
-| `tables-caption` | info | Data tables should have captions |
+### 11. Structural (`structural`)
+Semantic HTML elements: header, main, nav, footer, article, section.
 
-### Schema (Structured Data)
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `jsonld-exists` | info | Page should have JSON-LD structured data |
-| `jsonld-valid` | warning | JSON-LD should be valid |
-| `breadcrumbs-schema` | info | Breadcrumbs should use BreadcrumbList schema |
+### 12. i18n - Internationalization (`i18n`)
+Hreflang tags, language codes, x-default, Content-Language header.
 
-### Structural
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `has-header` | info | Page should have `<header>` element |
-| `has-main` | warning | Page should have `<main>` element |
-| `has-nav` | info | Page should have `<nav>` element |
-| `has-footer` | info | Page should have `<footer>` element |
+### 13. PWA - Progressive Web App (`pwa`)
+Web manifest, theme color, apple-touch-icon, maskable icons, service worker.
+
+### 14. Social Media (`social`)
+OpenGraph completeness, Twitter Card optimization, image dimensions.
+
+### 15. E-commerce (`ecommerce`)
+Product schema, price, availability, reviews, offers structured data.
+
+### 16. Local SEO (`local`)
+LocalBusiness schema, NAP consistency, opening hours, geo coordinates.
+
+### 17. Core Web Vitals (`cwv`)
+LCP hints, CLS prevention, FID optimization suggestions.
+
+### 18. Readability (`readability`)
+Flesch reading ease, sentence length, paragraph complexity.
+
+### 19. Crawlability (`crawl`)
+Robots.txt, sitemap.xml, crawl budget optimization, pagination.
+
+### 20. Internal Linking (`internal-linking`)
+Link ratio, anchor diversity, orphan pages, click depth, contextual links.
+
+### 21. Best Practices (`best-practices`)
+DOCTYPE, charset position, HTTP status codes, crawlable links.
+
+## Site-Wide Analysis with SEO Spider
+
+Crawl entire websites and detect site-wide SEO issues:
+
+```typescript
+import { SeoSpider, seoSpider } from 'recker/seo';
+
+// Quick function
+const result = await seoSpider('https://example.com', {
+  seo: true,           // Enable SEO analysis per page
+  maxPages: 50,        // Limit pages to crawl
+  maxDepth: 4,         // Maximum link depth
+  concurrency: 5,      // Parallel requests
+  output: 'report.json' // Save to file
+});
+
+console.log(`Crawled ${result.summary.totalPages} pages`);
+console.log(`Average Score: ${result.summary.avgScore}`);
+console.log(`Duplicate Titles: ${result.summary.duplicateTitles}`);
+console.log(`Orphan Pages: ${result.summary.orphanPages}`);
+
+// Site-wide issues
+for (const issue of result.siteWideIssues) {
+  console.log(`[${issue.severity}] ${issue.type}: ${issue.message}`);
+  console.log(`  Affected: ${issue.affectedUrls.length} pages`);
+}
+```
+
+### Site-Wide Issues Detected
+
+| Issue Type | Description |
+|------------|-------------|
+| `duplicate-title` | Multiple pages share the same title |
+| `duplicate-description` | Multiple pages share the same meta description |
+| `duplicate-h1` | Multiple pages share the same H1 heading |
+| `orphan-page` | Pages with no internal links pointing to them |
+| `missing-canonical` | Pages without canonical URL declaration |
+
+### Interactive Shell
+
+```bash
+# Crawl with SEO analysis
+spider https://example.com seo=true depth=3 limit=20
+
+# Output
+✔ Crawl complete (12.5s)
+  Pages: 20
+  Errors: 2
+  Avg Score: 78/100
+
+Site-Wide Issues:
+  ✗ 3 pages share duplicate title "Welcome"
+  ⚠ 2 orphan pages detected
+```
+
+## Request Timing Metrics
+
+The SEO analyzer captures detailed timing metrics from each request:
+
+```
+Timing: DNS 12ms → TCP 8ms → TLS 25ms → TTFB 85ms → Download 45ms → Total 175ms
+```
+
+| Metric | Description |
+|--------|-------------|
+| **DNS** | DNS lookup time |
+| **TCP** | TCP connection establishment |
+| **TLS** | TLS/SSL handshake time |
+| **TTFB** | Time to First Byte (server response time) |
+| **Download** | Content download time |
+| **Total** | Total request duration |
+
+These metrics help identify performance bottlenecks:
+- High DNS → Consider DNS prefetch
+- High TLS → Check certificate chain
+- High TTFB → Server-side optimization needed
+- High Download → Compress content, reduce page size
 
 ## API Reference
 
@@ -232,30 +287,54 @@ const report = await analyzeSeo(html, {
   baseUrl: 'https://example.com',  // Required for link analysis
   responseHeaders: headers,         // Optional: HTTP response headers
   rules: {
-    categories: ['meta', 'content'], // Only run specific categories
+    categories: ['meta', 'content', 'security'], // Only run specific categories
     disabled: ['title-no-caps'],     // Disable specific rules
   }
 });
 ```
 
-### `SeoAnalyzer` Class
+### `SeoSpider` Class
 
-For more control, use the class directly:
+For site-wide analysis:
 
 ```typescript
-import { SeoAnalyzer } from 'recker/seo';
+import { SeoSpider } from 'recker/seo';
 
-const analyzer = await SeoAnalyzer.fromHtml(html, options);
+const spider = new SeoSpider({
+  seo: true,
+  maxPages: 100,
+  maxDepth: 4,
+  concurrency: 5,
+  delay: 100,
+  output: 'seo-report.json',
+  onSeoAnalysis: (result) => {
+    console.log(`Analyzed ${result.url}: ${result.seoReport?.score}/100`);
+  }
+});
 
-// Get available categories
-const categories = analyzer.getCategories();
-// ['title', 'meta', 'og', 'twitter', 'content', 'headings', 'links', ...]
+const result = await spider.crawl('https://example.com');
+```
 
-// Get rules by category
-const metaRules = analyzer.getRulesByCategory('meta');
+### `createRulesEngine(options)`
 
-// Run analysis
-const report = analyzer.analyze();
+Create a custom rules engine:
+
+```typescript
+import { createRulesEngine, ALL_SEO_RULES } from 'recker/seo';
+
+const engine = createRulesEngine({
+  categories: ['meta', 'security', 'performance'],
+  excludeCategories: ['pwa'],
+  excludeRules: ['og-image-url-quality'],
+  minSeverity: 'warning'  // Only 'warning' and 'error' rules
+});
+
+// Get enabled rules
+const rules = engine.getRules();
+console.log(`${rules.length} rules enabled`);
+
+// Get categories
+const categories = engine.getCategories();
 ```
 
 ### Report Structure
@@ -266,6 +345,33 @@ interface SeoReport {
   timestamp: Date;
   score: number;           // 0-100
   grade: string;           // A, B, C, D, F
+
+  // Request timing
+  timing?: {
+    dns?: number;
+    tcp?: number;
+    tls?: number;
+    ttfb?: number;
+    download?: number;
+    total?: number;
+  };
+
+  // Social meta
+  openGraph?: {
+    title?: string;
+    description?: string;
+    image?: string;
+    url?: string;
+    type?: string;
+  };
+  twitterCard?: {
+    card?: string;
+    title?: string;
+    description?: string;
+    image?: string;
+  };
+
+  // Checks
   checks: SeoCheckResult[];
 
   // Detailed analysis
@@ -279,35 +385,15 @@ interface SeoReport {
   technical: TechnicalSeo;
   jsonLd: { count: number; types: string[] };
 }
-
-interface SeoCheckResult {
-  name: string;
-  status: 'pass' | 'warn' | 'fail' | 'info';
-  message: string;
-  value?: any;
-  recommendation?: string;
-  evidence?: RuleEvidence;
-}
-
-interface RuleEvidence {
-  found?: string;      // What was found in the HTML
-  expected?: string;   // What should be there
-  example?: string;    // Code example to fix the issue
-  impact?: string;     // SEO impact of the issue
-  learnMore?: string;  // Link to documentation
-}
 ```
 
 ## Configuration
 
 ### Thresholds
 
-Default thresholds can be customized:
-
 ```typescript
 import { SEO_THRESHOLDS } from 'recker/seo';
 
-// View current thresholds
 console.log(SEO_THRESHOLDS.title);
 // { min: 30, ideal: { min: 50, max: 60 }, max: 70 }
 
@@ -315,43 +401,24 @@ console.log(SEO_THRESHOLDS.metaDescription);
 // { min: 50, ideal: { min: 120, max: 155 }, max: 160 }
 ```
 
-### Custom Rules Engine
+### Scoring Weights
+
+Categories have different weights in the final score:
 
 ```typescript
-import { createRulesEngine } from 'recker/seo';
+import { SCORING_WEIGHTS } from 'recker/seo';
 
-const engine = createRulesEngine({
-  categories: ['meta', 'og', 'twitter'],  // Only these categories
-  disabled: ['og-image-url-quality'],      // Disable specific rules
-});
-
-// Get enabled rules
-const rules = engine.getRules();
-```
-
-## Integration with Scraping
-
-The SEO analyzer integrates seamlessly with Recker's scraping capabilities:
-
-```typescript
-import { createClient } from 'recker';
-import { analyzeSeo } from 'recker/seo';
-
-const client = createClient({
-  headers: {
-    'User-Agent': 'SEO-Bot/1.0'
-  }
-});
-
-// Fetch and analyze
-const response = await client.get('https://example.com');
-const html = await response.text();
-const headers = Object.fromEntries(response.headers.entries());
-
-const report = await analyzeSeo(html, {
-  baseUrl: 'https://example.com',
-  responseHeaders: headers,
-});
+// Category importance multipliers
+// performance: 1.4 (most important)
+// title: 1.5
+// technical: 1.3
+// meta: 1.3
+// content: 1.2
+// mobile: 1.2
+// headings: 1.2
+// links: 1.1
+// security: 0.9
+// accessibility: 0.8
 ```
 
 ## CI/CD Integration
@@ -380,8 +447,10 @@ jobs:
         run: |
           npx rek seo https://staging.example.com --format json > seo-report.json
           SCORE=$(jq '.score' seo-report.json)
+          echo "SEO Score: $SCORE"
           if [ "$SCORE" -lt 70 ]; then
-            echo "SEO score too low: $SCORE"
+            echo "::error::SEO score too low: $SCORE (minimum: 70)"
+            jq '.checks[] | select(.status == "fail")' seo-report.json
             exit 1
           fi
 
@@ -392,15 +461,23 @@ jobs:
           path: seo-report.json
 ```
 
+### Site-Wide CI Check
+
+```yaml
+- name: Run Site-Wide SEO Audit
+  run: |
+    npx rek shell <<EOF
+    spider https://staging.example.com seo=true depth=2 limit=30
+    EOF
+```
+
 ## Best Practices
 
 ### 1. Run Before Deploy
 
 ```bash
-# In your CI pipeline
 rek seo https://staging.example.com --format json > report.json
 
-# Check minimum score
 if [ $(jq '.score' report.json) -lt 80 ]; then
   echo "SEO score below threshold"
   exit 1
@@ -412,7 +489,7 @@ fi
 ```typescript
 import { analyzeSeo } from 'recker/seo';
 
-async function trackSeo(urls: string[]) {
+async function auditSite(urls: string[]) {
   const results = await Promise.all(
     urls.map(async (url) => {
       const html = await fetch(url).then(r => r.text());
@@ -421,12 +498,12 @@ async function trackSeo(urls: string[]) {
         url,
         score: report.score,
         grade: report.grade,
+        timing: report.timing,
         issues: report.checks.filter(c => c.status === 'fail').length,
         warnings: report.checks.filter(c => c.status === 'warn').length,
       };
     })
   );
-
   return results;
 }
 ```
@@ -436,20 +513,28 @@ async function trackSeo(urls: string[]) {
 ```typescript
 const report = await analyzeSeo(html);
 
-// Priority order: errors → warnings → info
-const criticalIssues = report.checks.filter(c => c.status === 'fail');
+// Priority: errors → warnings → info
+const critical = report.checks.filter(c => c.status === 'fail');
 const warnings = report.checks.filter(c => c.status === 'warn');
 
-console.log(`Critical issues: ${criticalIssues.length}`);
-console.log(`Warnings: ${warnings.length}`);
+console.log(`Critical: ${critical.length}, Warnings: ${warnings.length}`);
 
-// Fix critical issues first
-for (const issue of criticalIssues) {
+for (const issue of critical) {
   console.log(`[CRITICAL] ${issue.name}: ${issue.message}`);
   if (issue.evidence?.example) {
     console.log(`  Fix: ${issue.evidence.example}`);
   }
 }
+```
+
+### 4. Filter by Category
+
+```typescript
+const report = await analyzeSeo(html, {
+  rules: {
+    categories: ['security', 'performance']  // Only security and performance
+  }
+});
 ```
 
 ## Next Steps
