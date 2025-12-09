@@ -409,7 +409,13 @@ Analyze web pages for SEO issues directly from the shell:
 │  https://example.com                                         │
 ├──────────────────────────────────────────────────────────────┤
 │  Score: 85/100  Grade: B                                     │
-│  Checks: 47 pass │ 8 warn │ 2 fail │ 5 info                 │
+│  Checks: 180 pass │ 15 warn │ 3 fail │ 12 info              │
+├──────────────────────────────────────────────────────────────┤
+│  Timing: DNS 12ms → TCP 8ms → TLS 25ms → TTFB 85ms → Total 175ms
+├──────────────────────────────────────────────────────────────┤
+│  OpenGraph:                                                  │
+│    Title: Example Site - Your Tagline                        │
+│    Image: https://example.com/og-image.jpg                   │
 ├──────────────────────────────────────────────────────────────┤
 │  ✗ Title Tag                                                 │
 │    Missing title tag                                         │
@@ -422,6 +428,8 @@ Analyze web pages for SEO issues directly from the shell:
   "url": "https://example.com",
   "score": 85,
   "grade": "B",
+  "timing": { "dns": 12, "tcp": 8, "tls": 25, "ttfb": 85, "total": 175 },
+  "openGraph": { "title": "...", "image": "..." },
   "checks": [...]
 }
 
@@ -429,17 +437,83 @@ Analyze web pages for SEO issues directly from the shell:
 › seo https://example.com -v
 ```
 
-The SEO analyzer checks 70+ rules across 13 categories:
-- **Meta**: Title, description, keywords
-- **OpenGraph**: og:title, og:image, og:description
-- **Twitter**: Card type, title, image
-- **Content**: H1, headings hierarchy, word count
-- **Links**: Anchor text, noopener/noreferrer
-- **Images**: Alt text, dimensions, lazy loading
-- **Technical**: Canonical, charset, viewport
-- **And more**: Security, Performance, Accessibility, Schema
+The SEO analyzer checks **250+ rules across 21 categories**:
+- **Meta**: Title, description, keywords, robots
+- **Content**: H1, headings hierarchy, word count, readability
+- **Links**: Anchor text, noopener/noreferrer, sponsored/ugc
+- **Images**: Alt text, dimensions, lazy loading, modern formats
+- **Technical**: Canonical, charset, viewport, lang
+- **Security**: HTTPS, CSP, HSTS, X-Frame-Options, COOP/COEP/CORP
+- **Performance**: Render-blocking, preconnect, dns-prefetch
+- **Mobile**: Viewport, touch targets, responsive images
+- **Accessibility**: ARIA, labels, headings, skip links
+- **Schema**: JSON-LD, breadcrumbs, rich snippets
+- **i18n**: Hreflang, language codes, x-default
+- **PWA**: Manifest, theme color, apple-touch-icon
+- **Social**: OpenGraph, Twitter Card validation
+- **E-commerce**: Product schema, price, availability
+- **Local SEO**: LocalBusiness, NAP, geo coordinates
+- **Core Web Vitals**: LCP hints, CLS prevention
+- **Readability**: Flesch score, sentence length
+- **Crawlability**: Robots.txt, sitemap, pagination
+- **Internal Linking**: Link ratio, orphan pages, click depth
+- **Best Practices**: DOCTYPE, charset, crawlable links
 
 See **[SEO Analysis](/http/19-seo.md)** for full documentation.
+
+### Spider Web Crawler
+
+Crawl entire websites following internal links:
+
+```bash
+# Basic crawl
+› spider https://example.com
+✔ Crawl complete (8.5s)
+  Pages: 25
+  Errors: 2
+  Duration: 8.5s
+
+  ✓ /                         → 200 (125ms)
+  ✓ /about                    → 200 (98ms)
+  ✓ /products                 → 200 (156ms)
+  ✗ /old-page                 → HTTP 404
+  ...
+
+# Limit depth and pages
+› spider https://example.com depth=2 limit=50
+
+# Enable SEO analysis per page
+› spider https://example.com seo=true
+✔ Crawl complete (12.5s)
+  Pages: 20
+  Errors: 2
+  Avg Score: 78/100
+
+Site-Wide Issues:
+  ✗ 3 pages share duplicate title "Welcome"
+  ⚠ 2 orphan pages detected
+
+# Adjust concurrency
+› spider https://example.com concurrency=10 delay=200
+```
+
+#### Spider Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `depth=N` | 4 | Maximum link depth to crawl |
+| `limit=N` | 100 | Maximum pages to crawl |
+| `concurrency=N` | 5 | Parallel requests |
+| `delay=N` | 100 | Delay between requests (ms) |
+| `seo=true` | false | Run SEO analysis on each page |
+
+#### Site-Wide SEO Detection
+
+When `seo=true`, the spider detects:
+- **Duplicate Titles** - Pages sharing the same title tag
+- **Duplicate Descriptions** - Pages with identical meta descriptions
+- **Duplicate H1s** - Pages with the same H1 heading
+- **Orphan Pages** - Pages with no internal links pointing to them
 
 ## Request Syntax in Shell
 

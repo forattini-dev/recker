@@ -601,9 +601,117 @@ import type {
 } from 'recker';
 ```
 
+## Spider Web Crawler
+
+Crawl entire websites following internal links with the Spider module:
+
+### Basic Usage
+
+```typescript
+import { Spider, spider } from 'recker/scrape';
+
+// Quick function
+const result = await spider('https://example.com');
+
+console.log(`Crawled ${result.pages.length} pages`);
+console.log(`Duration: ${result.duration}ms`);
+console.log(`Errors: ${result.errors.length}`);
+
+// Each page contains
+for (const page of result.pages) {
+  console.log(`${page.status} ${page.url} - ${page.title}`);
+  console.log(`  Links: ${page.links.length}`);
+  console.log(`  Duration: ${page.duration}ms`);
+}
+```
+
+### Spider Class
+
+For more control, use the Spider class:
+
+```typescript
+import { Spider } from 'recker/scrape';
+
+const spider = new Spider({
+  maxDepth: 4,          // Maximum link depth (default: 4)
+  maxPages: 100,        // Maximum pages to crawl (default: 100)
+  concurrency: 5,       // Parallel requests (default: 5)
+  delay: 100,           // Delay between requests in ms (default: 100)
+  sameDomain: true,     // Only crawl same domain (default: true)
+  timeout: 10000,       // Request timeout in ms
+  userAgent: 'MyBot/1.0',
+
+  // Include/exclude URL patterns
+  include: [/\/products\//],    // Only URLs matching these
+  exclude: [/\/admin\//, /\.pdf$/],  // Skip these URLs
+
+  // Real-time callbacks
+  onPage: (page) => {
+    console.log(`✓ ${page.url} (${page.status})`);
+  },
+  onProgress: (progress) => {
+    console.log(`Crawled: ${progress.crawled}/${progress.total}`);
+  }
+});
+
+const result = await spider.crawl('https://example.com');
+```
+
+### URL Normalization
+
+Spider automatically normalizes URLs to avoid duplicates:
+
+- Removes URL fragments (`#section`)
+- Removes common tracking parameters (utm_*, fbclid, gclid, etc.)
+- Sorts query parameters
+- Removes trailing slashes
+- Lowercases hostname
+
+```typescript
+// These are all treated as the same URL:
+// https://example.com/page
+// https://example.com/page/
+// https://example.com/page#section
+// https://example.com/page?utm_source=google
+```
+
+### Crawl Results
+
+```typescript
+interface SpiderResult {
+  startUrl: string;
+  pages: SpiderPageResult[];
+  visited: Set<string>;
+  duration: number;
+  errors: Array<{ url: string; error: string }>;
+}
+
+interface SpiderPageResult {
+  url: string;
+  status: number;
+  title: string;
+  depth: number;
+  links: ExtractedLink[];
+  duration: number;
+  error?: string;
+}
+```
+
+### Interactive Shell
+
+Use spider from the Recker shell:
+
+```bash
+› spider https://example.com
+› spider https://example.com depth=2 limit=50
+› spider https://example.com seo=true  # With SEO analysis
+```
+
+See [SEO Analysis](19-seo.md) for site-wide SEO spider with duplicate detection.
+
 ## Next Steps
 
-- **[SEO Analysis](19-seo.md)** - Analyze pages for 70+ SEO issues
+- **[SEO Analysis](19-seo.md)** - Analyze pages for 250+ SEO issues with site-wide crawling
 - **[GraphQL](13-graphql.md)** - GraphQL queries and mutations
 - **[Concurrency](08-concurrency.md)** - Batch requests and rate limiting
 - **[Caching](09-cache.md)** - Cache scraped responses
