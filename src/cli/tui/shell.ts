@@ -19,6 +19,8 @@ import { analyzeSecurityHeaders, SecurityReport } from '../../utils/security-gra
 import { getIpInfo, IpInfo } from '../../mcp/ip-intel.js'; // Import IP Intel (MaxMind)
 import { checkPropagation, formatPropagationReport, PropagationResult } from '../../dns/propagation.js'; // Import DNS Propagation
 import { analyzeSeo, SeoSpider, type SeoReport, type SeoSpiderResult, type SiteWideIssue } from '../../seo/index.js'; // Import SEO Analyzer and Spider
+import { resolvePreset } from '../presets.js'; // Import preset resolver
+import type { Client } from '../../core/client.js'; // Import Client type for AI
 
 // Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
@@ -56,6 +58,8 @@ export class RekShell {
   private scrollBuffer: ScrollBuffer;
   private originalStdoutWrite: typeof process.stdout.write | null = null;
   private inScrollMode: boolean = false;
+  // AI clients per preset for memory persistence across messages
+  private aiClients: Map<string, Client> = new Map();
 
   constructor() {
     // We initialize with a placeholder base URL because the Client enforces it.
@@ -123,8 +127,10 @@ export class RekShell {
     const commands = [
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
+      '@openai', '@anthropic', '@groq', '@google', '@xai', '@mistral', '@cohere', '@deepseek', '@fireworks', '@together', '@perplexity',
+      'ai:clear',
       'whois', 'tls', 'ssl', 'security', 'ip', 'dns', 'dns:propagate', 'dns:email', 'rdap', 'ping',
-      'scrap', 'spider', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
+      'scrap', 'spider', 'seo', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
       '?', 'search', 'suggest', 'example',
       'help', 'clear', 'exit', 'set', 'url', 'vars', 'env'
     ];
@@ -468,7 +474,26 @@ export class RekShell {
   }
 
   private async handleCommand(input: string) {
-    // 0. Natural language search: lines ending with ?
+    // 0. AI Chat: @preset pattern (e.g., @openai Hello, how are you?)
+    // This is handled BEFORE other parsing to intercept AI chat messages
+    if (input.startsWith('@')) {
+      const spaceIdx = input.indexOf(' ');
+      if (spaceIdx > 1) {
+        const presetName = input.slice(1, spaceIdx).toLowerCase();
+        const message = input.slice(spaceIdx + 1).trim();
+        if (message) {
+          await this.runAIPresetChat(presetName, message);
+          return;
+        }
+      }
+      // If no message, show help
+      console.log(colors.yellow('Usage: @<preset> <message>'));
+      console.log(colors.gray('Example: @openai Hello, how are you?'));
+      console.log(colors.gray('Available AI presets: openai, anthropic, groq, google, xai, mistral, cohere'));
+      return;
+    }
+
+    // 1. Natural language search: lines ending with ?
     // "how to configure retry?" - triggers search panel
     // Note: "? query" is handled by the switch case below
     if (input.endsWith('?') && !input.startsWith('?') && input.length > 1) {
@@ -477,13 +502,13 @@ export class RekShell {
       return;
     }
 
-    // 1. Variable assignment: var = value
+    // 2. Variable assignment: var = value
     if (input.includes('=') && !input.includes(' ') && !input.startsWith('http')) {
       // Allow simple variable setting context? Maybe later.
       // For now, let's focus on commands.
     }
 
-    // 2. Magic Parsing
+    // 3. Magic Parsing
     const parts = this.parseLine(input);
     const cmd = parts[0].toLowerCase();
 
@@ -493,6 +518,9 @@ export class RekShell {
         return;
       case 'clear':
         console.clear();
+        return;
+      case 'ai:clear':
+        this.clearAIMemory(parts[1]);
         return;
       case 'exit':
       case 'quit':
@@ -703,19 +731,142 @@ export class RekShell {
   private async runAIChat(args: string[]) {
     // Usage: chat [provider] [model]
     // e.g. chat openai gpt-5.1
-    
+
     const provider = args[0] || 'openai';
     const model = args[1];
-    
+
     // Try to find API Key in variables or env
     const envKeyName = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
     const apiKey = this.variables[envKeyName] || process.env[envKeyName];
 
     const { startAIChat } = await import('./ai-chat.js');
-    
+
     await this.runInteractiveMode(async (rl) => {
         await startAIChat(rl, provider, apiKey, model);
     });
+  }
+
+  /**
+   * AI Chat with memory persistence per preset
+   * Usage: @openai Hello, how are you?
+   *
+   * This uses the client.ai.chat() method which maintains conversation memory
+   * (12 pairs = 24 messages) across messages in the same session.
+   */
+  private async runAIPresetChat(presetName: string, message: string) {
+    try {
+      // Get or create the AI client for this preset
+      let client = this.aiClients.get(presetName);
+
+      if (!client) {
+        // Resolve the preset configuration
+        const presetConfig = resolvePreset(presetName);
+
+        if (!presetConfig) {
+          console.log(colors.red(`Unknown AI preset: @${presetName}`));
+          console.log(colors.gray('Available AI presets: openai, anthropic, groq, google, xai, mistral, cohere, deepseek, fireworks, together, perplexity'));
+          return;
+        }
+
+        // Check if preset has AI config
+        if (!presetConfig._aiConfig) {
+          console.log(colors.red(`Preset @${presetName} does not support AI features.`));
+          console.log(colors.gray('Use an AI preset like @openai, @anthropic, @groq, etc.'));
+          return;
+        }
+
+        // Create the client with the preset config
+        client = createClient(presetConfig as any);
+        this.aiClients.set(presetName, client);
+      }
+
+      // Check if client has AI capabilities
+      if (!client.hasAI) {
+        console.log(colors.red(`Preset @${presetName} does not have AI capabilities.`));
+        return;
+      }
+
+      // Show thinking indicator
+      const model = (client as any)._aiConfig?.model || presetName;
+      console.log(colors.gray(`\n${presetName} (${model}) is thinking...`));
+
+      // Use streaming for real-time response
+      const stream = await client.ai.chatStream(message);
+
+      // Print assistant response with streaming (neon orange)
+      process.stdout.write('\n');
+
+      for await (const event of stream) {
+        if (event.type === 'text') {
+          process.stdout.write(colors.orange(event.content));
+        } else if (event.type === 'error') {
+          console.log(colors.red(`\nError: ${event.error}`));
+        }
+      }
+
+      // Show memory status (single newline after response)
+      const memory = client.ai.getMemory();
+      const pairs = Math.floor(memory.length / 2);
+      console.log(colors.reset(''));
+      console.log(colors.gray(`Memory: ${pairs}/12 pairs (${memory.length} messages)`));
+
+    } catch (error: any) {
+      // Handle specific errors
+      if (error.message?.includes('API key')) {
+        console.log(colors.red(`\nMissing API key for @${presetName}`));
+
+        // Suggest environment variable based on preset
+        const envVarMap: Record<string, string> = {
+          openai: 'OPENAI_API_KEY',
+          anthropic: 'ANTHROPIC_API_KEY',
+          google: 'GOOGLE_API_KEY',
+          groq: 'GROQ_API_KEY',
+          xai: 'XAI_API_KEY',
+          mistral: 'MISTRAL_API_KEY',
+          cohere: 'COHERE_API_KEY',
+          deepseek: 'DEEPSEEK_API_KEY',
+          fireworks: 'FIREWORKS_API_KEY',
+          together: 'TOGETHER_API_KEY',
+          perplexity: 'PERPLEXITY_API_KEY',
+        };
+
+        const envVar = envVarMap[presetName] || `${presetName.toUpperCase()}_API_KEY`;
+        console.log(colors.gray(`Set ${envVar} environment variable to use this preset.`));
+      } else {
+        console.log(colors.red(`\nError: ${error.message || error}`));
+      }
+    }
+  }
+
+  /**
+   * Clear AI conversation memory
+   * Usage: ai:clear [preset] - Clear memory for specific preset or all presets
+   */
+  private clearAIMemory(presetName?: string) {
+    if (presetName) {
+      const client = this.aiClients.get(presetName);
+      if (client && client.hasAI) {
+        client.ai.clearMemory();
+        console.log(colors.green(`Cleared AI memory for @${presetName}`));
+      } else {
+        console.log(colors.yellow(`No active AI session for @${presetName}`));
+      }
+    } else {
+      // Clear all AI memories
+      let cleared = 0;
+      for (const [name, client] of this.aiClients) {
+        if (client.hasAI) {
+          client.ai.clearMemory();
+          cleared++;
+        }
+      }
+
+      if (cleared > 0) {
+        console.log(colors.green(`Cleared AI memory for ${cleared} preset(s)`));
+      } else {
+        console.log(colors.yellow('No active AI sessions to clear'));
+      }
+    }
   }
 
   private async runLoadTest(args: string[]) {
@@ -3243,6 +3394,17 @@ ${colors.bold('Network:')}
     ${colors.green('ws <url>')}            Start interactive WebSocket session.
     ${colors.green('udp <url>')}           Send UDP packet.
 
+  ${colors.bold('AI Chat:')}
+    ${colors.green('@openai <message>')}   Chat with OpenAI (GPT) with memory.
+    ${colors.green('@anthropic <msg>')}    Chat with Anthropic (Claude) with memory.
+    ${colors.green('@groq <message>')}     Chat with Groq (fast inference).
+    ${colors.green('@google <message>')}   Chat with Google (Gemini).
+    ${colors.green('@xai <message>')}      Chat with xAI (Grok).
+    ${colors.green('@mistral <message>')}  Chat with Mistral AI.
+                             ${colors.gray('Memory:')} ${colors.white('12 pairs (24 messages)')} preserved per preset.
+                             ${colors.gray('Env:')} Set ${colors.white('OPENAI_API_KEY')}, ${colors.white('ANTHROPIC_API_KEY')}, etc.
+    ${colors.green('ai:clear [preset]')}   Clear AI memory (all or specific preset).
+
   ${colors.bold('Network Tools:')}
     ${colors.green('whois <domain>')}      WHOIS lookup (domain or IP).
     ${colors.green('tls <host> [port]')}   Inspect TLS/SSL certificate.
@@ -3294,7 +3456,8 @@ ${colors.bold('Network:')}
     › get /json
     › post /post name="Neo" active:=true role:Admin
     › load /heavy-endpoint users=100 mode=stress
-    › chat openai gpt-5.1
+    › @openai What is the capital of France?
+    › @anthropic Explain quantum computing
     › spider example.com depth=2 limit=50
     `);
   }

@@ -19,6 +19,16 @@ export type AIProvider =
   | 'replicate'
   | 'huggingface'
   | 'ollama'
+  | 'groq'
+  | 'mistral'
+  | 'cohere'
+  | 'together'
+  | 'perplexity'
+  | 'deepseek'
+  | 'fireworks'
+  | 'xai'
+  | 'azure-openai'
+  | 'cloudflare-workers-ai'
   | 'custom';
 
 /**

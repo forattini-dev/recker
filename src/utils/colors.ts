@@ -57,6 +57,11 @@ export const cyan = code(36, 39);
 export const white = code(37, 39);
 export const gray = code(90, 39);
 
+// Extended colors (256 color mode)
+export const orange = hasColors
+  ? (s: string | number) => `\x1b[38;5;208m${String(s)}\x1b[39m`
+  : (s: string | number) => String(s);
+
 // Background colors
 export const bgBlack = code(40, 49);
 export const bgRed = code(41, 49);
@@ -80,6 +85,7 @@ const colors = {
   cyan,
   white,
   gray,
+  orange,
   // Background
   bgBlack,
   bgRed,

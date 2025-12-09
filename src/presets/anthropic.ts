@@ -1,11 +1,24 @@
 import { ClientOptions } from '../types/index.js';
+import type { ClientOptionsWithAI, PresetAIConfig } from '../types/ai-client.js';
 
 export interface AnthropicPresetOptions {
   apiKey: string;
   version?: string;
+  /** Default model for chat completions @default 'claude-sonnet-4-5' */
+  model?: string;
 }
 
-export function anthropic(options: AnthropicPresetOptions): ClientOptions {
+export function anthropic(options: AnthropicPresetOptions): ClientOptions & ClientOptionsWithAI {
+  const _aiConfig: PresetAIConfig = {
+    provider: 'anthropic',
+    apiKey: options.apiKey,
+    model: options.model ?? 'claude-sonnet-4-5',
+    headers: {
+      'anthropic-version': options.version || '2023-06-01',
+    },
+    memory: { maxPairs: 12 },
+  };
+
   return {
     baseUrl: 'https://api.anthropic.com/v1',
     headers: {
@@ -20,6 +33,7 @@ export function anthropic(options: AnthropicPresetOptions): ClientOptions {
       delay: 1000,
       // Anthropic is sensitive to overload
       statusCodes: [408, 429, 500, 502, 503, 504]
-    }
+    },
+    _aiConfig,
   };
 }
