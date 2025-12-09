@@ -50,6 +50,12 @@ export interface PresetAIConfig {
   organization?: string;
   /** Additional headers */
   headers?: Record<string, string>;
+  /** Azure resource name */
+  resourceName?: string;
+  /** Azure deployment name */
+  deploymentName?: string;
+  /** Azure API version */
+  apiVersion?: string;
 }
 
 // ============================================================================

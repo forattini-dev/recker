@@ -421,8 +421,19 @@ export class UndiciTransport implements Transport {
     // Handle URL resolution: if baseUrl is empty, req.url must be absolute
     let currentUrl: string;
     if (this.baseUrl) {
-      const path = req.url.startsWith(this.baseUrl) ? req.url.substring(this.baseUrl.length) : req.url;
-      currentUrl = new URL(path, this.baseUrl).toString();
+      // If URL already starts with baseUrl, use it directly (already fully qualified by client.ts)
+      if (req.url.startsWith(this.baseUrl)) {
+        currentUrl = req.url;
+      } else if (req.url.startsWith('http://') || req.url.startsWith('https://')) {
+        // Absolute URL to different host - use as-is
+        currentUrl = req.url;
+      } else {
+        // Relative path - combine with baseUrl manually (avoid URL constructor path bug)
+        // URL constructor treats paths starting with '/' as absolute from origin, discarding baseUrl path
+        const base = this.baseUrl.endsWith('/') ? this.baseUrl.slice(0, -1) : this.baseUrl;
+        const path = req.url.startsWith('/') ? req.url : '/' + req.url;
+        currentUrl = base + path;
+      }
     } else {
       // No baseUrl - req.url must be an absolute URL
       currentUrl = req.url;

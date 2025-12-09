@@ -59,6 +59,12 @@
 // Main client
 export { UnifiedAIClient, createAI } from './client.js';
 
+// Client AI (integrated into HTTP Client)
+export { ClientAIImpl, AIConfigurationError } from './client-ai.js';
+
+// Memory
+export { ConversationMemory } from './memory.js';
+
 // Providers
 export { BaseAIProvider, AIError, RateLimitError, ContextLengthError, OverloadedError, AuthenticationError } from './providers/base.js';
 export { OpenAIProvider } from './providers/openai.js';

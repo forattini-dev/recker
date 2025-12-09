@@ -4,6 +4,7 @@
  */
 
 import { ClientOptions } from '../types/index.js';
+import type { AIProvider } from '../types/ai.js';
 
 // Import all presets
 import { openai } from './openai.js';
@@ -66,6 +67,14 @@ export interface PresetInfo {
   requiredAuth: string[];
   /** Documentation URL */
   docsUrl?: string;
+
+  // AI-specific metadata (only for AI presets)
+  /** AI provider type (for AI presets) */
+  aiProvider?: AIProvider;
+  /** Default model for chat completions */
+  defaultModel?: string;
+  /** Chat completions endpoint path */
+  chatEndpoint?: string;
 }
 
 /**
@@ -81,6 +90,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://platform.openai.com/docs',
+    aiProvider: 'openai',
+    defaultModel: 'gpt-4o',
+    chatEndpoint: '/chat/completions',
   },
   {
     name: 'anthropic',
@@ -90,6 +102,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://docs.anthropic.com/',
+    aiProvider: 'anthropic',
+    defaultModel: 'claude-sonnet-4-20250514',
+    chatEndpoint: '/messages',
   },
   {
     name: 'gemini',
@@ -99,6 +114,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://ai.google.dev/docs',
+    aiProvider: 'google',
+    defaultModel: 'gemini-2.0-flash',
+    chatEndpoint: '/models/{model}:generateContent',
   },
   {
     name: 'cohere',
@@ -108,6 +126,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://docs.cohere.com/',
+    aiProvider: 'cohere',
+    defaultModel: 'command-r-plus',
+    chatEndpoint: '/chat',
   },
   {
     name: 'mistral',
@@ -117,6 +138,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://docs.mistral.ai/',
+    aiProvider: 'mistral',
+    defaultModel: 'mistral-large-latest',
+    chatEndpoint: '/chat/completions',
   },
   {
     name: 'groq',
@@ -126,6 +150,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://console.groq.com/docs',
+    aiProvider: 'groq',
+    defaultModel: 'llama-3.3-70b-versatile',
+    chatEndpoint: '/openai/v1/chat/completions',
   },
   {
     name: 'together',
@@ -135,6 +162,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://docs.together.ai/',
+    aiProvider: 'together',
+    defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+    chatEndpoint: '/chat/completions',
   },
   {
     name: 'replicate',
@@ -144,6 +174,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://replicate.com/docs',
+    aiProvider: 'replicate',
+    defaultModel: 'meta/llama-2-70b-chat',
+    chatEndpoint: '/predictions',
   },
   {
     name: 'huggingface',
@@ -153,6 +186,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://huggingface.co/docs/api-inference',
+    aiProvider: 'huggingface',
+    defaultModel: 'meta-llama/Meta-Llama-3-70B-Instruct',
+    chatEndpoint: '/models/{model}',
   },
   {
     name: 'perplexity',
@@ -162,6 +198,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://docs.perplexity.ai/',
+    aiProvider: 'perplexity',
+    defaultModel: 'llama-3.1-sonar-large-128k-online',
+    chatEndpoint: '/chat/completions',
   },
   {
     name: 'deepseek',
@@ -171,6 +210,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://platform.deepseek.com/docs',
+    aiProvider: 'deepseek',
+    defaultModel: 'deepseek-chat',
+    chatEndpoint: '/chat/completions',
   },
   {
     name: 'fireworks',
@@ -180,6 +222,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://docs.fireworks.ai/',
+    aiProvider: 'fireworks',
+    defaultModel: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+    chatEndpoint: '/inference/v1/chat/completions',
   },
   {
     name: 'xai',
@@ -189,6 +234,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://docs.x.ai/',
+    aiProvider: 'xai',
+    defaultModel: 'grok-2',
+    chatEndpoint: '/v1/chat/completions',
   },
   {
     name: 'grok',
@@ -198,6 +246,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['apiKey'],
     docsUrl: 'https://docs.x.ai/',
+    aiProvider: 'xai',
+    defaultModel: 'grok-2',
+    chatEndpoint: '/v1/chat/completions',
   },
   {
     name: 'azure-openai',
@@ -207,6 +258,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['resourceName', 'apiKey'],
     docsUrl: 'https://learn.microsoft.com/en-us/azure/ai-services/openai/',
+    aiProvider: 'azure-openai',
+    defaultModel: 'gpt-4o',
+    chatEndpoint: '/openai/deployments/{deployment}/chat/completions',
   },
   {
     name: 'cloudflare-workers-ai',
@@ -216,6 +270,9 @@ export const presetRegistry: PresetInfo[] = [
     category: 'ai',
     requiredAuth: ['accountId', 'apiToken'],
     docsUrl: 'https://developers.cloudflare.com/workers-ai/',
+    aiProvider: 'cloudflare-workers-ai',
+    defaultModel: '@cf/meta/llama-3-8b-instruct',
+    chatEndpoint: '/run/{model}',
   },
 
   // Cloud & DevTools

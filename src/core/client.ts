@@ -1,4 +1,6 @@
 import { ClientOptions, Middleware, NextFunction, ReckerRequest, ReckerResponse, RequestOptions, Transport, CacheStorage, Hooks, PaginationConfig, HTTP2Options, PageResult, CookieJar, CookieOptions, Logger, consoleLogger } from '../types/index.js';
+import type { ClientAI, PresetAIConfig, ClientOptionsWithAI } from '../types/ai-client.js';
+import { ClientAIImpl } from '../ai/client-ai.js';
 import { HttpRequest } from './request.js';
 import { HttpResponse } from './response.js';
 import { UndiciTransport } from '../transport/undici.js';
@@ -60,8 +62,12 @@ export class Client {
   private cookieJar?: CookieJar;
   private cookieIgnoreInvalid: boolean = false;
   private defaultTimeout?: number | import('../types/index.js').TimeoutOptions;
-  
-  constructor(options: ExtendedClientOptions = {}) {
+
+  // AI integration
+  private _aiConfig?: PresetAIConfig;
+  private _ai?: ClientAI;
+
+  constructor(options: ExtendedClientOptions & Partial<ClientOptionsWithAI> = {}) {
     this.baseUrl = options.baseUrl || '';
     this.middlewares = options.middlewares || [];
     this.defaultTimeout = options.timeout;
@@ -204,7 +210,12 @@ export class Client {
       this.setupCookieJar(options.cookies);
     }
 
-    // 6. Max response size protection (if enabled)
+    // 6. AI configuration (from AI presets)
+    if (options._aiConfig) {
+      this._aiConfig = options._aiConfig;
+    }
+
+    // 7. Max response size protection (if enabled)
     if (this.maxResponseSize !== undefined) {
       this.middlewares.push(this.createMaxSizeMiddleware(this.maxResponseSize));
     }
@@ -1206,6 +1217,58 @@ export class Client {
    */
   hls(manifestUrl: string, options: HlsOptions = {}): HlsPromise {
     return new HlsPromise(this, manifestUrl, options);
+  }
+
+  // ============================================
+  // AI Integration
+  // ============================================
+
+  /**
+   * Access AI features for this client.
+   * Only available when using AI-enabled presets (@openai, @anthropic, etc.)
+   *
+   * @example
+   * ```typescript
+   * const client = createClient(openai({ apiKey: '...' }));
+   *
+   * // Chat with memory (remembers last 12 exchanges)
+   * await client.ai.chat('Hello!');
+   * await client.ai.chat('What did I just say?'); // Remembers context
+   *
+   * // Single prompt without memory
+   * const response = await client.ai.prompt('Translate "hello" to Spanish');
+   *
+   * // Streaming
+   * for await (const event of await client.ai.chatStream('Write a poem')) {
+   *   if (event.type === 'text') process.stdout.write(event.content);
+   * }
+   *
+   * // Memory management
+   * client.ai.clearMemory();
+   * client.ai.setMemoryConfig({ maxPairs: 20 });
+   * ```
+   *
+   * @throws {ConfigurationError} If client was not created with an AI preset
+   */
+  get ai(): ClientAI {
+    if (!this._ai) {
+      if (!this._aiConfig) {
+        throw new ConfigurationError(
+          'AI features require an AI-enabled preset. Use createClient(openai({...})), createClient(anthropic({...})), etc.',
+          { configKey: '_aiConfig' }
+        );
+      }
+      // Lazy initialization
+      this._ai = new ClientAIImpl(this, this._aiConfig);
+    }
+    return this._ai!;
+  }
+
+  /**
+   * Check if AI features are available for this client
+   */
+  get hasAI(): boolean {
+    return this._aiConfig !== undefined;
   }
 }
 

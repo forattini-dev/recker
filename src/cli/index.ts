@@ -420,7 +420,19 @@ complete -F _rek_completions rek
     .alias('interactive')
     .alias('repl')
     .description('Start the interactive Rek Shell')
-    .action(async () => {
+    .option('-e, --env [path]', 'Load .env file (auto-loads from cwd by default)')
+    .action(async (options: { env?: string | boolean }) => {
+      // Auto-load .env from cwd by default (unless explicitly disabled with --env=false)
+      if (options.env !== false) {
+        try {
+          const envPath = typeof options.env === 'string' ? options.env : join(process.cwd(), '.env');
+          await fs.access(envPath);
+          await loadEnvFile(options.env);
+        } catch {
+          // .env doesn't exist, that's fine
+        }
+      }
+
       const { RekShell } = await import('./tui/shell.js');
       const shell = new RekShell();
       shell.start();
@@ -636,6 +648,295 @@ ${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray
 
       } catch (error: any) {
         console.error(colors.red(`SEO analysis failed: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // Spider - Web Crawler
+  program
+    .command('spider')
+    .description('Crawl a website following internal links')
+    .argument('<url>', 'Starting URL to crawl')
+    .option('-d, --depth <n>', 'Maximum depth to crawl', '5')
+    .option('-l, --limit <n>', 'Maximum pages to crawl', '100')
+    .option('-c, --concurrency <n>', 'Concurrent requests', '5')
+    .option('--delay <ms>', 'Delay between requests in ms', '100')
+    .option('--format <format>', 'Output format: text (default) or json', 'text')
+    .option('-o, --output <file>', 'Write JSON results to file')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek spider example.com')}                    ${colors.gray('Crawl with defaults')}
+  ${colors.green('$ rek spider example.com -d 3 -l 50')}         ${colors.gray('Depth 3, max 50 pages')}
+  ${colors.green('$ rek spider example.com --format json')}      ${colors.gray('Output as JSON')}
+  ${colors.green('$ rek spider example.com -o results.json')}    ${colors.gray('Save to file')}
+
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('--depth, -d')}       Max link depth to follow (default: 5)
+  ${colors.cyan('--limit, -l')}       Max pages to crawl (default: 100)
+  ${colors.cyan('--concurrency, -c')} Parallel requests (default: 5)
+  ${colors.cyan('--delay')}           Ms between requests (default: 100)
+`)
+    .action(async (url, options: { depth?: string; limit?: string; concurrency?: string; delay?: string; format?: string; output?: string }) => {
+      if (!url.startsWith('http')) url = `https://${url}`;
+      const isJson = options.format === 'json';
+      const maxDepth = parseInt(options.depth || '5', 10);
+      const maxPages = parseInt(options.limit || '100', 10);
+      const concurrency = parseInt(options.concurrency || '5', 10);
+      const delay = parseInt(options.delay || '100', 10);
+
+      const { Spider } = await import('../scrape/spider.js');
+
+      if (!isJson) {
+        console.log(colors.gray(`\nCrawling ${url}...`));
+        console.log(colors.gray(`  Depth: ${maxDepth}, Limit: ${maxPages}, Concurrency: ${concurrency}\n`));
+      }
+
+      try {
+        const startTime = performance.now();
+        const spider = new Spider({
+          maxDepth,
+          maxPages,
+          concurrency,
+          delay,
+          onProgress: (progress) => {
+            if (!isJson) {
+              process.stdout.write(`\r${colors.cyan('⟳')} Crawled: ${colors.bold(String(progress.crawled))} | Queued: ${progress.queued} | Current: ${colors.gray(progress.currentUrl.slice(0, 50))}...`);
+            }
+          },
+        });
+
+        const result = await spider.crawl(url);
+        const duration = Math.round(performance.now() - startTime);
+
+        if (!isJson) {
+          // Clear progress line
+          process.stdout.write('\r' + ' '.repeat(100) + '\r');
+        }
+
+        // JSON output
+        if (isJson || options.output) {
+          const jsonOutput = {
+            startUrl: result.startUrl,
+            crawledAt: new Date().toISOString(),
+            duration,
+            summary: {
+              totalPages: result.pages.length,
+              successCount: result.pages.filter(p => !p.error).length,
+              errorCount: result.errors.length,
+              uniqueUrls: result.visited.size,
+            },
+            pages: result.pages.map(p => ({
+              url: p.url,
+              status: p.status,
+              title: p.title,
+              depth: p.depth,
+              linksCount: p.links.length,
+              duration: p.duration,
+              error: p.error,
+            })),
+            errors: result.errors,
+          };
+
+          if (options.output) {
+            await fs.writeFile(options.output, JSON.stringify(jsonOutput, null, 2));
+            console.log(colors.green(`✓ Results saved to ${options.output}`));
+          }
+          if (isJson) {
+            console.log(JSON.stringify(jsonOutput, null, 2));
+            return;
+          }
+        }
+
+        // Text output
+        console.log(`${colors.bold(colors.cyan('🕷️ Spider Crawl Complete'))}`);
+        console.log(`${colors.gray('URL:')} ${url}`);
+        console.log(`${colors.gray('Duration:')} ${(duration / 1000).toFixed(1)}s`);
+        console.log('');
+
+        // Summary
+        const successCount = result.pages.filter(p => !p.error).length;
+        console.log(`${colors.bold('Summary:')}`);
+        console.log(`  ${colors.green('✓')} Pages crawled: ${colors.bold(String(successCount))}`);
+        console.log(`  ${colors.red('✗')} Errors: ${colors.bold(String(result.errors.length))}`);
+        console.log(`  ${colors.gray('○')} Unique URLs: ${result.visited.size}`);
+        console.log('');
+
+        // Pages by depth
+        const byDepth = new Map<number, number>();
+        for (const page of result.pages) {
+          byDepth.set(page.depth, (byDepth.get(page.depth) || 0) + 1);
+        }
+        console.log(`${colors.bold('Pages by Depth:')}`);
+        for (const [depth, count] of [...byDepth.entries()].sort((a, b) => a[0] - b[0])) {
+          console.log(`  ${colors.gray(`Depth ${depth}:`)} ${count} pages`);
+        }
+        console.log('');
+
+        // Show errors if any
+        if (result.errors.length > 0) {
+          console.log(`${colors.bold(colors.red('Errors:'))}`);
+          for (const err of result.errors.slice(0, 10)) {
+            const shortUrl = err.url.replace(url, '');
+            // Extract HTTP status if present
+            const statusMatch = err.error.match(/status code (\d+)/);
+            const errorMsg = statusMatch ? `HTTP ${statusMatch[1]}` : err.error.slice(0, 50);
+            console.log(`  ${colors.red('✗')} ${colors.gray(shortUrl || '/')} → ${errorMsg}`);
+          }
+          if (result.errors.length > 10) {
+            console.log(`  ${colors.gray(`  ... and ${result.errors.length - 10} more`)}`);
+          }
+          console.log('');
+        }
+
+        // Show sample of successful pages
+        const successPages = result.pages.filter(p => !p.error).slice(0, 10);
+        if (successPages.length > 0) {
+          console.log(`${colors.bold('Sample Pages:')}`);
+          for (const page of successPages) {
+            const shortUrl = page.url.replace(url, '');
+            console.log(`  ${colors.green('✓')} ${colors.gray((shortUrl || '/').padEnd(40))} ${page.title.slice(0, 40)}`);
+          }
+          if (result.pages.length > 10) {
+            console.log(`  ${colors.gray(`  ... and ${result.pages.length - 10} more`)}`);
+          }
+        }
+
+      } catch (error: any) {
+        console.error(colors.red(`\nSpider failed: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // AI Command (single-shot prompt without memory)
+  program
+    .command('ai')
+    .description('Send a single AI prompt (no memory/context)')
+    .argument('<preset>', 'AI preset to use (e.g., @openai, @anthropic, @groq)')
+    .argument('<prompt...>', 'The prompt to send')
+    .option('-m, --model <model>', 'Override default model')
+    .option('-t, --temperature <temp>', 'Temperature (0-1)', '0.7')
+    .option('--max-tokens <tokens>', 'Max tokens in response', '2048')
+    .option('-w, --wait', 'Wait for full response (disable streaming)')
+    .option('-j, --json', 'Output raw JSON response')
+    .option('-e, --env [path]', 'Load .env file (auto-loads from cwd if exists)')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek ai @openai "What is the capital of France?"')}
+  ${colors.green('$ rek ai @anthropic "Explain quantum computing" -m claude-sonnet-4-20250514')}
+  ${colors.green('$ rek ai @groq "Write a haiku" --wait')}
+  ${colors.green('$ rek ai @openai "Translate to Spanish: Hello world"')}
+
+${colors.bold(colors.yellow('Available AI Presets:'))}
+  ${colors.cyan('@openai')}       OpenAI (GPT-4o, GPT-5.1)
+  ${colors.cyan('@anthropic')}    Anthropic (Claude)
+  ${colors.cyan('@groq')}         Groq (fast inference)
+  ${colors.cyan('@google')}       Google (Gemini)
+  ${colors.cyan('@xai')}          xAI (Grok)
+  ${colors.cyan('@mistral')}      Mistral AI
+  ${colors.cyan('@cohere')}       Cohere
+  ${colors.cyan('@deepseek')}     DeepSeek
+  ${colors.cyan('@perplexity')}   Perplexity
+  ${colors.cyan('@together')}     Together AI
+  ${colors.cyan('@fireworks')}    Fireworks AI
+  ${colors.cyan('@replicate')}    Replicate
+  ${colors.cyan('@huggingface')}  Hugging Face
+
+${colors.bold(colors.yellow('Note:'))}
+  This command sends a single prompt without conversation memory.
+  For chat with memory, use: ${colors.cyan('rek shell')} then ${colors.cyan('@openai Your message')}
+`)
+    .action(async (preset: string, promptParts: string[], options: { model?: string; temperature?: string; maxTokens?: string; wait?: boolean; json?: boolean; env?: string | boolean }) => {
+      // Load .env file if requested or by default
+      // Auto-load .env from cwd if it exists (silent fail)
+      if (options.env !== undefined) {
+        await loadEnvFile(options.env);
+      } else {
+        // Try loading from cwd silently
+        try {
+          const envPath = join(process.cwd(), '.env');
+          await fs.access(envPath);
+          await loadEnvFile(true);
+        } catch {
+          // .env doesn't exist, that's fine
+        }
+      }
+
+      // Parse preset name
+      let presetName = preset;
+      if (presetName.startsWith('@')) {
+        presetName = presetName.slice(1);
+      }
+
+      // Resolve preset
+      const presetConfig = resolvePreset(presetName);
+      if (!presetConfig) {
+        console.error(colors.red(`Unknown AI preset: @${presetName}`));
+        console.log(colors.gray('Available AI presets: @openai, @anthropic, @groq, @google, @xai, @mistral, @cohere'));
+        process.exit(1);
+      }
+
+      // Check if preset has AI config
+      if (!presetConfig._aiConfig) {
+        console.error(colors.red(`Preset @${presetName} does not support AI features.`));
+        console.log(colors.gray('Use an AI preset like @openai, @anthropic, @groq, etc.'));
+        process.exit(1);
+      }
+
+      const prompt = promptParts.join(' ');
+      if (!prompt.trim()) {
+        console.error(colors.red('Error: Prompt is required'));
+        process.exit(1);
+      }
+
+      try {
+        const { createClient } = await import('../core/client.js');
+        const client = createClient(presetConfig);
+
+        // Override model if specified
+        if (options.model) {
+          client.ai.setMemoryConfig({ systemPrompt: undefined }); // Reset any system prompt
+          (client as any)._aiConfig.model = options.model;
+        }
+
+        if (!options.json) {
+          console.log(colors.gray(`Using @${presetName} (${(client as any)._aiConfig.model})...\n`));
+        }
+
+        if (options.wait || options.json) {
+          // Non-streaming mode (wait for full response)
+          const response = await client.ai.prompt(prompt);
+
+          if (options.json) {
+            console.log(JSON.stringify({
+              content: response.content,
+              model: response.model,
+              usage: response.usage,
+              finishReason: response.finishReason,
+            }, null, 2));
+          } else {
+            console.log(response.content);
+
+            // Show usage stats
+            if (response.usage) {
+              console.log(colors.gray(`\n─────────────────────────────────────────`));
+              console.log(colors.gray(`Tokens: ${response.usage.inputTokens} in / ${response.usage.outputTokens} out`));
+            }
+          }
+        } else {
+          // Streaming mode (default)
+          const stream = await client.ai.promptStream(prompt);
+          for await (const event of stream) {
+            if (event.type === 'text') {
+              process.stdout.write(event.content);
+            }
+          }
+          console.log(''); // Final newline
+        }
+      } catch (error: any) {
+        console.error(colors.red(`AI request failed: ${error.message}`));
+        if (error.cause) {
+          console.error(colors.gray(error.cause.message || error.cause));
+        }
         process.exit(1);
       }
     });
