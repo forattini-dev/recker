@@ -1,13 +1,37 @@
 /**
  * SEO Best Practices Rules
  * Lighthouse-aligned general best practices checks
+ *
+ * DATA SOURCE REQUIREMENTS:
+ * ─────────────────────────
+ * Rules marked [HTTP] work with standard HTTP response + HTML parsing.
+ * Rules marked [BROWSER] require runtime data from Puppeteer/Playwright/etc.
+ *
+ * [HTTP] Rules (work out of the box):
+ *   - bp-doctype, bp-charset, bp-http-status, bp-indexable
+ *   - bp-robots-txt, bp-structured-data, bp-links-crawlable
+ *
+ * [BROWSER] Rules (require external context):
+ *   - bp-deprecated-apis: Needs console monitoring during JS execution
+ *   - bp-third-party-cookies: Needs cookie jar tracking during navigation
+ *   - bp-console-errors: Needs console.error interception
+ *   - bp-source-maps: Needs source map fetching and validation
+ *   - bp-js-libraries: Works partially via script src, fully with runtime detection
+ *   - bp-vulnerable-libraries: Needs version detection (snyk.io integration)
+ *   - bp-geolocation-on-load: Needs geolocation API interception
+ *   - bp-notification-on-load: Needs notification API interception
+ *   - bp-image-aspect-ratio: Needs computed vs natural dimensions
+ *   - bp-image-resolution: Needs device pixel ratio and rendered size
+ *
+ * Browser rules return null when their context fields are undefined,
+ * allowing seamless integration with tools like Puppeteer or Playwright.
  */
 
 import { SeoRule, createResult } from './types.js';
 
 export const bestPracticesRules: SeoRule[] = [
   // ==========================================================================
-  // General
+  // General [BROWSER - requires runtime data]
   // ==========================================================================
   {
     id: 'bp-deprecated-apis',
@@ -203,7 +227,7 @@ export const bestPracticesRules: SeoRule[] = [
   },
 
   // ==========================================================================
-  // Document
+  // Document [HTTP - works with HTML parsing]
   // ==========================================================================
   {
     id: 'bp-doctype',
@@ -281,7 +305,7 @@ export const bestPracticesRules: SeoRule[] = [
   },
 
   // ==========================================================================
-  // Permissions
+  // Permissions [BROWSER - requires API interception]
   // ==========================================================================
   {
     id: 'bp-geolocation-on-load',
@@ -347,7 +371,7 @@ export const bestPracticesRules: SeoRule[] = [
   },
 
   // ==========================================================================
-  // Images
+  // Images [BROWSER - requires rendered dimensions]
   // ==========================================================================
   {
     id: 'bp-image-aspect-ratio',
@@ -415,7 +439,7 @@ export const bestPracticesRules: SeoRule[] = [
   },
 
   // ==========================================================================
-  // HTTP Status
+  // HTTP Status [HTTP - works with response]
   // ==========================================================================
   {
     id: 'bp-http-status',
@@ -462,7 +486,7 @@ export const bestPracticesRules: SeoRule[] = [
   },
 
   // ==========================================================================
-  // SEO Crawling and Indexing
+  // SEO Crawling and Indexing [HTTP - works with HTML/headers]
   // ==========================================================================
   {
     id: 'bp-indexable',
