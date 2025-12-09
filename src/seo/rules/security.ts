@@ -191,6 +191,86 @@ export const securityRules: SeoRule[] = [
       );
     },
   },
+  {
+    id: 'security-csp-directives',
+    name: 'CSP Required Directives',
+    category: 'security',
+    severity: 'error',
+    description: 'CSP should have script-src and object-src directives to prevent unsafe script execution',
+    check: (ctx) => {
+      if (!ctx.responseHeaders) return null;
+      const cspHeader = ctx.responseHeaders['content-security-policy'] || ctx.responseHeaders['Content-Security-Policy'];
+      if (!cspHeader) return null;
+
+      const csp = String(cspHeader).toLowerCase();
+      const missingDirectives: { directive: string; severity: string; impact: string }[] = [];
+
+      // Check for script-src (High severity)
+      if (!csp.includes('script-src') && !csp.includes('default-src')) {
+        missingDirectives.push({
+          directive: 'script-src',
+          severity: 'High',
+          impact: 'Allows execution of unsafe scripts from any source',
+        });
+      }
+
+      // Check for object-src (High severity)
+      if (!csp.includes('object-src') && !csp.includes('default-src')) {
+        missingDirectives.push({
+          directive: 'object-src',
+          severity: 'High',
+          impact: 'Allows injection of plugins that execute unsafe scripts',
+        });
+      }
+
+      // Check for base-uri (Medium severity)
+      if (!csp.includes('base-uri')) {
+        missingDirectives.push({
+          directive: 'base-uri',
+          severity: 'Medium',
+          impact: 'Allows attackers to change the base URL for relative links',
+        });
+      }
+
+      if (missingDirectives.length > 0) {
+        const highSeverity = missingDirectives.filter((d) => d.severity === 'High');
+        if (highSeverity.length > 0) {
+          return createResult(
+            { id: 'security-csp-directives', name: 'CSP Required Directives', category: 'security', severity: 'error' },
+            'fail',
+            `Missing critical CSP directives: ${highSeverity.map((d) => d.directive).join(', ')}`,
+            {
+              recommendation: "Add script-src and object-src directives. Consider setting object-src to 'none' if plugins are not needed.",
+              evidence: {
+                found: missingDirectives.map((d) => `${d.directive} (${d.severity}): ${d.impact}`),
+                expected: "script-src 'self'; object-src 'none'; base-uri 'self'",
+                impact: 'Page is vulnerable to script injection attacks',
+                learnMore: 'https://web.dev/csp/',
+              },
+            }
+          );
+        }
+        return createResult(
+          { id: 'security-csp-directives', name: 'CSP Required Directives', category: 'security', severity: 'error' },
+          'warn',
+          `Missing recommended CSP directives: ${missingDirectives.map((d) => d.directive).join(', ')}`,
+          {
+            recommendation: 'Add base-uri directive to prevent base tag hijacking',
+            evidence: {
+              found: missingDirectives.map((d) => `${d.directive}: ${d.impact}`),
+              expected: "base-uri 'self'",
+            },
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'security-csp-directives', name: 'CSP Required Directives', category: 'security', severity: 'error' },
+        'pass',
+        'CSP has required script-src and object-src directives'
+      );
+    },
+  },
 
   // ==========================================================================
   // HSTS
