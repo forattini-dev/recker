@@ -25,6 +25,15 @@
 // Main analyzer
 export { SeoAnalyzer, analyzeSeo } from './analyzer.js';
 
+// SEO Spider (site-wide analysis)
+export { SeoSpider, seoSpider } from './seo-spider.js';
+export type {
+  SeoSpiderOptions,
+  SeoPageResult,
+  SiteWideIssue,
+  SeoSpiderResult,
+} from './seo-spider.js';
+
 // Rules engine
 export {
   SeoRulesEngine,
@@ -38,6 +47,7 @@ export type {
   SeoReport,
   SeoCheckResult,
   SeoStatus,
+  SeoTiming,
   HeadingAnalysis,
   HeadingInfo,
   ContentMetrics,
