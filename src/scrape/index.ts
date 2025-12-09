@@ -8,6 +8,15 @@
 export { ScrapeDocument } from './document.js';
 export { ScrapeElement } from './element.js';
 
+// Spider (web crawler)
+export { Spider, spider } from './spider.js';
+export type {
+  SpiderOptions,
+  SpiderPageResult,
+  SpiderProgress,
+  SpiderResult,
+} from './spider.js';
+
 // Extractors
 export {
   extractLinks,
