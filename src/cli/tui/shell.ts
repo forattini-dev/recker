@@ -1870,17 +1870,27 @@ ${colors.bold('Network:')}
       }
 
       // Show errors if any
+      const formatError = (error: string): string => {
+        // Extract status code from common error patterns
+        const statusMatch = error.match(/status code (\d{3})/i);
+        if (statusMatch) {
+          return `HTTP ${statusMatch[1]}`;
+        }
+        // Truncate long errors but show enough context
+        return error.length > 50 ? error.slice(0, 47) + '...' : error;
+      };
+
       if (result.errors.length > 0 && result.errors.length <= 10) {
         console.log(colors.bold('\n  Errors:'));
         for (const err of result.errors) {
           const path = new URL(err.url).pathname;
-          console.log(`    ${colors.red('✗')} ${path.slice(0, 40)} ${colors.gray('→')} ${err.error.slice(0, 30)}`);
+          console.log(`    ${colors.red('✗')} ${path.padEnd(25)} ${colors.gray('→')} ${formatError(err.error)}`);
         }
       } else if (result.errors.length > 10) {
         console.log(colors.yellow(`\n  ${result.errors.length} errors (showing first 10):`));
         for (const err of result.errors.slice(0, 10)) {
           const path = new URL(err.url).pathname;
-          console.log(`    ${colors.red('✗')} ${path.slice(0, 40)} ${colors.gray('→')} ${err.error.slice(0, 30)}`);
+          console.log(`    ${colors.red('✗')} ${path.padEnd(25)} ${colors.gray('→')} ${formatError(err.error)}`);
         }
       }
 
