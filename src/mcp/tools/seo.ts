@@ -250,8 +250,8 @@ async function seoAnalyze(args: Record<string, unknown>): Promise<MCPToolResult>
  */
 async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolResult> {
   const url = String(args.url || '');
-  const maxPages = Number(args.maxPages) || 20;
-  const maxDepth = Number(args.maxDepth) || 3;
+  const maxPages = Number(args.maxPages) || 100;
+  const maxDepth = Number(args.maxDepth) || 5;
   const concurrency = Number(args.concurrency) || 3;
 
   if (!url) {
@@ -501,12 +501,12 @@ Returns per-page scores and prioritized recommendations for improving overall si
         maxPages: {
           type: 'number',
           description: 'Maximum pages to crawl',
-          default: 20,
+          default: 100,
         },
         maxDepth: {
           type: 'number',
           description: 'Maximum link depth to follow',
-          default: 3,
+          default: 5,
         },
         concurrency: {
           type: 'number',

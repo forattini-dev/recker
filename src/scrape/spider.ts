@@ -11,7 +11,7 @@ import { RequestPool } from '../utils/request-pool.js';
 import type { ExtractedLink } from './types.js';
 
 export interface SpiderOptions {
-  /** Maximum depth to crawl (default: 4) */
+  /** Maximum depth to crawl (default: 5) */
   maxDepth?: number;
   /** Maximum pages to crawl (default: 100) */
   maxPages?: number;
@@ -210,7 +210,7 @@ export class Spider {
 
   constructor(options: SpiderOptions = {}) {
     this.options = {
-      maxDepth: options.maxDepth ?? 4,
+      maxDepth: options.maxDepth ?? 5,
       maxPages: options.maxPages ?? 100,
       sameDomain: options.sameDomain ?? true,
       concurrency: options.concurrency ?? 5,
