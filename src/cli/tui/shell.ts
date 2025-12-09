@@ -1868,7 +1868,7 @@ ${colors.bold('Network:')}
   private async runSpider(args: string[]) {
     // Parse arguments
     let url = '';
-    let maxDepth = 3;
+    let maxDepth = 5;
     let maxPages = 100;
     let concurrency = 5;
     let seoEnabled = false;
@@ -1877,7 +1877,7 @@ ${colors.bold('Network:')}
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
       if (arg.startsWith('depth=')) {
-        maxDepth = parseInt(arg.split('=')[1]) || 4;
+        maxDepth = parseInt(arg.split('=')[1]) || 5;
       } else if (arg.startsWith('limit=')) {
         maxPages = parseInt(arg.split('=')[1]) || 100;
       } else if (arg.startsWith('concurrency=')) {
@@ -1896,7 +1896,7 @@ ${colors.bold('Network:')}
       if (!this.baseUrl) {
         console.log(colors.yellow('Usage: spider <url> [options]'));
         console.log(colors.gray('  Options:'));
-        console.log(colors.gray('    depth=4           Max crawl depth'));
+        console.log(colors.gray('    depth=5           Max crawl depth'));
         console.log(colors.gray('    limit=100         Max pages to crawl'));
         console.log(colors.gray('    concurrency=5     Concurrent requests'));
         console.log(colors.gray('    seo               Enable SEO analysis'));
@@ -3274,7 +3274,7 @@ ${colors.bold('Network:')}
   ${colors.bold('Web Crawler:')}
     ${colors.green('spider <url>')}        Crawl website following internal links.
                              ${colors.gray('Options:')}
-                             ${colors.white('--depth=4')}     ${colors.gray('Maximum depth to crawl')}
+                             ${colors.white('--depth=5')}     ${colors.gray('Maximum depth to crawl')}
                              ${colors.white('--limit=100')}   ${colors.gray('Maximum pages to crawl')}
                              ${colors.white('--concurrency=5')} ${colors.gray('Parallel requests')}
 
