@@ -10,7 +10,7 @@ import { ScrapeDocument } from './document.js';
 import type { ExtractedLink } from './types.js';
 
 export interface SpiderOptions {
-  /** Maximum depth to crawl (default: 3) */
+  /** Maximum depth to crawl (default: 4) */
   maxDepth?: number;
   /** Maximum pages to crawl (default: 100) */
   maxPages?: number;
@@ -171,7 +171,7 @@ export class Spider {
 
   constructor(options: SpiderOptions = {}) {
     this.options = {
-      maxDepth: options.maxDepth ?? 3,
+      maxDepth: options.maxDepth ?? 4,
       maxPages: options.maxPages ?? 100,
       sameDomain: options.sameDomain ?? true,
       concurrency: options.concurrency ?? 5,

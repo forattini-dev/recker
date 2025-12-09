@@ -1803,7 +1803,7 @@ ${colors.bold('Network:')}
       if (!this.baseUrl) {
         console.log(colors.yellow('Usage: spider <url> [options]'));
         console.log(colors.gray('  Options:'));
-        console.log(colors.gray('    --depth=3      Max crawl depth'));
+        console.log(colors.gray('    --depth=4      Max crawl depth'));
         console.log(colors.gray('    --limit=100    Max pages to crawl'));
         console.log(colors.gray('    --concurrency=5  Concurrent requests'));
         console.log(colors.gray('  Examples:'));
@@ -2990,7 +2990,7 @@ ${colors.bold('Network:')}
   ${colors.bold('Web Crawler:')}
     ${colors.green('spider <url>')}        Crawl website following internal links.
                              ${colors.gray('Options:')}
-                             ${colors.white('--depth=3')}     ${colors.gray('Maximum depth to crawl')}
+                             ${colors.white('--depth=4')}     ${colors.gray('Maximum depth to crawl')}
                              ${colors.white('--limit=100')}   ${colors.gray('Maximum pages to crawl')}
                              ${colors.white('--concurrency=5')} ${colors.gray('Parallel requests')}
 
