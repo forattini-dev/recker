@@ -1232,20 +1232,24 @@ ${colors.bold('Details:')}`);
     const startTime = performance.now();
 
     try {
-      // Fetch the page with timing capture
-      const ttfbStart = performance.now();
+      // Fetch the page - undici captures detailed timing via diagnostics_channel
       const res = await this.client.get(url);
-      const ttfb = Math.round(performance.now() - ttfbStart);
       const html = await res.text();
       const duration = Math.round(performance.now() - startTime);
 
       // Run SEO analysis
       const report = await analyzeSeo(html, { baseUrl: url });
 
-      // Inject timing data
+      // Inject timing data from undici's diagnostics (if available)
+      // Map from Timings (undici) to SeoTiming (SEO report)
+      const t = res.timings;
       report.timing = {
-        ttfb,
-        total: duration,
+        ttfb: t?.firstByte ? Math.round(t.firstByte) : undefined,
+        total: t?.total ? Math.round(t.total) : duration,
+        dns: t?.dns ? Math.round(t.dns) : undefined,
+        tcp: t?.tcp ? Math.round(t.tcp) : undefined,
+        tls: t?.tls ? Math.round(t.tls) : undefined,
+        download: t?.content ? Math.round(t.content) : undefined,
       };
 
       // JSON output mode for programmatic use
@@ -1331,11 +1335,19 @@ Grade: ${gradeColor(colors.bold(report.grade))}  (${report.score}/100)
         }
       }
 
-      // Show timing metrics (TTFB)
-      if (report.timing?.ttfb !== undefined) {
+      // Show timing metrics
+      if (report.timing) {
+        const t = report.timing;
         console.log('');
-        console.log(colors.bold('Timing:') + ` TTFB ${report.timing.ttfb}ms` +
-          (report.timing.total ? `, Total ${report.timing.total}ms` : ''));
+        console.log(colors.bold('Timing:'));
+        const timings: string[] = [];
+        if (t.dns !== undefined) timings.push(`DNS ${t.dns}ms`);
+        if (t.tcp !== undefined) timings.push(`TCP ${t.tcp}ms`);
+        if (t.tls !== undefined) timings.push(`TLS ${t.tls}ms`);
+        if (t.ttfb !== undefined) timings.push(`TTFB ${t.ttfb}ms`);
+        if (t.download !== undefined) timings.push(`Download ${t.download}ms`);
+        if (t.total !== undefined) timings.push(`Total ${t.total}ms`);
+        console.log(`  ${timings.join(' → ')}`);
       }
 
       // Show content stats
