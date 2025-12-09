@@ -10,6 +10,7 @@ import { inspectTLS, TLSInfo } from '../../utils/tls-inspector.js'; // Import TL
 import { getSecurityRecords, DnsSecurityRecords } from '../../utils/dns-toolkit.js';
 import { rdap } from '../../utils/rdap.js'; // Import RDAPResult
 import { ScrapeDocument } from '../../scrape/document.js';
+import { Spider, type SpiderPageResult, type SpiderResult } from '../../scrape/spider.js';
 import colors from '../../utils/colors.js';
 import { getShellSearch } from './shell-search.js';
 import { openSearchPanel } from './search-panel.js';
@@ -123,7 +124,7 @@ export class RekShell {
       'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
       'ws', 'udp', 'load', 'chat', 'ai',
       'whois', 'tls', 'ssl', 'security', 'ip', 'dns', 'dns:propagate', 'dns:email', 'rdap', 'ping',
-      'scrap', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
+      'scrap', 'spider', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
       '?', 'search', 'suggest', 'example',
       'help', 'clear', 'exit', 'set', 'url', 'vars', 'env'
     ];
@@ -521,6 +522,9 @@ export class RekShell {
         return;
       case 'scrap':
         await this.runScrap(parts[1]);
+        return;
+      case 'spider':
+        await this.runSpider(parts.slice(1));
         return;
       case '$':
         await this.runSelect(parts.slice(1).join(' '));
@@ -1774,6 +1778,121 @@ ${colors.bold('Network:')}
     console.log('');
   }
 
+  private async runSpider(args: string[]) {
+    // Parse arguments
+    let url = '';
+    let maxDepth = 3;
+    let maxPages = 100;
+    let concurrency = 5;
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (arg.startsWith('--depth=') || arg.startsWith('-d=')) {
+        maxDepth = parseInt(arg.split('=')[1]) || 3;
+      } else if (arg.startsWith('--limit=') || arg.startsWith('-l=')) {
+        maxPages = parseInt(arg.split('=')[1]) || 100;
+      } else if (arg.startsWith('--concurrency=') || arg.startsWith('-c=')) {
+        concurrency = parseInt(arg.split('=')[1]) || 5;
+      } else if (!arg.startsWith('-')) {
+        url = arg;
+      }
+    }
+
+    // If no URL provided, use baseUrl
+    if (!url) {
+      if (!this.baseUrl) {
+        console.log(colors.yellow('Usage: spider <url> [options]'));
+        console.log(colors.gray('  Options:'));
+        console.log(colors.gray('    --depth=3      Max crawl depth'));
+        console.log(colors.gray('    --limit=100    Max pages to crawl'));
+        console.log(colors.gray('    --concurrency=5  Concurrent requests'));
+        console.log(colors.gray('  Examples:'));
+        console.log(colors.gray('    spider https://example.com'));
+        console.log(colors.gray('    spider https://example.com --depth=2 --limit=50'));
+        return;
+      }
+      url = this.baseUrl;
+    } else if (!url.startsWith('http')) {
+      url = `https://${url}`;
+    }
+
+    console.log(colors.cyan(`\nSpider starting: ${url}`));
+    console.log(colors.gray(`  Depth: ${maxDepth} | Limit: ${maxPages} | Concurrency: ${concurrency}`));
+    console.log('');
+
+    const spider = new Spider({
+      maxDepth,
+      maxPages,
+      concurrency,
+      sameDomain: true,
+      delay: 100,
+      onProgress: (progress) => {
+        // Update progress line
+        process.stdout.write(`\r${colors.gray('  Crawling:')} ${colors.cyan(progress.crawled.toString())} pages | ${colors.gray('Queue:')} ${progress.queued} | ${colors.gray('Depth:')} ${progress.depth}   `);
+      },
+    });
+
+    try {
+      const result = await spider.crawl(url);
+
+      // Clear progress line
+      process.stdout.write('\r' + ' '.repeat(80) + '\r');
+
+      // Print results
+      console.log(colors.green(`\n✔ Spider complete`) + colors.gray(` (${(result.duration / 1000).toFixed(1)}s)`));
+      console.log(`  ${colors.cyan('Pages crawled')}: ${result.pages.length}`);
+      console.log(`  ${colors.cyan('Unique URLs')}: ${result.visited.size}`);
+      console.log(`  ${colors.cyan('Errors')}: ${result.errors.length}`);
+
+      // Show pages by depth
+      const byDepth = new Map<number, number>();
+      for (const page of result.pages) {
+        byDepth.set(page.depth, (byDepth.get(page.depth) || 0) + 1);
+      }
+      console.log(colors.bold('\n  Pages by depth:'));
+      for (const [depth, count] of Array.from(byDepth.entries()).sort((a, b) => a[0] - b[0])) {
+        const bar = '█'.repeat(Math.min(count, 40));
+        console.log(`    ${colors.gray(`d${depth}:`)} ${bar} ${count}`);
+      }
+
+      // Show top pages by links
+      const topPages = [...result.pages]
+        .filter(p => !p.error)
+        .sort((a, b) => b.links.length - a.links.length)
+        .slice(0, 10);
+
+      if (topPages.length > 0) {
+        console.log(colors.bold('\n  Top pages by outgoing links:'));
+        for (const page of topPages) {
+          const title = page.title.slice(0, 40) || new URL(page.url).pathname;
+          console.log(`    ${colors.cyan(page.links.length.toString().padStart(3))} ${title}`);
+        }
+      }
+
+      // Show errors if any
+      if (result.errors.length > 0 && result.errors.length <= 10) {
+        console.log(colors.bold('\n  Errors:'));
+        for (const err of result.errors) {
+          const path = new URL(err.url).pathname;
+          console.log(`    ${colors.red('✗')} ${path.slice(0, 40)} ${colors.gray('→')} ${err.error.slice(0, 30)}`);
+        }
+      } else if (result.errors.length > 10) {
+        console.log(colors.yellow(`\n  ${result.errors.length} errors (showing first 10):`));
+        for (const err of result.errors.slice(0, 10)) {
+          const path = new URL(err.url).pathname;
+          console.log(`    ${colors.red('✗')} ${path.slice(0, 40)} ${colors.gray('→')} ${err.error.slice(0, 30)}`);
+        }
+      }
+
+      // Store result for further queries
+      this.lastResponse = result;
+      console.log(colors.gray('\n  Result stored in lastResponse. Use $links to explore.'));
+    } catch (error: any) {
+      console.error(colors.red(`Spider failed: ${error.message}`));
+    }
+    console.log('');
+  }
+
   private async runSelect(selector: string) {
     if (!this.currentDoc) {
       console.log(colors.yellow('No document loaded. Use "scrap <url>" first.'));
@@ -2868,6 +2987,13 @@ ${colors.bold('Network:')}
     ${colors.green('$beautify:save [f]')}  Save beautified code to file.
     ${colors.green('$table <selector>')}   Extract table as data.
 
+  ${colors.bold('Web Crawler:')}
+    ${colors.green('spider <url>')}        Crawl website following internal links.
+                             ${colors.gray('Options:')}
+                             ${colors.white('--depth=3')}     ${colors.gray('Maximum depth to crawl')}
+                             ${colors.white('--limit=100')}   ${colors.gray('Maximum pages to crawl')}
+                             ${colors.white('--concurrency=5')} ${colors.gray('Parallel requests')}
+
   ${colors.bold('Documentation:')}
     ${colors.green('? <query>')}           Search Recker documentation.
     ${colors.green('search <query>')}      Alias for ? (hybrid fuzzy+semantic search).
@@ -2885,6 +3011,7 @@ ${colors.bold('Network:')}
     › post /post name="Neo" active:=true role:Admin
     › load /heavy-endpoint users=100 mode=stress
     › chat openai gpt-5.1
+    › spider https://example.com --depth=2 --limit=50
     `);
   }
 }
