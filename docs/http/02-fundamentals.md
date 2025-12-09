@@ -484,3 +484,4 @@ interface RequestOptions {
 - **[Responses & Data](03-responses.md)** - Parsing, streaming, downloads
 - **[Validation](04-validation.md)** - Type-safe requests with Zod
 - **[Configuration](05-configuration.md)** - Client options and hooks
+- **[Mini Client](/mini/01-overview.md)** - Zero-overhead alternative for raw performance

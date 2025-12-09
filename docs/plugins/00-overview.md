@@ -80,8 +80,8 @@ Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 | Plugin | Function | Description |
 |--------|----------|-------------|
 | Pagination | `paginationPlugin` | Automatic pagination |
-| Scrape | `scrapePlugin` | Web scraping with CSS selectors |
-| HLS | `hlsPlugin` | HLS streaming support |
+| Scrape | `scrapePlugin` | [Web scraping with CSS selectors](../web-automation/01-scraping.md) |
+| HLS | `hlsPlugin` | [HLS streaming support](../protocols/08-hls.md) |
 | User Agent | `userAgentRotatorPlugin` | Custom user agent generation |
 | Proxy Rotator | `proxyRotatorPlugin` | Proxy rotation |
 | Interface Rotator | `interfaceRotatorPlugin` | Network interface rotation |

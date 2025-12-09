@@ -252,6 +252,68 @@ await ai.embed({
 // Error: Anthropic does not support embeddings
 ```
 
+## Google Gemini
+
+### Configuration
+
+```typescript
+const client = createAIClient({
+  defaultProvider: 'google',
+  providers: {
+    google: {
+      apiKey: process.env.GOOGLE_API_KEY,
+      apiVersion: 'v1beta', // Default
+      // baseUrl: 'https://generativelanguage.googleapis.com/v1beta' // Default
+    }
+  }
+});
+```
+
+### Environment Variables
+
+```bash
+export GOOGLE_API_KEY="AIza..."
+```
+
+### Models
+
+```typescript
+// Gemini 2.5 Flash (default, fast & multimodal)
+await ai.chat({
+  provider: 'google',
+  model: 'gemini-2.5-flash',
+  messages: [{ role: 'user', content: 'Hello' }]
+});
+
+// Gemini 1.5 Pro (complex reasoning)
+await ai.chat({
+  provider: 'google',
+  model: 'gemini-1.5-pro',
+  messages: [{ role: 'user', content: 'Analysis this report...' }]
+});
+```
+
+### Features
+
+- **Streaming:** Native SSE support
+- **Multimodal:** Text + Images + Video (via base64 or tokens)
+- **JSON Mode:** Supported via `responseFormat: { type: 'json_object' }`
+- **Tools:** Full function calling support
+
+### Embeddings
+
+Google's text-embedding models are supported, including batch processing:
+
+```typescript
+const response = await ai.embed({
+  provider: 'google',
+  model: 'text-embedding-004',
+  input: ['Hello world', 'Another sentence']
+});
+
+console.log(response.embeddings.length); // 2
+```
+
 ## Tool Calling
 
 Both providers support function/tool calling:
@@ -341,16 +403,16 @@ toolChoice: { type: 'function', function: { name: 'get_weather' } }
 
 ## Provider Comparison
 
-| Feature | OpenAI | Anthropic |
-|---------|--------|-----------|
-| Chat | Yes | Yes |
-| Streaming | Yes | Yes |
-| Vision | Yes | Yes |
-| Tools | Yes | Yes |
-| Embeddings | Yes | No |
-| JSON Mode | Yes | No |
-| System Prompt | In messages | Separate field |
-| Max Tokens | Optional | Required |
+| Feature | OpenAI | Anthropic | Google |
+|---------|--------|-----------|--------|
+| Chat | Yes | Yes | Yes |
+| Streaming | Yes | Yes | Yes |
+| Vision | Yes | Yes | Yes |
+| Tools | Yes | Yes | Yes |
+| Embeddings | Yes | No | Yes |
+| JSON Mode | Yes | No | Yes |
+| System Prompt | In messages | Separate field | Separate/Merged |
+| Max Tokens | Optional | Required | Optional |
 
 ## Custom Providers
 
@@ -454,4 +516,4 @@ try {
 ## Next Steps
 
 - **[Patterns](04-patterns.md)** - Prompt handling and context
-- **[MCP](05-mcp.md)** - Model Context Protocol
+- **[MCP](06-mcp-client.md)** - Model Context Protocol

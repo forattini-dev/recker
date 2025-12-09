@@ -524,5 +524,5 @@ process.on('SIGTERM', async () => {
 
 ## Next Steps
 
-- **[MCP Server](06-mcp-server.md)** - Expose your docs to AI agents
+- **[MCP Server](07-mcp-server.md)** - Expose your docs to AI agents
 - **[AI Patterns](04-patterns.md)** - Common AI integration patterns

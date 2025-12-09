@@ -506,5 +506,5 @@ async function processWithLimit(
 
 ## Next Steps
 
-- **[MCP](05-mcp.md)** - Model Context Protocol
+- **[MCP](06-mcp-client.md)** - Model Context Protocol
 - **[Overview](01-overview.md)** - Back to AI basics

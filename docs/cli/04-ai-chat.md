@@ -30,8 +30,13 @@ rek shell
 › set ANTHROPIC_API_KEY=sk-ant-your-key
 › chat anthropic
 
-# Claude with specific model
-› chat anthropic claude-sonnet-4-5
+# Google Gemini
+› set GOOGLE_API_KEY=AIza...
+› chat google gemini-1.5-flash
+
+# Local Models (Ollama)
+# Requires Ollama running on localhost:11434
+› chat ollama llama3
 ```
 
 ## The Chat Interface
@@ -79,6 +84,7 @@ The recommended way to set API keys:
 # Add to your shell profile (.bashrc, .zshrc, etc.)
 export OPENAI_API_KEY=sk-your-openai-key
 export ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
+export GOOGLE_API_KEY=AIza-your-google-key
 ```
 
 ### Session Variables

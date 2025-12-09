@@ -113,9 +113,10 @@ See [CLI Documentation](cli/01-overview.md) for more.
 
 - **Core Features**
   - [Streaming & SSE](ai/02-streaming.md)
-  - [HTML Scraping](http/14-scraping.md)
+  - [Web Automation](web-automation/01-scraping.md)
   - [GraphQL](http/13-graphql.md)
   - [Validation & Contracts](http/04-validation.md)
+  - [Mini Client (Fast)](mini/01-overview.md)
 
 - **Resilience**
   - [Retry & Circuit Breaker](http/07-resilience.md)
@@ -124,11 +125,13 @@ See [CLI Documentation](cli/01-overview.md) for more.
 - **Protocols**
   - [WebSocket](protocols/01-websocket.md)
   - [DNS](protocols/04-dns.md)
+  - [UDP](protocols/09-udp.md)
   - [WHOIS](protocols/05-whois-rdap.md)
 
 - **AI Integration**
   - [AI Overview](ai/01-overview.md)
-  - [MCP Server](ai/06-mcp-server.md)
+  - [Vector Store](ai/05-vector-store.md)
+  - [MCP Server](ai/07-mcp-server.md)
 
 - **Reference**
   - [API Reference](reference/01-api.md)
