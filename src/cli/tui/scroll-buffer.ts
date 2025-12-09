@@ -227,27 +227,48 @@ export class ScrollBuffer extends EventEmitter {
 
 /**
  * Key sequence detection for scroll navigation
+ * Supports multiple terminal escape sequence formats for compatibility.
  */
 export function parseScrollKey(data: Buffer): 'pageUp' | 'pageDown' | 'scrollUp' | 'scrollDown' | 'home' | 'end' | 'quit' | null {
   const str = data.toString();
 
-  // Page Up: \x1b[5~ or \x1bOy
-  if (str === '\x1b[5~' || str === '\x1bOy') return 'pageUp';
+  // Page Up: Multiple terminal formats
+  // \x1b[5~  - VT/xterm standard
+  // \x1bOy   - Application mode
+  // \x1b[5;5~ - With modifier (Ctrl)
+  // \x1b[5;2~ - With modifier (Shift)
+  if (str === '\x1b[5~' || str === '\x1bOy' || str === '\x1b[5;5~' || str === '\x1b[5;2~') return 'pageUp';
 
-  // Page Down: \x1b[6~ or \x1bOs
-  if (str === '\x1b[6~' || str === '\x1bOs') return 'pageDown';
+  // Page Down: Multiple terminal formats
+  // \x1b[6~  - VT/xterm standard
+  // \x1bOs   - Application mode
+  // \x1b[6;5~ - With modifier (Ctrl)
+  // \x1b[6;2~ - With modifier (Shift)
+  if (str === '\x1b[6~' || str === '\x1bOs' || str === '\x1b[6;5~' || str === '\x1b[6;2~') return 'pageDown';
 
-  // Shift+Up: \x1b[1;2A (scroll up)
+  // Shift+Up: scroll up line by line
+  // \x1b[1;2A - Standard with shift modifier
+  // \x1b[A    - Basic up arrow (when in scroll mode)
   if (str === '\x1b[1;2A') return 'scrollUp';
 
-  // Shift+Down: \x1b[1;2B (scroll down)
+  // Shift+Down: scroll down line by line
+  // \x1b[1;2B - Standard with shift modifier
+  // \x1b[B    - Basic down arrow (when in scroll mode)
   if (str === '\x1b[1;2B') return 'scrollDown';
 
-  // Home: \x1b[H or \x1b[1~
-  if (str === '\x1b[H' || str === '\x1b[1~' || str === '\x1bOH') return 'home';
+  // Home: Multiple formats
+  // \x1b[H   - VT100
+  // \x1b[1~  - VT220
+  // \x1bOH   - Application mode
+  // \x1b[7~  - rxvt/urxvt
+  if (str === '\x1b[H' || str === '\x1b[1~' || str === '\x1bOH' || str === '\x1b[7~') return 'home';
 
-  // End: \x1b[F or \x1b[4~
-  if (str === '\x1b[F' || str === '\x1b[4~' || str === '\x1bOF') return 'end';
+  // End: Multiple formats
+  // \x1b[F   - VT100
+  // \x1b[4~  - VT220
+  // \x1bOF   - Application mode
+  // \x1b[8~  - rxvt/urxvt
+  if (str === '\x1b[F' || str === '\x1b[4~' || str === '\x1bOF' || str === '\x1b[8~') return 'end';
 
   // Q or q to quit scroll mode
   if (str === 'q' || str === 'Q') return 'quit';
