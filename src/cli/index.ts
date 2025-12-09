@@ -657,150 +657,316 @@ ${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray
     .command('spider')
     .description('Crawl a website following internal links')
     .argument('<url>', 'Starting URL to crawl')
-    .option('-d, --depth <n>', 'Maximum depth to crawl', '5')
-    .option('-l, --limit <n>', 'Maximum pages to crawl', '100')
-    .option('-c, --concurrency <n>', 'Concurrent requests', '5')
-    .option('--delay <ms>', 'Delay between requests in ms', '100')
-    .option('--format <format>', 'Output format: text (default) or json', 'text')
-    .option('-o, --output <file>', 'Write JSON results to file')
+    .argument('[args...]', 'Options: depth=N limit=N concurrency=N seo output=file.json')
     .addHelpText('after', `
 ${colors.bold(colors.yellow('Examples:'))}
-  ${colors.green('$ rek spider example.com')}                    ${colors.gray('Crawl with defaults')}
-  ${colors.green('$ rek spider example.com -d 3 -l 50')}         ${colors.gray('Depth 3, max 50 pages')}
-  ${colors.green('$ rek spider example.com --format json')}      ${colors.gray('Output as JSON')}
-  ${colors.green('$ rek spider example.com -o results.json')}    ${colors.gray('Save to file')}
+  ${colors.green('$ rek spider example.com')}                           ${colors.gray('Crawl with defaults')}
+  ${colors.green('$ rek spider example.com depth=3 limit=50')}          ${colors.gray('Depth 3, max 50 pages')}
+  ${colors.green('$ rek spider example.com seo')}                       ${colors.gray('Crawl + SEO analysis')}
+  ${colors.green('$ rek spider example.com seo output=report.json')}    ${colors.gray('SEO with JSON export')}
 
 ${colors.bold(colors.yellow('Options:'))}
-  ${colors.cyan('--depth, -d')}       Max link depth to follow (default: 5)
-  ${colors.cyan('--limit, -l')}       Max pages to crawl (default: 100)
-  ${colors.cyan('--concurrency, -c')} Parallel requests (default: 5)
-  ${colors.cyan('--delay')}           Ms between requests (default: 100)
+  ${colors.cyan('depth=N')}           Max link depth to follow (default: 5)
+  ${colors.cyan('limit=N')}           Max pages to crawl (default: 100)
+  ${colors.cyan('concurrency=N')}     Parallel requests (default: 5)
+  ${colors.cyan('seo')}               Enable SEO analysis mode
+  ${colors.cyan('output=file.json')}  Save JSON report to file
 `)
-    .action(async (url, options: { depth?: string; limit?: string; concurrency?: string; delay?: string; format?: string; output?: string }) => {
-      if (!url.startsWith('http')) url = `https://${url}`;
-      const isJson = options.format === 'json';
-      const maxDepth = parseInt(options.depth || '5', 10);
-      const maxPages = parseInt(options.limit || '100', 10);
-      const concurrency = parseInt(options.concurrency || '5', 10);
-      const delay = parseInt(options.delay || '100', 10);
+    .action(async (url: string, args: string[]) => {
+      // Parse key=value args (same syntax as shell)
+      let maxDepth = 5;
+      let maxPages = 100;
+      let concurrency = 5;
+      let seoEnabled = false;
+      let outputFile = '';
 
-      const { Spider } = await import('../scrape/spider.js');
-
-      if (!isJson) {
-        console.log(colors.gray(`\nCrawling ${url}...`));
-        console.log(colors.gray(`  Depth: ${maxDepth}, Limit: ${maxPages}, Concurrency: ${concurrency}\n`));
+      for (const arg of args) {
+        if (arg.startsWith('depth=')) {
+          maxDepth = parseInt(arg.split('=')[1]) || 5;
+        } else if (arg.startsWith('limit=')) {
+          maxPages = parseInt(arg.split('=')[1]) || 100;
+        } else if (arg.startsWith('concurrency=')) {
+          concurrency = parseInt(arg.split('=')[1]) || 5;
+        } else if (arg === 'seo') {
+          seoEnabled = true;
+        } else if (arg.startsWith('output=')) {
+          outputFile = arg.split('=')[1] || '';
+        }
       }
 
+      if (!url.startsWith('http')) url = `https://${url}`;
+
+      const modeLabel = seoEnabled ? colors.magenta(' + SEO') : '';
+      console.log(colors.cyan(`\nSpider starting: ${url}`));
+      console.log(colors.gray(`  Depth: ${maxDepth} | Limit: ${maxPages} | Concurrency: ${concurrency}${modeLabel}`));
+      if (outputFile) {
+        console.log(colors.gray(`  Output: ${outputFile}`));
+      }
+      console.log('');
+
       try {
-        const startTime = performance.now();
-        const spider = new Spider({
-          maxDepth,
-          maxPages,
-          concurrency,
-          delay,
-          onProgress: (progress) => {
-            if (!isJson) {
-              process.stdout.write(`\r${colors.cyan('⟳')} Crawled: ${colors.bold(String(progress.crawled))} | Queued: ${progress.queued} | Current: ${colors.gray(progress.currentUrl.slice(0, 50))}...`);
-            }
-          },
-        });
+        // SEO Spider mode
+        if (seoEnabled) {
+          const { SeoSpider } = await import('../seo/index.js');
 
-        const result = await spider.crawl(url);
-        const duration = Math.round(performance.now() - startTime);
-
-        if (!isJson) {
-          // Clear progress line
-          process.stdout.write('\r' + ' '.repeat(100) + '\r');
-        }
-
-        // JSON output
-        if (isJson || options.output) {
-          const jsonOutput = {
-            startUrl: result.startUrl,
-            crawledAt: new Date().toISOString(),
-            duration,
-            summary: {
-              totalPages: result.pages.length,
-              successCount: result.pages.filter(p => !p.error).length,
-              errorCount: result.errors.length,
-              uniqueUrls: result.visited.size,
+          const seoSpider = new SeoSpider({
+            maxDepth,
+            maxPages,
+            concurrency,
+            sameDomain: true,
+            delay: 100,
+            seo: true,
+            output: outputFile || undefined,
+            onProgress: (progress) => {
+              process.stdout.write(`\r${colors.gray('  Crawling:')} ${colors.cyan(progress.crawled.toString())} pages | ${colors.gray('Queue:')} ${progress.queued} | ${colors.gray('Depth:')} ${progress.depth}   `);
             },
-            pages: result.pages.map(p => ({
-              url: p.url,
-              status: p.status,
-              title: p.title,
-              depth: p.depth,
-              linksCount: p.links.length,
-              duration: p.duration,
-              error: p.error,
-            })),
-            errors: result.errors,
+          });
+
+          const result = await seoSpider.crawl(url);
+
+          // Clear progress line
+          process.stdout.write('\r' + ' '.repeat(80) + '\r');
+
+          // Print SEO Spider results
+          console.log(colors.green(`\n✔ SEO Spider complete`) + colors.gray(` (${(result.duration / 1000).toFixed(1)}s)`));
+          console.log(`  ${colors.cyan('Pages crawled')}: ${result.pages.length}`);
+          console.log(`  ${colors.cyan('Unique URLs')}: ${result.visited.size}`);
+          console.log(`  ${colors.cyan('Avg SEO Score')}: ${result.summary.avgScore}/100`);
+
+          // Calculate performance metrics
+          const responseTimes = result.pages.filter(p => p.duration > 0).map(p => p.duration);
+          const avgResponseTime = responseTimes.length > 0
+            ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+            : 0;
+          const minResponseTime = responseTimes.length > 0 ? Math.min(...responseTimes) : 0;
+          const maxResponseTime = responseTimes.length > 0 ? Math.max(...responseTimes) : 0;
+          const reqPerSec = result.duration > 0 ? (result.pages.length / (result.duration / 1000)).toFixed(1) : '0';
+
+          // Calculate HTTP status distribution
+          const statusCounts = new Map<number, number>();
+          for (const page of result.pages) {
+            const status = page.status || 0;
+            statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+          }
+
+          // Calculate link and image totals from SEO reports
+          let totalInternalLinks = 0;
+          let totalExternalLinks = 0;
+          let totalImages = 0;
+          let imagesWithoutAlt = 0;
+          let pagesWithoutTitle = 0;
+          let pagesWithoutDescription = 0;
+
+          for (const page of result.pages) {
+            if (page.seoReport) {
+              totalInternalLinks += page.seoReport.links?.internal || 0;
+              totalExternalLinks += page.seoReport.links?.external || 0;
+              totalImages += page.seoReport.images?.total || 0;
+              imagesWithoutAlt += page.seoReport.images?.withoutAlt || 0;
+              if (!page.seoReport.title?.text) pagesWithoutTitle++;
+              if (!page.seoReport.metaDescription?.text) pagesWithoutDescription++;
+            }
+          }
+
+          // Show Performance section
+          console.log(colors.bold('\n  Performance:'));
+          console.log(`    ${colors.gray('Avg Response:')}  ${avgResponseTime}ms`);
+          console.log(`    ${colors.gray('Min/Max:')}       ${minResponseTime}ms / ${maxResponseTime}ms`);
+          console.log(`    ${colors.gray('Throughput:')}    ${reqPerSec} req/s`);
+
+          // Show HTTP Status Distribution
+          console.log(colors.bold('\n  HTTP Status:'));
+          const sortedStatuses = Array.from(statusCounts.entries()).sort((a, b) => b[1] - a[1]);
+          for (const [status, count] of sortedStatuses.slice(0, 5)) {
+            const statusLabel = status === 0 ? 'Error' : status.toString();
+            const statusColor = status >= 400 || status === 0 ? colors.red :
+                                status >= 300 ? colors.yellow : colors.green;
+            const pct = ((count / result.pages.length) * 100).toFixed(0);
+            console.log(`    ${statusColor(statusLabel.padEnd(5))} ${count.toString().padStart(3)} (${pct}%)`);
+          }
+
+          // Show Content Stats
+          console.log(colors.bold('\n  Content:'));
+          console.log(`    ${colors.gray('Internal links:')} ${totalInternalLinks.toLocaleString()}`);
+          console.log(`    ${colors.gray('External links:')} ${totalExternalLinks.toLocaleString()}`);
+          console.log(`    ${colors.gray('Images:')}         ${totalImages.toLocaleString()} (${imagesWithoutAlt} missing alt)`);
+          console.log(`    ${colors.gray('Missing title:')}  ${pagesWithoutTitle}`);
+          console.log(`    ${colors.gray('Missing desc:')}   ${pagesWithoutDescription}`);
+
+          // Show SEO summary
+          console.log(colors.bold('\n  SEO Summary:'));
+          const { summary } = result;
+          console.log(`    ${colors.red('✗')} Pages with errors:     ${summary.pagesWithErrors}`);
+          console.log(`    ${colors.yellow('⚠')} Pages with warnings:   ${summary.pagesWithWarnings}`);
+          console.log(`    ${colors.magenta('⚐')} Duplicate titles:      ${summary.duplicateTitles}`);
+          console.log(`    ${colors.magenta('⚐')} Duplicate descriptions:${summary.duplicateDescriptions}`);
+          console.log(`    ${colors.magenta('⚐')} Duplicate H1s:         ${summary.duplicateH1s}`);
+          console.log(`    ${colors.gray('○')} Orphan pages:          ${summary.orphanPages}`);
+
+          // Show site-wide issues
+          if (result.siteWideIssues.length > 0) {
+            console.log(colors.bold('\n  Site-Wide Issues:'));
+            for (const issue of result.siteWideIssues.slice(0, 10)) {
+              const icon = issue.severity === 'error' ? colors.red('✗') :
+                           issue.severity === 'warning' ? colors.yellow('⚠') : colors.gray('○');
+              console.log(`    ${icon} ${issue.message}`);
+              if (issue.value) {
+                const truncatedValue = issue.value.length > 50 ? issue.value.slice(0, 47) + '...' : issue.value;
+                console.log(`      ${colors.gray(`"${truncatedValue}"`)}`);
+              }
+              // Deduplicate affected URLs by pathname
+              const uniquePaths = [...new Set(issue.affectedUrls.map(u => new URL(u).pathname))];
+              if (uniquePaths.length <= 3) {
+                for (const path of uniquePaths) {
+                  console.log(`      ${colors.gray('→')} ${path}`);
+                }
+              } else {
+                console.log(`      ${colors.gray(`→ ${uniquePaths.length} pages affected`)}`);
+              }
+            }
+            if (result.siteWideIssues.length > 10) {
+              console.log(colors.gray(`    ... and ${result.siteWideIssues.length - 10} more issues`));
+            }
+          }
+
+          // Show pages by SEO score (deduplicated by pathname)
+          const pagesWithScores = result.pages
+            .filter(p => p.seoReport)
+            .sort((a, b) => (a.seoReport?.score || 0) - (b.seoReport?.score || 0));
+
+          // Deduplicate by pathname, keeping lowest score per path
+          const seenPaths = new Set<string>();
+          const uniquePages = pagesWithScores.filter(page => {
+            const path = new URL(page.url).pathname;
+            if (seenPaths.has(path)) return false;
+            seenPaths.add(path);
+            return true;
+          });
+
+          if (uniquePages.length > 0) {
+            console.log(colors.bold('\n  Pages by SEO Score:'));
+            const worstPages = uniquePages.slice(0, 5);
+            for (const page of worstPages) {
+              const score = page.seoReport?.score || 0;
+              const grade = page.seoReport?.grade || '?';
+              const path = new URL(page.url).pathname;
+              const scoreColor = score >= 80 ? colors.green : score >= 60 ? colors.yellow : colors.red;
+              console.log(`    ${scoreColor(`${score.toString().padStart(3)}`)} ${colors.gray(`[${grade}]`)} ${path.slice(0, 50)}`);
+            }
+            if (uniquePages.length > 5) {
+              console.log(colors.gray(`    ... and ${uniquePages.length - 5} more pages`));
+            }
+          }
+
+          // Show output file location
+          if (outputFile) {
+            console.log(colors.green(`\n  Report saved to: ${outputFile}`));
+          }
+
+        } else {
+          // Regular spider (non-SEO mode)
+          const { Spider } = await import('../scrape/spider.js');
+
+          const spider = new Spider({
+            maxDepth,
+            maxPages,
+            concurrency,
+            sameDomain: true,
+            delay: 100,
+            onProgress: (progress) => {
+              process.stdout.write(`\r${colors.gray('  Crawling:')} ${colors.cyan(progress.crawled.toString())} pages | ${colors.gray('Queue:')} ${progress.queued} | ${colors.gray('Depth:')} ${progress.depth}   `);
+            },
+          });
+
+          const result = await spider.crawl(url);
+
+          // Clear progress line
+          process.stdout.write('\r' + ' '.repeat(80) + '\r');
+
+          // Print results
+          console.log(colors.green(`\n✔ Spider complete`) + colors.gray(` (${(result.duration / 1000).toFixed(1)}s)`));
+          console.log(`  ${colors.cyan('Pages crawled')}: ${result.pages.length}`);
+          console.log(`  ${colors.cyan('Unique URLs')}: ${result.visited.size}`);
+          console.log(`  ${colors.cyan('Errors')}: ${result.errors.length}`);
+
+          // Show pages by depth
+          const byDepth = new Map<number, number>();
+          for (const page of result.pages) {
+            byDepth.set(page.depth, (byDepth.get(page.depth) || 0) + 1);
+          }
+          console.log(colors.bold('\n  Pages by depth:'));
+          for (const [depth, count] of Array.from(byDepth.entries()).sort((a, b) => a[0] - b[0])) {
+            const bar = '█'.repeat(Math.min(count, 40));
+            console.log(`    ${colors.gray(`d${depth}:`)} ${bar} ${count}`);
+          }
+
+          // Show top pages by links
+          const topPages = [...result.pages]
+            .filter(p => !p.error)
+            .sort((a, b) => b.links.length - a.links.length)
+            .slice(0, 10);
+
+          if (topPages.length > 0) {
+            console.log(colors.bold('\n  Top pages by outgoing links:'));
+            for (const page of topPages) {
+              const title = page.title.slice(0, 40) || new URL(page.url).pathname;
+              console.log(`    ${colors.cyan(page.links.length.toString().padStart(3))} ${title}`);
+            }
+          }
+
+          // Show errors if any
+          const formatError = (error: string): string => {
+            const statusMatch = error.match(/status code (\d{3})/i);
+            if (statusMatch) {
+              return `HTTP ${statusMatch[1]}`;
+            }
+            return error.length > 50 ? error.slice(0, 47) + '...' : error;
           };
 
-          if (options.output) {
-            await fs.writeFile(options.output, JSON.stringify(jsonOutput, null, 2));
-            console.log(colors.green(`✓ Results saved to ${options.output}`));
+          if (result.errors.length > 0 && result.errors.length <= 10) {
+            console.log(colors.bold('\n  Errors:'));
+            for (const err of result.errors) {
+              const path = new URL(err.url).pathname;
+              console.log(`    ${colors.red('✗')} ${path.padEnd(30)} → ${formatError(err.error)}`);
+            }
+          } else if (result.errors.length > 10) {
+            console.log(colors.bold('\n  Errors:'));
+            for (const err of result.errors.slice(0, 5)) {
+              const path = new URL(err.url).pathname;
+              console.log(`    ${colors.red('✗')} ${path.padEnd(30)} → ${formatError(err.error)}`);
+            }
+            console.log(colors.gray(`    ... and ${result.errors.length - 5} more errors`));
           }
-          if (isJson) {
-            console.log(JSON.stringify(jsonOutput, null, 2));
-            return;
+
+          // Save to file if requested
+          if (outputFile) {
+            const jsonOutput = {
+              startUrl: result.startUrl,
+              crawledAt: new Date().toISOString(),
+              duration: result.duration,
+              summary: {
+                totalPages: result.pages.length,
+                successCount: result.pages.filter(p => !p.error).length,
+                errorCount: result.errors.length,
+                uniqueUrls: result.visited.size,
+              },
+              pages: result.pages.map(p => ({
+                url: p.url,
+                status: p.status,
+                title: p.title,
+                depth: p.depth,
+                linksCount: p.links.length,
+                duration: p.duration,
+                error: p.error,
+              })),
+              errors: result.errors,
+            };
+            await fs.writeFile(outputFile, JSON.stringify(jsonOutput, null, 2));
+            console.log(colors.green(`\n  Report saved to: ${outputFile}`));
           }
         }
 
-        // Text output
-        console.log(`${colors.bold(colors.cyan('🕷️ Spider Crawl Complete'))}`);
-        console.log(`${colors.gray('URL:')} ${url}`);
-        console.log(`${colors.gray('Duration:')} ${(duration / 1000).toFixed(1)}s`);
         console.log('');
-
-        // Summary
-        const successCount = result.pages.filter(p => !p.error).length;
-        console.log(`${colors.bold('Summary:')}`);
-        console.log(`  ${colors.green('✓')} Pages crawled: ${colors.bold(String(successCount))}`);
-        console.log(`  ${colors.red('✗')} Errors: ${colors.bold(String(result.errors.length))}`);
-        console.log(`  ${colors.gray('○')} Unique URLs: ${result.visited.size}`);
-        console.log('');
-
-        // Pages by depth
-        const byDepth = new Map<number, number>();
-        for (const page of result.pages) {
-          byDepth.set(page.depth, (byDepth.get(page.depth) || 0) + 1);
-        }
-        console.log(`${colors.bold('Pages by Depth:')}`);
-        for (const [depth, count] of [...byDepth.entries()].sort((a, b) => a[0] - b[0])) {
-          console.log(`  ${colors.gray(`Depth ${depth}:`)} ${count} pages`);
-        }
-        console.log('');
-
-        // Show errors if any
-        if (result.errors.length > 0) {
-          console.log(`${colors.bold(colors.red('Errors:'))}`);
-          for (const err of result.errors.slice(0, 10)) {
-            const shortUrl = err.url.replace(url, '');
-            // Extract HTTP status if present
-            const statusMatch = err.error.match(/status code (\d+)/);
-            const errorMsg = statusMatch ? `HTTP ${statusMatch[1]}` : err.error.slice(0, 50);
-            console.log(`  ${colors.red('✗')} ${colors.gray(shortUrl || '/')} → ${errorMsg}`);
-          }
-          if (result.errors.length > 10) {
-            console.log(`  ${colors.gray(`  ... and ${result.errors.length - 10} more`)}`);
-          }
-          console.log('');
-        }
-
-        // Show sample of successful pages
-        const successPages = result.pages.filter(p => !p.error).slice(0, 10);
-        if (successPages.length > 0) {
-          console.log(`${colors.bold('Sample Pages:')}`);
-          for (const page of successPages) {
-            const shortUrl = page.url.replace(url, '');
-            console.log(`  ${colors.green('✓')} ${colors.gray((shortUrl || '/').padEnd(40))} ${page.title.slice(0, 40)}`);
-          }
-          if (result.pages.length > 10) {
-            console.log(`  ${colors.gray(`  ... and ${result.pages.length - 10} more`)}`);
-          }
-        }
-
       } catch (error: any) {
         console.error(colors.red(`\nSpider failed: ${error.message}`));
         process.exit(1);
