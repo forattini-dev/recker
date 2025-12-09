@@ -20,6 +20,7 @@ import type {
 import { UnsupportedError } from '../core/errors.js';
 import { getIpInfo, isValidIP, isGeoIPAvailable, isBogon, isIPv6, type IpInfo } from './ip-intel.js';
 import { networkTools, networkToolHandlers } from './tools/network.js';
+import { seoTools, seoToolHandlers } from './tools/seo.js';
 import { ToolRegistry } from './tools/registry.js';
 import { loadToolModules } from './tools/loader.js';
 
@@ -83,6 +84,9 @@ interface TypeDefinition {
  * - `dns_lookup`: Resolve DNS records
  * - `whois_lookup`: Query WHOIS databases
  * - `network_ping`: Check TCP connectivity
+ * - `rek_seo_analyze`: Analyze a single page for SEO issues (250+ rules)
+ * - `rek_seo_spider`: Crawl entire site and detect duplicates/orphans
+ * - `rek_seo_quick_wins`: Get prioritized SEO improvements
  */
 export class MCPServer {
   private options: Required<MCPServerOptions>;
@@ -125,6 +129,10 @@ export class MCPServer {
     this.toolRegistry.registerModule({
       tools: networkTools,
       handlers: networkToolHandlers
+    });
+    this.toolRegistry.registerModule({
+      tools: seoTools,
+      handlers: seoToolHandlers
     });
 
     // Note: buildIndex is async but constructor can't await.
