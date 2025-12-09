@@ -6,6 +6,7 @@ Unified AI communication across OpenAI, Anthropic, and more.
 
 - **Multi-Provider**: OpenAI, Anthropic, Google, Ollama support
 - **Unified API**: Same interface for all providers
+- **Vector Store**: In-memory vector database for RAG
 - **Streaming**: Token-by-token streaming with typed events
 - **Tool Calling**: Function calling across providers
 - **Metrics**: Token usage, cost tracking, latency
@@ -307,13 +308,19 @@ try {
 
 | Model | Description |
 |-------|-------------|
-| `gemini-3-pro` | Gemini 3.0 Pro (SOTA, beats GPT-5 Pro) |
-| `gemini-3-deep-think` | Gemini 3.0 Deep Think (advanced reasoning) |
-| `gemini-2.5-pro` | Gemini 2.5 Pro (thinking model) |
-| `gemini-2.5-flash` | Gemini 2.5 Flash (fast, efficient) |
-| `gemini-2.5-flash-lite` | Gemini 2.5 Flash-Lite (most cost-efficient) |
-| `gemini-2.0-flash` | Gemini 2.0 Flash (1M context, tool use) |
-| `text-embedding-005` | Embeddings |
+| `gemini-1.5-pro` | Gemini 1.5 Pro (complex reasoning) |
+| `gemini-1.5-flash` | Gemini 1.5 Flash (fast, multimodal) |
+| `gemini-1.0-pro` | Gemini 1.0 Pro |
+| `text-embedding-004` | Embeddings |
+
+### Local Models (Ollama)
+
+| Model | Description |
+|-------|-------------|
+| `llama3` | Llama 3 (8B/70B) |
+| `mistral` | Mistral 7B |
+| `phi3` | Microsoft Phi-3 |
+| `gemma` | Google Gemma |
 
 ### Other Providers
 
@@ -329,4 +336,5 @@ try {
 - **[Streaming](02-streaming.md)** - Token streaming and events
 - **[Providers](03-providers.md)** - Provider-specific features
 - **[Patterns](04-patterns.md)** - Prompt handling and context
-- **[MCP](05-mcp.md)** - Model Context Protocol
+- **[Vector Store](05-vector-store.md)** - RAG and embeddings
+- **[MCP](06-mcp-client.md)** - Model Context Protocol

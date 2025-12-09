@@ -9,7 +9,6 @@
   - [Responses & Data](/http/03-responses.md)
   - [Validation & Contracts](/http/04-validation.md)
   - [Configuration & Hooks](/http/05-configuration.md)
-  - [Mini Client (Fast Mode)](/http/18-mini-client.md)
   - [Performance](/http/06-performance.md)
   - [Resilience](/http/07-resilience.md)
   - [Concurrency & Batch](/http/08-concurrency.md)
@@ -18,11 +17,16 @@
   - [Specialties](/http/11-specialties.md)
   - [Observability](/http/12-observability.md)
   - [GraphQL](/http/13-graphql.md)
-  - [Web Scraping](/http/14-scraping.md)
-  - [SEO Analysis](/http/19-seo.md)
-  - [SOAP & XML-RPC](/http/15-soap.md)
-  - [JSON-RPC](/http/16-jsonrpc.md)
-  - [OData](/http/17-odata.md)
+  - [SOAP & XML-RPC](/http/14-soap.md)
+  - [JSON-RPC](/http/15-jsonrpc.md)
+  - [OData](/http/16-odata.md)
+
+- **Mini Client**
+  - [Overview](/mini/01-overview.md)
+
+- **Web Automation**
+  - [Scraping](/web-automation/01-scraping.md)
+  - [SEO Analysis](/web-automation/02-seo.md)
 
 - **Plugins**
   - [Overview](/plugins/00-overview.md)
@@ -42,8 +46,9 @@
   - [Streaming](/ai/02-streaming.md)
   - [Providers](/ai/03-providers.md)
   - [Patterns](/ai/04-patterns.md)
-  - [MCP Client](/ai/05-mcp-client.md)
-  - [MCP Server](/ai/06-mcp-server.md)
+  - [Vector Store](/ai/05-vector-store.md)
+  - [MCP Client](/ai/06-mcp-client.md)
+  - [MCP Server](/ai/07-mcp-server.md)
 
 - **CLI Tool**
   - [Overview](/cli/01-overview.md)
@@ -68,6 +73,7 @@
   - [SSE](/protocols/06-sse.md)
   - [Enterprise](/protocols/07-enterprise.md)
   - [HLS](/protocols/08-hls.md)
+  - [UDP SDK](/protocols/09-udp.md)
 
 - **Reference**
   - [API Reference](/reference/01-api.md)

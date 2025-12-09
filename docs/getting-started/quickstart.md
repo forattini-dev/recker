@@ -17,6 +17,22 @@ const user = await client.get('/users/octocat').json();
 console.log(user.name); // "The Octocat"
 ```
 
+## Beyond HTTP
+
+Recker is more than just an HTTP client.
+
+### AI & LLMs
+```typescript
+import { recker } from 'recker';
+const response = await recker.ai.chat('Hello world');
+```
+
+### Protocols
+```typescript
+import { udp } from 'recker/udp';
+await udp.send('127.0.0.1:9000', Buffer.from('ping'));
+```
+
 ## With Smart Features
 
 ```typescript

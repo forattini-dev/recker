@@ -477,6 +477,33 @@ if (response.toolCalls) {
 }
 ```
 
+### RAG with Vector Store
+
+```typescript
+import { MemoryVectorStore } from 'recker/ai/vector';
+import { ai } from 'recker/ai';
+
+const store = new MemoryVectorStore({ client: ai });
+
+// 1. Ingest
+await store.add([
+  { content: 'Recker supports UDP via recker/udp' },
+  { content: 'Recker supports RAG via MemoryVectorStore' }
+]);
+
+// 2. Search & Generate
+const question = 'Does Recker support UDP?';
+const context = await store.search(question, 1);
+
+const response = await ai.chat({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'system', content: `Context: ${context[0].content}` },
+    { role: 'user', content: question }
+  ]
+});
+```
+
 ## WebSocket
 
 ### Basic Connection
