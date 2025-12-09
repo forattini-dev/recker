@@ -7,6 +7,7 @@
 
 import { createClient } from '../core/client.js';
 import { ScrapeDocument } from './document.js';
+import { RequestPool } from '../utils/request-pool.js';
 import type { ExtractedLink } from './types.js';
 
 export interface SpiderOptions {
@@ -161,6 +162,7 @@ export class Spider {
     onProgress?: (progress: SpiderProgress) => void;
   };
   private client: ReturnType<typeof createClient>;
+  private pool: RequestPool;
   private visited: Set<string> = new Set();
   private queue: QueueItem[] = [];
   private results: SpiderPageResult[] = [];
@@ -168,6 +170,7 @@ export class Spider {
   private baseHost: string = '';
   private running: boolean = false;
   private aborted: boolean = false;
+  private pendingCount: number = 0;
 
   constructor(options: SpiderOptions = {}) {
     this.options = {
@@ -192,10 +195,26 @@ export class Spider {
         'User-Agent': this.options.userAgent,
       },
     } as any);
+
+    // Initialize request pool for concurrency control
+    // Also supports rate limiting via delay (requestsPerInterval)
+    this.pool = new RequestPool({
+      concurrency: this.options.concurrency,
+      // If delay is set, convert to rate limiting: 1 request per delay ms
+      ...(this.options.delay > 0 ? {
+        requestsPerInterval: 1,
+        interval: this.options.delay,
+      } : {}),
+    });
   }
 
   /**
    * Start crawling from a URL
+   *
+   * Uses RequestPool for efficient concurrency control:
+   * - True concurrent execution (no batch waiting)
+   * - Rate limiting via delay option
+   * - Immediate scheduling of discovered URLs
    */
   async crawl(startUrl: string): Promise<SpiderResult> {
     const startTime = performance.now();
@@ -206,51 +225,68 @@ export class Spider {
 
     // Reset state
     this.visited.clear();
-    this.queue = [{ url: normalizedStart, depth: 0 }];
+    this.queue = [];
     this.results = [];
     this.errors = [];
     this.running = true;
     this.aborted = false;
+    this.pendingCount = 0;
 
-    // Process queue with concurrency
-    while (this.queue.length > 0 && !this.aborted) {
-      // Check page limit
-      if (this.results.length >= this.options.maxPages) {
-        break;
-      }
+    // Track pending crawl promises by URL
+    const pending = new Map<string, Promise<void>>();
 
-      // Get batch of URLs to process
-      const batch: QueueItem[] = [];
-      while (batch.length < this.options.concurrency && this.queue.length > 0) {
+    // Helper to schedule a URL for crawling
+    const scheduleUrl = (item: QueueItem): void => {
+      const normalized = normalizeUrl(item.url);
+
+      // Skip if already visited or pending
+      if (this.visited.has(normalized)) return;
+      if (pending.has(normalized)) return;
+
+      // Skip if exceeds max depth
+      if (item.depth > this.options.maxDepth) return;
+
+      // Skip if we've reached max pages (count completed + pending)
+      if (this.results.length + pending.size >= this.options.maxPages) return;
+
+      // Mark as visited to prevent duplicate scheduling
+      this.visited.add(normalized);
+      this.pendingCount++;
+
+      // Schedule via pool - returns immediately, pool handles concurrency
+      const promise = this.pool.run(() => this.crawlPage({ ...item, url: normalized }))
+        .finally(() => {
+          pending.delete(normalized);
+          this.pendingCount--;
+        });
+
+      pending.set(normalized, promise);
+    };
+
+    // Schedule the start URL
+    scheduleUrl({ url: normalizedStart, depth: 0 });
+
+    // Process until no more pending crawls or aborted
+    while ((pending.size > 0 || this.queue.length > 0) && !this.aborted) {
+      // Schedule any URLs discovered from completed crawls
+      while (this.queue.length > 0 && !this.aborted) {
         const item = this.queue.shift()!;
-        const normalized = normalizeUrl(item.url);
 
-        // Skip if already visited
-        if (this.visited.has(normalized)) {
-          continue;
-        }
+        // Check if we should continue scheduling
+        if (this.results.length + pending.size >= this.options.maxPages) break;
 
-        // Skip if exceeds max depth
-        if (item.depth > this.options.maxDepth) {
-          continue;
-        }
-
-        // Mark as visited BEFORE processing (prevents duplicates)
-        this.visited.add(normalized);
-        batch.push({ ...item, url: normalized });
+        scheduleUrl(item);
       }
 
-      if (batch.length === 0) {
-        continue;
+      // If there are pending crawls, wait for at least one to complete
+      if (pending.size > 0) {
+        await Promise.race(pending.values());
       }
+    }
 
-      // Process batch concurrently
-      await Promise.all(batch.map(item => this.crawlPage(item)));
-
-      // Delay between batches
-      if (this.options.delay > 0 && this.queue.length > 0) {
-        await sleep(this.options.delay);
-      }
+    // Wait for any remaining crawls to complete
+    if (pending.size > 0) {
+      await Promise.all(pending.values());
     }
 
     this.running = false;
