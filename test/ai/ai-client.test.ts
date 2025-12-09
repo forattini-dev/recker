@@ -983,8 +983,13 @@ describe('AI Client Extended Features', () => {
 
 describe('AI Client Retry Logic', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     mockFetch.mockReset();
     process.env.OPENAI_API_KEY = 'test-key';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should retry on rate limit error', async () => {
@@ -1013,7 +1018,10 @@ describe('AI Client Retry Logic', () => {
     const client = createAI({
       retry: { maxAttempts: 3, on: ['rate_limit'] }
     });
-    const response = await client.chat('Test');
+    
+    const promise = client.chat('Test');
+    await vi.runAllTimersAsync();
+    const response = await promise;
 
     expect(response.content).toBe('Success');
     expect(attempts).toBe(2);
@@ -1050,7 +1058,10 @@ describe('AI Client Retry Logic', () => {
         onRetry: () => { retryCallbackCalled = true; }
       }
     });
-    await client.chat('Test');
+    
+    const promise = client.chat('Test');
+    await vi.runAllTimersAsync();
+    await promise;
 
     expect(retryCallbackCalled).toBe(true);
   });
@@ -1080,7 +1091,14 @@ describe('AI Client Retry Logic', () => {
     const client = createAI({
       retry: { maxAttempts: 3, on: ['overloaded'], backoff: 'linear' }
     });
-    const response = await client.chat('Test');
+    
+    const promise = client.chat('Test');
+    
+    // We need to advance time multiple times for multiple retries
+    // Or runAllTimersAsync handles it if they are chained
+    await vi.runAllTimersAsync();
+    
+    const response = await promise;
 
     expect(response.content).toBe('Success');
     expect(attempts).toBe(3);
@@ -1111,7 +1129,10 @@ describe('AI Client Retry Logic', () => {
     const client = createAI({
       retry: { maxAttempts: 3, on: ['overloaded'], backoff: 'decorrelated' }
     });
-    const response = await client.chat('Test');
+    
+    const promise = client.chat('Test');
+    await vi.runAllTimersAsync();
+    const response = await promise;
 
     expect(response.content).toBe('Success');
   });
@@ -1127,7 +1148,11 @@ describe('AI Client Retry Logic', () => {
       retry: { maxAttempts: 2, on: ['overloaded'] }
     });
 
-    await expect(client.chat('Test')).rejects.toThrow();
+    const promise = client.chat('Test');
+    const expectation = expect(promise).rejects.toThrow();
+    
+    await vi.runAllTimersAsync();
+    await expectation;
   });
 
   it('should not retry on non-retryable errors', async () => {
@@ -1182,7 +1207,10 @@ describe('AI Client Retry Logic', () => {
       debug: true,
       retry: { maxAttempts: 3, on: ['overloaded'] }
     });
-    await client.chat('Test');
+    
+    const promise = client.chat('Test');
+    await vi.runAllTimersAsync();
+    await promise;
 
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
