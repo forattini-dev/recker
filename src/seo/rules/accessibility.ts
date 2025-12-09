@@ -145,43 +145,6 @@ export const accessibilityRules: SeoRule[] = [
   },
 
   // ==========================================================================
-  // Contrast
-  // ==========================================================================
-  {
-    id: 'a11y-color-contrast',
-    name: 'Color Contrast',
-    category: 'accessibility',
-    severity: 'warning',
-    description: 'Background and foreground colors should have sufficient contrast ratio',
-    check: (ctx) => {
-      if (ctx.lowContrastElements === undefined) return null;
-      const count = ctx.lowContrastElements;
-      if (count > 0) {
-        return createResult(
-          { id: 'a11y-color-contrast', name: 'Color Contrast', category: 'accessibility', severity: 'warning' },
-          'warn',
-          `${count} element(s) have insufficient color contrast`,
-          {
-            value: count,
-            recommendation: 'Ensure text has a contrast ratio of at least 4.5:1 for normal text, 3:1 for large text',
-            evidence: {
-              found: count,
-              expected: 0,
-              impact: 'Low-vision users may have difficulty reading content',
-              learnMore: 'https://dequeuniversity.com/rules/axe/4.4/color-contrast',
-            },
-          }
-        );
-      }
-      return createResult(
-        { id: 'a11y-color-contrast', name: 'Color Contrast', category: 'accessibility', severity: 'warning' },
-        'pass',
-        'All text has sufficient color contrast'
-      );
-    },
-  },
-
-  // ==========================================================================
   // Navigation
   // ==========================================================================
   {
@@ -765,43 +728,6 @@ export const accessibilityRules: SeoRule[] = [
   },
 
   // ==========================================================================
-  // Touch Targets
-  // ==========================================================================
-  {
-    id: 'a11y-touch-targets',
-    name: 'Touch Target Size',
-    category: 'accessibility',
-    severity: 'warning',
-    description: 'Touch targets should have sufficient size and spacing',
-    check: (ctx) => {
-      if (ctx.smallTouchTargets === undefined) return null;
-      const count = ctx.smallTouchTargets;
-      if (count > 0) {
-        return createResult(
-          { id: 'a11y-touch-targets', name: 'Touch Target Size', category: 'accessibility', severity: 'warning' },
-          'warn',
-          `${count} interactive element(s) have small touch targets`,
-          {
-            value: count,
-            recommendation: 'Ensure touch targets are at least 48x48 CSS pixels with adequate spacing',
-            evidence: {
-              found: count,
-              expected: 0,
-              impact: 'Users with motor impairments may have difficulty tapping small targets',
-              learnMore: 'https://web.dev/accessible-tap-targets/',
-            },
-          }
-        );
-      }
-      return createResult(
-        { id: 'a11y-touch-targets', name: 'Touch Target Size', category: 'accessibility', severity: 'warning' },
-        'pass',
-        'Touch targets have sufficient size'
-      );
-    },
-  },
-
-  // ==========================================================================
   // Document
   // ==========================================================================
   {
@@ -977,43 +903,6 @@ export const accessibilityRules: SeoRule[] = [
   },
 
   // ==========================================================================
-  // Paste Prevention
-  // ==========================================================================
-  {
-    id: 'a11y-paste-inputs',
-    name: 'Input Paste Prevention',
-    category: 'accessibility',
-    severity: 'warning',
-    description: 'Users should be allowed to paste into input fields',
-    check: (ctx) => {
-      if (ctx.inputsPreventingPaste === undefined) return null;
-      const count = ctx.inputsPreventingPaste;
-      if (count > 0) {
-        return createResult(
-          { id: 'a11y-paste-inputs', name: 'Input Paste Prevention', category: 'accessibility', severity: 'warning' },
-          'warn',
-          `${count} input(s) prevent pasting`,
-          {
-            value: count,
-            recommendation: 'Remove onpaste="return false" or JavaScript that prevents pasting',
-            evidence: {
-              found: count,
-              expected: 0,
-              impact: 'Users with password managers cannot paste passwords, impacting usability',
-              learnMore: 'https://web.dev/password-inputs-can-be-pasted-into/',
-            },
-          }
-        );
-      }
-      return createResult(
-        { id: 'a11y-paste-inputs', name: 'Input Paste Prevention', category: 'accessibility', severity: 'warning' },
-        'pass',
-        'All inputs allow pasting'
-      );
-    },
-  },
-
-  // ==========================================================================
   // Headings
   // ==========================================================================
   {
@@ -1082,38 +971,6 @@ export const accessibilityRules: SeoRule[] = [
         { id: 'a11y-images-redundant-alt', name: 'Redundant Alt Text', category: 'accessibility', severity: 'info' },
         'pass',
         'No redundant alt text found'
-      );
-    },
-  },
-  {
-    id: 'a11y-images-aspect-ratio',
-    name: 'Image Aspect Ratio',
-    category: 'accessibility',
-    severity: 'info',
-    description: 'Images should display with correct aspect ratio',
-    check: (ctx) => {
-      if (ctx.imagesWithIncorrectAspectRatio === undefined) return null;
-      const count = ctx.imagesWithIncorrectAspectRatio;
-      if (count > 0) {
-        return createResult(
-          { id: 'a11y-images-aspect-ratio', name: 'Image Aspect Ratio', category: 'accessibility', severity: 'info' },
-          'info',
-          `${count} image(s) may display with incorrect aspect ratio`,
-          {
-            value: count,
-            recommendation: 'Ensure image width and height attributes match the actual image dimensions',
-            evidence: {
-              found: count,
-              expected: 0,
-              impact: 'Distorted images affect visual presentation and usability',
-            },
-          }
-        );
-      }
-      return createResult(
-        { id: 'a11y-images-aspect-ratio', name: 'Image Aspect Ratio', category: 'accessibility', severity: 'info' },
-        'pass',
-        'Images display with correct aspect ratios'
       );
     },
   },
