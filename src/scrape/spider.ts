@@ -69,10 +69,35 @@ interface QueueItem {
 }
 
 /**
+ * Common tracking parameters that should be removed during normalization
+ * These don't affect page content but create duplicate URLs
+ */
+const TRACKING_PARAMS = new Set([
+  // Google Analytics / Ads
+  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+  'gclid', 'gclsrc', 'dclid',
+  // Facebook
+  'fbclid', 'fb_action_ids', 'fb_action_types', 'fb_source', 'fb_ref',
+  // Microsoft/Bing
+  'msclkid',
+  // Twitter
+  'twclid',
+  // Other common tracking
+  'ref', 'referer', 'referrer', 'source',
+  '_ga', '_gl', '_hsenc', '_hsmi',
+  'mc_cid', 'mc_eid',
+  'yclid', 'ymclid',
+  'igshid',
+  // Session/cache busting
+  '_t', 't', 'timestamp', 'ts', 'nocache', 'cache',
+]);
+
+/**
  * Normalize URL for deduplication
- * - Remove trailing slashes
  * - Remove fragments
- * - Sort query params
+ * - Remove tracking parameters
+ * - Sort remaining query params
+ * - Remove trailing slashes
  * - Lowercase hostname
  */
 function normalizeUrl(urlStr: string): string {
@@ -80,8 +105,19 @@ function normalizeUrl(urlStr: string): string {
     const url = new URL(urlStr);
     // Remove fragment
     url.hash = '';
-    // Sort query params
+
+    // Remove tracking parameters
+    const paramsToDelete: string[] = [];
+    url.searchParams.forEach((_, key) => {
+      if (TRACKING_PARAMS.has(key.toLowerCase())) {
+        paramsToDelete.push(key);
+      }
+    });
+    paramsToDelete.forEach(key => url.searchParams.delete(key));
+
+    // Sort remaining query params
     url.searchParams.sort();
+
     // Remove trailing slash from pathname (except for root)
     if (url.pathname !== '/' && url.pathname.endsWith('/')) {
       url.pathname = url.pathname.slice(0, -1);
