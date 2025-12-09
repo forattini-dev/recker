@@ -315,36 +315,46 @@ async function sendTelnetCommand(port: number, command: string): Promise<string>
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ port, host: '127.0.0.1' });
     let response = '';
+    let commandSent = false;
 
     const timeout = setTimeout(() => {
       socket.destroy();
-      resolve(response); // Return what we have
+      resolve(response);
     }, 2000);
 
-    socket.on('connect', () => {
-      if (command) {
-        // Wait a bit for banner, then send command
-        setTimeout(() => {
-          socket.write(command + '\r\n');
-          // Wait for response
-          setTimeout(() => {
-            clearTimeout(timeout);
-            socket.destroy();
-            resolve(response);
-          }, 500);
-        }, 200);
-      } else {
-        // Just read initial banner
-        setTimeout(() => {
+    socket.on('data', (data) => {
+      const chunk = data.toString();
+      response += chunk;
+
+      // Check if we are ready to send (server sent prompt)
+      // The mock server sends "> " as prompt.
+      if (!commandSent && chunk.includes('> ')) {
+        if (!command) {
           clearTimeout(timeout);
           socket.destroy();
           resolve(response);
-        }, 500);
+          return;
+        }
+
+        commandSent = true;
+        socket.write(command + '\r\n');
+        return;
+      }
+
+      // If we sent command, wait for response
+      // The server usually echoes the command, sends result, then prompt.
+      // So if we see the prompt again, we are done.
+      // Exception: "quit" command closes connection, so 'close' event handles that.
+      if (commandSent && (chunk.includes('> ') || chunk.includes('Goodbye'))) {
+         clearTimeout(timeout);
+         socket.destroy();
+         resolve(response);
       }
     });
 
-    socket.on('data', (data) => {
-      response += data.toString();
+    socket.on('close', () => {
+       clearTimeout(timeout);
+       resolve(response);
     });
 
     socket.on('error', (err) => {

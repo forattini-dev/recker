@@ -468,33 +468,43 @@ async function sendFtpCommand(port: number, command: string | null): Promise<str
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ port, host: '127.0.0.1' });
     let response = '';
+    let hasWelcome = false;
 
     const timeout = setTimeout(() => {
       socket.destroy();
-      resolve(response);
-    }, 3000);
+      resolve(response); // Return whatever we got
+    }, 2000);
 
-    socket.on('connect', () => {
-      if (command) {
-        setTimeout(() => {
-          socket.write(command + '\r\n');
-          setTimeout(() => {
-            clearTimeout(timeout);
-            socket.destroy();
-            resolve(response);
-          }, 500);
-        }, 200);
-      } else {
-        setTimeout(() => {
+    socket.on('data', (data) => {
+      const chunk = data.toString();
+      response += chunk;
+
+      // Check for Welcome message (220)
+      if (!hasWelcome && chunk.includes('220 ')) {
+        hasWelcome = true;
+        
+        // If we only wanted to connect (no command), we are done
+        if (!command) {
           clearTimeout(timeout);
           socket.destroy();
           resolve(response);
-        }, 500);
-      }
-    });
+          return;
+        }
 
-    socket.on('data', (data) => {
-      response += data.toString();
+        // Send the command now that we are connected and welcomed
+        socket.write(command + '\r\n');
+        return;
+      }
+
+      // If we already had welcome, this must be the response to our command
+      if (hasWelcome && command) {
+         // Wait for a complete line (response code)
+         if (chunk.match(/\d{3} .+\r\n$/)) {
+            clearTimeout(timeout);
+            socket.destroy();
+            resolve(response);
+         }
+      }
     });
 
     socket.on('error', (err) => {
@@ -510,35 +520,40 @@ async function sendFtpCommands(port: number, commands: string[]): Promise<string
     const socket = net.createConnection({ port, host: '127.0.0.1' });
     let response = '';
     let commandIndex = 0;
+    let hasWelcome = false;
 
     const timeout = setTimeout(() => {
       socket.destroy();
       resolve(response);
-    }, 5000);
+    }, 3000);
 
-    const sendNextCommand = () => {
+    const sendNext = () => {
       if (commandIndex < commands.length) {
-        setTimeout(() => {
-          socket.write(commands[commandIndex++] + '\r\n');
-          if (commandIndex < commands.length) {
-            sendNextCommand();
-          } else {
-            setTimeout(() => {
-              clearTimeout(timeout);
-              socket.destroy();
-              resolve(response);
-            }, 500);
-          }
-        }, 150);
+        socket.write(commands[commandIndex++] + '\r\n');
+      } else {
+        clearTimeout(timeout);
+        socket.destroy();
+        resolve(response);
       }
     };
 
-    socket.on('connect', () => {
-      setTimeout(sendNextCommand, 200);
-    });
-
     socket.on('data', (data) => {
-      response += data.toString();
+      const chunk = data.toString();
+      response += chunk;
+
+      if (!hasWelcome && chunk.includes('220 ')) {
+        hasWelcome = true;
+        sendNext(); // Send first command
+        return;
+      }
+
+      // If we are processing commands
+      if (hasWelcome) {
+        // Simple heuristic: if it looks like a complete response, send next
+        if (chunk.match(/\d{3} .+\r\n$/)) {
+           sendNext();
+        }
+      }
     });
 
     socket.on('error', (err) => {

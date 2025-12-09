@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createClient } from '../../src/index.js';
 import { cachePlugin } from '../../src/plugins/cache.js';
 import { MockTransport } from '../helpers/mock-transport.js';
@@ -6,6 +6,14 @@ import { MemoryStorage } from '../../src/cache/memory-storage.js';
 
 describe('Cache Plugin', () => {
   const baseUrl = 'https://api.example.com';
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('should cache GET requests', async () => {
     const mockTransport = new MockTransport();
@@ -48,7 +56,7 @@ describe('Cache Plugin', () => {
     await client.get('/ttl'); // v: 1
 
     // Wait for TTL to expire
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await vi.advanceTimersByTimeAsync(150);
 
     const res2 = await client.get('/ttl').json<{ v: number }>();
     expect(res2.v).toBe(2); // Should be fresh
@@ -85,7 +93,7 @@ describe('Cache Plugin', () => {
     expect(res1.v).toBe(1);
 
     // Wait for background fetch to update storage
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     // Check storage directly to see if it was updated to v:2
     const entry = await storage.get(`GET:${baseUrl}/swr`);
@@ -471,7 +479,7 @@ describe('Cache Plugin', () => {
       await client.get('/explicit-wins');
 
       // Wait for max-age to expire (2 seconds)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await vi.advanceTimersByTimeAsync(2000);
 
       // Should revalidate (max-age=1 overrides heuristic)
       mockTransport.setMockResponse('GET', '/explicit-wins', 200, { data: 'second' });
@@ -529,7 +537,7 @@ describe('Cache Plugin', () => {
       await client.get('/maxage');
 
       // Wait 2 seconds
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await vi.advanceTimersByTimeAsync(2000);
 
       // Request with max-age=1 (only accept responses < 1s old)
       // Should reject cached response and fetch fresh
@@ -564,7 +572,7 @@ describe('Cache Plugin', () => {
       await client.get('/minfresh');
 
       // Wait 2 seconds (cached response is 2s old, still fresh for 3s)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await vi.advanceTimersByTimeAsync(2000);
 
       // Request with min-fresh=5 (need response fresh for at least 5s more)
       // Should reject cached response (only 3s freshness remaining)
