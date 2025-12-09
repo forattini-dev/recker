@@ -1787,13 +1787,13 @@ ${colors.bold('Network:')}
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
-      if (arg.startsWith('--depth=') || arg.startsWith('-d=')) {
-        maxDepth = parseInt(arg.split('=')[1]) || 3;
-      } else if (arg.startsWith('--limit=') || arg.startsWith('-l=')) {
+      if (arg.startsWith('depth=')) {
+        maxDepth = parseInt(arg.split('=')[1]) || 4;
+      } else if (arg.startsWith('limit=')) {
         maxPages = parseInt(arg.split('=')[1]) || 100;
-      } else if (arg.startsWith('--concurrency=') || arg.startsWith('-c=')) {
+      } else if (arg.startsWith('concurrency=')) {
         concurrency = parseInt(arg.split('=')[1]) || 5;
-      } else if (!arg.startsWith('-')) {
+      } else if (!arg.includes('=')) {
         url = arg;
       }
     }
@@ -1803,12 +1803,12 @@ ${colors.bold('Network:')}
       if (!this.baseUrl) {
         console.log(colors.yellow('Usage: spider <url> [options]'));
         console.log(colors.gray('  Options:'));
-        console.log(colors.gray('    --depth=4      Max crawl depth'));
-        console.log(colors.gray('    --limit=100    Max pages to crawl'));
-        console.log(colors.gray('    --concurrency=5  Concurrent requests'));
+        console.log(colors.gray('    depth=4        Max crawl depth'));
+        console.log(colors.gray('    limit=100      Max pages to crawl'));
+        console.log(colors.gray('    concurrency=5  Concurrent requests'));
         console.log(colors.gray('  Examples:'));
-        console.log(colors.gray('    spider https://example.com'));
-        console.log(colors.gray('    spider https://example.com --depth=2 --limit=50'));
+        console.log(colors.gray('    spider example.com'));
+        console.log(colors.gray('    spider example.com depth=2 limit=50'));
         return;
       }
       url = this.baseUrl;
@@ -3021,7 +3021,7 @@ ${colors.bold('Network:')}
     › post /post name="Neo" active:=true role:Admin
     › load /heavy-endpoint users=100 mode=stress
     › chat openai gpt-5.1
-    › spider https://example.com --depth=2 --limit=50
+    › spider example.com depth=2 limit=50
     `);
   }
 }
