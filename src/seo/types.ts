@@ -100,11 +100,29 @@ export interface TechnicalSeo {
   langValue?: string;
 }
 
+export interface SeoTiming {
+  /** Time to first byte (ms) */
+  ttfb?: number;
+  /** Total request duration (ms) */
+  total?: number;
+  /** DNS lookup time (ms) */
+  dns?: number;
+  /** TCP connection time (ms) */
+  tcp?: number;
+  /** TLS handshake time (ms) */
+  tls?: number;
+  /** Content download time (ms) */
+  download?: number;
+}
+
 export interface SeoReport {
   url: string;
   timestamp: Date;
   grade: string;
   score: number;
+
+  /** Request timing metrics */
+  timing?: SeoTiming;
 
   // Core checks
   checks: SeoCheckResult[];
@@ -118,6 +136,26 @@ export interface SeoReport {
     text: string;
     length: number;
   };
+
+  // OpenGraph data
+  openGraph?: {
+    title?: string;
+    description?: string;
+    image?: string;
+    url?: string;
+    type?: string;
+    siteName?: string;
+  };
+
+  // Twitter Card data
+  twitterCard?: {
+    card?: string;
+    title?: string;
+    description?: string;
+    image?: string;
+    site?: string;
+  };
+
   headings: HeadingAnalysis;
   content: ContentMetrics;
   links: LinkAnalysis;
