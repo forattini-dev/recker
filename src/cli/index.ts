@@ -179,6 +179,7 @@ async function main() {
     .name('rek')
     .description('The HTTP Client for Humans (and Robots)')
     .version(version)
+    .showHelpAfterError(true)
     .argument('[args...]', 'URL, Method, Headers (Key:Value), Data (key=value)')
     .option('-v, --verbose', 'Show full request/response details')
     .option('-q, --quiet', 'Output only response body (no colors, perfect for piping)')
@@ -5534,6 +5535,15 @@ ${colors.bold(colors.yellow('Examples:'))}
         process.exit(1);
       }
     });
+
+  // Apply showHelpAfterError to all subcommands recursively
+  function applyHelpAfterError(cmd: typeof program) {
+    cmd.showHelpAfterError(true);
+    for (const subcmd of cmd.commands) {
+      applyHelpAfterError(subcmd);
+    }
+  }
+  applyHelpAfterError(program);
 
   program.parse();
 }
