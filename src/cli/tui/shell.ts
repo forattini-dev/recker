@@ -808,20 +808,18 @@ export class RekShell {
   }
 
   private async runAIChat(args: string[]) {
-    // Usage: chat [provider] [model]
-    // e.g. chat openai gpt-5.1
+    // Usage: ai [provider]
+    // e.g. ai openai, ai anthropic, ai groq
 
     const provider = args[0] || 'openai';
-    const model = args[1];
-
-    // Try to find API Key in variables or env
-    const envKeyName = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
-    const apiKey = this.variables[envKeyName] || process.env[envKeyName];
 
     const { startAIChat } = await import('./ai-chat.js');
 
     await this.runInteractiveMode(async (rl) => {
-        await startAIChat(rl, provider, apiKey, model);
+      await startAIChat(rl, provider, {
+        aiClients: this.aiClients,
+        variables: this.variables
+      });
     });
   }
 
@@ -5322,21 +5320,22 @@ ${colors.bold('Network:')}
                              ${colors.white('mode=realistic')} ${colors.gray('realistic | throughput | stress')}
                              ${colors.white('http2=false')}   ${colors.gray('Force HTTP/2')}
 
-    ${colors.green('chat <provider>')}     Start AI Chat.
-                             ${colors.gray('Providers:')} ${colors.white('openai')}, ${colors.white('anthropic')}
-                             ${colors.gray('Arg:')} ${colors.white('model=...')} (optional)
-
     ${colors.green('ws <url>')}            Start interactive WebSocket session.
     ${colors.green('udp <url>')}           Send UDP packet.
 
   ${colors.bold('AI Chat:')}
-    ${colors.green('@openai <message>')}   Chat with OpenAI (GPT) with memory.
-    ${colors.green('@anthropic <msg>')}    Chat with Anthropic (Claude) with memory.
-    ${colors.green('@groq <message>')}     Chat with Groq (fast inference).
-    ${colors.green('@google <message>')}   Chat with Google (Gemini).
-    ${colors.green('@xai <message>')}      Chat with xAI (Grok).
-    ${colors.green('@mistral <message>')}  Chat with Mistral AI.
-                             ${colors.gray('Memory:')} ${colors.white('12 pairs (24 messages)')} preserved per preset.
+    ${colors.green('ai [provider]')}       Enter AI mode (interactive conversation).
+                             ${colors.gray('Default: openai. Use /switch to change provider.')}
+                             ${colors.gray('Exit: ESC, Ctrl+C, or /exit')}
+                             ${colors.gray('Commands: /switch, /clear, /memory, /help')}
+
+    ${colors.green('@<provider> <msg>')}   Quick AI message (inline, no mode switch).
+                             ${colors.gray('Examples: @openai Hello!, @anthropic Explain this')}
+                             ${colors.gray('Providers: openai, anthropic, groq, google, xai,')}
+                             ${colors.gray('           mistral, cohere, deepseek, fireworks,')}
+                             ${colors.gray('           together, perplexity')}
+
+                             ${colors.gray('Memory:')} ${colors.white('12 pairs (24 messages)')} per provider.
                              ${colors.gray('Env:')} Set ${colors.white('OPENAI_API_KEY')}, ${colors.white('ANTHROPIC_API_KEY')}, etc.
     ${colors.green('ai:clear [preset]')}   Clear AI memory (all or specific preset).
 
