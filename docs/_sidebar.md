@@ -28,6 +28,15 @@
   - [Scraping](/web-automation/01-scraping.md)
   - [SEO Analysis](/web-automation/02-seo.md)
 
+- **SEO Analysis**
+  - [Overview](/seo/01-overview.md)
+  - [Analyzer](/seo/02-analyzer.md)
+  - [Spider](/seo/03-spider.md)
+  - [AI Search](/seo/04-ai-search.md)
+  - [Validators](/seo/05-validators.md)
+  - [Categories](/seo/06-categories.md)
+  - [CI/CD](/seo/07-cicd.md)
+
 - **Plugins**
   - [Overview](/plugins/00-overview.md)
   - [Memory Cache](/plugins/01-memory-cache.md)
