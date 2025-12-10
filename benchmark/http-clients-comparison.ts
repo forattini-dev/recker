@@ -23,6 +23,7 @@ import { run, bench, group } from 'mitata';
 import { createServer } from 'node:http';
 import { createClient } from '../src/index.js';
 import { createMiniClient } from '../src/mini.js';
+import { createClient as createBrowserClient } from '../dist/browser/browser/index.js';
 
 // HTTP Clients
 import axios from 'axios';
@@ -36,8 +37,9 @@ import crossFetch from 'cross-fetch';
 import wretch from 'wretch';
 import makeFetchHappen from 'make-fetch-happen';
 import minipassFetch from 'minipass-fetch';
-import { fetch as popsicle } from 'popsicle';
 import Wreck from '@hapi/wreck';
+
+process.setMaxListeners(0);
 
 const JSON_OUTPUT = process.env.BENCH_JSON === '1';
 
@@ -79,6 +81,7 @@ const url = `http://localhost:${port}`;
 // Setup Clients
 const recker = createClient({ baseUrl: url });
 const miniClient = createMiniClient({ baseUrl: url });
+const browserClient = createBrowserClient({ baseUrl: url });
 
 if (!JSON_OUTPUT) {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
@@ -114,6 +117,10 @@ group('GET JSON (simple)', () => {
   // High-level clients
   bench('recker', async () => {
     await recker.get('/').json();
+  });
+
+  bench('recker-browser', async () => {
+    await browserClient.get('/').json();
   });
 
   bench('axios', async () => {
@@ -160,11 +167,6 @@ group('GET JSON (simple)', () => {
     await res.json();
   });
 
-  bench('popsicle', async () => {
-    const res = await popsicle(url);
-    return res.json();
-  });
-
   bench('wreck', async () => {
     const { payload } = await Wreck.get(url, { json: true });
     return payload;
@@ -203,6 +205,10 @@ group('POST JSON (with body)', () => {
 
   bench('recker', async () => {
     await recker.post('/', body).json();
+  });
+
+  bench('recker-browser', async () => {
+    await browserClient.post('/', body).json();
   });
 
   bench('axios', async () => {
@@ -265,15 +271,6 @@ group('POST JSON (with body)', () => {
     await res.json();
   });
 
-  bench('popsicle', async () => {
-    const res = await popsicle(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    return res.json();
-  });
-
   bench('wreck', async () => {
     const { payload } = await Wreck.post(url, { payload: body, json: true });
     return payload;
@@ -309,6 +306,12 @@ group('Parallel GET (10 concurrent)', () => {
   bench('recker', async () => {
     await Promise.all(Array(10).fill(null).map(() =>
       recker.get('/').json()
+    ));
+  });
+
+  bench('recker-browser', async () => {
+    await Promise.all(Array(10).fill(null).map(() =>
+      browserClient.get('/').json()
     ));
   });
 
@@ -376,13 +379,6 @@ group('Parallel GET (10 concurrent)', () => {
     }));
   });
 
-  bench('popsicle', async () => {
-    await Promise.all(Array(10).fill(null).map(async () => {
-      const res = await popsicle(url);
-      return res.json();
-    }));
-  });
-
   bench('wreck', async () => {
     await Promise.all(Array(10).fill(null).map(async () => {
       const { payload } = await Wreck.get(url, { json: true });
@@ -420,6 +416,12 @@ group('Sequential GET (5 requests)', () => {
   bench('recker', async () => {
     for (let i = 0; i < 5; i++) {
       await recker.get('/').json();
+    }
+  });
+
+  bench('recker-browser', async () => {
+    for (let i = 0; i < 5; i++) {
+      await browserClient.get('/').json();
     }
   });
 
@@ -487,13 +489,6 @@ group('Sequential GET (5 requests)', () => {
     }
   });
 
-  bench('popsicle', async () => {
-    for (let i = 0; i < 5; i++) {
-      const res = await popsicle(url);
-      await res.json();
-    }
-  });
-
   bench('wreck', async () => {
     for (let i = 0; i < 5; i++) {
       const { payload } = await Wreck.get(url, { json: true });
@@ -520,6 +515,7 @@ if (!JSON_OUTPUT) {
   console.log('recker-mini       - Zero-overhead wrapper (~2% vs undici) ★');
   console.log('fetch             - Native fetch API');
   console.log('recker            - Batteries-included (retries, cache, rate-limit)');
+  console.log('recker-browser    - Browser build (using native fetch)');
   console.log('axios             - Most popular, browser + Node');
   console.log('got               - Full-featured, Node-focused');
   console.log('ky                - Fetch-based, originally for browsers');
@@ -530,7 +526,6 @@ if (!JSON_OUTPUT) {
   console.log('wretch            - Fluent fetch wrapper');
   console.log('make-fetch-happen - npm ecosystem (caching, retry)');
   console.log('minipass-fetch    - Minipass-based fetch');
-  console.log('popsicle          - Composable HTTP transport');
   console.log('wreck             - Hapi ecosystem client');
   console.log('');
 }
