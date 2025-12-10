@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import colors from '../utils/colors.js';
 import { formatColumns } from '../utils/columns.js';
+import { summarizeErrors, formatErrorSummary, printError } from './helpers.js';
 
 /**
  * Read data from stdin if piped
@@ -1247,11 +1248,25 @@ ${colors.bold(colors.yellow('Focus Modes:'))}
           const maxResponseTime = responseTimes.length > 0 ? Math.max(...responseTimes) : 0;
           const reqPerSec = result.duration > 0 ? (result.pages.length / (result.duration / 1000)).toFixed(1) : '0';
 
-          // Calculate HTTP status distribution
-          const statusCounts = new Map<number, number>();
+          // Calculate HTTP status distribution + error types
+          const statusCounts = new Map<string, number>();
+          const errorDetails: Array<{ url: string; error: string; status: number }> = [];
+
           for (const page of result.pages) {
-            const status = page.status || 0;
-            statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+            if (page.status && page.status > 0) {
+              // Real HTTP status
+              const key = page.status.toString();
+              statusCounts.set(key, (statusCounts.get(key) || 0) + 1);
+            } else if (page.error) {
+              // Classify the error for better display
+              const { classifyError } = await import('./helpers.js');
+              const classified = classifyError(page.error);
+              const key = classified.category.type;
+              statusCounts.set(key, (statusCounts.get(key) || 0) + 1);
+              errorDetails.push({ url: page.url, error: page.error, status: page.status || 0 });
+            } else {
+              statusCounts.set('UNKNOWN', (statusCounts.get('UNKNOWN') || 0) + 1);
+            }
           }
 
           // Calculate link and image totals from SEO reports
@@ -1282,12 +1297,58 @@ ${colors.bold(colors.yellow('Focus Modes:'))}
           // Show HTTP Status Distribution
           console.log(colors.bold('\n  HTTP Status:'));
           const sortedStatuses = Array.from(statusCounts.entries()).sort((a, b) => b[1] - a[1]);
-          for (const [status, count] of sortedStatuses.slice(0, 5)) {
-            const statusLabel = status === 0 ? 'Error' : status.toString();
-            const statusColor = status >= 400 || status === 0 ? colors.red :
-                                status >= 300 ? colors.yellow : colors.green;
+          for (const [statusKey, count] of sortedStatuses.slice(0, 8)) {
+            const statusNum = parseInt(statusKey);
+            const isHttpStatus = !isNaN(statusNum) && statusNum > 0;
+
+            let statusLabel: string;
+            let statusColor: (s: string) => string;
+
+            if (isHttpStatus) {
+              // HTTP status code
+              statusLabel = statusNum.toString();
+              statusColor = statusNum >= 500 ? colors.red :
+                            statusNum >= 400 ? colors.yellow :
+                            statusNum >= 300 ? colors.cyan : colors.green;
+            } else {
+              // Error type from classifier
+              statusLabel = statusKey;
+              statusColor = statusKey.startsWith('HTTP_4') ? colors.yellow :
+                            statusKey.startsWith('HTTP_5') ? colors.red :
+                            statusKey === 'TIMEOUT' ? colors.yellow :
+                            colors.red;
+            }
+
             const pct = ((count / result.pages.length) * 100).toFixed(0);
-            console.log(`    ${statusColor(statusLabel.padEnd(5))} ${count.toString().padStart(3)} (${pct}%)`);
+            console.log(`    ${statusColor(statusLabel.padEnd(12))} ${count.toString().padStart(3)} (${pct}%)`);
+          }
+
+          // Show error details if any
+          if (errorDetails.length > 0) {
+            console.log(colors.bold('\n  Errors:'));
+            // Group by error type
+            const grouped = new Map<string, typeof errorDetails>();
+            for (const err of errorDetails) {
+              const { classifyError } = await import('./helpers.js');
+              const classified = classifyError(err.error);
+              const key = classified.category.type;
+              if (!grouped.has(key)) grouped.set(key, []);
+              grouped.get(key)!.push(err);
+            }
+            for (const [type, errs] of grouped) {
+              const paths = errs.map(e => {
+                try { return new URL(e.url).pathname; }
+                catch { return e.url; }
+              });
+              console.log(`    ${colors.red(type.padEnd(16))} ${errs.length} page${errs.length > 1 ? 's' : ''}`);
+              // Show up to 3 affected paths
+              for (const path of paths.slice(0, 3)) {
+                console.log(`      ${colors.gray('→')} ${path.slice(0, 60)}`);
+              }
+              if (paths.length > 3) {
+                console.log(`      ${colors.gray(`... and ${paths.length - 3} more`)}`);
+              }
+            }
           }
 
           // Show Content Stats
@@ -1419,28 +1480,10 @@ ${colors.bold(colors.yellow('Focus Modes:'))}
             }
           }
 
-          // Show errors if any
-          const formatError = (error: string): string => {
-            const statusMatch = error.match(/status code (\d{3})/i);
-            if (statusMatch) {
-              return `HTTP ${statusMatch[1]}`;
-            }
-            return error.length > 50 ? error.slice(0, 47) + '...' : error;
-          };
-
-          if (result.errors.length > 0 && result.errors.length <= 10) {
-            console.log(colors.bold('\n  Errors:'));
-            for (const err of result.errors) {
-              const path = new URL(err.url).pathname;
-              console.log(`    ${colors.red('✗')} ${path.padEnd(30)} → ${formatError(err.error)}`);
-            }
-          } else if (result.errors.length > 10) {
-            console.log(colors.bold('\n  Errors:'));
-            for (const err of result.errors.slice(0, 5)) {
-              const path = new URL(err.url).pathname;
-              console.log(`    ${colors.red('✗')} ${path.padEnd(30)} → ${formatError(err.error)}`);
-            }
-            console.log(colors.gray(`    ... and ${result.errors.length - 5} more errors`));
+          // Show errors using centralized error handler
+          if (result.errors.length > 0) {
+            const errorSummary = summarizeErrors(result.errors);
+            console.log(formatErrorSummary(errorSummary));
           }
 
           // Save to file if requested
