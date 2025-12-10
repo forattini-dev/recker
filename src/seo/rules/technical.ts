@@ -126,28 +126,6 @@ export const technicalRules: SeoRule[] = [
   },
   // URL Rules
   {
-    id: 'url-length',
-    name: 'URL Length',
-    category: 'technical',
-    severity: 'info',
-    description: 'URL should be under 75 characters',
-    check: (ctx) => {
-      if (!ctx.url) return null;
-      const len = ctx.urlLength ?? ctx.url.length;
-      const max = SEO_THRESHOLDS.url.maxLength;
-
-      if (len > max) {
-        return createResult(
-          { id: 'url-length', name: 'URL Length', category: 'technical', severity: 'info' },
-          'info',
-          `URL is long (${len} chars)`,
-          { value: len, recommendation: `Keep URLs under ${max} characters when possible` }
-        );
-      }
-      return null;
-    },
-  },
-  {
     id: 'url-lowercase',
     name: 'URL Lowercase',
     category: 'technical',
@@ -314,6 +292,111 @@ export const technicalRules: SeoRule[] = [
         'Robots.txt existence cannot be verified from HTML alone.',
         { recommendation: 'Ensure a valid `robots.txt` file is present at your domain root (e.g., `https://example.com/robots.txt`) to guide search engine crawlers and define your sitemap location.' }
       );
+    },
+  },
+
+  // ==========================================================================
+  // Too Many URL Parameters
+  // ==========================================================================
+  {
+    id: 'url-many-parameters',
+    name: 'Too Many URL Parameters',
+    category: 'technical',
+    severity: 'warning',
+    description: 'URLs should not have more than 3 query parameters',
+    check: (ctx) => {
+      if (!ctx.url) return null;
+
+      try {
+        const url = new URL(ctx.url);
+        const paramCount = Array.from(url.searchParams.keys()).length;
+
+        if (paramCount > 3) {
+          return createResult(
+            { id: 'url-many-parameters', name: 'Too Many URL Parameters', category: 'technical', severity: 'warning' },
+            'warn',
+            `URL has ${paramCount} query parameters`,
+            {
+              value: paramCount,
+              recommendation: 'Reduce URL parameters to 3 or fewer for better crawlability',
+              evidence: {
+                found: url.search,
+                expected: '3 or fewer parameters',
+                impact: 'Multiple parameters make URLs less enticing and may cause indexing issues'
+              }
+            }
+          );
+        }
+      } catch {
+        // Invalid URL
+      }
+
+      return null;
+    },
+  },
+
+  // ==========================================================================
+  // Deprecated Plugins (Flash, Java, Silverlight)
+  // ==========================================================================
+  {
+    id: 'deprecated-plugins',
+    name: 'Deprecated Plugins',
+    category: 'technical',
+    severity: 'error',
+    description: 'Pages should not use Flash, Java Applets, or Silverlight',
+    check: (ctx) => {
+      if (ctx.hasDeprecatedPlugins === undefined) return null;
+
+      if (ctx.hasDeprecatedPlugins) {
+        return createResult(
+          { id: 'deprecated-plugins', name: 'Deprecated Plugins', category: 'technical', severity: 'error' },
+          'fail',
+          'Page uses deprecated plugins (Flash, Java, or Silverlight)',
+          {
+            recommendation: 'Convert plugin content to HTML5',
+            evidence: {
+              found: ctx.deprecatedPluginTypes?.join(', ') || 'Flash/Java/Silverlight detected',
+              expected: 'No deprecated plugins',
+              impact: 'These plugins do not work on mobile devices and cannot be crawled properly',
+              learnMore: 'https://developers.google.com/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing'
+            }
+          }
+        );
+      }
+
+      return null;
+    },
+  },
+
+  // ==========================================================================
+  // Frame Tags
+  // ==========================================================================
+  {
+    id: 'frame-tags',
+    name: 'Frame Tags',
+    category: 'technical',
+    severity: 'error',
+    description: 'Pages should not use <frame> or <frameset> tags',
+    check: (ctx) => {
+      if (ctx.hasFrameTags === undefined) return null;
+
+      if (ctx.hasFrameTags) {
+        return createResult(
+          { id: 'frame-tags', name: 'Frame Tags', category: 'technical', severity: 'error' },
+          'fail',
+          'Page uses <frame> or <frameset> tags',
+          {
+            recommendation: 'Remove frame tags and restructure using modern HTML',
+            evidence: {
+              found: '<frame> or <frameset> tags detected',
+              expected: 'No frame tags',
+              impact: 'Search engines have difficulty indexing content within frames, affecting rankings'
+            }
+          }
+        );
+      }
+
+      return null;
     },
   },
 ];

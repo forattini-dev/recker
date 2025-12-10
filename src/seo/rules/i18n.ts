@@ -301,4 +301,45 @@ export const i18nRules: SeoRule[] = [
       return null;
     },
   },
+
+  // ==========================================================================
+  // Hreflang Language Mismatch
+  // ==========================================================================
+  {
+    id: 'hreflang-language-mismatch',
+    name: 'Hreflang Language Mismatch',
+    category: 'technical',
+    severity: 'warning',
+    description: 'Hreflang language should match page content language',
+    check: (ctx) => {
+      if (!ctx.hreflangTags || !ctx.detectedLanguage) return null;
+
+      const selfHreflang = ctx.hreflangTags.find(tag =>
+        tag.href === ctx.url || tag.href === ctx.canonicalUrl
+      );
+
+      if (selfHreflang && ctx.detectedLanguage) {
+        const hreflangLang = selfHreflang.lang.split('-')[0].toLowerCase();
+        const detectedLang = ctx.detectedLanguage.toLowerCase();
+
+        if (hreflangLang !== detectedLang && hreflangLang !== 'x-default') {
+          return createResult(
+            { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'technical', severity: 'warning' },
+            'warn',
+            `Hreflang declares "${selfHreflang.lang}" but content appears to be "${ctx.detectedLanguage}"`,
+            {
+              recommendation: 'Verify the hreflang attribute matches the actual page language',
+              evidence: {
+                found: `hreflang="${selfHreflang.lang}"`,
+                expected: `Content language: ${ctx.detectedLanguage}`,
+                impact: 'Language mismatch may confuse search engines and affect international SEO'
+              }
+            }
+          );
+        }
+      }
+
+      return null;
+    },
+  },
 ];

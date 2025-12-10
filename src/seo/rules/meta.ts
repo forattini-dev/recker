@@ -745,4 +745,38 @@ export const metaRules: SeoRule[] = [
       return null;
     },
   },
+
+  // ==========================================================================
+  // Title Too Short
+  // ==========================================================================
+  {
+    id: 'title-too-short',
+    name: 'Title Too Short',
+    category: 'title',
+    severity: 'warning',
+    description: 'Title should have at least 10 characters for SEO value',
+    check: (ctx) => {
+      if (!ctx.title) return null;
+      const len = ctx.titleLength ?? ctx.title.length;
+
+      if (len <= 10) {
+        return createResult(
+          { id: 'title-too-short', name: 'Title Too Short', category: 'title', severity: 'warning' },
+          'warn',
+          `Title is very short (${len} chars)`,
+          {
+            value: len,
+            recommendation: 'Add more descriptive text to your title (50-60 chars ideal)',
+            evidence: {
+              found: `${len} characters`,
+              expected: 'At least 10 characters, ideally 50-60',
+              impact: 'Short titles do not provide enough information about the page and limit keyword potential'
+            }
+          }
+        );
+      }
+
+      return null;
+    },
+  },
 ];

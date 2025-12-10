@@ -25,6 +25,12 @@ import { pwaRules } from './pwa.js';
 import { socialRules } from './social.js';
 import { internalLinkingRules } from './internal-linking.js';
 import { bestPracticesRules } from './best-practices.js';
+// Advanced SEO rules
+import { aiSearchRules } from './ai-search.js';
+import { resourceRules } from './resources.js';
+import { technicalAdvancedRules } from './technical-advanced.js';
+import { redirectRules } from './redirects.js';
+import { canonicalRules } from './canonical.js';
 
 // Re-export types and thresholds
 export * from './types.js';
@@ -53,6 +59,12 @@ export const ALL_SEO_RULES: SeoRule[] = [
   ...socialRules,
   ...internalLinkingRules,
   ...bestPracticesRules,
+  // Advanced SEO rules
+  ...aiSearchRules,
+  ...resourceRules,
+  ...technicalAdvancedRules,
+  ...redirectRules,
+  ...canonicalRules,
 ];
 
 // =============================================================================
@@ -86,6 +98,11 @@ export const SCORING_WEIGHTS = {
     'structured-data': 1.0, // Rich snippets
     performance: 1.4, // Core Web Vitals
     accessibility: 0.8, // Accessibility
+    // Advanced categories
+    'ai-search': 0.7, // AI/LLM optimization
+    resources: 1.1, // Resource optimization
+    crawlability: 1.3, // Crawlability issues
+    canonicalization: 1.2, // Canonical URL issues
   } as Record<RuleCategory, number>,
 } as const;
 

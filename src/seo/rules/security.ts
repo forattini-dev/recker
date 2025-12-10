@@ -756,4 +756,442 @@ export const securityRules: SeoRule[] = [
       );
     },
   },
+
+  // ==========================================================================
+  // SSL/TLS Certificate Checks (Semrush-style)
+  // ==========================================================================
+  {
+    id: 'security-ssl-valid',
+    name: 'SSL Certificate Valid',
+    category: 'security',
+    severity: 'error',
+    description: 'SSL certificate must be valid and not expired',
+    check: (ctx) => {
+      if (ctx.sslCertificate === undefined) return null;
+
+      if (!ctx.sslCertificate.valid) {
+        return createResult(
+          { id: 'security-ssl-valid', name: 'SSL Certificate Valid', category: 'security', severity: 'error' },
+          'fail',
+          'SSL certificate is invalid',
+          {
+            recommendation: 'Renew or replace the SSL certificate immediately',
+            evidence: {
+              found: ctx.sslCertificate.error || 'Invalid certificate',
+              impact: 'Browsers will show security warnings, users may not trust the site',
+            },
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'security-ssl-valid', name: 'SSL Certificate Valid', category: 'security', severity: 'error' },
+        'pass',
+        'SSL certificate is valid'
+      );
+    },
+  },
+  {
+    id: 'security-ssl-expiry',
+    name: 'SSL Certificate Expiry',
+    category: 'security',
+    severity: 'warning',
+    description: 'SSL certificate should not expire within 30 days',
+    check: (ctx) => {
+      if (!ctx.sslCertificate?.expiryDate) return null;
+
+      const expiryDate = new Date(ctx.sslCertificate.expiryDate);
+      const now = new Date();
+      const daysUntilExpiry = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysUntilExpiry < 0) {
+        return createResult(
+          { id: 'security-ssl-expiry', name: 'SSL Certificate Expiry', category: 'security', severity: 'warning' },
+          'fail',
+          'SSL certificate has expired',
+          {
+            recommendation: 'Renew the SSL certificate immediately',
+            evidence: {
+              found: `Expired ${Math.abs(daysUntilExpiry)} days ago`,
+              impact: 'Site is showing security warnings to all visitors',
+            },
+          }
+        );
+      }
+
+      if (daysUntilExpiry < 7) {
+        return createResult(
+          { id: 'security-ssl-expiry', name: 'SSL Certificate Expiry', category: 'security', severity: 'warning' },
+          'fail',
+          `SSL certificate expires in ${daysUntilExpiry} days`,
+          {
+            recommendation: 'Renew the SSL certificate urgently',
+            evidence: {
+              found: `Expires: ${expiryDate.toISOString().split('T')[0]}`,
+              impact: 'Certificate will expire very soon',
+            },
+          }
+        );
+      }
+
+      if (daysUntilExpiry < 30) {
+        return createResult(
+          { id: 'security-ssl-expiry', name: 'SSL Certificate Expiry', category: 'security', severity: 'warning' },
+          'warn',
+          `SSL certificate expires in ${daysUntilExpiry} days`,
+          {
+            recommendation: 'Plan to renew the SSL certificate soon',
+            evidence: {
+              found: `Expires: ${expiryDate.toISOString().split('T')[0]}`,
+            },
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'security-ssl-expiry', name: 'SSL Certificate Expiry', category: 'security', severity: 'warning' },
+        'pass',
+        `SSL certificate valid for ${daysUntilExpiry} days`
+      );
+    },
+  },
+  {
+    id: 'security-ssl-name-match',
+    name: 'SSL Certificate Name Match',
+    category: 'security',
+    severity: 'error',
+    description: 'SSL certificate CN/SAN must match the domain',
+    check: (ctx) => {
+      if (ctx.sslCertificate?.nameMismatch === undefined) return null;
+
+      if (ctx.sslCertificate.nameMismatch) {
+        return createResult(
+          { id: 'security-ssl-name-match', name: 'SSL Certificate Name Match', category: 'security', severity: 'error' },
+          'fail',
+          'SSL certificate name mismatch',
+          {
+            recommendation: 'Get a certificate that matches your domain name',
+            evidence: {
+              found: ctx.sslCertificate.commonName || 'Unknown',
+              expected: ctx.sslCertificate.expectedDomain || 'Domain name',
+              impact: 'Browsers will show certificate warning',
+            },
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'security-ssl-name-match', name: 'SSL Certificate Name Match', category: 'security', severity: 'error' },
+        'pass',
+        'SSL certificate matches domain'
+      );
+    },
+  },
+  {
+    id: 'security-tls-version',
+    name: 'TLS Version',
+    category: 'security',
+    severity: 'error',
+    description: 'Server should use TLS 1.2 or higher',
+    check: (ctx) => {
+      if (!ctx.tlsVersion) return null;
+
+      const version = ctx.tlsVersion;
+      const insecureVersions = ['SSLv2', 'SSLv3', 'TLSv1', 'TLSv1.0', 'TLSv1.1'];
+
+      if (insecureVersions.includes(version)) {
+        return createResult(
+          { id: 'security-tls-version', name: 'TLS Version', category: 'security', severity: 'error' },
+          'fail',
+          `Insecure TLS version: ${version}`,
+          {
+            recommendation: 'Upgrade to TLS 1.2 or TLS 1.3',
+            evidence: {
+              found: version,
+              expected: 'TLSv1.2 or TLSv1.3',
+              impact: 'Old TLS versions have known vulnerabilities',
+            },
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'security-tls-version', name: 'TLS Version', category: 'security', severity: 'error' },
+        'pass',
+        `Using ${version}`
+      );
+    },
+  },
+  {
+    id: 'security-ssl-issuer',
+    name: 'SSL Certificate Issuer',
+    category: 'security',
+    severity: 'info',
+    description: 'SSL certificate should be from a trusted CA',
+    check: (ctx) => {
+      if (!ctx.sslCertificate?.issuer) return null;
+
+      const issuer = ctx.sslCertificate.issuer;
+      const selfSigned = issuer.toLowerCase().includes('self-signed') ||
+                         ctx.sslCertificate.selfSigned === true;
+
+      if (selfSigned) {
+        return createResult(
+          { id: 'security-ssl-issuer', name: 'SSL Certificate Issuer', category: 'security', severity: 'info' },
+          'warn',
+          'Self-signed SSL certificate detected',
+          {
+            recommendation: 'Use a certificate from a trusted Certificate Authority',
+            evidence: {
+              found: issuer,
+              impact: 'Self-signed certificates show warnings in browsers',
+            },
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'security-ssl-issuer', name: 'SSL Certificate Issuer', category: 'security', severity: 'info' },
+        'pass',
+        `Certificate issued by: ${issuer}`
+      );
+    },
+  },
+
+  // ==========================================================================
+  // Form Security
+  // ==========================================================================
+  {
+    id: 'security-password-on-http',
+    name: 'Password Fields on HTTP',
+    category: 'security',
+    severity: 'error',
+    description: 'Password fields must only appear on HTTPS pages',
+    check: (ctx) => {
+      if (ctx.hasPasswordField === undefined) return null;
+
+      if (ctx.hasPasswordField && ctx.isHttps === false) {
+        return createResult(
+          { id: 'security-password-on-http', name: 'Password Fields on HTTP', category: 'security', severity: 'error' },
+          'fail',
+          'Password field on insecure HTTP page',
+          {
+            recommendation: 'Enable HTTPS for all pages with password fields',
+            evidence: {
+              impact: 'Passwords sent over HTTP can be intercepted',
+            },
+          }
+        );
+      }
+
+      if (ctx.hasPasswordField && ctx.isHttps === true) {
+        return createResult(
+          { id: 'security-password-on-http', name: 'Password Fields on HTTP', category: 'security', severity: 'error' },
+          'pass',
+          'Password fields are on HTTPS'
+        );
+      }
+
+      return null;
+    },
+  },
+  {
+    id: 'security-forms-on-http',
+    name: 'Forms on HTTP',
+    category: 'security',
+    severity: 'warning',
+    description: 'Forms should only submit to HTTPS endpoints',
+    check: (ctx) => {
+      if (ctx.formsOnHttp === undefined) return null;
+
+      if (ctx.formsOnHttp > 0) {
+        return createResult(
+          { id: 'security-forms-on-http', name: 'Forms on HTTP', category: 'security', severity: 'warning' },
+          'warn',
+          `${ctx.formsOnHttp} form(s) submit to HTTP`,
+          {
+            value: ctx.formsOnHttp,
+            recommendation: 'Update form actions to use HTTPS',
+            evidence: {
+              impact: 'Form data sent over HTTP can be intercepted',
+            },
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'security-forms-on-http', name: 'Forms on HTTP', category: 'security', severity: 'warning' },
+        'pass',
+        'All forms submit to HTTPS'
+      );
+    },
+  },
+
+  // ==========================================================================
+  // Server Information Disclosure
+  // ==========================================================================
+  {
+    id: 'security-server-disclosure',
+    name: 'Server Version Disclosure',
+    category: 'security',
+    severity: 'info',
+    description: 'Server header should not reveal detailed version information',
+    check: (ctx) => {
+      if (!ctx.responseHeaders) return null;
+
+      const serverHeader = ctx.responseHeaders['server'] || ctx.responseHeaders['Server'];
+      if (!serverHeader) return null;
+
+      const server = String(serverHeader);
+      // Check for version numbers
+      if (/\d+\.\d+/.test(server)) {
+        return createResult(
+          { id: 'security-server-disclosure', name: 'Server Version Disclosure', category: 'security', severity: 'info' },
+          'info',
+          `Server header reveals version: ${server}`,
+          {
+            recommendation: 'Configure server to hide version information',
+            evidence: {
+              found: server,
+              impact: 'Attackers can target known vulnerabilities',
+            },
+          }
+        );
+      }
+
+      return null;
+    },
+  },
+  {
+    id: 'security-x-powered-by',
+    name: 'X-Powered-By Header',
+    category: 'security',
+    severity: 'info',
+    description: 'X-Powered-By header reveals technology stack',
+    check: (ctx) => {
+      if (!ctx.responseHeaders) return null;
+
+      const xPoweredBy = ctx.responseHeaders['x-powered-by'] || ctx.responseHeaders['X-Powered-By'];
+      if (xPoweredBy) {
+        return createResult(
+          { id: 'security-x-powered-by', name: 'X-Powered-By Header', category: 'security', severity: 'info' },
+          'info',
+          `X-Powered-By header present: ${xPoweredBy}`,
+          {
+            recommendation: 'Remove X-Powered-By header to reduce attack surface',
+            evidence: {
+              found: String(xPoweredBy),
+              impact: 'Reveals technology stack to potential attackers',
+            },
+          }
+        );
+      }
+
+      return null;
+    },
+  },
+
+  // ==========================================================================
+  // SNI Support
+  // ==========================================================================
+  {
+    id: 'ssl-sni-support',
+    name: 'SNI Support',
+    category: 'security',
+    severity: 'info',
+    description: 'Server should support Server Name Indication (SNI)',
+    check: (ctx) => {
+      if (ctx.sniSupported === undefined) return null;
+
+      if (!ctx.sniSupported) {
+        return createResult(
+          { id: 'ssl-sni-support', name: 'SNI Support', category: 'security', severity: 'info' },
+          'info',
+          'Server may not support SNI',
+          {
+            recommendation: 'Ensure web server supports SNI for proper HTTPS functionality',
+            evidence: {
+              impact: 'Some older browsers may have issues with SSL certificates without SNI support'
+            }
+          }
+        );
+      }
+
+      return null;
+    },
+  },
+
+  // ==========================================================================
+  // HTTP URLs in Sitemap
+  // ==========================================================================
+  {
+    id: 'sitemap-https-urls',
+    name: 'HTTPS URLs in Sitemap',
+    category: 'security',
+    severity: 'warning',
+    description: 'Sitemap should only contain HTTPS URLs',
+    check: (ctx) => {
+      if (ctx.sitemapHttpUrls === undefined) return null;
+
+      if (ctx.sitemapHttpUrls > 0) {
+        return createResult(
+          { id: 'sitemap-https-urls', name: 'HTTPS URLs in Sitemap', category: 'security', severity: 'warning' },
+          'warn',
+          `Sitemap contains ${ctx.sitemapHttpUrls} HTTP URLs`,
+          {
+            value: ctx.sitemapHttpUrls,
+            recommendation: 'Replace all HTTP URLs in sitemap.xml with HTTPS versions',
+            evidence: {
+              found: `${ctx.sitemapHttpUrls} HTTP URLs`,
+              expected: 'All URLs should use HTTPS',
+              impact: 'HTTP URLs in sitemap can cause mixed content issues and indexing confusion'
+            }
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'sitemap-https-urls', name: 'HTTPS URLs in Sitemap', category: 'security', severity: 'warning' },
+        'pass',
+        'All sitemap URLs use HTTPS'
+      );
+    },
+  },
+
+  // ==========================================================================
+  // HSTS Header
+  // ==========================================================================
+  {
+    id: 'security-hsts',
+    name: 'HSTS Header',
+    category: 'security',
+    severity: 'info',
+    description: 'HTTPS sites should implement HSTS for security',
+    check: (ctx) => {
+      if (!ctx.isHttps) return null;
+      if (ctx.hasHsts === undefined) return null;
+
+      if (!ctx.hasHsts) {
+        return createResult(
+          { id: 'security-hsts', name: 'HSTS Header', category: 'security', severity: 'info' },
+          'info',
+          'Missing Strict-Transport-Security header',
+          {
+            recommendation: 'Implement HSTS to enforce HTTPS connections',
+            evidence: {
+              expected: 'Strict-Transport-Security: max-age=31536000; includeSubDomains',
+              impact: 'Without HSTS, browsers may still attempt insecure HTTP connections',
+              learnMore: 'https://web.dev/strict-transport-security/'
+            }
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'security-hsts', name: 'HSTS Header', category: 'security', severity: 'info' },
+        'pass',
+        'HSTS header is present'
+      );
+    },
+  },
 ];

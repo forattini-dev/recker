@@ -69,36 +69,7 @@ export const mobileRules: SeoRule[] = [
       );
     },
   },
-  {
-    id: 'mobile-font-size',
-    name: 'Mobile Font Size',
-    category: 'mobile',
-    severity: 'info',
-    description: 'Content should use readable font sizes on mobile (at least 16px base)',
-    check: (ctx) => {
-      // This is a hint - actual font size detection requires CSS analysis
-      return createResult(
-        { id: 'mobile-font-size', name: 'Mobile Font Size', category: 'mobile', severity: 'info' },
-        'info',
-        'Font size check requires CSS analysis',
-        { recommendation: 'Use a minimum base font size of 16px for mobile readability' }
-      );
-    },
-  },
-  {
-    id: 'mobile-tap-targets',
-    name: 'Mobile Tap Targets',
-    category: 'mobile',
-    severity: 'info',
-    description: 'Interactive elements should be at least 48x48px for touch accessibility',
-    check: (ctx) => {
-      // This is a hint - actual tap target detection requires CSS/layout analysis
-      return createResult(
-        { id: 'mobile-tap-targets', name: 'Mobile Tap Targets', category: 'mobile', severity: 'info' },
-        'info',
-        'Tap target size check requires CSS analysis',
-        { recommendation: 'Ensure buttons and links are at least 48x48px with 8px spacing for mobile usability' }
-      );
-    },
-  },
+  // NOTE: mobile-font-size and mobile-tap-targets removed
+  // They require CSS layout computation (CDP/Puppeteer) to properly evaluate
+  // Can be re-added when we implement CDP-based rendering
 ];
