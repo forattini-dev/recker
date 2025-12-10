@@ -10,6 +10,7 @@
 
 import { HybridSearch, createHybridSearch, createEmbedder, isFastembedAvailable } from '../../mcp/search/index.js';
 import type { IndexedDoc, SearchResult } from '../../mcp/search/types.js';
+import { loadEmbeddings } from '../../mcp/embeddings-loader.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative, extname, basename, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -115,7 +116,7 @@ export class ShellSearch {
       }
 
       this.updateSpinner('Indexing documentation...');
-      this.buildIndex();
+      await this.buildIndex();
 
       this.updateSpinner('Finalizing search index...');
       await this.hybridSearch.initialize(this.docsIndex);
@@ -411,26 +412,30 @@ const { results, stats } = await client.batch([
 
   // ============ Indexing ============
 
-  private buildIndex(): void {
-    this.indexDocsFromEmbeddings();
+  private async buildIndex(): Promise<void> {
+    await this.indexDocsFromEmbeddings();
     this.indexExamples();
     this.indexTypes();
   }
 
   /**
    * Load docs from pre-computed embeddings (includes chunking).
+   * Uses embeddings-loader which handles:
+   * 1. Local cache (~/.cache/recker/)
+   * 2. Bundled file (development)
+   * 3. GitHub Releases download (production)
+   *
    * Falls back to filesystem if embeddings not available.
    */
-  private indexDocsFromEmbeddings(): void {
+  private async indexDocsFromEmbeddings(): Promise<void> {
     try {
-      // Try to load embeddings.json which has chunked documents
-      const embeddingsPath = join(dirname(fileURLToPath(import.meta.url)), '../../mcp/data/embeddings.json');
+      // Use lazy loader (handles cache, bundled, and download from GitHub Releases)
+      this.updateSpinner('Loading documentation index...');
+      const data = await loadEmbeddings({ debug: false });
 
-      if (existsSync(embeddingsPath)) {
-        const data = JSON.parse(readFileSync(embeddingsPath, 'utf-8'));
-
+      if (data && data.documents && data.documents.length > 0) {
         for (const doc of data.documents) {
-          // Load full content for non-chunked docs
+          // Load full content for non-chunked docs (if filesystem available)
           let content = '';
           if (!doc.section) {
             const fullPath = join(this.docsPath, doc.path);
@@ -452,11 +457,12 @@ const { results, stats } = await client.batch([
         }
         return;
       }
-    } catch {
+    } catch (error) {
       // Fall through to filesystem indexing
+      this.updateSpinner('Downloading documentation index failed, trying filesystem...');
     }
 
-    // Fallback: index from filesystem
+    // Fallback: index from filesystem (for development or if download fails)
     this.indexDocsFromFilesystem();
   }
 
