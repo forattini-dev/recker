@@ -530,12 +530,16 @@ export class HlsPromise implements Promise<void> {
     isLive: boolean;
     totalDuration?: number;
   }> {
-    const content = await this.client.get(this.manifestUrl).text();
+    const content = await this.client.get(this.manifestUrl, {
+      signal: this.abortController.signal,
+    }).text();
 
     if (isMasterPlaylist(content)) {
       const master = parseMasterPlaylist(content, this.manifestUrl);
       const selectedVariant = selectVariant(master.variants, this.options.quality);
-      const playlistContent = await this.client.get(selectedVariant.url).text();
+      const playlistContent = await this.client.get(selectedVariant.url, {
+        signal: this.abortController.signal,
+      }).text();
       const playlist = parseMediaPlaylist(playlistContent, selectedVariant.url);
 
       const totalDuration = playlist.endList
@@ -568,7 +572,9 @@ export class HlsPromise implements Promise<void> {
   // ============================================
 
   private async resolveMediaPlaylist(): Promise<string> {
-    const content = await this.client.get(this.manifestUrl).text();
+    const content = await this.client.get(this.manifestUrl, {
+      signal: this.abortController.signal,
+    }).text();
 
     if (!isMasterPlaylist(content)) {
       return this.manifestUrl;
@@ -581,7 +587,9 @@ export class HlsPromise implements Promise<void> {
   }
 
   private async fetchMediaPlaylist(url: string): Promise<HlsPlaylist> {
-    const content = await this.client.get(url).text();
+    const content = await this.client.get(url, {
+      signal: this.abortController.signal,
+    }).text();
     return parseMediaPlaylist(content, url);
   }
 
