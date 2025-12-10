@@ -22,6 +22,10 @@ export interface SeoSpiderOptions extends SpiderOptions {
   output?: string;
   /** Callback for each page's SEO analysis */
   onSeoAnalysis?: (result: SeoPageResult) => void;
+  /** Focus on specific rule categories (empty array = all categories) */
+  focusCategories?: string[];
+  /** Focus mode name for display purposes */
+  focusMode?: 'all' | 'links' | 'duplicates' | 'security' | 'ai' | 'resources';
 }
 
 export interface SeoPageResult extends SpiderPageResult {
@@ -150,8 +154,16 @@ export class SeoSpider {
         const response = await client.get(page.url);
         const html = await response.text();
 
-        // Use the full SEO analyzer with all 70+ rules
-        const seoReport = await analyzeSeo(html, { baseUrl: page.url });
+        // Build rules options based on focus categories
+        const rulesOptions = this.options.focusCategories?.length
+          ? { categories: this.options.focusCategories as any[] }
+          : undefined;
+
+        // Use the full SEO analyzer with focus categories if specified
+        const seoReport = await analyzeSeo(html, {
+          baseUrl: page.url,
+          rules: rulesOptions,
+        });
 
         const seoPage: SeoPageResult = {
           ...page,
@@ -246,11 +258,51 @@ export class SeoSpider {
     }, 0);
     const score = checks.length > 0 ? Math.round(scoreSum / checks.length) : 0;
 
+    // Build basic summary for spider reports
+    const passed = checks.filter(c => c.status === 'pass').length;
+    const warnings = checks.filter(c => c.status === 'warn').length;
+    const errors = checks.filter(c => c.status === 'fail').length;
+    const infos = checks.filter(c => c.status === 'info').length;
+    const passRate = checks.length > 0 ? Math.round((passed / checks.length) * 100) : 0;
+
     return {
       url: page.url,
       timestamp: new Date(),
       grade: this.scoreToGrade(score),
       score,
+      summary: {
+        totalChecks: checks.length,
+        passed,
+        warnings,
+        errors,
+        infos,
+        passRate,
+        issuesByCategory: {},
+        topIssues: checks
+          .filter(c => c.status === 'fail' || c.status === 'warn')
+          .slice(0, 5)
+          .map(c => ({
+            name: c.name,
+            message: c.message,
+            category: 'general',
+            severity: c.status === 'fail' ? 'error' as const : 'warning' as const,
+          })),
+        quickWins: [],
+        vitals: {
+          wordCount: 0,
+          readingTime: 0,
+          imageCount: 0,
+          linkCount: page.links.length,
+        },
+        completeness: {
+          meta: 0,
+          social: 0,
+          technical: 0,
+          content: 0,
+          images: 0,
+          links: 0,
+        },
+      },
       checks,
       title: page.title ? { text: page.title, length: page.title.length } : undefined,
       headings: {
@@ -317,9 +369,10 @@ export class SeoSpider {
         hasCharset: false,
         hasLang: false,
       },
-      jsonLd: {
+      structuredData: {
         count: 0,
         types: [],
+        items: [],
       },
     };
   }

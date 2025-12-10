@@ -21,7 +21,12 @@ export type RuleCategory =
   | 'mobile'
   | 'structured-data'
   | 'performance'
-  | 'accessibility';
+  | 'accessibility'
+  // Advanced categories
+  | 'ai-search'
+  | 'resources'
+  | 'crawlability'
+  | 'canonicalization';
 
 export interface RuleContext {
   // Title
@@ -71,6 +76,8 @@ export interface RuleContext {
   altTextLengths?: number[];
   imageFilenames?: string[]; // For image file naming conventions
   imagesWithAsyncDecoding?: number; // Count of images with decoding="async"
+  brokenExternalImages?: number;
+  brokenExternalImageUrls?: string[];
 
   // Accessibility - Basic
   buttonsWithoutAriaLabel?: number;
@@ -114,6 +121,10 @@ export interface RuleContext {
   linksWithGenericText?: number;
   externalLinksWithoutNoopener?: number;
   externalLinksWithoutNoreferrer?: number;
+  linksToResources?: number;
+  resourceLinkUrls?: string[];
+  forbidden403Links?: number;
+  forbidden403LinkUrls?: string[];
 
   // Problematic links (for detailed reporting)
   problematicLinks?: {
@@ -180,6 +191,9 @@ export interface RuleContext {
   hasMixedContent?: boolean;
   responseHeaders?: Record<string, string | string[]>;
   textHtmlRatio?: number; // Ratio of plain text to total HTML size
+  hasDeprecatedPlugins?: boolean;
+  deprecatedPluginTypes?: string[];
+  hasFrameTags?: boolean;
 
   // Favicon
   hasFavicon?: boolean;
@@ -219,6 +233,7 @@ export interface RuleContext {
   hreflangTags?: Array<{ lang: string; href: string }>;
   ogLocale?: string;
   alternateLanguages?: string[]; // Languages available on the site
+  detectedLanguage?: string; // Detected content language
 
   // SEO Quality Checks
   titleMatchesH1?: boolean;
@@ -342,9 +357,16 @@ export interface RuleContext {
   hasSitemapLink?: boolean;
   sitemapUrl?: string;
   robotsHasSitemap?: boolean;
+  robotsTxtExists?: boolean;
+  robotsTxtHasSitemap?: boolean;
   isPaginatedPage?: boolean;
   hasRelPrev?: boolean;
   hasRelNext?: boolean;
+  blockedResources?: number;
+  blockedResourceUrls?: string[];
+  blockedExternalResources?: number;
+  blockedExternalResourceUrls?: string[];
+  xRobotsTag?: string;
 
   // ==========================================================================
   // Best Practices Context
@@ -361,6 +383,10 @@ export interface RuleContext {
   // Security Context (Lighthouse Trust & Safety)
   // ==========================================================================
   httpRedirectsToHttps?: boolean; // HTTP redirects to HTTPS
+  sniSupported?: boolean; // Server Name Indication support
+  sitemapHttpUrls?: number; // Count of HTTP URLs in sitemap
+  sitemapHttpUrlsList?: string[]; // List of HTTP URLs in sitemap
+  hasHsts?: boolean; // Has HSTS header
 
   // ==========================================================================
   // Readability Context
@@ -411,9 +437,83 @@ export interface RuleContext {
   contextualLinkCount?: number;
   incomingInternalLinks?: number;
   selfReferencingLinks?: number;
-  brokenInternalLinks?: number;
-  redirectChainLinks?: number;
+  brokenInternalLinks?: string[];
+  brokenExternalLinks?: string[];
+  redirectChainLinks?: Array<{ from: string; to: string; hops: number }>;
   pageClickDepth?: number;
+  clickDepth?: number;
+  isStartPage?: boolean;
+  nofollowInternalLinks?: number;
+
+  // ==========================================================================
+  // AI Search Context (llms.txt, robots.txt AI)
+  // ==========================================================================
+  llmsTxt?: {
+    exists: boolean;
+    valid: boolean;
+    issues?: Array<{ message: string }>;
+    parseResult?: {
+      siteName?: string;
+      siteDescription?: string;
+      sections: Array<{ title: string }>;
+      links: Array<{ text: string; url: string }>;
+    };
+  };
+  robotsTxt?: {
+    parseResult?: {
+      userAgentBlocks: Array<{
+        userAgents: string[];
+        rules: Array<{ type: string; path: string }>;
+      }>;
+    };
+  };
+  headings?: {
+    structure: Array<{ level: number; text: string }>;
+    h1Count?: number;
+    hasProperHierarchy?: boolean;
+  };
+  lastModified?: string; // Last-Modified header value
+  semanticHtmlRatio?: number; // Ratio of semantic elements to total elements
+
+  // ==========================================================================
+  // Resources Context
+  // ==========================================================================
+  jsFilesCount?: number;
+  jsTotalSize?: number;
+  renderBlockingJs?: number;
+  cssFilesCount?: number;
+  cssTotalSize?: number;
+  hasCriticalCss?: boolean;
+  largeImages?: string[];
+  imagesTotal?: number;
+  modernFormatImages?: number;
+  fontFilesCount?: number;
+  hasFontDisplaySwap?: boolean;
+  totalRequests?: number;
+  totalPageSize?: number;
+  uncompressedResources?: number;
+  resourcesWithoutCaching?: number;
+  brokenExternalResources?: number;
+  brokenExternalResourceUrls?: string[];
+  unminifiedResources?: number;
+  unminifiedResourceUrls?: string[];
+
+  // ==========================================================================
+  // SSL/TLS Context
+  // ==========================================================================
+  sslCertificate?: {
+    valid: boolean;
+    error?: string;
+    expiryDate?: string;
+    nameMismatch?: boolean;
+    commonName?: string;
+    expectedDomain?: string;
+    issuer?: string;
+    selfSigned?: boolean;
+  };
+  tlsVersion?: string;
+  hasPasswordField?: boolean;
+  formsOnHttp?: number;
 }
 
 export interface RuleEvidence {

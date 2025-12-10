@@ -131,43 +131,6 @@ export const imageRules: SeoRule[] = [
     name: 'Alt Text Length',
     category: 'images',
     severity: 'warning',
-    description: 'Alt text should be descriptive (min 10, max 125 chars)',
-    check: (ctx) => {
-      if (!ctx.altTextLengths || ctx.altTextLengths.length === 0) return null;
-
-      const { minLength, maxLength } = SEO_THRESHOLDS.images.alt;
-      let shortAlts = 0;
-      let longAlts = 0;
-
-      ctx.altTextLengths.forEach(len => {
-        if (len < minLength) shortAlts++;
-        if (len > maxLength) longAlts++;
-      });
-
-      if (shortAlts > 0) {
-        return createResult(
-          { id: 'images-alt-length', name: 'Alt Text Length', category: 'images', severity: 'warning' },
-          'warn',
-          `${shortAlts} alt text(s) are too short (min: ${minLength} chars)`,
-          { value: shortAlts, recommendation: `Make alt texts more descriptive, at least ${minLength} characters.` }
-        );
-      }
-      if (longAlts > 0) {
-        return createResult(
-          { id: 'images-alt-length', name: 'Alt Text Length', category: 'images', severity: 'warning' },
-          'warn',
-          `${longAlts} alt text(s) are too long (max: ${maxLength} chars)`,
-          { value: longAlts, recommendation: `Shorten alt texts to be concise, under ${maxLength} characters.` }
-        );
-      }
-      return null;
-    },
-  },
-  {
-    id: 'images-alt-length',
-    name: 'Alt Text Length',
-    category: 'images',
-    severity: 'warning',
     description: 'Alt text should be descriptive (ideal 80-120, max 150 chars)',
     check: (ctx) => {
       if (!ctx.altTextLengths || ctx.altTextLengths.length === 0) return null;
@@ -255,6 +218,39 @@ export const imageRules: SeoRule[] = [
           { value: nonAsync, recommendation: 'Consider adding decoding="async" to non-critical images for performance benefits.' }
         );
       }
+      return null;
+    },
+  },
+
+  // ==========================================================================
+  // Broken External Images
+  // ==========================================================================
+  {
+    id: 'broken-external-images',
+    name: 'Broken External Images',
+    category: 'images',
+    severity: 'warning',
+    description: 'External images should be accessible',
+    check: (ctx) => {
+      if (ctx.brokenExternalImages === undefined) return null;
+
+      if (ctx.brokenExternalImages > 0) {
+        return createResult(
+          { id: 'broken-external-images', name: 'Broken External Images', category: 'images', severity: 'warning' },
+          'warn',
+          `${ctx.brokenExternalImages} broken external images`,
+          {
+            value: ctx.brokenExternalImages,
+            recommendation: 'Fix or remove broken external image references',
+            evidence: {
+              found: ctx.brokenExternalImageUrls?.slice(0, 5) || [],
+              expected: 'All images should load successfully',
+              impact: 'Broken images negatively affect user experience and may signal poor maintenance'
+            }
+          }
+        );
+      }
+
       return null;
     },
   },

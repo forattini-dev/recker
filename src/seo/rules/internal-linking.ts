@@ -410,15 +410,15 @@ export const internalLinkingRules: SeoRule[] = [
     check: (ctx) => {
       if (ctx.brokenInternalLinks === undefined) return null;
 
-      if (ctx.brokenInternalLinks > 0) {
+      if (ctx.brokenInternalLinks.length > 0) {
         return createResult(
           { id: 'linking-broken-internal', name: 'Broken Internal Links', category: 'links', severity: 'error' },
           'fail',
-          `${ctx.brokenInternalLinks} broken internal link(s)`,
+          `${ctx.brokenInternalLinks.length} broken internal link(s)`,
           {
             recommendation: 'Fix or remove broken internal links',
             evidence: {
-              found: ctx.brokenInternalLinks,
+              found: ctx.brokenInternalLinks.slice(0, 5),
               expected: '0 broken links',
               impact: 'Broken links waste crawl budget and harm user experience',
             },
@@ -442,15 +442,15 @@ export const internalLinkingRules: SeoRule[] = [
     check: (ctx) => {
       if (ctx.redirectChainLinks === undefined) return null;
 
-      if (ctx.redirectChainLinks > 0) {
+      if (ctx.redirectChainLinks.length > 0) {
         return createResult(
           { id: 'linking-redirect-chains', name: 'Redirect Chains', category: 'links', severity: 'warning' },
           'warn',
-          `${ctx.redirectChainLinks} link(s) go through redirects`,
+          `${ctx.redirectChainLinks.length} link(s) go through redirects`,
           {
             recommendation: 'Update links to point to final destination URLs',
             evidence: {
-              found: ctx.redirectChainLinks,
+              found: ctx.redirectChainLinks.slice(0, 5).map(r => `${r.from} → ${r.to} (${r.hops} hops)`),
               expected: '0 redirect chain links',
               impact: 'Redirect chains slow down crawling and lose link equity',
             },

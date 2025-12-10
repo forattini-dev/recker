@@ -9,6 +9,7 @@ import type { CheerioAPI } from 'cheerio';
 import type {
   SeoReport,
   SeoCheckResult,
+  SeoSummary,
   HeadingAnalysis,
   ContentMetrics,
   LinkAnalysis,
@@ -119,11 +120,23 @@ export class SeoAnalyzer {
     // Calculate score
     const { score, grade } = this.calculateScore(checks);
 
+    // Build summary with big numbers
+    const summary = this.buildSummary(ruleResults, checks, {
+      content,
+      imageAnalysis,
+      linkAnalysis,
+      meta,
+      og,
+      twitter,
+      technical,
+    });
+
     return {
       url,
       timestamp: new Date(),
       grade,
       score,
+      summary,
       checks,
       title: meta.title ? { text: meta.title, length: meta.title.length } : undefined,
       metaDescription: meta.description ? { text: meta.description, length: meta.description.length } : undefined,
@@ -142,16 +155,17 @@ export class SeoAnalyzer {
         image: Array.isArray(twitter.image) ? twitter.image[0] : twitter.image,
         site: twitter.site,
       } : undefined,
+      structuredData: {
+        count: jsonLd.length,
+        types: jsonLd.map((j) => j['@type'] as string).filter(Boolean),
+        items: jsonLd,
+      },
       headings: headings,
       content,
       links: linkAnalysis,
       images: imageAnalysis,
       social,
       technical,
-      jsonLd: {
-        count: jsonLd.length,
-        types: jsonLd.map((j) => j['@type'] as string).filter(Boolean),
-      },
     };
   }
 
@@ -878,6 +892,237 @@ export class SeoAnalyzer {
       recommendation: r.recommendation,
       evidence: r.evidence,
     }));
+  }
+
+  /**
+   * Build summary with big numbers and key metrics
+   */
+  private buildSummary(
+    ruleResults: RuleResult[],
+    checks: SeoCheckResult[],
+    data: {
+      content: ContentMetrics & { paragraphWordCounts: number[]; avgSentenceLength: number; faqCount: number; imagePerWordRatio: number };
+      imageAnalysis: ImageAnalysis;
+      linkAnalysis: LinkAnalysis;
+      meta: ReturnType<typeof extractMeta>;
+      og: ReturnType<typeof extractOpenGraph>;
+      twitter: ReturnType<typeof extractTwitterCard>;
+      technical: TechnicalSeo;
+    }
+  ): SeoSummary {
+    // Count by status
+    const passed = checks.filter(c => c.status === 'pass').length;
+    const warnings = checks.filter(c => c.status === 'warn').length;
+    const errors = checks.filter(c => c.status === 'fail').length;
+    const infos = checks.filter(c => c.status === 'info').length;
+    const totalChecks = checks.length;
+
+    // Pass rate (excluding info)
+    const scoringChecks = totalChecks - infos;
+    const passRate = scoringChecks > 0 ? Math.round((passed / scoringChecks) * 100) : 100;
+
+    // Issues by category
+    const issuesByCategory: Record<string, { passed: number; warnings: number; errors: number }> = {};
+    for (const result of ruleResults) {
+      const cat = result.category;
+      if (!issuesByCategory[cat]) {
+        issuesByCategory[cat] = { passed: 0, warnings: 0, errors: 0 };
+      }
+      if (result.status === 'pass') issuesByCategory[cat].passed++;
+      else if (result.status === 'warn') issuesByCategory[cat].warnings++;
+      else if (result.status === 'fail') issuesByCategory[cat].errors++;
+    }
+
+    // Top issues (errors first, then warnings)
+    const topIssues = ruleResults
+      .filter(r => r.status === 'fail' || r.status === 'warn')
+      .sort((a, b) => {
+        if (a.status === 'fail' && b.status !== 'fail') return -1;
+        if (a.status !== 'fail' && b.status === 'fail') return 1;
+        return 0;
+      })
+      .slice(0, 5)
+      .map(r => ({
+        name: r.name,
+        message: r.message,
+        category: r.category,
+        severity: (r.status === 'fail' ? 'error' : 'warning') as 'error' | 'warning',
+      }));
+
+    // Quick wins - easy fixes that have good impact
+    const quickWins: string[] = [];
+
+    // Check for missing basics
+    if (!data.meta.title) quickWins.push('Add a page title');
+    if (!data.meta.description) quickWins.push('Add a meta description');
+    if (!data.og.title && !data.og.description) quickWins.push('Add OpenGraph meta tags for social sharing');
+    if (!data.twitter.card) quickWins.push('Add Twitter Card meta tags');
+    if (!data.technical.hasCanonical) quickWins.push('Add a canonical URL');
+    if (!data.technical.hasLang) quickWins.push('Add lang attribute to <html>');
+    if (data.imageAnalysis.withoutAlt > 0) quickWins.push(`Add alt text to ${data.imageAnalysis.withoutAlt} image(s)`);
+    if (data.linkAnalysis.withoutText > 0) quickWins.push(`Add text to ${data.linkAnalysis.withoutText} empty link(s)`);
+
+    // Limit quick wins
+    const limitedQuickWins = quickWins.slice(0, 5);
+
+    // Page vitals
+    const htmlSize = this.$('html').html()?.length;
+    const domElements = this.$('*').length;
+
+    const vitals = {
+      htmlSize,
+      domElements,
+      ttfb: this.options.responseHeaders ? undefined : undefined, // Would need timing data
+      totalTime: undefined,
+      wordCount: data.content.wordCount,
+      readingTime: data.content.readingTimeMinutes,
+      imageCount: data.imageAnalysis.total,
+      linkCount: data.linkAnalysis.total,
+    };
+
+    // Completeness scores (0-100)
+    const completeness = {
+      meta: this.calculateMetaCompleteness(data.meta),
+      social: this.calculateSocialCompleteness(data.og, data.twitter),
+      technical: this.calculateTechnicalCompleteness(data.technical),
+      content: this.calculateContentCompleteness(data.content),
+      images: this.calculateImageCompleteness(data.imageAnalysis),
+      links: this.calculateLinkCompleteness(data.linkAnalysis),
+    };
+
+    return {
+      totalChecks,
+      passed,
+      warnings,
+      errors,
+      infos,
+      passRate,
+      issuesByCategory,
+      topIssues,
+      quickWins: limitedQuickWins,
+      vitals,
+      completeness,
+    };
+  }
+
+  /**
+   * Calculate meta completeness score
+   */
+  private calculateMetaCompleteness(meta: ReturnType<typeof extractMeta>): number {
+    let score = 0;
+    const total = 5;
+
+    if (meta.title) score++;
+    if (meta.description) score++;
+    if (meta.canonical) score++;
+    if (meta.viewport) score++;
+    if (meta.charset) score++;
+
+    return Math.round((score / total) * 100);
+  }
+
+  /**
+   * Calculate social completeness score
+   */
+  private calculateSocialCompleteness(
+    og: ReturnType<typeof extractOpenGraph>,
+    twitter: ReturnType<typeof extractTwitterCard>
+  ): number {
+    let score = 0;
+    const total = 8;
+
+    // OpenGraph
+    if (og.title) score++;
+    if (og.description) score++;
+    if (og.image) score++;
+    if (og.url) score++;
+
+    // Twitter
+    if (twitter.card) score++;
+    if (twitter.title) score++;
+    if (twitter.description) score++;
+    if (twitter.image) score++;
+
+    return Math.round((score / total) * 100);
+  }
+
+  /**
+   * Calculate technical completeness score
+   */
+  private calculateTechnicalCompleteness(technical: TechnicalSeo): number {
+    let score = 0;
+    const total = 5;
+
+    if (technical.hasCanonical) score++;
+    if (technical.hasViewport) score++;
+    if (technical.hasCharset) score++;
+    if (technical.hasLang) score++;
+    if (technical.hasRobotsMeta) score++;
+
+    return Math.round((score / total) * 100);
+  }
+
+  /**
+   * Calculate content completeness score
+   */
+  private calculateContentCompleteness(content: ContentMetrics & { faqCount: number }): number {
+    let score = 0;
+    const total = 5;
+
+    // Good word count (300+)
+    if (content.wordCount >= 300) score++;
+    // Has paragraphs
+    if (content.paragraphCount >= 3) score++;
+    // Has lists
+    if (content.listCount > 0) score++;
+    // Good reading time (1+ min)
+    if (content.readingTimeMinutes >= 1) score++;
+    // Has emphasis
+    if (content.strongTagCount > 0 || content.emTagCount > 0) score++;
+
+    return Math.round((score / total) * 100);
+  }
+
+  /**
+   * Calculate image completeness score
+   */
+  private calculateImageCompleteness(images: ImageAnalysis): number {
+    if (images.total === 0) return 100; // No images = nothing to fix
+
+    let score = 0;
+    const total = 4;
+
+    // All images have alt
+    if (images.withoutAlt === 0) score++;
+    // Some images use lazy loading
+    if (images.lazy > 0) score++;
+    // All images have dimensions
+    if (images.missingDimensions === 0) score++;
+    // Some modern formats
+    if (images.modernFormats > 0) score++;
+
+    return Math.round((score / total) * 100);
+  }
+
+  /**
+   * Calculate link completeness score
+   */
+  private calculateLinkCompleteness(links: LinkAnalysis): number {
+    if (links.total === 0) return 100; // No links = nothing to fix
+
+    let score = 0;
+    const total = 4;
+
+    // Has internal links
+    if (links.internal > 0) score++;
+    // Has external links (shows authority)
+    if (links.external > 0) score++;
+    // No empty links
+    if (links.withoutText === 0) score++;
+    // No broken links
+    if (links.broken === 0) score++;
+
+    return Math.round((score / total) * 100);
   }
 
   /**

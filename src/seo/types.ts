@@ -47,6 +47,8 @@ export interface ContentMetrics {
   listCount: number;
   strongTagCount: number;
   emTagCount: number;
+  fleschReadingEase?: number;
+  hasQuestionHeadings?: boolean;
 }
 
 export interface LinkAnalysis {
@@ -56,6 +58,8 @@ export interface LinkAnalysis {
   nofollow: number;
   broken: number;
   withoutText: number;
+  sponsoredLinks: number;
+  ugcLinks: number;
 }
 
 export interface ImageAnalysis {
@@ -115,11 +119,75 @@ export interface SeoTiming {
   download?: number;
 }
 
+/**
+ * Summary statistics for the SEO report
+ */
+export interface SeoSummary {
+  /** Total rules evaluated */
+  totalChecks: number;
+
+  /** Count by status */
+  passed: number;
+  warnings: number;
+  errors: number;
+  infos: number;
+
+  /** Pass rate percentage (0-100) */
+  passRate: number;
+
+  /** Issues by category */
+  issuesByCategory: Record<string, { passed: number; warnings: number; errors: number }>;
+
+  /** Top issues (most critical) */
+  topIssues: Array<{
+    name: string;
+    message: string;
+    category: string;
+    severity: 'error' | 'warning';
+  }>;
+
+  /** Quick wins (easy fixes with high impact) */
+  quickWins: string[];
+
+  /** Page vitals */
+  vitals: {
+    /** HTML size in bytes */
+    htmlSize?: number;
+    /** Total DOM elements */
+    domElements?: number;
+    /** Time to First Byte (ms) */
+    ttfb?: number;
+    /** Total request time (ms) */
+    totalTime?: number;
+    /** Word count */
+    wordCount: number;
+    /** Reading time in minutes */
+    readingTime: number;
+    /** Total images */
+    imageCount: number;
+    /** Total links */
+    linkCount: number;
+  };
+
+  /** Completeness scores by area (0-100) */
+  completeness: {
+    meta: number;
+    social: number;
+    technical: number;
+    content: number;
+    images: number;
+    links: number;
+  };
+}
+
 export interface SeoReport {
   url: string;
   timestamp: Date;
   grade: string;
   score: number;
+
+  /** High-level summary with big numbers */
+  summary: SeoSummary;
 
   /** Request timing metrics */
   timing?: SeoTiming;
@@ -156,16 +224,22 @@ export interface SeoReport {
     site?: string;
   };
 
+  // Structured Data (JSON-LD)
+  structuredData: {
+    /** Number of JSON-LD blocks found */
+    count: number;
+    /** Schema.org types detected */
+    types: string[];
+    /** Raw JSON-LD objects */
+    items: Record<string, unknown>[];
+  };
+
   headings: HeadingAnalysis;
   content: ContentMetrics;
   links: LinkAnalysis;
   images: ImageAnalysis;
   social: SocialMetaAnalysis;
   technical: TechnicalSeo;
-  jsonLd: {
-    count: number;
-    types: string[];
-  };
 }
 
 export interface SeoAnalyzerOptions {
@@ -211,29 +285,3 @@ export interface ExtractedImage {
   loading?: 'lazy' | 'eager';
 }
 
-// === Link Extraction ===
-export interface LinkAnalysis {
-  total: number;
-  internal: number;
-  external: number;
-  nofollow: number;
-  broken: number;
-  withoutText: number;
-  sponsoredLinks: number;
-  ugcLinks: number;
-}
-
-export interface ContentMetrics {
-  wordCount: number;
-  characterCount: number;
-  sentenceCount: number;
-  paragraphCount: number;
-  readingTimeMinutes: number;
-  avgWordsPerSentence: number;
-  avgParagraphLength: number;
-  listCount: number;
-  strongTagCount: number;
-  emTagCount: number;
-  fleschReadingEase?: number;
-  hasQuestionHeadings?: boolean;
-}

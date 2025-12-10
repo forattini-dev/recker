@@ -405,4 +405,187 @@ export const performanceRules: SeoRule[] = [
       return null;
     },
   },
+
+  // ==========================================================================
+  // Browser Caching for Resources
+  // ==========================================================================
+  {
+    id: 'browser-caching',
+    name: 'Browser Caching',
+    category: 'performance',
+    severity: 'warning',
+    description: 'Static resources should have browser caching enabled',
+    check: (ctx) => {
+      if (ctx.resourcesWithoutCaching === undefined) return null;
+
+      if (ctx.resourcesWithoutCaching > 0) {
+        return createResult(
+          { id: 'browser-caching', name: 'Browser Caching', category: 'performance', severity: 'warning' },
+          'warn',
+          `${ctx.resourcesWithoutCaching} resources without cache headers`,
+          {
+            value: ctx.resourcesWithoutCaching,
+            recommendation: 'Enable browser caching with Cache-Control or Expires headers',
+            evidence: {
+              found: `${ctx.resourcesWithoutCaching} uncached resources`,
+              expected: 'All static resources should have cache headers',
+              impact: 'Without caching, browsers download resources repeatedly, increasing load time',
+              learnMore: 'https://web.dev/uses-long-cache-ttl/'
+            }
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'browser-caching', name: 'Browser Caching', category: 'performance', severity: 'warning' },
+        'pass',
+        'Resources have proper cache headers'
+      );
+    },
+  },
+
+  // ==========================================================================
+  // JS/CSS Total Size
+  // ==========================================================================
+  {
+    id: 'js-css-total-size',
+    name: 'JS/CSS Total Size',
+    category: 'performance',
+    severity: 'warning',
+    description: 'Total JS and CSS size should not exceed 2MB',
+    check: (ctx) => {
+      const jsSize = ctx.jsTotalSize || 0;
+      const cssSize = ctx.cssTotalSize || 0;
+      const totalSize = jsSize + cssSize;
+
+      if (totalSize === 0) return null;
+
+      const sizeMb = totalSize / (1024 * 1024);
+
+      if (sizeMb > 2) {
+        return createResult(
+          { id: 'js-css-total-size', name: 'JS/CSS Total Size', category: 'performance', severity: 'warning' },
+          'fail',
+          `JS/CSS total ${sizeMb.toFixed(2)}MB exceeds 2MB limit`,
+          {
+            value: totalSize,
+            recommendation: 'Reduce JS/CSS file sizes through minification and code splitting',
+            evidence: {
+              found: `${sizeMb.toFixed(2)}MB (JS: ${(jsSize / 1024).toFixed(0)}KB, CSS: ${(cssSize / 1024).toFixed(0)}KB)`,
+              expected: '<2MB total',
+              impact: 'Large JS/CSS files significantly increase page load time',
+              learnMore: 'https://web.dev/total-byte-weight/'
+            }
+          }
+        );
+      }
+
+      if (sizeMb > 1) {
+        return createResult(
+          { id: 'js-css-total-size', name: 'JS/CSS Total Size', category: 'performance', severity: 'warning' },
+          'warn',
+          `JS/CSS total ${sizeMb.toFixed(2)}MB is large`,
+          {
+            value: totalSize,
+            recommendation: 'Consider reducing JS/CSS bundle sizes',
+            evidence: {
+              found: `${sizeMb.toFixed(2)}MB`,
+              expected: '<1MB recommended',
+              impact: 'Large bundles increase load time, especially on mobile'
+            }
+          }
+        );
+      }
+
+      return null;
+    },
+  },
+
+  // ==========================================================================
+  // Too Many JS/CSS Files
+  // ==========================================================================
+  {
+    id: 'excessive-js-css-files',
+    name: 'Excessive JS/CSS Files',
+    category: 'performance',
+    severity: 'warning',
+    description: 'Pages should not load more than 100 JS/CSS files',
+    check: (ctx) => {
+      const jsCount = ctx.jsFilesCount || 0;
+      const cssCount = ctx.cssFilesCount || 0;
+      const totalFiles = jsCount + cssCount;
+
+      if (totalFiles === 0) return null;
+
+      if (totalFiles > 100) {
+        return createResult(
+          { id: 'excessive-js-css-files', name: 'Excessive JS/CSS Files', category: 'performance', severity: 'warning' },
+          'fail',
+          `Page loads ${totalFiles} JS/CSS files (exceeds 100)`,
+          {
+            value: totalFiles,
+            recommendation: 'Combine files or use bundling to reduce HTTP requests',
+            evidence: {
+              found: `${totalFiles} files (JS: ${jsCount}, CSS: ${cssCount})`,
+              expected: '<100 files',
+              impact: 'Each file requires a separate HTTP request, increasing page load time'
+            }
+          }
+        );
+      }
+
+      if (totalFiles > 50) {
+        return createResult(
+          { id: 'excessive-js-css-files', name: 'Excessive JS/CSS Files', category: 'performance', severity: 'warning' },
+          'warn',
+          `Page loads ${totalFiles} JS/CSS files`,
+          {
+            value: totalFiles,
+            recommendation: 'Consider bundling resources to reduce requests',
+            evidence: {
+              found: `${totalFiles} files`,
+              expected: '<50 files recommended',
+              impact: 'Many files increase connection overhead'
+            }
+          }
+        );
+      }
+
+      return null;
+    },
+  },
+
+  // ==========================================================================
+  // Unminified Resources
+  // ==========================================================================
+  {
+    id: 'unminified-resources',
+    name: 'Unminified Resources',
+    category: 'performance',
+    severity: 'warning',
+    description: 'JS and CSS files should be minified',
+    check: (ctx) => {
+      if (ctx.unminifiedResources === undefined) return null;
+
+      if (ctx.unminifiedResources > 0) {
+        return createResult(
+          { id: 'unminified-resources', name: 'Unminified Resources', category: 'performance', severity: 'warning' },
+          'warn',
+          `${ctx.unminifiedResources} unminified JS/CSS files detected`,
+          {
+            value: ctx.unminifiedResources,
+            recommendation: 'Minify JavaScript and CSS files to reduce file size',
+            evidence: {
+              found: `${ctx.unminifiedResources} unminified files`,
+              expected: 'All JS/CSS files should be minified',
+              impact: 'Minification reduces file size by removing whitespace and comments',
+              learnMore: 'https://web.dev/minify-css/'
+            }
+          }
+        );
+      }
+
+      return null;
+    },
+  },
 ];

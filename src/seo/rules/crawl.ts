@@ -447,4 +447,175 @@ export const crawlRules: SeoRule[] = [
       return null;
     },
   },
+
+  // ==========================================================================
+  // robots.txt Exists
+  // ==========================================================================
+  {
+    id: 'robots-txt-exists',
+    name: 'robots.txt Exists',
+    category: 'crawlability',
+    severity: 'info',
+    description: 'Website should have a robots.txt file',
+    check: (ctx) => {
+      if (ctx.robotsTxtExists === undefined) return null;
+
+      if (!ctx.robotsTxtExists) {
+        return createResult(
+          { id: 'robots-txt-exists', name: 'robots.txt Exists', category: 'crawlability', severity: 'info' },
+          'info',
+          'No robots.txt file found',
+          {
+            recommendation: 'Create a robots.txt file to control search engine crawling',
+            evidence: {
+              expected: '/robots.txt',
+              impact: 'Without robots.txt, search engines will crawl everything by default',
+              learnMore: 'https://developers.google.com/search/docs/crawling-indexing/robots/intro'
+            }
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'robots-txt-exists', name: 'robots.txt Exists', category: 'crawlability', severity: 'info' },
+        'pass',
+        'robots.txt file exists'
+      );
+    },
+  },
+
+  // ==========================================================================
+  // Sitemap in robots.txt
+  // ==========================================================================
+  {
+    id: 'sitemap-in-robots',
+    name: 'Sitemap Reference in robots.txt',
+    category: 'crawlability',
+    severity: 'warning',
+    description: 'robots.txt should reference sitemap.xml location',
+    check: (ctx) => {
+      if (ctx.robotsTxtHasSitemap === undefined) return null;
+
+      if (!ctx.robotsTxtHasSitemap) {
+        return createResult(
+          { id: 'sitemap-in-robots', name: 'Sitemap Reference in robots.txt', category: 'crawlability', severity: 'warning' },
+          'warn',
+          'robots.txt does not reference sitemap.xml',
+          {
+            recommendation: 'Add sitemap location to robots.txt',
+            evidence: {
+              expected: 'Sitemap: https://example.com/sitemap.xml',
+              impact: 'Search engines may not discover your sitemap automatically',
+              learnMore: 'https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap'
+            }
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'sitemap-in-robots', name: 'Sitemap Reference in robots.txt', category: 'crawlability', severity: 'warning' },
+        'pass',
+        'Sitemap is referenced in robots.txt'
+      );
+    },
+  },
+
+  // ==========================================================================
+  // Blocked Resources in robots.txt
+  // ==========================================================================
+  {
+    id: 'blocked-resources',
+    name: 'Blocked Resources',
+    category: 'crawlability',
+    severity: 'warning',
+    description: 'CSS/JS resources should not be blocked by robots.txt',
+    check: (ctx) => {
+      if (ctx.blockedResources === undefined) return null;
+
+      if (ctx.blockedResources > 0) {
+        return createResult(
+          { id: 'blocked-resources', name: 'Blocked Resources', category: 'crawlability', severity: 'warning' },
+          'warn',
+          `${ctx.blockedResources} resources blocked by robots.txt`,
+          {
+            value: ctx.blockedResources,
+            recommendation: 'Update robots.txt to allow crawling of CSS and JS files',
+            evidence: {
+              found: `${ctx.blockedResources} blocked resources`,
+              expected: 'CSS, JS, and image files should be crawlable',
+              impact: 'Blocked resources prevent proper page rendering and indexing',
+              learnMore: 'https://developers.google.com/search/docs/crawling-indexing/robots/intro'
+            }
+          }
+        );
+      }
+
+      return null;
+    },
+  },
+
+  // ==========================================================================
+  // X-Robots-Tag Blocking
+  // ==========================================================================
+  {
+    id: 'x-robots-tag-noindex',
+    name: 'X-Robots-Tag Noindex',
+    category: 'crawlability',
+    severity: 'warning',
+    description: 'X-Robots-Tag should not block important pages',
+    check: (ctx) => {
+      if (!ctx.xRobotsTag) return null;
+
+      const tag = ctx.xRobotsTag.toLowerCase();
+      if (tag.includes('noindex')) {
+        return createResult(
+          { id: 'x-robots-tag-noindex', name: 'X-Robots-Tag Noindex', category: 'crawlability', severity: 'warning' },
+          'warn',
+          'Page blocked by X-Robots-Tag: noindex',
+          {
+            value: ctx.xRobotsTag,
+            recommendation: 'Verify this page should not be indexed; remove X-Robots-Tag if unintentional',
+            evidence: {
+              found: `X-Robots-Tag: ${ctx.xRobotsTag}`,
+              impact: 'This page will not appear in search results'
+            }
+          }
+        );
+      }
+
+      return null;
+    },
+  },
+
+  // ==========================================================================
+  // Blocked External Resources
+  // ==========================================================================
+  {
+    id: 'blocked-external-resources',
+    name: 'Blocked External Resources',
+    category: 'crawlability',
+    severity: 'info',
+    description: 'External resources blocked by robots.txt may affect rendering',
+    check: (ctx) => {
+      if (ctx.blockedExternalResources === undefined) return null;
+
+      if (ctx.blockedExternalResources > 0) {
+        return createResult(
+          { id: 'blocked-external-resources', name: 'Blocked External Resources', category: 'crawlability', severity: 'info' },
+          'info',
+          `${ctx.blockedExternalResources} external resources blocked by robots.txt`,
+          {
+            value: ctx.blockedExternalResources,
+            recommendation: 'Verify blocked resources are not critical for page rendering',
+            evidence: {
+              found: `${ctx.blockedExternalResources} blocked external resources`,
+              impact: 'If critical resources are blocked, search engines may not render pages correctly'
+            }
+          }
+        );
+      }
+
+      return null;
+    },
+  },
 ];

@@ -230,44 +230,8 @@ export const cwvRules: SeoRule[] = [
       return null;
     },
   },
-  {
-    id: 'cwv-cls-dynamic-content',
-    name: 'Dynamic Content Space',
-    category: 'performance',
-    severity: 'info',
-    description: 'Reserve space for dynamically injected content',
-    check: (ctx) => {
-      const potentialShifts: string[] = [];
-
-      if (ctx.hasAdsWithoutReservedSpace) {
-        potentialShifts.push('Ads without reserved space');
-      }
-      if (ctx.hasBannersWithoutMinHeight) {
-        potentialShifts.push('Banners/alerts without min-height');
-      }
-      if (ctx.hasInfiniteScroll) {
-        potentialShifts.push('Infinite scroll may cause shifts');
-      }
-
-      if (potentialShifts.length > 0) {
-        return createResult(
-          { id: 'cwv-cls-dynamic-content', name: 'Dynamic Content Space', category: 'performance', severity: 'info' },
-          'info',
-          'Potential layout shift sources detected',
-          {
-            recommendation: 'Reserve space for dynamic content with min-height or skeleton loaders',
-            evidence: {
-              found: potentialShifts,
-              example: '.ad-slot { min-height: 250px; }',
-              impact: 'Dynamic content is a major source of CLS',
-            },
-          }
-        );
-      }
-
-      return null;
-    },
-  },
+  // NOTE: cwv-cls-dynamic-content removed - requires runtime detection
+  // (hasAdsWithoutReservedSpace, hasBannersWithoutMinHeight, hasInfiniteScroll not extracted)
   {
     id: 'cwv-cls-font-fallback',
     name: 'Font Fallback Metrics',
@@ -307,91 +271,10 @@ export const cwvRules: SeoRule[] = [
     },
   },
 
-  // ==========================================================================
-  // INP/FID (Interaction to Next Paint / First Input Delay) Rules
-  // ==========================================================================
-  {
-    id: 'cwv-inp-main-thread',
-    name: 'Main Thread Blocking',
-    category: 'performance',
-    severity: 'warning',
-    description: 'Large inline scripts can block the main thread',
-    check: (ctx) => {
-      if (ctx.largeInlineScripts === undefined) return null;
-
-      if (ctx.largeInlineScripts > 0) {
-        return createResult(
-          { id: 'cwv-inp-main-thread', name: 'Main Thread Blocking', category: 'performance', severity: 'warning' },
-          'warn',
-          `${ctx.largeInlineScripts} large inline script(s) may block main thread`,
-          {
-            recommendation: 'Move large scripts to external files with defer',
-            evidence: {
-              found: `${ctx.largeInlineScripts} inline scripts > 10KB`,
-              expected: 'Small inline scripts only for critical initialization',
-              impact: 'Large scripts block main thread and delay interactions',
-              learnMore: 'https://web.dev/optimize-inp/',
-            },
-          }
-        );
-      }
-
-      return null;
-    },
-  },
-  {
-    id: 'cwv-inp-event-handlers',
-    name: 'Inline Event Handlers',
-    category: 'performance',
-    severity: 'info',
-    description: 'Avoid inline event handlers for better performance',
-    check: (ctx) => {
-      if (ctx.inlineEventHandlers === undefined) return null;
-
-      if (ctx.inlineEventHandlers > 10) {
-        return createResult(
-          { id: 'cwv-inp-event-handlers', name: 'Inline Event Handlers', category: 'performance', severity: 'info' },
-          'info',
-          `${ctx.inlineEventHandlers} inline event handlers found`,
-          {
-            recommendation: 'Use event delegation instead of inline handlers',
-            evidence: {
-              found: ctx.inlineEventHandlers,
-              expected: 'Minimal inline handlers, prefer addEventListener',
-              example: 'document.addEventListener("click", handleClick)',
-              impact: 'Many inline handlers increase parsing time',
-            },
-          }
-        );
-      }
-
-      return null;
-    },
-  },
-  {
-    id: 'cwv-inp-heavy-animations',
-    name: 'Heavy Animations',
-    category: 'performance',
-    severity: 'info',
-    description: 'Animations should use transform/opacity for best performance',
-    check: (ctx) => {
-      if (!ctx.hasHeavyAnimations) return null;
-
-      return createResult(
-        { id: 'cwv-inp-heavy-animations', name: 'Heavy Animations', category: 'performance', severity: 'info' },
-        'info',
-        'Potentially expensive animations detected',
-        {
-          recommendation: 'Use transform and opacity for animations, avoid layout properties',
-          evidence: {
-            issue: 'Animating width, height, top, left triggers layout',
-            expected: 'Animate transform: translate(), scale(), rotate() and opacity',
-            learnMore: 'https://web.dev/animations-guide/',
-          },
-        }
-      );
-    },
-  },
+  // NOTE: INP/FID rules removed - require runtime detection
+  // - cwv-inp-main-thread (largeInlineScripts not extracted)
+  // - cwv-inp-event-handlers (inlineEventHandlers not extracted)
+  // - cwv-inp-heavy-animations (hasHeavyAnimations not extracted)
 
   // ==========================================================================
   // General Performance Rules
