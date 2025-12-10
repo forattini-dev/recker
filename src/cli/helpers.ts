@@ -18,8 +18,8 @@ import {
 // Re-export for convenience
 export { classifyErrorCore as classifyError };
 
-// Use picocolors for consistent coloring
-import colors from 'picocolors';
+// Use internal colors utility (picocolors replacement)
+import colors from '../utils/colors.js';
 
 export { colors };
 
