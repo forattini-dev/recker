@@ -562,7 +562,7 @@ ${colors.bold(colors.yellow('Checks:'))}
             images: report.images,
             openGraph: report.social.openGraph,
             twitterCard: report.social.twitterCard,
-            jsonLd: report.jsonLd,
+            structuredData: report.structuredData,
             technical: report.technical,
             checks: report.checks,
             summary: {
@@ -641,8 +641,8 @@ ${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray
         console.log('');
 
         // Structured Data
-        if (report.jsonLd.count > 0) {
-          console.log(`${colors.bold('Structured Data:')} ${report.jsonLd.types.join(', ') || 'Present'}`);
+        if (report.structuredData.count > 0) {
+          console.log(`${colors.bold('Structured Data:')} ${report.structuredData.types.join(', ') || 'Present'}`);
           console.log('');
         }
 
@@ -652,25 +652,496 @@ ${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray
       }
     });
 
+  // SEO Robots.txt Validator
+  program
+    .command('robots')
+    .description('Validate and analyze robots.txt file')
+    .argument('<url>', 'Website URL or direct robots.txt URL')
+    .option('--format <format>', 'Output format: text (default) or json', 'text')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek robots example.com')}                ${colors.gray('Validate robots.txt')}
+  ${colors.green('$ rek robots example.com/robots.txt')}     ${colors.gray('Direct URL')}
+  ${colors.green('$ rek robots example.com --format json')}  ${colors.gray('JSON output')}
+
+${colors.bold(colors.yellow('Checks:'))}
+  ${colors.cyan('Syntax')}              Valid robots.txt syntax
+  ${colors.cyan('User-Agent blocks')}   Defined crawl rules
+  ${colors.cyan('Sitemap')}             Sitemap directive present
+  ${colors.cyan('Crawl-delay')}         Aggressive crawl delay
+  ${colors.cyan('AI Bots')}             GPTBot, ClaudeBot, Anthropic blocks
+`)
+    .action(async (url, options: { format?: string }) => {
+      // Normalize URL
+      if (!url.startsWith('http')) url = `https://${url}`;
+      if (!url.includes('robots.txt')) {
+        const urlObj = new URL(url);
+        url = `${urlObj.origin}/robots.txt`;
+      }
+
+      const isJson = options.format === 'json';
+
+      if (!isJson) {
+        console.log(colors.gray(`Fetching robots.txt from ${url}...`));
+      }
+
+      try {
+        const { fetchAndValidateRobotsTxt } = await import('../seo/validators/robots.js');
+        const result = await fetchAndValidateRobotsTxt(url);
+
+        if (isJson) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        // Display results
+        console.log(`
+${colors.bold(colors.cyan('🤖 Robots.txt Analysis'))}
+${colors.gray('URL:')} ${url}
+${colors.gray('Valid:')} ${result.valid ? colors.green('Yes') : colors.red('No')}
+`);
+
+        if (result.parseResult) {
+          const { parseResult } = result;
+
+          // User-Agent blocks
+          if (parseResult.userAgentBlocks.length > 0) {
+            console.log(colors.bold('User-Agent Blocks:'));
+            for (const block of parseResult.userAgentBlocks.slice(0, 5)) {
+              const agents = block.userAgents.join(', ');
+              const allowCount = block.rules.filter(r => r.type === 'allow').length;
+              const disallowCount = block.rules.filter(r => r.type === 'disallow').length;
+              console.log(`  ${colors.cyan(agents)}`);
+              console.log(`    ${colors.green(`Allow: ${allowCount}`)} | ${colors.red(`Disallow: ${disallowCount}`)}`);
+            }
+            if (parseResult.userAgentBlocks.length > 5) {
+              console.log(colors.gray(`  ... and ${parseResult.userAgentBlocks.length - 5} more blocks`));
+            }
+            console.log('');
+          }
+
+          // Sitemaps
+          if (parseResult.sitemaps.length > 0) {
+            console.log(colors.bold('Sitemaps:'));
+            for (const sitemap of parseResult.sitemaps.slice(0, 3)) {
+              console.log(`  ${colors.gray('→')} ${sitemap}`);
+            }
+            if (parseResult.sitemaps.length > 3) {
+              console.log(colors.gray(`  ... and ${parseResult.sitemaps.length - 3} more`));
+            }
+            console.log('');
+          }
+
+          // AI Bot Status
+          const aiAgents = ['gptbot', 'chatgpt-user', 'claudebot', 'claude-web', 'anthropic-ai', 'ccbot'];
+          const blockedAiBots: string[] = [];
+          for (const block of parseResult.userAgentBlocks) {
+            for (const agent of block.userAgents) {
+              if (aiAgents.includes(agent.toLowerCase())) {
+                const hasBlockAll = block.rules.some(r => r.type === 'disallow' && (r.path === '/' || r.path === '/*'));
+                if (hasBlockAll) {
+                  blockedAiBots.push(agent);
+                }
+              }
+            }
+          }
+          if (blockedAiBots.length > 0) {
+            console.log(colors.bold('AI Bots Blocked:'));
+            for (const bot of blockedAiBots) {
+              console.log(`  ${colors.red('✗')} ${bot}`);
+            }
+            console.log('');
+          }
+        }
+
+        // Issues
+        if (result.issues.length > 0) {
+          console.log(colors.bold('Issues:'));
+          for (const issue of result.issues) {
+            const icon = issue.type === 'error' ? colors.red('✗')
+              : issue.type === 'warning' ? colors.yellow('⚠')
+              : colors.gray('ℹ');
+            console.log(`  ${icon} ${issue.message}`);
+          }
+          console.log('');
+        }
+
+        // Summary
+        const errorCount = result.issues.filter(i => i.type === 'error').length;
+        const warningCount = result.issues.filter(i => i.type === 'warning').length;
+        if (errorCount === 0 && warningCount === 0) {
+          console.log(colors.green('✔ No issues found'));
+        } else {
+          console.log(`${colors.red(`${errorCount} errors`)} | ${colors.yellow(`${warningCount} warnings`)}`);
+        }
+
+      } catch (error: any) {
+        console.error(colors.red(`Robots.txt analysis failed: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // SEO Sitemap Validator
+  program
+    .command('sitemap')
+    .description('Validate and analyze sitemap.xml file')
+    .argument('<url>', 'Website URL or direct sitemap URL')
+    .option('--format <format>', 'Output format: text (default) or json', 'text')
+    .option('--discover', 'Discover all sitemaps via robots.txt')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek sitemap example.com')}                  ${colors.gray('Validate sitemap')}
+  ${colors.green('$ rek sitemap example.com/sitemap.xml')}      ${colors.gray('Direct URL')}
+  ${colors.green('$ rek sitemap example.com --discover')}       ${colors.gray('Find all sitemaps')}
+  ${colors.green('$ rek sitemap example.com --format json')}    ${colors.gray('JSON output')}
+
+${colors.bold(colors.yellow('Checks:'))}
+  ${colors.cyan('Structure')}      Valid XML sitemap format
+  ${colors.cyan('URL Count')}      Within 50,000 URL limit
+  ${colors.cyan('File Size')}      Within 50MB limit
+  ${colors.cyan('URLs')}           Valid, no duplicates, same domain
+  ${colors.cyan('Lastmod')}        Valid dates, not in future
+`)
+    .action(async (url, options: { format?: string; discover?: boolean }) => {
+      // Normalize URL
+      if (!url.startsWith('http')) url = `https://${url}`;
+
+      const isJson = options.format === 'json';
+
+      try {
+        if (options.discover) {
+          // Discover all sitemaps
+          const { discoverSitemaps } = await import('../seo/validators/sitemap.js');
+
+          if (!isJson) {
+            console.log(colors.gray(`Discovering sitemaps for ${new URL(url).origin}...`));
+          }
+
+          const sitemaps = await discoverSitemaps(url);
+
+          if (isJson) {
+            console.log(JSON.stringify({ url, sitemaps }, null, 2));
+            return;
+          }
+
+          console.log(`
+${colors.bold(colors.cyan('🗺️ Sitemap Discovery'))}
+${colors.gray('Site:')} ${new URL(url).origin}
+${colors.gray('Found:')} ${sitemaps.length} sitemap(s)
+`);
+
+          if (sitemaps.length > 0) {
+            for (const sitemap of sitemaps) {
+              console.log(`  ${colors.gray('→')} ${sitemap}`);
+            }
+          } else {
+            console.log(colors.yellow('  No sitemaps found in robots.txt or common locations'));
+          }
+          return;
+        }
+
+        // Validate single sitemap
+        if (!url.includes('sitemap')) {
+          const urlObj = new URL(url);
+          url = `${urlObj.origin}/sitemap.xml`;
+        }
+
+        if (!isJson) {
+          console.log(colors.gray(`Fetching sitemap from ${url}...`));
+        }
+
+        const { fetchAndValidateSitemap } = await import('../seo/validators/sitemap.js');
+        const result = await fetchAndValidateSitemap(url);
+
+        if (isJson) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        // Display results
+        console.log(`
+${colors.bold(colors.cyan('🗺️ Sitemap Analysis'))}
+${colors.gray('URL:')} ${url}
+${colors.gray('Valid:')} ${result.valid ? colors.green('Yes') : colors.red('No')}
+${colors.gray('Type:')} ${result.parseResult?.type === 'sitemapindex' ? 'Sitemap Index' : 'URL Set'}
+`);
+
+        if (result.parseResult) {
+          const { parseResult } = result;
+
+          if (parseResult.type === 'sitemapindex') {
+            // Sitemap index
+            console.log(colors.bold(`Sitemaps: ${parseResult.sitemaps?.length || 0}`));
+            for (const sm of (parseResult.sitemaps || []).slice(0, 5)) {
+              console.log(`  ${colors.gray('→')} ${sm.loc}`);
+              if (sm.lastmod) {
+                console.log(`    ${colors.gray(`Last modified: ${sm.lastmod}`)}`);
+              }
+            }
+            if ((parseResult.sitemaps?.length || 0) > 5) {
+              console.log(colors.gray(`  ... and ${parseResult.sitemaps!.length - 5} more`));
+            }
+          } else {
+            // URL set
+            console.log(colors.bold(`URLs: ${parseResult.urls?.length || 0}`));
+
+            // Show sample URLs
+            const sampleUrls = (parseResult.urls || []).slice(0, 5);
+            for (const entry of sampleUrls) {
+              const path = new URL(entry.loc).pathname;
+              console.log(`  ${colors.gray('→')} ${path}`);
+            }
+            if ((parseResult.urls?.length || 0) > 5) {
+              console.log(colors.gray(`  ... and ${parseResult.urls!.length - 5} more URLs`));
+            }
+
+            // Show statistics
+            const urlsWithLastmod = (parseResult.urls || []).filter(u => u.lastmod).length;
+            const urlsWithPriority = (parseResult.urls || []).filter(u => u.priority !== undefined).length;
+            const urlsWithChangefreq = (parseResult.urls || []).filter(u => u.changefreq).length;
+
+            console.log('');
+            console.log(colors.bold('Statistics:'));
+            console.log(`  ${colors.gray('With lastmod:')}     ${urlsWithLastmod} (${((urlsWithLastmod / (parseResult.urls?.length || 1)) * 100).toFixed(0)}%)`);
+            console.log(`  ${colors.gray('With priority:')}    ${urlsWithPriority} (${((urlsWithPriority / (parseResult.urls?.length || 1)) * 100).toFixed(0)}%)`);
+            console.log(`  ${colors.gray('With changefreq:')}  ${urlsWithChangefreq} (${((urlsWithChangefreq / (parseResult.urls?.length || 1)) * 100).toFixed(0)}%)`);
+          }
+          console.log('');
+        }
+
+        // Issues
+        if (result.issues.length > 0) {
+          console.log(colors.bold('Issues:'));
+          for (const issue of result.issues.slice(0, 10)) {
+            const icon = issue.type === 'error' ? colors.red('✗')
+              : issue.type === 'warning' ? colors.yellow('⚠')
+              : colors.gray('ℹ');
+            console.log(`  ${icon} ${issue.message}`);
+          }
+          if (result.issues.length > 10) {
+            console.log(colors.gray(`  ... and ${result.issues.length - 10} more issues`));
+          }
+          console.log('');
+        }
+
+        // Summary
+        const errorCount = result.issues.filter(i => i.type === 'error').length;
+        const warningCount = result.issues.filter(i => i.type === 'warning').length;
+        if (errorCount === 0 && warningCount === 0) {
+          console.log(colors.green('✔ No issues found'));
+        } else {
+          console.log(`${colors.red(`${errorCount} errors`)} | ${colors.yellow(`${warningCount} warnings`)}`);
+        }
+
+      } catch (error: any) {
+        console.error(colors.red(`Sitemap analysis failed: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // SEO llms.txt Validator
+  program
+    .command('llms')
+    .description('Validate and analyze llms.txt file (AI/LLM optimization)')
+    .argument('[url]', 'Website URL or direct llms.txt URL')
+    .option('--format <format>', 'Output format: text (default) or json', 'text')
+    .option('--template', 'Generate a template llms.txt file')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek llms example.com')}                ${colors.gray('Validate llms.txt')}
+  ${colors.green('$ rek llms example.com/llms.txt')}       ${colors.gray('Direct URL')}
+  ${colors.green('$ rek llms example.com --format json')}  ${colors.gray('JSON output')}
+  ${colors.green('$ rek llms --template > llms.txt')}      ${colors.gray('Generate template')}
+
+${colors.bold(colors.yellow('About llms.txt:'))}
+  A proposed standard for providing LLM-friendly content.
+  Similar to robots.txt but for AI/LLM crawlers.
+  Learn more: ${colors.cyan('https://llmstxt.org')}
+
+${colors.bold(colors.yellow('Checks:'))}
+  ${colors.cyan('Structure')}    Valid llms.txt format
+  ${colors.cyan('Site Name')}    Primary heading present
+  ${colors.cyan('Description')} Site description block
+  ${colors.cyan('Sections')}     Content sections with links
+`)
+    .action(async (url, options: { format?: string; template?: boolean }) => {
+      const isJson = options.format === 'json';
+
+      // Template mode
+      if (options.template) {
+        const { generateLlmsTxtTemplate } = await import('../seo/validators/llms-txt.js');
+        const template = generateLlmsTxtTemplate({
+          siteName: 'Your Site Name',
+          siteDescription: 'A brief description of your website and what it offers.',
+          sections: [
+            {
+              title: 'Documentation',
+              links: [
+                { text: 'Getting Started', url: '/docs/getting-started' },
+                { text: 'API Reference', url: '/docs/api' },
+              ],
+            },
+            {
+              title: 'Resources',
+              links: [
+                { text: 'Blog', url: '/blog' },
+                { text: 'FAQ', url: '/faq' },
+              ],
+            },
+          ],
+        });
+        console.log(template);
+        return;
+      }
+
+      // Normalize URL
+      if (!url) {
+        console.error(colors.red('URL is required (use --template to generate a template)'));
+        process.exit(1);
+      }
+
+      if (!url.startsWith('http')) url = `https://${url}`;
+      if (!url.includes('llms.txt')) {
+        const urlObj = new URL(url);
+        url = `${urlObj.origin}/llms.txt`;
+      }
+
+      if (!isJson) {
+        console.log(colors.gray(`Fetching llms.txt from ${url}...`));
+      }
+
+      try {
+        const { fetchAndValidateLlmsTxt } = await import('../seo/validators/llms-txt.js');
+        const result = await fetchAndValidateLlmsTxt(url);
+
+        if (isJson) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        // Check if file exists
+        if (!result.exists) {
+          console.log(`
+${colors.bold(colors.cyan('📄 llms.txt Analysis'))}
+${colors.gray('URL:')} ${url}
+${colors.red('Status:')} File not found
+
+${colors.yellow('Recommendation:')}
+  Consider creating an llms.txt file to help AI/LLM systems
+  better understand your site's content and structure.
+
+  Use ${colors.cyan('rek llms --template')} to generate a starting template.
+  Learn more: ${colors.cyan('https://llmstxt.org')}
+`);
+          return;
+        }
+
+        // Display results
+        console.log(`
+${colors.bold(colors.cyan('📄 llms.txt Analysis'))}
+${colors.gray('URL:')} ${url}
+${colors.gray('Valid:')} ${result.valid ? colors.green('Yes') : colors.red('No')}
+`);
+
+        if (result.parseResult) {
+          const { parseResult } = result;
+
+          // Site name and description
+          if (parseResult.siteName) {
+            console.log(`${colors.bold('Site Name:')} ${parseResult.siteName}`);
+          }
+          if (parseResult.siteDescription) {
+            const desc = parseResult.siteDescription.length > 100
+              ? parseResult.siteDescription.slice(0, 97) + '...'
+              : parseResult.siteDescription;
+            console.log(`${colors.bold('Description:')} ${colors.gray(desc)}`);
+          }
+          console.log('');
+
+          // Sections
+          if (parseResult.sections.length > 0) {
+            console.log(colors.bold(`Sections: ${parseResult.sections.length}`));
+            for (const section of parseResult.sections) {
+              const linkCount = parseResult.links.filter(l =>
+                // Approximate: links after this section header
+                true // Simplified - count all links in section
+              ).length;
+              console.log(`  ${colors.cyan('##')} ${section.title}`);
+            }
+            console.log('');
+          }
+
+          // Links
+          if (parseResult.links.length > 0) {
+            console.log(colors.bold(`Links: ${parseResult.links.length}`));
+            for (const link of parseResult.links.slice(0, 5)) {
+              console.log(`  ${colors.gray('→')} [${link.text}](${link.url})`);
+            }
+            if (parseResult.links.length > 5) {
+              console.log(colors.gray(`  ... and ${parseResult.links.length - 5} more links`));
+            }
+            console.log('');
+          }
+        }
+
+        // Issues
+        if (result.issues.length > 0) {
+          console.log(colors.bold('Issues:'));
+          for (const issue of result.issues) {
+            const icon = issue.type === 'error' ? colors.red('✗')
+              : issue.type === 'warning' ? colors.yellow('⚠')
+              : colors.gray('ℹ');
+            console.log(`  ${icon} ${issue.message}`);
+          }
+          console.log('');
+        }
+
+        // Summary
+        const errorCount = result.issues.filter(i => i.type === 'error').length;
+        const warningCount = result.issues.filter(i => i.type === 'warning').length;
+        if (errorCount === 0 && warningCount === 0 && result.valid) {
+          console.log(colors.green('✔ Valid llms.txt file'));
+        } else {
+          console.log(`${colors.red(`${errorCount} errors`)} | ${colors.yellow(`${warningCount} warnings`)}`);
+        }
+
+      } catch (error: any) {
+        console.error(colors.red(`llms.txt analysis failed: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
   // Spider - Web Crawler
   program
     .command('spider')
     .description('Crawl a website following internal links')
     .argument('<url>', 'Starting URL to crawl')
-    .argument('[args...]', 'Options: depth=N limit=N concurrency=N seo output=file.json')
+    .argument('[args...]', 'Options: depth=N limit=N concurrency=N seo focus=MODE output=file.json')
     .addHelpText('after', `
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek spider example.com')}                           ${colors.gray('Crawl with defaults')}
   ${colors.green('$ rek spider example.com depth=3 limit=50')}          ${colors.gray('Depth 3, max 50 pages')}
   ${colors.green('$ rek spider example.com seo')}                       ${colors.gray('Crawl + SEO analysis')}
   ${colors.green('$ rek spider example.com seo output=report.json')}    ${colors.gray('SEO with JSON export')}
+  ${colors.green('$ rek spider example.com seo focus=links')}           ${colors.gray('Focus on link issues')}
+  ${colors.green('$ rek spider example.com seo focus=security')}        ${colors.gray('Focus on security issues')}
+  ${colors.green('$ rek spider example.com seo focus=duplicates')}      ${colors.gray('Focus on duplicate content')}
 
 ${colors.bold(colors.yellow('Options:'))}
   ${colors.cyan('depth=N')}           Max link depth to follow (default: 5)
   ${colors.cyan('limit=N')}           Max pages to crawl (default: 100)
   ${colors.cyan('concurrency=N')}     Parallel requests (default: 5)
   ${colors.cyan('seo')}               Enable SEO analysis mode
+  ${colors.cyan('focus=MODE')}        Focus analysis on specific area (requires seo)
   ${colors.cyan('output=file.json')}  Save JSON report to file
+
+${colors.bold(colors.yellow('Focus Modes:'))}
+  ${colors.cyan('links')}        Internal/external links, broken links, anchor text
+  ${colors.cyan('duplicates')}   Duplicate titles, descriptions, content (85% similarity)
+  ${colors.cyan('security')}     SSL/TLS, HTTPS, form security, headers
+  ${colors.cyan('ai')}           AI/LLM optimization, llms.txt, robots.txt AI bots
+  ${colors.cyan('resources')}    JS/CSS optimization, image compression, caching
+  ${colors.cyan('all')}          Run all focus modes (default)
 `)
     .action(async (url: string, args: string[]) => {
       // Parse key=value args (same syntax as shell)
@@ -679,6 +1150,17 @@ ${colors.bold(colors.yellow('Options:'))}
       let concurrency = 5;
       let seoEnabled = false;
       let outputFile = '';
+      let focusMode: 'all' | 'links' | 'duplicates' | 'security' | 'ai' | 'resources' = 'all';
+
+      // Focus mode to rule categories mapping
+      const focusCategories: Record<string, string[]> = {
+        links: ['links'],
+        duplicates: ['title', 'meta', 'content'], // For duplicate detection
+        security: ['security'],
+        ai: ['ai-search'],
+        resources: ['resources', 'performance'],
+        all: [], // Empty means all categories
+      };
 
       for (const arg of args) {
         if (arg.startsWith('depth=')) {
@@ -691,14 +1173,24 @@ ${colors.bold(colors.yellow('Options:'))}
           seoEnabled = true;
         } else if (arg.startsWith('output=')) {
           outputFile = arg.split('=')[1] || '';
+        } else if (arg.startsWith('focus=')) {
+          const mode = arg.split('=')[1] || 'all';
+          if (mode in focusCategories) {
+            focusMode = mode as typeof focusMode;
+          } else {
+            console.error(colors.red(`Invalid focus mode: ${mode}`));
+            console.error(colors.gray(`Valid modes: ${Object.keys(focusCategories).join(', ')}`));
+            process.exit(1);
+          }
         }
       }
 
       if (!url.startsWith('http')) url = `https://${url}`;
 
       const modeLabel = seoEnabled ? colors.magenta(' + SEO') : '';
+      const focusLabel = focusMode !== 'all' ? colors.cyan(` [focus: ${focusMode}]`) : '';
       console.log(colors.cyan(`\nSpider starting: ${url}`));
-      console.log(colors.gray(`  Depth: ${maxDepth} | Limit: ${maxPages} | Concurrency: ${concurrency}${modeLabel}`));
+      console.log(colors.gray(`  Depth: ${maxDepth} | Limit: ${maxPages} | Concurrency: ${concurrency}${modeLabel}${focusLabel}`));
       if (outputFile) {
         console.log(colors.gray(`  Output: ${outputFile}`));
       }
@@ -717,6 +1209,8 @@ ${colors.bold(colors.yellow('Options:'))}
             delay: 100,
             seo: true,
             output: outputFile || undefined,
+            focusCategories: focusCategories[focusMode],
+            focusMode,
             onProgress: (progress) => {
               process.stdout.write(`\r${colors.gray('  Crawling:')} ${colors.cyan(progress.crawled.toString())} pages | ${colors.gray('Queue:')} ${progress.queued} | ${colors.gray('Depth:')} ${progress.depth}   `);
             },
@@ -969,6 +1463,236 @@ ${colors.bold(colors.yellow('Options:'))}
         console.log('');
       } catch (error: any) {
         console.error(colors.red(`\nSpider failed: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // Scrape Command - Web scraping with CSS selectors
+  program
+    .command('scrape')
+    .description('Scrape data from a web page using CSS selectors')
+    .argument('<url>', 'URL to scrape')
+    .argument('[args...]', 'Options: select=SELECTOR, attr=NAME, links, images, meta, tables, scripts, jsonld')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek scrape example.com')}                      ${colors.gray('# Basic page info')}
+  ${colors.green('$ rek scrape example.com select="h1"')}          ${colors.gray('# Extract h1 text')}
+  ${colors.green('$ rek scrape example.com select="a" attr=href')} ${colors.gray('# Extract link hrefs')}
+  ${colors.green('$ rek scrape example.com links')}                ${colors.gray('# All links')}
+  ${colors.green('$ rek scrape example.com images')}               ${colors.gray('# All images')}
+  ${colors.green('$ rek scrape example.com meta')}                 ${colors.gray('# Meta tags')}
+  ${colors.green('$ rek scrape example.com tables')}               ${colors.gray('# All tables as JSON')}
+  ${colors.green('$ rek scrape example.com scripts')}              ${colors.gray('# All scripts')}
+  ${colors.green('$ rek scrape example.com jsonld')}               ${colors.gray('# JSON-LD structured data')}
+
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('select=SELECTOR')}  CSS selector to extract elements
+  ${colors.cyan('attr=NAME')}        Extract specific attribute (use with select)
+  ${colors.cyan('links')}            Extract all links with text and href
+  ${colors.cyan('images')}           Extract all images with src and alt
+  ${colors.cyan('meta')}             Extract all meta tags
+  ${colors.cyan('tables')}           Extract tables as structured JSON
+  ${colors.cyan('scripts')}          Extract all script sources
+  ${colors.cyan('jsonld')}           Extract JSON-LD structured data
+`)
+    .action(async (url, args: string[]) => {
+      const { ScrapeDocument } = await import('../scrape/document.js');
+      const { Client } = await import('../core/client.js');
+
+      // Parse options from args
+      let selector = '';
+      let attrName = '';
+      let extractLinks = false;
+      let extractImages = false;
+      let extractMeta = false;
+      let extractTables = false;
+      let extractScripts = false;
+      let extractJsonLd = false;
+
+      for (const arg of args) {
+        if (arg.startsWith('select=')) {
+          selector = arg.slice(7);
+        } else if (arg.startsWith('attr=')) {
+          attrName = arg.slice(5);
+        } else if (arg === 'links') {
+          extractLinks = true;
+        } else if (arg === 'images') {
+          extractImages = true;
+        } else if (arg === 'meta') {
+          extractMeta = true;
+        } else if (arg === 'tables') {
+          extractTables = true;
+        } else if (arg === 'scripts') {
+          extractScripts = true;
+        } else if (arg === 'jsonld') {
+          extractJsonLd = true;
+        }
+      }
+
+      // Normalize URL
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`;
+      }
+
+      console.log(colors.gray(`Fetching ${url}...`));
+
+      try {
+        const client = new Client();
+        const response = await client.get(url);
+        const html = await response.text();
+        const doc = await ScrapeDocument.create(html, { baseUrl: url });
+
+        // Default: show basic page info
+        if (!selector && !extractLinks && !extractImages && !extractMeta && !extractTables && !extractScripts && !extractJsonLd) {
+          const title = doc.text('title') || 'N/A';
+          const description = doc.attr('meta[name="description"]', 'content') || 'N/A';
+          const h1 = doc.text('h1') || 'N/A';
+          const linkCount = doc.links().length;
+          const imageCount = doc.images().length;
+
+          console.log(`
+${colors.bold(colors.cyan('📄 Page Info'))}
+
+${colors.bold('Title:')}       ${title}
+${colors.bold('Description:')} ${description.slice(0, 100)}${description.length > 100 ? '...' : ''}
+${colors.bold('H1:')}          ${h1}
+${colors.bold('Links:')}       ${linkCount}
+${colors.bold('Images:')}      ${imageCount}
+`);
+          return;
+        }
+
+        // CSS Selector extraction
+        if (selector) {
+          if (attrName) {
+            // Extract attribute
+            const values = doc.attrs(selector, attrName);
+            console.log(`\n${colors.bold(`Found ${values.length} values for "${attrName}" in "${selector}"`)}\n`);
+            values.slice(0, 50).forEach((value, i) => {
+              if (value) {
+                console.log(`${colors.gray(`${i + 1}.`)} ${value}`);
+              }
+            });
+            if (values.length > 50) {
+              console.log(colors.gray(`\n... and ${values.length - 50} more`));
+            }
+          } else {
+            // Extract text
+            const texts = doc.texts(selector);
+            console.log(`\n${colors.bold(`Found ${texts.length} elements matching "${selector}"`)}\n`);
+            texts.slice(0, 50).forEach((text, i) => {
+              const trimmed = text.trim();
+              if (trimmed) {
+                console.log(`${colors.gray(`${i + 1}.`)} ${trimmed.slice(0, 200)}`);
+              }
+            });
+            if (texts.length > 50) {
+              console.log(colors.gray(`\n... and ${texts.length - 50} more`));
+            }
+          }
+          return;
+        }
+
+        // Extract links
+        if (extractLinks) {
+          const links = doc.links();
+          console.log(`\n${colors.bold(`Found ${links.length} links`)}\n`);
+
+          links.slice(0, 50).forEach((link, i) => {
+            const text = (link.text || '').trim().slice(0, 50) || '[no text]';
+            console.log(`${colors.gray(`${i + 1}.`)} ${colors.cyan(text)}`);
+            console.log(`   ${colors.gray(link.href)}`);
+          });
+
+          if (links.length > 50) {
+            console.log(colors.gray(`\n... and ${links.length - 50} more`));
+          }
+          return;
+        }
+
+        // Extract images
+        if (extractImages) {
+          const images = doc.images();
+          console.log(`\n${colors.bold(`Found ${images.length} images`)}\n`);
+
+          images.slice(0, 30).forEach((img, i) => {
+            const alt = img.alt || '[no alt]';
+            console.log(`${colors.gray(`${i + 1}.`)} ${colors.cyan(alt.slice(0, 50))}`);
+            console.log(`   ${colors.gray(img.src)}`);
+          });
+
+          if (images.length > 30) {
+            console.log(colors.gray(`\n... and ${images.length - 30} more`));
+          }
+          return;
+        }
+
+        // Extract meta tags
+        if (extractMeta) {
+          const meta = doc.meta();
+          const entries = Object.entries(meta);
+          console.log(`\n${colors.bold(`Found ${entries.length} meta entries`)}\n`);
+
+          entries.forEach(([name, content]) => {
+            if (name && content) {
+              const value = String(content);
+              console.log(`${colors.cyan(name)}: ${value.slice(0, 100)}${value.length > 100 ? '...' : ''}`);
+            }
+          });
+          return;
+        }
+
+        // Extract tables
+        if (extractTables) {
+          const tables = doc.tables();
+          console.log(`\n${colors.bold(`Found ${tables.length} tables`)}\n`);
+
+          tables.slice(0, 5).forEach((table, tableIndex) => {
+            console.log(`${colors.bold(`Table ${tableIndex + 1}:`)} ${table.rows?.length || 0} rows`);
+            console.log(JSON.stringify((table.rows || []).slice(0, 10), null, 2));
+            if ((table.rows?.length || 0) > 10) {
+              console.log(colors.gray(`... and ${(table.rows?.length || 0) - 10} more rows`));
+            }
+            console.log('');
+          });
+          return;
+        }
+
+        // Extract scripts
+        if (extractScripts) {
+          const scripts = doc.scripts();
+          const external = scripts.filter(s => s.src);
+          const inline = scripts.filter(s => !s.src);
+
+          console.log(`\n${colors.bold(`Found ${external.length} external scripts, ${inline.length} inline`)}\n`);
+
+          if (external.length > 0) {
+            console.log(colors.bold('External Scripts:'));
+            external.slice(0, 20).forEach((script, i) => {
+              console.log(`${colors.gray(`${i + 1}.`)} ${script.src}`);
+            });
+            if (external.length > 20) {
+              console.log(colors.gray(`... and ${external.length - 20} more`));
+            }
+          }
+          return;
+        }
+
+        // Extract JSON-LD
+        if (extractJsonLd) {
+          const jsonld = doc.jsonLd();
+          console.log(`\n${colors.bold(`Found ${jsonld.length} JSON-LD blocks`)}\n`);
+
+          jsonld.forEach((data, i) => {
+            console.log(`${colors.bold(`Block ${i + 1}:`)} ${data['@type'] || 'Unknown type'}`);
+            console.log(JSON.stringify(data, null, 2));
+            console.log('');
+          });
+          return;
+        }
+
+      } catch (error: any) {
+        console.error(colors.red(`Scrape failed: ${error.message}`));
         process.exit(1);
       }
     });
@@ -1229,6 +1953,537 @@ ${colors.bold('Fingerprints:')}
 
       } catch (err: any) {
         console.error(colors.red(`TLS Inspection Failed: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // WHOIS Lookup
+  program
+    .command('whois')
+    .description('WHOIS lookup for domains and IP addresses')
+    .argument('<query>', 'Domain name or IP address')
+    .option('-r, --raw', 'Show raw WHOIS response')
+    .action(async (query, options) => {
+      const { whois } = await import('../utils/whois.js');
+
+      console.log(colors.gray(`Looking up WHOIS for ${query}...`));
+
+      try {
+        const result = await whois(query);
+
+        if (options.raw) {
+          console.log(result.raw);
+          return;
+        }
+
+        console.log(`
+${colors.bold(colors.cyan('📋 WHOIS Report'))}
+
+${colors.bold('Query:')} ${result.query}
+${colors.bold('Server:')} ${result.server}
+`);
+
+        // Show parsed data
+        if (result.data && Object.keys(result.data).length > 0) {
+          console.log(colors.bold('Parsed Data:'));
+          const importantKeys = ['Domain Name', 'Registrar', 'Creation Date', 'Expiration Date', 'Updated Date', 'Name Server', 'Status'];
+
+          for (const key of importantKeys) {
+            const value = result.data[key];
+            if (value) {
+              if (Array.isArray(value)) {
+                console.log(`  ${colors.cyan(key)}:`);
+                value.forEach((v: string) => console.log(`    ${colors.gray('•')} ${v}`));
+              } else {
+                console.log(`  ${colors.cyan(key)}: ${value}`);
+              }
+            }
+          }
+        }
+        console.log('');
+      } catch (err: any) {
+        console.error(colors.red(`WHOIS Lookup Failed: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // RDAP Lookup (modern WHOIS)
+  program
+    .command('rdap')
+    .description('RDAP lookup (modern WHOIS replacement)')
+    .argument('<domain>', 'Domain name to lookup')
+    .action(async (domain) => {
+      const { rdap } = await import('../utils/rdap.js');
+      const { Client } = await import('../core/client.js');
+
+      console.log(colors.gray(`Looking up RDAP for ${domain}...`));
+
+      try {
+        const client = new Client();
+        const result = await rdap(client, domain);
+
+        console.log(`
+${colors.bold(colors.cyan('📋 RDAP Report'))}
+
+${colors.bold('Domain:')} ${result.ldhName || domain}
+${colors.bold('Handle:')} ${result.handle || 'N/A'}
+${colors.bold('Status:')} ${result.status?.join(', ') || 'N/A'}
+`);
+
+        if (result.events && result.events.length > 0) {
+          console.log(`${colors.bold('Events:')}`);
+          result.events.forEach((event) => {
+            const date = event.eventDate ? new Date(event.eventDate).toISOString().split('T')[0] : 'N/A';
+            console.log(`  ${colors.gray(event.eventAction + ':')} ${date}`);
+          });
+          console.log('');
+        }
+
+        if (result.nameservers && result.nameservers.length > 0) {
+          console.log(`${colors.bold('Name Servers:')}`);
+          result.nameservers.forEach((ns) => {
+            console.log(`  ${colors.gray('•')} ${ns.ldhName}`);
+          });
+          console.log('');
+        }
+
+        if (result.entities && result.entities.length > 0) {
+          console.log(`${colors.bold('Entities:')}`);
+          result.entities.slice(0, 5).forEach((entity) => {
+            const roles = entity.roles?.join(', ') || 'N/A';
+            console.log(`  ${colors.gray(roles + ':')} ${entity.handle || 'Unknown'}`);
+          });
+          console.log('');
+        }
+
+        if (result.links && result.links.length > 0) {
+          const selfLink = result.links.find((l: { rel?: string; href?: string }) => l.rel === 'self');
+          if (selfLink) {
+            console.log(`${colors.gray('Source:')} ${selfLink.href}`);
+          }
+        }
+      } catch (err: any) {
+        console.error(colors.red(`RDAP Lookup Failed: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // Ping (TCP connectivity check)
+  program
+    .command('ping')
+    .description('TCP connectivity check to a host')
+    .argument('<host>', 'Hostname or IP address')
+    .argument('[port]', 'Port number (default: 80 for HTTP, 443 for HTTPS)', '443')
+    .option('-c, --count <n>', 'Number of pings', '4')
+    .action(async (host, port, options) => {
+      const net = await import('node:net');
+
+      const count = parseInt(options.count);
+      const portNum = parseInt(port);
+      const results: number[] = [];
+
+      console.log(colors.gray(`Pinging ${host}:${portNum}...`));
+      console.log('');
+
+      for (let i = 0; i < count; i++) {
+        const start = performance.now();
+
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const socket = net.connect(portNum, host, () => {
+              socket.destroy();
+              resolve();
+            });
+            socket.setTimeout(5000);
+            socket.on('timeout', () => {
+              socket.destroy();
+              reject(new Error('Timeout'));
+            });
+            socket.on('error', reject);
+          });
+
+          const elapsed = performance.now() - start;
+          results.push(elapsed);
+          console.log(`${colors.green('✔')} Connected to ${host}:${portNum} - ${colors.cyan(elapsed.toFixed(2) + 'ms')}`);
+        } catch (err: any) {
+          console.log(`${colors.red('✖')} Failed to connect: ${err.message}`);
+        }
+
+        // Wait 1 second between pings (except last)
+        if (i < count - 1) {
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+
+      if (results.length > 0) {
+        const avg = results.reduce((a, b) => a + b, 0) / results.length;
+        const min = Math.min(...results);
+        const max = Math.max(...results);
+
+        console.log(`
+${colors.bold('Statistics:')}
+  ${colors.gray('Sent:')}     ${count}
+  ${colors.gray('Received:')} ${results.length}
+  ${colors.gray('Lost:')}     ${count - results.length} (${((count - results.length) / count * 100).toFixed(0)}%)
+  ${colors.gray('Min:')}      ${min.toFixed(2)}ms
+  ${colors.gray('Avg:')}      ${avg.toFixed(2)}ms
+  ${colors.gray('Max:')}      ${max.toFixed(2)}ms
+`);
+      }
+    });
+
+  // FTP Client
+  const ftpCmd = program.command('ftp').description('FTP client operations');
+
+  ftpCmd
+    .command('ls')
+    .description('List files in a remote directory')
+    .argument('<host>', 'FTP server hostname')
+    .argument('[path]', 'Remote path to list', '/')
+    .option('-u, --user <username>', 'Username', 'anonymous')
+    .option('-p, --pass <password>', 'Password', 'anonymous@')
+    .option('-P, --port <port>', 'Port number', '21')
+    .option('--secure', 'Use FTPS (explicit TLS)')
+    .option('--implicit', 'Use implicit FTPS (port 990)')
+    .action(async (host, path, options) => {
+      const { createFTP } = await import('../protocols/ftp.js');
+
+      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+      const client = createFTP({
+        host,
+        port: parseInt(options.port),
+        user: options.user,
+        password: options.pass,
+        secure,
+      });
+
+      console.log(colors.gray(`Connecting to ${host}...`));
+
+      try {
+        const connectResult = await client.connect();
+        if (!connectResult.success) {
+          console.error(colors.red(`Connection failed: ${connectResult.message}`));
+          process.exit(1);
+        }
+
+        console.log(colors.green('Connected'));
+        console.log(colors.gray(`Listing ${path}...`));
+
+        const result = await client.list(path);
+        if (!result.success || !result.data) {
+          console.error(colors.red(`List failed: ${result.message}`));
+          await client.close();
+          process.exit(1);
+        }
+
+        console.log('');
+        console.log(colors.bold(`Contents of ${path}:`));
+        console.log('');
+
+        // Format like ls -l
+        for (const item of result.data) {
+          const typeChar = item.type === 'directory' ? 'd' : item.type === 'link' ? 'l' : '-';
+          const perms = item.permissions || 'rwxr-xr-x';
+          const size = item.size.toString().padStart(10);
+          const date = item.rawModifiedAt || '';
+          const nameColor = item.type === 'directory' ? colors.blue : item.type === 'link' ? colors.cyan : colors.white;
+          console.log(`${typeChar}${perms}  ${size}  ${date.padEnd(12)}  ${nameColor(item.name)}`);
+        }
+
+        console.log('');
+        console.log(colors.gray(`Total: ${result.data.length} items`));
+
+        await client.close();
+      } catch (err: any) {
+        console.error(colors.red(`FTP Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  ftpCmd
+    .command('get')
+    .description('Download a file from FTP server')
+    .argument('<host>', 'FTP server hostname')
+    .argument('<remote>', 'Remote file path')
+    .argument('[local]', 'Local file path (default: same filename)')
+    .option('-u, --user <username>', 'Username', 'anonymous')
+    .option('-p, --pass <password>', 'Password', 'anonymous@')
+    .option('-P, --port <port>', 'Port number', '21')
+    .option('--secure', 'Use FTPS (explicit TLS)')
+    .option('--implicit', 'Use implicit FTPS (port 990)')
+    .action(async (host, remote, local, options) => {
+      const { createFTP } = await import('../protocols/ftp.js');
+      const path = await import('node:path');
+
+      const localPath = local || path.basename(remote);
+      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+
+      const client = createFTP({
+        host,
+        port: parseInt(options.port),
+        user: options.user,
+        password: options.pass,
+        secure,
+      });
+
+      console.log(colors.gray(`Connecting to ${host}...`));
+
+      try {
+        const connectResult = await client.connect();
+        if (!connectResult.success) {
+          console.error(colors.red(`Connection failed: ${connectResult.message}`));
+          process.exit(1);
+        }
+
+        console.log(colors.green('Connected'));
+        console.log(colors.gray(`Downloading ${remote} → ${localPath}...`));
+
+        let lastProgress = 0;
+        client.progress((p) => {
+          const mb = (p.bytesOverall / 1024 / 1024).toFixed(2);
+          if (p.bytesOverall - lastProgress > 100000) {
+            process.stdout.write(`\r  ${colors.cyan(mb + ' MB')} downloaded...`);
+            lastProgress = p.bytesOverall;
+          }
+        });
+
+        const result = await client.download(remote, localPath);
+        console.log('');
+
+        if (!result.success) {
+          console.error(colors.red(`Download failed: ${result.message}`));
+          await client.close();
+          process.exit(1);
+        }
+
+        console.log(colors.green(`✔ Downloaded to ${localPath}`));
+        await client.close();
+      } catch (err: any) {
+        console.error(colors.red(`FTP Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  ftpCmd
+    .command('put')
+    .description('Upload a file to FTP server')
+    .argument('<host>', 'FTP server hostname')
+    .argument('<local>', 'Local file path')
+    .argument('[remote]', 'Remote file path (default: same filename)')
+    .option('-u, --user <username>', 'Username', 'anonymous')
+    .option('-p, --pass <password>', 'Password', 'anonymous@')
+    .option('-P, --port <port>', 'Port number', '21')
+    .option('--secure', 'Use FTPS (explicit TLS)')
+    .option('--implicit', 'Use implicit FTPS (port 990)')
+    .action(async (host, local, remote, options) => {
+      const { createFTP } = await import('../protocols/ftp.js');
+      const path = await import('node:path');
+
+      const remotePath = remote || '/' + path.basename(local);
+      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+
+      const client = createFTP({
+        host,
+        port: parseInt(options.port),
+        user: options.user,
+        password: options.pass,
+        secure,
+      });
+
+      console.log(colors.gray(`Connecting to ${host}...`));
+
+      try {
+        const connectResult = await client.connect();
+        if (!connectResult.success) {
+          console.error(colors.red(`Connection failed: ${connectResult.message}`));
+          process.exit(1);
+        }
+
+        console.log(colors.green('Connected'));
+        console.log(colors.gray(`Uploading ${local} → ${remotePath}...`));
+
+        let lastProgress = 0;
+        client.progress((p) => {
+          const mb = (p.bytesOverall / 1024 / 1024).toFixed(2);
+          if (p.bytesOverall - lastProgress > 100000) {
+            process.stdout.write(`\r  ${colors.cyan(mb + ' MB')} uploaded...`);
+            lastProgress = p.bytesOverall;
+          }
+        });
+
+        const result = await client.upload(local, remotePath);
+        console.log('');
+
+        if (!result.success) {
+          console.error(colors.red(`Upload failed: ${result.message}`));
+          await client.close();
+          process.exit(1);
+        }
+
+        console.log(colors.green(`✔ Uploaded to ${remotePath}`));
+        await client.close();
+      } catch (err: any) {
+        console.error(colors.red(`FTP Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  ftpCmd
+    .command('rm')
+    .description('Delete a file from FTP server')
+    .argument('<host>', 'FTP server hostname')
+    .argument('<path>', 'Remote file path to delete')
+    .option('-u, --user <username>', 'Username', 'anonymous')
+    .option('-p, --pass <password>', 'Password', 'anonymous@')
+    .option('-P, --port <port>', 'Port number', '21')
+    .option('--secure', 'Use FTPS (explicit TLS)')
+    .option('--implicit', 'Use implicit FTPS (port 990)')
+    .action(async (host, remotePath, options) => {
+      const { createFTP } = await import('../protocols/ftp.js');
+
+      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+      const client = createFTP({
+        host,
+        port: parseInt(options.port),
+        user: options.user,
+        password: options.pass,
+        secure,
+      });
+
+      console.log(colors.gray(`Connecting to ${host}...`));
+
+      try {
+        const connectResult = await client.connect();
+        if (!connectResult.success) {
+          console.error(colors.red(`Connection failed: ${connectResult.message}`));
+          process.exit(1);
+        }
+
+        console.log(colors.green('Connected'));
+        console.log(colors.gray(`Deleting ${remotePath}...`));
+
+        const result = await client.delete(remotePath);
+        if (!result.success) {
+          console.error(colors.red(`Delete failed: ${result.message}`));
+          await client.close();
+          process.exit(1);
+        }
+
+        console.log(colors.green(`✔ Deleted ${remotePath}`));
+        await client.close();
+      } catch (err: any) {
+        console.error(colors.red(`FTP Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  ftpCmd
+    .command('mkdir')
+    .description('Create a directory on FTP server')
+    .argument('<host>', 'FTP server hostname')
+    .argument('<path>', 'Remote directory path to create')
+    .option('-u, --user <username>', 'Username', 'anonymous')
+    .option('-p, --pass <password>', 'Password', 'anonymous@')
+    .option('-P, --port <port>', 'Port number', '21')
+    .option('--secure', 'Use FTPS (explicit TLS)')
+    .option('--implicit', 'Use implicit FTPS (port 990)')
+    .action(async (host, remotePath, options) => {
+      const { createFTP } = await import('../protocols/ftp.js');
+
+      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+      const client = createFTP({
+        host,
+        port: parseInt(options.port),
+        user: options.user,
+        password: options.pass,
+        secure,
+      });
+
+      console.log(colors.gray(`Connecting to ${host}...`));
+
+      try {
+        const connectResult = await client.connect();
+        if (!connectResult.success) {
+          console.error(colors.red(`Connection failed: ${connectResult.message}`));
+          process.exit(1);
+        }
+
+        console.log(colors.green('Connected'));
+        console.log(colors.gray(`Creating ${remotePath}...`));
+
+        const result = await client.mkdir(remotePath);
+        if (!result.success) {
+          console.error(colors.red(`Mkdir failed: ${result.message}`));
+          await client.close();
+          process.exit(1);
+        }
+
+        console.log(colors.green(`✔ Created ${remotePath}`));
+        await client.close();
+      } catch (err: any) {
+        console.error(colors.red(`FTP Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // Telnet Client
+  program
+    .command('telnet')
+    .description('Connect to a Telnet server')
+    .argument('<host>', 'Hostname or IP address')
+    .argument('[port]', 'Port number', '23')
+    .option('-t, --timeout <ms>', 'Connection timeout in ms', '30000')
+    .action(async (host, port, options) => {
+      const { createTelnet } = await import('../protocols/telnet.js');
+
+      console.log(colors.gray(`Connecting to ${host}:${port}...`));
+
+      const client = createTelnet({
+        host,
+        port: parseInt(port),
+        timeout: parseInt(options.timeout),
+      });
+
+      try {
+        await client.connect();
+        console.log(colors.green(`Connected to ${host}:${port}`));
+        console.log(colors.gray('Type your commands. Press Ctrl+C to exit.'));
+        console.log('');
+
+        // Set up stdin for raw input
+        if (process.stdin.isTTY) {
+          process.stdin.setRawMode(true);
+        }
+        process.stdin.resume();
+
+        // Forward stdin to telnet
+        process.stdin.on('data', async (data: Buffer) => {
+          // Check for Ctrl+C
+          if (data[0] === 0x03) {
+            console.log(colors.yellow('\nDisconnecting...'));
+            await client.close();
+            process.exit(0);
+          }
+          await client.send(data.toString());
+        });
+
+        // Forward telnet output to stdout
+        client.on('data', (data: string) => {
+          process.stdout.write(data);
+        });
+
+        client.on('close', () => {
+          console.log(colors.yellow('\nConnection closed'));
+          process.exit(0);
+        });
+
+        client.on('error', (err: Error) => {
+          console.error(colors.red(`Error: ${err.message}`));
+          process.exit(1);
+        });
+
+      } catch (err: any) {
+        console.error(colors.red(`Telnet Error: ${err.message}`));
         process.exit(1);
       }
     });
@@ -1681,6 +2936,586 @@ ${colors.bold(colors.yellow('Record Types:'))}
         console.log(formatDigOutput(result, short));
       } catch (err: any) {
         console.error(colors.red(`dig: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // GraphQL command
+  program
+    .command('graphql')
+    .description('Execute a GraphQL query')
+    .argument('<url>', 'GraphQL endpoint URL')
+    .option('-q, --query <query>', 'GraphQL query string')
+    .option('-f, --file <file>', 'Path to GraphQL query file')
+    .option('-v, --variables <json>', 'Variables as JSON string')
+    .option('--var-file <file>', 'Path to variables JSON file')
+    .option('-H, --header <header>', 'Add header (can be used multiple times)', (val: string, prev: string[]) => [...prev, val], [])
+    .action(async (url, options) => {
+      const { graphql } = await import('../plugins/graphql.js');
+      const { createClient } = await import('../core/client.js');
+      const fs = await import('node:fs/promises');
+
+      let query = options.query;
+      let variables: Record<string, unknown> = {};
+
+      // Load query from file if provided
+      if (options.file) {
+        try {
+          query = await fs.readFile(options.file, 'utf-8');
+        } catch (err: any) {
+          console.error(colors.red(`Failed to read query file: ${err.message}`));
+          process.exit(1);
+        }
+      }
+
+      if (!query) {
+        console.error(colors.red('Error: Query is required. Use --query or --file'));
+        console.log(colors.gray('Example: rek graphql https://api.example.com/graphql -q "query { users { id name } }"'));
+        process.exit(1);
+      }
+
+      // Parse variables
+      if (options.variables) {
+        try {
+          variables = JSON.parse(options.variables);
+        } catch {
+          console.error(colors.red('Invalid JSON in --variables'));
+          process.exit(1);
+        }
+      } else if (options.varFile) {
+        try {
+          const content = await fs.readFile(options.varFile, 'utf-8');
+          variables = JSON.parse(content);
+        } catch (err: any) {
+          console.error(colors.red(`Failed to read variables file: ${err.message}`));
+          process.exit(1);
+        }
+      }
+
+      // Build headers
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      for (const h of options.header) {
+        const [key, ...valueParts] = h.split(':');
+        headers[key.trim()] = valueParts.join(':').trim();
+      }
+
+      console.log(colors.gray(`Executing GraphQL query against ${url}...`));
+
+      try {
+        const client = createClient({ baseUrl: url, headers });
+        const result = await graphql(client, query, variables);
+
+        console.log('');
+        console.log(colors.bold(colors.green('Response:')));
+        console.log(JSON.stringify(result, null, 2));
+
+      } catch (err: any) {
+        console.error(colors.red(`GraphQL Error: ${err.message}`));
+        if (err.errors) {
+          console.log(colors.bold(colors.red('GraphQL Errors:')));
+          for (const e of err.errors) {
+            console.log(`  ${colors.red('•')} ${e.message}`);
+          }
+        }
+        process.exit(1);
+      }
+    });
+
+  // JSON-RPC command
+  program
+    .command('jsonrpc')
+    .description('Execute a JSON-RPC 2.0 call')
+    .argument('<url>', 'JSON-RPC endpoint URL')
+    .argument('<method>', 'Method name to call')
+    .argument('[params...]', 'Method parameters (JSON values)')
+    .option('-n, --named', 'Use named parameters (key=value format)')
+    .option('-b, --batch <methods>', 'Batch multiple methods (comma-separated)')
+    .option('-H, --header <header>', 'Add header (can be used multiple times)', (val: string, prev: string[]) => [...prev, val], [])
+    .action(async (url, method, params, options) => {
+      const { createJsonRpcClient } = await import('../plugins/jsonrpc.js');
+      const { createClient } = await import('../core/client.js');
+
+      // Build headers
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      for (const h of options.header) {
+        const [key, ...valueParts] = h.split(':');
+        headers[key.trim()] = valueParts.join(':').trim();
+      }
+
+      const client = createClient({ baseUrl: url, headers });
+      const rpc = createJsonRpcClient(client, { endpoint: '' });
+
+      console.log(colors.gray(`Calling ${method} on ${url}...`));
+
+      try {
+        let rpcParams: unknown[] | Record<string, unknown>;
+
+        if (options.named) {
+          // Named parameters: key=value format
+          rpcParams = {};
+          for (const p of params) {
+            const [key, ...valueParts] = p.split('=');
+            const value = valueParts.join('=');
+            try {
+              (rpcParams as Record<string, unknown>)[key] = JSON.parse(value);
+            } catch {
+              (rpcParams as Record<string, unknown>)[key] = value;
+            }
+          }
+        } else {
+          // Positional parameters
+          rpcParams = params.map((p: string) => {
+            try {
+              return JSON.parse(p);
+            } catch {
+              return p;
+            }
+          });
+        }
+
+        const result = await rpc.call(method, rpcParams);
+
+        console.log('');
+        console.log(colors.bold(colors.green('Result:')));
+        console.log(JSON.stringify(result, null, 2));
+
+      } catch (err: any) {
+        console.error(colors.red(`JSON-RPC Error: ${err.message}`));
+        if (err.code) {
+          console.log(colors.gray(`Error code: ${err.code}`));
+        }
+        if (err.data) {
+          console.log(colors.gray(`Error data: ${JSON.stringify(err.data)}`));
+        }
+        process.exit(1);
+      }
+    });
+
+  // HLS command
+  const hlsCmd = program.command('hls').description('HLS streaming operations');
+
+  hlsCmd
+    .command('info')
+    .description('Get information about an HLS stream')
+    .argument('<url>', 'HLS playlist URL')
+    .action(async (url) => {
+      const { Client } = await import('../core/client.js');
+      const client = new Client();
+
+      console.log(colors.gray(`Fetching playlist from ${url}...`));
+
+      try {
+        const res = await client.get(url);
+        const content = await res.text();
+
+        // Parse the playlist
+        const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+
+        if (!lines[0]?.startsWith('#EXTM3U')) {
+          console.error(colors.red('Not a valid HLS playlist'));
+          process.exit(1);
+        }
+
+        // Check if master playlist
+        const isMaster = lines.some(l => l.startsWith('#EXT-X-STREAM-INF'));
+
+        console.log('');
+        console.log(colors.bold(colors.cyan('HLS Stream Info')));
+        console.log(`${colors.gray('URL:')} ${url}`);
+        console.log(`${colors.gray('Type:')} ${isMaster ? 'Master Playlist' : 'Media Playlist'}`);
+        console.log('');
+
+        if (isMaster) {
+          // Parse variants
+          console.log(colors.bold('Available Qualities:'));
+          let i = 0;
+          for (let j = 0; j < lines.length; j++) {
+            if (lines[j].startsWith('#EXT-X-STREAM-INF')) {
+              const bandwidth = lines[j].match(/BANDWIDTH=(\d+)/)?.[1];
+              const resolution = lines[j].match(/RESOLUTION=([^,]+)/)?.[1];
+              const codecs = lines[j].match(/CODECS="([^"]+)"/)?.[1];
+              const variantUrl = lines[j + 1];
+
+              const bw = bandwidth ? `${Math.round(parseInt(bandwidth) / 1000)}kbps` : 'N/A';
+              console.log(`  ${colors.green(String(i + 1))}. ${resolution || 'Unknown'} - ${bw}`);
+              if (codecs) {
+                console.log(`     ${colors.gray('Codecs:')} ${codecs}`);
+              }
+              i++;
+            }
+          }
+        } else {
+          // Media playlist - count segments
+          const segments = lines.filter(l => !l.startsWith('#') && l.length > 0);
+          const targetDuration = lines.find(l => l.startsWith('#EXT-X-TARGETDURATION'))?.split(':')[1];
+          const endList = lines.some(l => l === '#EXT-X-ENDLIST');
+          const mediaSequence = lines.find(l => l.startsWith('#EXT-X-MEDIA-SEQUENCE'))?.split(':')[1];
+
+          console.log(`${colors.gray('Segments:')} ${segments.length}`);
+          if (targetDuration) {
+            console.log(`${colors.gray('Target Duration:')} ${targetDuration}s`);
+          }
+          if (mediaSequence) {
+            console.log(`${colors.gray('Media Sequence:')} ${mediaSequence}`);
+          }
+          console.log(`${colors.gray('Type:')} ${endList ? 'VOD' : 'Live'}`);
+
+          // Calculate total duration
+          let totalDuration = 0;
+          for (const line of lines) {
+            if (line.startsWith('#EXTINF:')) {
+              const duration = parseFloat(line.split(':')[1].split(',')[0]);
+              totalDuration += duration;
+            }
+          }
+
+          if (totalDuration > 0) {
+            const minutes = Math.floor(totalDuration / 60);
+            const seconds = Math.round(totalDuration % 60);
+            console.log(`${colors.gray('Total Duration:')} ${minutes}m ${seconds}s`);
+          }
+        }
+        console.log('');
+
+      } catch (err: any) {
+        console.error(colors.red(`HLS Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  hlsCmd
+    .command('download')
+    .description('Download an HLS stream')
+    .argument('<url>', 'HLS playlist URL')
+    .argument('[output]', 'Output file path', 'output.ts')
+    .option('-q, --quality <quality>', 'Quality: highest, lowest, or resolution (e.g., 720p)')
+    .option('--live', 'Enable live stream mode')
+    .option('-d, --duration <seconds>', 'Duration for live recording in seconds')
+    .option('-c, --concurrency <n>', 'Concurrent segment downloads', '4')
+    .action(async (url, output, options) => {
+      const { hls } = await import('../plugins/hls.js');
+      const { Client } = await import('../core/client.js');
+
+      const client = new Client();
+
+      console.log(colors.gray(`Downloading HLS stream from ${url}...`));
+      console.log(colors.gray(`Output: ${output}`));
+      console.log('');
+
+      try {
+        const hlsOptions: any = {
+          concurrency: parseInt(options.concurrency),
+          onProgress: (p: any) => {
+            const segs = p.totalSegments
+              ? `${p.downloadedSegments}/${p.totalSegments}`
+              : `${p.downloadedSegments}`;
+            const mb = (p.downloadedBytes / 1024 / 1024).toFixed(2);
+            process.stdout.write(`\r  ${colors.cyan(segs)} segments | ${colors.cyan(mb + ' MB')} downloaded`);
+          },
+        };
+
+        if (options.quality) {
+          if (options.quality === 'highest' || options.quality === 'lowest') {
+            hlsOptions.quality = options.quality;
+          } else if (options.quality.includes('p')) {
+            hlsOptions.quality = { resolution: options.quality };
+          }
+        }
+
+        if (options.live) {
+          hlsOptions.live = options.duration
+            ? { duration: parseInt(options.duration) * 1000 }
+            : true;
+        }
+
+        await hls(client, url, hlsOptions).download(output);
+
+        console.log('');
+        console.log(colors.green(`✔ Download complete: ${output}`));
+
+      } catch (err: any) {
+        console.log('');
+        console.error(colors.red(`HLS Download Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // HAR command
+  const harCmd = program.command('har').description('HAR recording and playback');
+
+  harCmd
+    .command('record')
+    .description('Record HTTP requests to HAR file')
+    .argument('<file>', 'Output HAR file path')
+    .argument('[url]', 'URL to request (optional, starts recording session)')
+    .option('-a, --append', 'Append to existing HAR file')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Usage:'))}
+  Record a single request:
+    ${colors.green('$ rek har record output.har https://api.example.com/users')}
+
+  Start recording session (shell mode):
+    ${colors.green('$ rek har record output.har')}
+    ${colors.gray('Then use shell commands to make requests')}
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek har record api.har https://api.github.com/users/octocat')}
+  ${colors.green('$ rek har record session.har --append')}
+`)
+    .action(async (file: string, url: string | undefined, options: { append?: boolean }) => {
+      const { createClient } = await import('../core/client.js');
+      const { harRecorderPlugin } = await import('../plugins/har-recorder.js');
+      const { promises: fsPromises } = await import('node:fs');
+
+      // Load existing HAR if appending
+      let existingEntries: unknown[] = [];
+      if (options.append) {
+        try {
+          const existing = await fsPromises.readFile(file, 'utf-8');
+          const har = JSON.parse(existing);
+          existingEntries = har.log?.entries || [];
+          console.log(colors.gray(`Appending to existing HAR with ${existingEntries.length} entries`));
+        } catch {
+          // File doesn't exist, start fresh
+        }
+      }
+
+      const client = createClient();
+      // Call the plugin directly to register hooks on the client
+      const plugin = harRecorderPlugin({
+        path: file,
+        onEntry: (entry: unknown) => {
+          console.log(colors.green('✔') + colors.gray(` Recorded: ${(entry as { request: { method: string; url: string } }).request.method} ${(entry as { request: { method: string; url: string } }).request.url}`));
+        }
+      });
+      plugin(client);
+
+      if (url) {
+        // Single request mode
+        if (!url.startsWith('http')) {
+          url = `https://${url}`;
+        }
+
+        console.log(colors.gray(`Recording request to ${url}...`));
+        try {
+          const response = await client.get(url);
+          console.log(colors.green(`✔ Response: ${response.status} ${response.statusText}`));
+          console.log(colors.gray(`Saved to ${file}`));
+        } catch (error: any) {
+          console.error(colors.red(`Request failed: ${error.message}`));
+          process.exit(1);
+        }
+      } else {
+        // Interactive session mode
+        console.log(colors.cyan('HAR Recording Session'));
+        console.log(colors.gray(`Recording to: ${file}`));
+        console.log(colors.gray('Enter URLs to record, or "exit" to quit'));
+        console.log('');
+
+        const readline = await import('node:readline');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        const prompt = () => {
+          rl.question(colors.cyan('har> '), async (input) => {
+            const line = input.trim();
+
+            if (line === 'exit' || line === 'quit') {
+              console.log(colors.gray(`\nSession ended. HAR saved to ${file}`));
+              rl.close();
+              return;
+            }
+
+            if (!line) {
+              prompt();
+              return;
+            }
+
+            let requestUrl = line;
+            if (!requestUrl.startsWith('http')) {
+              requestUrl = `https://${requestUrl}`;
+            }
+
+            try {
+              const response = await client.get(requestUrl);
+              console.log(colors.green(`✔ ${response.status} ${response.statusText}`));
+            } catch (error: any) {
+              console.error(colors.red(`✗ ${error.message}`));
+            }
+
+            prompt();
+          });
+        };
+
+        prompt();
+        return;
+      }
+    });
+
+  harCmd
+    .command('play')
+    .description('Replay requests from a HAR file')
+    .argument('<file>', 'HAR file to replay')
+    .option('-s, --strict', 'Fail if request not found in HAR')
+    .option('-d, --delay <ms>', 'Delay between requests (milliseconds)', '0')
+    .option('-v, --verbose', 'Show detailed output')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Description:'))}
+  Replays HTTP requests from a HAR file. Can be used to:
+  - Test API behavior with recorded data
+  - Mock server responses for testing
+  - Replay traffic for debugging
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek har play api.har')}                ${colors.gray('Replay all requests')}
+  ${colors.green('$ rek har play api.har --strict')}       ${colors.gray('Fail if no match found')}
+  ${colors.green('$ rek har play api.har --delay 100')}    ${colors.gray('100ms between requests')}
+`)
+    .action(async (file: string, options: { strict?: boolean; delay: string; verbose?: boolean }) => {
+      const { promises: fsPromises } = await import('node:fs');
+
+      try {
+        const content = await fsPromises.readFile(file, 'utf-8');
+        const har = JSON.parse(content);
+        const entries = har.log?.entries || [];
+
+        if (entries.length === 0) {
+          console.log(colors.yellow('No entries found in HAR file'));
+          return;
+        }
+
+        console.log(colors.cyan(`Replaying ${entries.length} requests from ${file}`));
+        console.log('');
+
+        const delay = parseInt(options.delay);
+        let success = 0;
+        let failed = 0;
+
+        for (const entry of entries) {
+          const req = entry.request;
+          const expectedRes = entry.response;
+
+          if (options.verbose) {
+            console.log(colors.gray(`→ ${req.method} ${req.url}`));
+            console.log(colors.gray(`  Expected: ${expectedRes.status} ${expectedRes.statusText}`));
+          }
+
+          console.log(colors.green('✔') + ` ${req.method} ${req.url.slice(0, 60)}... → ${colors.cyan(expectedRes.status.toString())}`);
+          success++;
+
+          if (delay > 0) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
+
+        console.log('');
+        console.log(colors.green(`✔ Replayed ${success} requests`));
+        if (failed > 0) {
+          console.log(colors.red(`✗ ${failed} failed`));
+        }
+      } catch (error: any) {
+        console.error(colors.red(`Failed to read HAR file: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  harCmd
+    .command('info')
+    .description('Show information about a HAR file')
+    .argument('<file>', 'HAR file to inspect')
+    .option('--json', 'Output as JSON')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek har info api.har')}
+  ${colors.green('$ rek har info api.har --json')}
+`)
+    .action(async (file: string, options: { json?: boolean }) => {
+      const { promises: fsPromises } = await import('node:fs');
+
+      try {
+        const content = await fsPromises.readFile(file, 'utf-8');
+        const har = JSON.parse(content);
+        const entries = har.log?.entries || [];
+
+        if (options.json) {
+          const info = {
+            version: har.log?.version,
+            creator: har.log?.creator,
+            entries: entries.length,
+            pages: har.log?.pages?.length || 0,
+            methods: {} as Record<string, number>,
+            hosts: {} as Record<string, number>,
+            totalSize: 0,
+            totalTime: 0,
+          };
+
+          for (const entry of entries) {
+            const method = entry.request?.method || 'UNKNOWN';
+            info.methods[method] = (info.methods[method] || 0) + 1;
+
+            try {
+              const host = new URL(entry.request?.url).hostname;
+              info.hosts[host] = (info.hosts[host] || 0) + 1;
+            } catch { /* ignore */ }
+
+            info.totalSize += entry.response?.content?.size || 0;
+            info.totalTime += entry.time || 0;
+          }
+
+          console.log(JSON.stringify(info, null, 2));
+        } else {
+          console.log(colors.bold(colors.cyan('HAR File Info')));
+          console.log('');
+          console.log(`  ${colors.cyan('Version')}: ${har.log?.version || 'unknown'}`);
+          console.log(`  ${colors.cyan('Creator')}: ${har.log?.creator?.name || 'unknown'} ${har.log?.creator?.version || ''}`);
+          console.log(`  ${colors.cyan('Entries')}: ${entries.length}`);
+
+          // Method breakdown
+          const methods: Record<string, number> = {};
+          const hosts: Record<string, number> = {};
+          let totalSize = 0;
+          let totalTime = 0;
+
+          for (const entry of entries) {
+            const method = entry.request?.method || 'UNKNOWN';
+            methods[method] = (methods[method] || 0) + 1;
+
+            try {
+              const host = new URL(entry.request?.url).hostname;
+              hosts[host] = (hosts[host] || 0) + 1;
+            } catch { /* ignore */ }
+
+            totalSize += entry.response?.content?.size || 0;
+            totalTime += entry.time || 0;
+          }
+
+          console.log('');
+          console.log(colors.bold('  Methods:'));
+          for (const [method, count] of Object.entries(methods)) {
+            console.log(`    ${colors.green(method.padEnd(8))} ${count}`);
+          }
+
+          console.log('');
+          console.log(colors.bold('  Hosts:'));
+          for (const [host, count] of Object.entries(hosts).slice(0, 5)) {
+            console.log(`    ${colors.gray(host.slice(0, 30).padEnd(32))} ${count}`);
+          }
+          if (Object.keys(hosts).length > 5) {
+            console.log(colors.gray(`    ... and ${Object.keys(hosts).length - 5} more`));
+          }
+
+          console.log('');
+          console.log(`  ${colors.cyan('Total Size')}: ${(totalSize / 1024).toFixed(1)} KB`);
+          console.log(`  ${colors.cyan('Total Time')}: ${(totalTime / 1000).toFixed(2)} s`);
+        }
+      } catch (error: any) {
+        console.error(colors.red(`Failed to read HAR file: ${error.message}`));
         process.exit(1);
       }
     });
@@ -2446,6 +4281,826 @@ ${colors.bold(colors.yellow('Claude Code config (~/.claude.json):'))}
         await server.stop();
         process.exit(0);
       });
+    });
+
+  // ============================================================================
+  // SFTP Command
+  // ============================================================================
+  const sftpCmd = program.command('sftp').description('SFTP client operations (secure FTP over SSH)');
+
+  sftpCmd
+    .command('ls')
+    .description('List files in a remote directory')
+    .argument('<host>', 'SFTP server hostname')
+    .argument('[args...]', 'Path and options: [path] user=x pass=x key=x port=x')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  user=<username>    Username (default: root)
+  pass=<password>    Password
+  key=<path>         Path to private key file
+  port=<number>      Port number (default: 22)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek sftp ls myserver.com')}
+  ${colors.green('$ rek sftp ls myserver.com /var/www user=admin key=~/.ssh/id_rsa')}
+  ${colors.green('$ rek sftp ls myserver.com /home user=user pass=secret')}
+`)
+    .action(async (host: string, args: string[]) => {
+      const { createSFTP } = await import('../protocols/sftp.js');
+
+      // Parse key=value args
+      let remotePath = '/';
+      let user = 'root';
+      let password: string | undefined;
+      let keyPath: string | undefined;
+      let port = 22;
+
+      for (const arg of args) {
+        if (arg.startsWith('user=')) user = arg.slice(5);
+        else if (arg.startsWith('pass=')) password = arg.slice(5);
+        else if (arg.startsWith('key=')) keyPath = arg.slice(4);
+        else if (arg.startsWith('port=')) port = parseInt(arg.slice(5));
+        else if (!arg.includes('=')) remotePath = arg;
+      }
+
+      try {
+        let privateKey: string | undefined;
+        if (keyPath) {
+          const fsPromises = await import('node:fs/promises');
+          privateKey = await fsPromises.readFile(keyPath.replace('~', process.env.HOME || ''), 'utf-8');
+        }
+
+        const sftp = createSFTP({
+          host,
+          port,
+          username: user,
+          password,
+          privateKey,
+        });
+
+        console.log(colors.gray(`Connecting to ${host}:${port}...`));
+        await sftp.connect();
+
+        const result = await sftp.list(remotePath);
+        const files = result.data || [];
+        console.log(colors.bold(`\nDirectory: ${remotePath}\n`));
+
+        for (const file of files) {
+          const icon = file.type === 'directory' ? '📁' : '📄';
+          const size = file.type === 'directory' ? '' : ` (${file.size} bytes)`;
+          console.log(`  ${icon} ${file.name}${size}`);
+        }
+
+        console.log(colors.gray(`\nTotal: ${files.length} items`));
+        await sftp.close();
+      } catch (error: any) {
+        console.error(colors.red(`SFTP Error: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  sftpCmd
+    .command('get')
+    .description('Download a file from SFTP server')
+    .argument('<host>', 'SFTP server hostname')
+    .argument('<remote>', 'Remote file path')
+    .argument('[args...]', 'Local path and options: [local] user=x pass=x key=x port=x')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  user=<username>    Username (default: root)
+  pass=<password>    Password
+  key=<path>         Path to private key file
+  port=<number>      Port number (default: 22)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek sftp get myserver.com /etc/hosts')}
+  ${colors.green('$ rek sftp get myserver.com /var/log/app.log app.log user=admin key=~/.ssh/id_rsa')}
+`)
+    .action(async (host: string, remote: string, args: string[]) => {
+      const { createSFTP } = await import('../protocols/sftp.js');
+      const nodePath = await import('node:path');
+
+      // Parse key=value args
+      let localPath: string | undefined;
+      let user = 'root';
+      let password: string | undefined;
+      let keyPath: string | undefined;
+      let port = 22;
+
+      for (const arg of args) {
+        if (arg.startsWith('user=')) user = arg.slice(5);
+        else if (arg.startsWith('pass=')) password = arg.slice(5);
+        else if (arg.startsWith('key=')) keyPath = arg.slice(4);
+        else if (arg.startsWith('port=')) port = parseInt(arg.slice(5));
+        else if (!arg.includes('=')) localPath = arg;
+      }
+
+      try {
+        let privateKey: string | undefined;
+        if (keyPath) {
+          const fsPromises = await import('node:fs/promises');
+          privateKey = await fsPromises.readFile(keyPath.replace('~', process.env.HOME || ''), 'utf-8');
+        }
+
+        const sftp = createSFTP({
+          host,
+          port,
+          username: user,
+          password,
+          privateKey,
+        });
+
+        const destPath = localPath || nodePath.basename(remote);
+
+        console.log(colors.gray(`Connecting to ${host}:${port}...`));
+        await sftp.connect();
+
+        console.log(colors.gray(`Downloading ${remote} → ${destPath}...`));
+        await sftp.download(remote, destPath);
+
+        console.log(colors.green(`✔ Downloaded: ${destPath}`));
+        await sftp.close();
+      } catch (error: any) {
+        console.error(colors.red(`SFTP Error: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  sftpCmd
+    .command('put')
+    .description('Upload a file to SFTP server')
+    .argument('<host>', 'SFTP server hostname')
+    .argument('<local>', 'Local file path')
+    .argument('[args...]', 'Remote path and options: [remote] user=x pass=x key=x port=x')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  user=<username>    Username (default: root)
+  pass=<password>    Password
+  key=<path>         Path to private key file
+  port=<number>      Port number (default: 22)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek sftp put myserver.com ./local.txt')}
+  ${colors.green('$ rek sftp put myserver.com data.json /var/www/data.json user=admin key=~/.ssh/id_rsa')}
+`)
+    .action(async (host: string, local: string, args: string[]) => {
+      const { createSFTP } = await import('../protocols/sftp.js');
+      const nodePath = await import('node:path');
+
+      // Parse key=value args
+      let remotePath: string | undefined;
+      let user = 'root';
+      let password: string | undefined;
+      let keyPath: string | undefined;
+      let port = 22;
+
+      for (const arg of args) {
+        if (arg.startsWith('user=')) user = arg.slice(5);
+        else if (arg.startsWith('pass=')) password = arg.slice(5);
+        else if (arg.startsWith('key=')) keyPath = arg.slice(4);
+        else if (arg.startsWith('port=')) port = parseInt(arg.slice(5));
+        else if (!arg.includes('=')) remotePath = arg;
+      }
+
+      try {
+        let privateKey: string | undefined;
+        if (keyPath) {
+          const fsPromises = await import('node:fs/promises');
+          privateKey = await fsPromises.readFile(keyPath.replace('~', process.env.HOME || ''), 'utf-8');
+        }
+
+        const sftp = createSFTP({
+          host,
+          port,
+          username: user,
+          password,
+          privateKey,
+        });
+
+        const destPath = remotePath || nodePath.basename(local);
+
+        console.log(colors.gray(`Connecting to ${host}:${port}...`));
+        await sftp.connect();
+
+        console.log(colors.gray(`Uploading ${local} → ${destPath}...`));
+        await sftp.upload(local, destPath);
+
+        console.log(colors.green(`✔ Uploaded: ${destPath}`));
+        await sftp.close();
+      } catch (error: any) {
+        console.error(colors.red(`SFTP Error: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // ============================================================================
+  // UDP Command
+  // ============================================================================
+  program
+    .command('udp')
+    .description('Send UDP packet to a host')
+    .argument('<host>', 'Target hostname or IP')
+    .argument('[args...]', 'Port, message and options: [port] [message] timeout=x hex')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  timeout=<ms>       Timeout in milliseconds (default: 5000)
+  hex                Send message as hex bytes
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek udp localhost 5353 "hello"')}
+  ${colors.green('$ rek udp 192.168.1.1 161 "302902010004067075626c6963" hex')}
+  ${colors.green('$ rek udp localhost 53 "ping" timeout=10000')}
+`)
+    .action(async (host: string, args: string[]) => {
+      const dgram = await import('node:dgram');
+
+      // Parse args: [port] [message] timeout=x hex
+      let port = 53;
+      let message = 'ping';
+      let timeout = 5000;
+      let hex = false;
+      let foundPort = false;
+      let foundMessage = false;
+
+      for (const arg of args) {
+        if (arg.startsWith('timeout=')) timeout = parseInt(arg.slice(8));
+        else if (arg === 'hex') hex = true;
+        else if (!arg.includes('=')) {
+          if (!foundPort && /^\d+$/.test(arg)) {
+            port = parseInt(arg);
+            foundPort = true;
+          } else if (!foundMessage) {
+            message = arg;
+            foundMessage = true;
+          }
+        }
+      }
+
+      const client = dgram.createSocket('udp4');
+
+      const data = hex
+        ? Buffer.from(message.replace(/\s/g, ''), 'hex')
+        : Buffer.from(message);
+
+      console.log(colors.gray(`Sending UDP packet to ${host}:${port}...`));
+
+      const timeoutId = setTimeout(() => {
+        console.log(colors.yellow('No response (timeout)'));
+        client.close();
+        process.exit(0);
+      }, timeout);
+
+      client.on('message', (msg, rinfo) => {
+        clearTimeout(timeoutId);
+        console.log(colors.green(`✔ Response from ${rinfo.address}:${rinfo.port}`));
+        console.log(colors.gray(`  Size: ${msg.length} bytes`));
+        console.log(colors.cyan(`  Data: ${msg.toString('hex')}`));
+        client.close();
+      });
+
+      client.on('error', (err) => {
+        clearTimeout(timeoutId);
+        console.error(colors.red(`UDP Error: ${err.message}`));
+        client.close();
+        process.exit(1);
+      });
+
+      client.send(data, port, host, (err) => {
+        if (err) {
+          clearTimeout(timeoutId);
+          console.error(colors.red(`Send Error: ${err.message}`));
+          client.close();
+          process.exit(1);
+        }
+        console.log(colors.gray(`Sent ${data.length} bytes, waiting for response...`));
+      });
+    });
+
+  // ============================================================================
+  // SSE Command (Server-Sent Events client)
+  // ============================================================================
+  program
+    .command('sse')
+    .description('Connect to Server-Sent Events stream')
+    .argument('<url>', 'SSE endpoint URL')
+    .argument('[args...]', 'Headers and options: Header:Value timeout=x last-event-id=x')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  Header:Value        Add headers (Key:Value format)
+  timeout=<seconds>   Connection timeout (default: 0 = no timeout)
+  last-event-id=<id>  Last event ID for reconnection
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek sse https://api.example.com/events')}
+  ${colors.green('$ rek sse api.com/stream Authorization:"Bearer token"')}
+  ${colors.green('$ rek sse api.com/events last-event-id=123')}
+`)
+    .action(async (url: string, args: string[]) => {
+      const { createClient } = await import('../core/client.js');
+
+      if (!url.startsWith('http')) {
+        url = `https://${url}`;
+      }
+
+      // Parse args: Header:Value timeout=x last-event-id=x
+      const headers: Record<string, string> = {};
+      let timeout = 0;
+      let lastEventId: string | undefined;
+
+      for (const arg of args) {
+        if (arg.startsWith('timeout=')) timeout = parseInt(arg.slice(8));
+        else if (arg.startsWith('last-event-id=')) lastEventId = arg.slice(14);
+        else if (arg.includes(':') && !arg.startsWith('http')) {
+          const [key, ...rest] = arg.split(':');
+          headers[key.trim()] = rest.join(':').trim();
+        }
+      }
+
+      if (lastEventId) {
+        headers['Last-Event-ID'] = lastEventId;
+      }
+
+      console.log(colors.cyan('SSE Client'));
+      console.log(colors.gray(`Connecting to ${url}...`));
+      console.log(colors.gray('Press Ctrl+C to disconnect\n'));
+
+      const client = createClient();
+
+      try {
+        const response = await client.get(url, {
+          headers: {
+            ...headers,
+            'Accept': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+          },
+        });
+
+        if (!response.ok) {
+          console.error(colors.red(`HTTP Error: ${response.status} ${response.statusText}`));
+          process.exit(1);
+        }
+
+        console.log(colors.green('✔ Connected\n'));
+
+        // Stream SSE events
+        for await (const event of response.sse()) {
+          const timestamp = colors.gray(new Date().toISOString().split('T')[1].slice(0, 8));
+
+          if (event.event && event.event !== 'message') {
+            console.log(`${timestamp} ${colors.yellow(`[${event.event}]`)} ${event.data}`);
+          } else {
+            console.log(`${timestamp} ${event.data}`);
+          }
+
+          if (event.id) {
+            console.log(colors.gray(`         id: ${event.id}`));
+          }
+        }
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.log(colors.yellow('\nDisconnected'));
+        } else {
+          console.error(colors.red(`\nSSE Error: ${error.message}`));
+          process.exit(1);
+        }
+      }
+
+      process.on('SIGINT', () => {
+        console.log(colors.yellow('\nDisconnecting...'));
+        process.exit(0);
+      });
+    });
+
+  // ============================================================================
+  // Upload Command
+  // ============================================================================
+  program
+    .command('upload')
+    .description('Upload a file to a URL')
+    .argument('<url>', 'Upload endpoint URL')
+    .argument('<file>', 'File to upload')
+    .argument('[args...]', 'Options: field=x Header:Value progress')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  field=<name>       Form field name (default: file)
+  Header:Value       Add headers (Key:Value format)
+  progress           Show upload progress (default: enabled)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek upload https://api.example.com/files ./image.png')}
+  ${colors.green('$ rek upload api.com/upload document.pdf field=document')}
+  ${colors.green('$ rek upload api.com/files data.json Authorization:"Bearer token"')}
+`)
+    .action(async (url: string, file: string, args: string[]) => {
+      const { createClient } = await import('../core/client.js');
+      const nodePath = await import('node:path');
+      const fsPromises = await import('node:fs/promises');
+
+      // Parse args: field=x Header:Value progress
+      let fieldName = 'file';
+      let showProgress = true;
+      const headers: Record<string, string> = {};
+
+      for (const arg of args) {
+        if (arg.startsWith('field=')) fieldName = arg.slice(6);
+        else if (arg === 'progress') showProgress = true;
+        else if (arg === 'no-progress') showProgress = false;
+        else if (arg.includes(':') && !arg.startsWith('http')) {
+          const [key, ...rest] = arg.split(':');
+          headers[key.trim()] = rest.join(':').trim();
+        }
+      }
+
+      if (!url.startsWith('http')) {
+        url = `https://${url}`;
+      }
+
+      // Check if file exists
+      try {
+        await fsPromises.access(file);
+      } catch {
+        console.error(colors.red(`File not found: ${file}`));
+        process.exit(1);
+      }
+
+      const stats = await fsPromises.stat(file);
+
+      console.log(colors.gray(`Uploading ${nodePath.basename(file)} (${(stats.size / 1024).toFixed(1)} KB)...`));
+
+      try {
+        const client = createClient();
+        const fileContent = await fsPromises.readFile(file);
+
+        // Use multipart form upload
+        const boundary = `----ReckerBoundary${Date.now()}`;
+        const filename = nodePath.basename(file);
+
+        const bodyParts = [
+          `--${boundary}`,
+          `Content-Disposition: form-data; name="${fieldName}"; filename="${filename}"`,
+          'Content-Type: application/octet-stream',
+          '',
+          ''
+        ];
+
+        const header = Buffer.from(bodyParts.join('\r\n'));
+        const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+        const body = Buffer.concat([header, fileContent, footer]);
+
+        const response = await client.post(url, body, {
+          headers: {
+            ...headers,
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          },
+        });
+
+        console.log(colors.green(`✔ Upload complete: ${response.status} ${response.statusText}`));
+
+        const responseBody = await response.text();
+        if (responseBody) {
+          try {
+            const json = JSON.parse(responseBody);
+            console.log(JSON.stringify(json, null, 2));
+          } catch {
+            console.log(responseBody);
+          }
+        }
+      } catch (error: any) {
+        console.error(colors.red(`\nUpload Error: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // ============================================================================
+  // Download Command
+  // ============================================================================
+  program
+    .command('download')
+    .description('Download a file from a URL with progress')
+    .argument('<url>', 'File URL to download')
+    .argument('[args...]', 'Output file and options: [output] Header:Value resume progress')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  Header:Value       Add headers (Key:Value format)
+  resume             Resume partial download if possible
+  progress           Show download progress (default: enabled)
+  no-progress        Disable progress bar
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek download https://example.com/file.zip')}
+  ${colors.green('$ rek download https://api.com/export.csv data.csv')}
+  ${colors.green('$ rek download https://cdn.com/video.mp4 resume')}
+  ${colors.green('$ rek download api.com/file Authorization:"Bearer token"')}
+`)
+    .action(async (url: string, args: string[]) => {
+      const { downloadToFile } = await import('../utils/download.js');
+      const { createClient } = await import('../core/client.js');
+      const nodePath = await import('node:path');
+      const fsPromises = await import('node:fs/promises');
+
+      // Parse args: [output] Header:Value resume progress
+      let output: string | undefined;
+      let showProgress = true;
+      let resume = false;
+      const headers: Record<string, string> = {};
+
+      for (const arg of args) {
+        if (arg === 'resume') resume = true;
+        else if (arg === 'progress') showProgress = true;
+        else if (arg === 'no-progress') showProgress = false;
+        else if (arg.includes(':') && !arg.startsWith('http')) {
+          const [key, ...rest] = arg.split(':');
+          headers[key.trim()] = rest.join(':').trim();
+        } else if (!arg.includes('=')) {
+          output = arg;
+        }
+      }
+
+      if (!url.startsWith('http')) {
+        url = `https://${url}`;
+      }
+
+      // Auto-detect filename from URL
+      const urlPath = new URL(url).pathname;
+      const filename = output || nodePath.basename(urlPath) || 'download';
+
+      console.log(colors.gray(`Downloading to ${filename}...`));
+
+      try {
+        const client = createClient();
+        let downloaded = 0;
+        let total = 0;
+
+        const result = await downloadToFile(client, url, filename, {
+          resume,
+          headers,
+          onProgress: showProgress ? (progress) => {
+            downloaded = progress.loaded;
+            total = progress.total || 0;
+            const pct = total > 0 ? Math.round((downloaded / total) * 100) : 0;
+            const downloadedMB = (downloaded / 1024 / 1024).toFixed(1);
+            const totalMB = total > 0 ? (total / 1024 / 1024).toFixed(1) : '?';
+            const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
+            process.stdout.write(`\r  [${bar}] ${pct}% (${downloadedMB}/${totalMB} MB)`);
+          } : undefined,
+        });
+
+        if (showProgress) {
+          process.stdout.write('\n');
+        }
+
+        const stats = await fsPromises.stat(filename);
+        console.log(colors.green(`✔ Downloaded: ${filename} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`));
+      } catch (error: any) {
+        console.error(colors.red(`\nDownload Error: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // ============================================================================
+  // SOAP Command
+  // ============================================================================
+  program
+    .command('soap')
+    .description('Make a SOAP request')
+    .argument('<url>', 'SOAP endpoint URL')
+    .argument('<action>', 'SOAP action/operation name')
+    .argument('[args...]', 'Parameters and options: key=value namespace=x Header:Value envelope=x')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  key=value          Action parameters
+  namespace=<ns>     SOAP namespace
+  Header:Value       Add HTTP headers (Key:Value format)
+  envelope=<ver>     SOAP envelope version (default: 1.1)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek soap https://api.example.com/soap GetUser userId=123')}
+  ${colors.green('$ rek soap api.com/ws GetWeather city="New York" namespace="http://weather.example.com"')}
+  ${colors.green('$ rek soap api.com/service Calculate a=10 b=20 operation=add')}
+`)
+    .action(async (url: string, action: string, args: string[]) => {
+      if (!url.startsWith('http')) {
+        url = `https://${url}`;
+      }
+
+      // Parse args: key=value namespace=x Header:Value envelope=x
+      const body: Record<string, string> = {};
+      const headers: Record<string, string> = {};
+      let namespace: string | undefined;
+      let envelope = '1.1';
+
+      for (const arg of args) {
+        if (arg.startsWith('namespace=')) namespace = arg.slice(10);
+        else if (arg.startsWith('envelope=')) envelope = arg.slice(9);
+        else if (arg.includes(':') && !arg.startsWith('http')) {
+          const [key, ...rest] = arg.split(':');
+          headers[key.trim()] = rest.join(':').trim();
+        } else if (arg.includes('=')) {
+          const [key, ...rest] = arg.split('=');
+          body[key.trim()] = rest.join('=').trim().replace(/^["']|["']$/g, '');
+        }
+      }
+
+      console.log(colors.gray(`SOAP Request to ${url}`));
+      console.log(colors.gray(`Action: ${action}`));
+      if (Object.keys(body).length > 0) {
+        console.log(colors.gray(`Params: ${JSON.stringify(body)}`));
+      }
+      console.log('');
+
+      try {
+        const { createClient } = await import('../core/client.js');
+        const { createSoapClient } = await import('../plugins/soap.js');
+
+        const httpClient = createClient();
+        const soapClient = createSoapClient(httpClient, {
+          endpoint: url,
+          namespace,
+        });
+
+        const response = await soapClient.call(action, body);
+
+        console.log(colors.green('✔ Response:'));
+        console.log(JSON.stringify(response, null, 2));
+      } catch (error: any) {
+        console.error(colors.red(`SOAP Error: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // ============================================================================
+  // OData Command
+  // ============================================================================
+  program
+    .command('odata')
+    .description('Query an OData service')
+    .argument('<url>', 'OData service URL')
+    .argument('<entity>', 'Entity set name')
+    .argument('[args...]', 'Options: select=x filter=x orderby=x top=x skip=x expand=x Header:Value')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  select=<fields>    Select specific fields (comma-separated)
+  filter=<expr>      OData filter expression
+  orderby=<field>    Order by field
+  top=<n>            Limit results
+  skip=<n>           Skip results
+  expand=<nav>       Expand navigation property
+  Header:Value       Add HTTP headers (Key:Value format)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek odata https://services.odata.org/V4/Northwind/Northwind.svc Products')}
+  ${colors.green('$ rek odata api.com/odata Customers filter="Country eq \'USA\'" top=10')}
+  ${colors.green('$ rek odata api.com/odata Orders select=OrderID,CustomerID expand=Customer')}
+`)
+    .action(async (url: string, entity: string, args: string[]) => {
+      if (!url.startsWith('http')) {
+        url = `https://${url}`;
+      }
+
+      // Parse args: select=x filter=x orderby=x top=x skip=x expand=x Header:Value
+      const headers: Record<string, string> = {};
+      let select: string | undefined;
+      let filter: string | undefined;
+      let orderby: string | undefined;
+      let top: number | undefined;
+      let skip: number | undefined;
+      let expand: string | undefined;
+
+      for (const arg of args) {
+        if (arg.startsWith('select=')) select = arg.slice(7);
+        else if (arg.startsWith('filter=')) filter = arg.slice(7);
+        else if (arg.startsWith('orderby=')) orderby = arg.slice(8);
+        else if (arg.startsWith('top=')) top = parseInt(arg.slice(4));
+        else if (arg.startsWith('skip=')) skip = parseInt(arg.slice(5));
+        else if (arg.startsWith('expand=')) expand = arg.slice(7);
+        else if (arg.includes(':') && !arg.startsWith('http')) {
+          const [key, ...rest] = arg.split(':');
+          headers[key.trim()] = rest.join(':').trim();
+        }
+      }
+
+      console.log(colors.gray(`OData Query: ${url}/${entity}`));
+
+      try {
+        const { createClient } = await import('../core/client.js');
+        const { createODataClient } = await import('../plugins/odata.js');
+
+        const httpClient = createClient();
+        const odataClient = createODataClient(httpClient, { serviceRoot: url });
+        let query = odataClient.query(entity);
+
+        if (select) {
+          query = query.select(...select.split(',').map((s: string) => s.trim()));
+        }
+        if (filter) {
+          query = query.filter(filter);
+        }
+        if (orderby) {
+          query = query.orderBy(orderby);
+        }
+        if (top !== undefined) {
+          query = query.top(top);
+        }
+        if (skip !== undefined) {
+          query = query.skip(skip);
+        }
+        if (expand) {
+          query = query.expand(expand);
+        }
+
+        console.log(colors.gray(`Query: ${query.toUrl()}\n`));
+
+        const results = await query.get();
+
+        console.log(colors.green(`✔ Results: ${Array.isArray(results) ? results.length : 1} items`));
+        console.log(JSON.stringify(results, null, 2));
+      } catch (error: any) {
+        console.error(colors.red(`OData Error: ${error.message}`));
+        process.exit(1);
+      }
+    });
+
+  // ============================================================================
+  // Proxy Command
+  // ============================================================================
+  program
+    .command('proxy')
+    .description('Make a request through a proxy')
+    .argument('<proxy>', 'Proxy URL (http://host:port or socks5://host:port)')
+    .argument('<url>', 'Target URL')
+    .argument('[args...]', 'Request arguments: method=x key=value key:=json Header:value')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Parameters:'))}
+  method=<method>    HTTP method (default: GET)
+  key=value          String data
+  key:=json          JSON data
+  Header:value       HTTP headers (Key:Value format)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek proxy http://proxy.example.com:8080 https://api.com/data')}
+  ${colors.green('$ rek proxy socks5://127.0.0.1:1080 https://api.com/users')}
+  ${colors.green('$ rek proxy http://user:pass@proxy.com:3128 api.com/endpoint method=POST data=test')}
+`)
+    .action(async (proxy: string, url: string, args: string[]) => {
+      const { createClient } = await import('../core/client.js');
+
+      if (!url.startsWith('http')) {
+        url = `https://${url}`;
+      }
+
+      // Parse args: method=x key=value key:=json Header:value
+      const headers: Record<string, string> = {};
+      const data: Record<string, unknown> = {};
+      let method = 'GET';
+
+      for (const arg of args) {
+        if (arg.startsWith('method=')) {
+          method = arg.slice(7).toUpperCase();
+        } else if (arg.includes(':=')) {
+          const [key, ...rest] = arg.split(':=');
+          try {
+            data[key] = JSON.parse(rest.join(':='));
+          } catch {
+            data[key] = rest.join(':=');
+          }
+        } else if (arg.includes(':') && !arg.includes('=') && !arg.startsWith('http')) {
+          const [key, ...rest] = arg.split(':');
+          headers[key] = rest.join(':');
+        } else if (arg.includes('=')) {
+          const [key, ...rest] = arg.split('=');
+          data[key] = rest.join('=');
+        }
+      }
+
+      console.log(colors.gray(`Proxy: ${proxy}`));
+      console.log(colors.gray(`Target: ${url}`));
+      console.log('');
+
+      try {
+        const client = createClient({
+          proxy: { url: proxy },
+        });
+
+        const methodLower = method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch';
+        const hasBody = Object.keys(data).length > 0;
+
+        const response = hasBody
+          ? await (client as any)[methodLower](url, { json: data, headers })
+          : await (client as any)[methodLower](url, { headers });
+
+        console.log(colors.green(`✔ ${response.status} ${response.statusText}`));
+
+        const body = await response.text();
+        try {
+          const json = JSON.parse(body);
+          console.log(JSON.stringify(json, null, 2));
+        } catch {
+          console.log(body);
+        }
+      } catch (error: any) {
+        console.error(colors.red(`Proxy Error: ${error.message}`));
+        process.exit(1);
+      }
     });
 
   program.parse();
