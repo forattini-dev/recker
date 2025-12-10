@@ -140,7 +140,7 @@ jobs:
           sleep 30
 
           echo "Testing npx recker@next version..."
-          PUBLISHED_VERSION=$(npx -y recker@next version --short 2>/dev/null || echo "FAILED")
+          PUBLISHED_VERSION=$(npx -y recker@next version short 2>/dev/null || echo "FAILED")
 
           if [ "$PUBLISHED_VERSION" = "FAILED" ]; then
             echo "❌ Failed to run 'npx recker@next version'"
@@ -159,7 +159,7 @@ jobs:
 
           echo ""
           echo "Full version info:"
-          npx -y recker@next version --format json || true
+          npx -y recker@next version format=json || true
 
       - name: Job Summary
         if: steps.check.outputs.skip != 'true'
@@ -267,7 +267,7 @@ jobs:
           sleep 30
 
           echo "Testing npx recker@latest version..."
-          PUBLISHED_VERSION=$(npx -y recker@latest version --short 2>/dev/null || echo "FAILED")
+          PUBLISHED_VERSION=$(npx -y recker@latest version short 2>/dev/null || echo "FAILED")
 
           if [ "$PUBLISHED_VERSION" = "FAILED" ]; then
             echo "❌ Failed to run 'npx recker@latest version'"
@@ -286,7 +286,7 @@ jobs:
 
           echo ""
           echo "Full version info:"
-          npx -y recker@latest version --format json || true
+          npx -y recker@latest version format=json || true
 
       - name: Generate Changelog
         id: changelog
