@@ -1,11 +1,11 @@
 # SEO Analyzer
 
-Comprehensive SEO analysis for web pages using a rules-based engine with **250+ checks across 21 categories**.
+Comprehensive SEO analysis for web pages using a rules-based engine with **250+ checks across 22 categories**.
 
 ## Features
 
 - **250+ SEO Rules** - The most comprehensive SEO checker available
-- **21 Categories** - Meta, Content, Links, Images, Technical, Security, Performance, Mobile, Accessibility, Schema, Structural, i18n, PWA, Social, E-commerce, Local SEO, Core Web Vitals, Readability, Crawlability, Internal Linking, Best Practices
+- **22 Categories** - Meta, Content, Links, Images, Technical, Security, Performance, Mobile, Accessibility, Schema, Structural, i18n, PWA, Social, E-commerce, Local SEO, Core Web Vitals, Readability, Crawlability, Internal Linking, Best Practices, **AI Search**
 - **Site-Wide Analysis** - SEO Spider crawls entire sites detecting duplicates and orphan pages
 - **Request Timing** - Full timing waterfall (DNS, TCP, TLS, TTFB, Download)
 - **Detailed Evidence** - Each issue includes found value, expected value, impact, and code examples
@@ -131,7 +131,7 @@ seo https://example.com --format json
 }
 ```
 
-## Rule Categories (21)
+## Rule Categories (22)
 
 ### 1. Meta Tags (`meta`)
 Title, description, keywords, author, robots directives.
@@ -195,6 +195,9 @@ Link ratio, anchor diversity, orphan pages, click depth, contextual links.
 
 ### 21. Best Practices (`best-practices`)
 DOCTYPE, charset position, HTTP status codes, crawlable links.
+
+### 22. AI Search Optimization (`ai-search`) - NEW!
+llms.txt validation, GPTBot/Anthropic access, AI-friendly content structure, question headings, semantic HTML ratio.
 
 ## Site-Wide Analysis with SEO Spider
 
@@ -383,7 +386,7 @@ interface SeoReport {
   images: ImageAnalysis;
   social: SocialMetaAnalysis;
   technical: TechnicalSeo;
-  jsonLd: { count: number; types: string[] };
+  structuredData: { count: number; types: string[]; items: Record<string, unknown>[] };
 }
 ```
 
@@ -537,8 +540,195 @@ const report = await analyzeSeo(html, {
 });
 ```
 
+## AI Search Optimization
+
+Recker includes a dedicated **AI Search** category with 15+ rules optimized for AI-powered search engines like ChatGPT, Perplexity, Claude, and Google AI Overviews.
+
+### llms.txt Support
+
+The [llms.txt](https://llmstxt.org/) standard helps AI systems understand your website:
+
+```typescript
+import { parseLlmsTxt, validateLlmsTxt, fetchAndValidateLlmsTxt } from 'recker/seo';
+
+// Validate llms.txt content
+const content = `# My Site
+> A description of my site
+
+## Documentation
+- [Getting Started](/docs/start): Quick start guide
+- [API Reference](/docs/api): Full API documentation
+`;
+
+const result = validateLlmsTxt(content, 'https://example.com');
+console.log(result.valid); // true
+console.log(result.parseResult.siteName); // "My Site"
+console.log(result.parseResult.links.length); // 2
+
+// Fetch and validate from URL
+const remote = await fetchAndValidateLlmsTxt('https://example.com');
+console.log(remote.exists); // true/false
+console.log(remote.parseResult?.sections); // Parsed sections
+```
+
+### Generate llms.txt Template
+
+```typescript
+import { generateLlmsTxtTemplate } from 'recker/seo';
+
+const template = generateLlmsTxtTemplate({
+  siteName: 'Recker',
+  siteDescription: 'Network SDK for the AI era',
+  sections: [
+    {
+      title: 'Documentation',
+      links: [
+        { text: 'Quick Start', url: '/docs/quickstart', description: 'Get started in 5 minutes' },
+        { text: 'API Reference', url: '/docs/api', description: 'Full API documentation' },
+      ]
+    },
+    {
+      title: 'Examples',
+      links: [
+        { text: 'HTTP Examples', url: '/examples/http' },
+        { text: 'WebSocket Examples', url: '/examples/websocket' },
+      ]
+    }
+  ]
+});
+
+console.log(template);
+// # Recker
+//
+// > Network SDK for the AI era
+//
+// ## Documentation
+//
+// - [Quick Start](/docs/quickstart): Get started in 5 minutes
+// - [API Reference](/docs/api): Full API documentation
+//
+// ## Examples
+//
+// - [HTTP Examples](/examples/http)
+// - [WebSocket Examples](/examples/websocket)
+```
+
+### AI Search Rules
+
+| Rule ID | Description |
+|---------|-------------|
+| `ai-llms-txt-exists` | Check if llms.txt file exists |
+| `ai-llms-txt-structure` | Validate llms.txt has proper structure |
+| `ai-content-structure` | Check heading hierarchy for AI comprehension |
+| `ai-question-headings` | Detect question-based headings (What, How, Why) |
+| `ai-structured-data` | Check for AI-helpful schema types |
+| `ai-faq-schema` | Recommend FAQPage/HowTo schema |
+| `ai-content-depth` | Check word count for AI visibility |
+| `ai-content-freshness` | Detect date signals in structured data |
+| `ai-robots-gpt-bot` | Check if GPTBot is blocked |
+| `ai-robots-anthropic` | Check if Anthropic/Claude is blocked |
+| `ai-page-too-long` | Warn if content may be truncated |
+| `semantic-html-ratio` | Check semantic HTML usage |
+
+### Focus Mode: AI Only
+
+Run only AI-related rules:
+
+```typescript
+const report = await analyzeSeo(html, {
+  rules: {
+    categories: ['ai-search']
+  }
+});
+```
+
+Or via CLI:
+
+```bash
+rek seo https://example.com --focus ai
+```
+
+## SEO Validators
+
+Built-in validators for common SEO files:
+
+### robots.txt Validator
+
+```typescript
+import { parseRobotsTxt, validateRobotsTxt } from 'recker/seo';
+
+const robotsTxt = `
+User-agent: *
+Disallow: /admin/
+Allow: /admin/public/
+
+User-agent: GPTBot
+Disallow: /
+
+Sitemap: https://example.com/sitemap.xml
+`;
+
+const parsed = parseRobotsTxt(robotsTxt);
+console.log(parsed.userAgentBlocks); // Rules per user-agent
+console.log(parsed.sitemaps); // ['https://example.com/sitemap.xml']
+
+// Validate
+const result = validateRobotsTxt(robotsTxt, 'https://example.com');
+console.log(result.issues); // Warnings/errors
+```
+
+### sitemap.xml Validator
+
+```typescript
+import { parseSitemap, validateSitemap } from 'recker/seo';
+
+const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/</loc>
+    <lastmod>2024-01-15</lastmod>
+    <priority>1.0</priority>
+  </url>
+</urlset>`;
+
+const parsed = parseSitemap(sitemap);
+console.log(parsed.urls.length); // 1
+console.log(parsed.isSitemapIndex); // false
+
+// Validate
+const result = validateSitemap(sitemap, 'https://example.com');
+console.log(result.issues);
+```
+
+### llms.txt Validator
+
+See [AI Search Optimization](#ai-search-optimization) section above.
+
+## Focus Modes
+
+Run focused analysis on specific rule categories:
+
+```bash
+# CLI focus modes
+rek seo https://example.com --focus links      # Links & internal linking
+rek seo https://example.com --focus duplicates # Duplicate content
+rek seo https://example.com --focus security   # Security headers
+rek seo https://example.com --focus ai         # AI search optimization
+rek seo https://example.com --focus resources  # Performance & resources
+```
+
+Programmatic focus:
+
+```typescript
+const report = await analyzeSeo(html, {
+  rules: {
+    categories: ['security', 'performance']  // Only these categories
+  }
+});
+```
+
 ## Next Steps
 
-- **[Web Scraping](14-scraping.md)** - Extract data from pages
-- **[Concurrency](08-concurrency.md)** - Batch SEO analysis
+- **[Web Scraping](01-scraping.md)** - Extract data from pages
+- **[Concurrency](../http/08-concurrency.md)** - Batch SEO analysis
 - **[CLI Overview](../cli/01-overview.md)** - CLI commands
