@@ -30,10 +30,47 @@
   />
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="./custom.css" />
+  <link rel="stylesheet" href="./custom.css?v=2" />
 
-  <!-- Progress Bar -->
+  <!-- Progress Bar & Lightning Animation -->
   <style>
+    /* Lightning Animation (Inlined for reliability) */
+    .lightning-anim {
+      display: inline-block;
+      animation: lightning-flash 5s infinite;
+      transform-origin: center;
+    }
+
+    @keyframes lightning-flash {
+      0%, 90%, 100% {
+        filter: brightness(1);
+        text-shadow: none;
+        transform: scale(1);
+        opacity: 1;
+      }
+      92% {
+        filter: brightness(3) drop-shadow(0 0 5px #ff8a00);
+        text-shadow: 0 0 10px #ffd166, 0 0 20px #ff8a00;
+        transform: scale(1.15) rotate(-3deg);
+        opacity: 1;
+      }
+      93% {
+        filter: brightness(1);
+        text-shadow: none;
+        transform: scale(1);
+      }
+      94% {
+        filter: brightness(5) drop-shadow(0 0 8px #ffd166);
+        text-shadow: 0 0 15px #ffd166, 0 0 30px #ff8a00;
+        transform: scale(1.25) rotate(3deg);
+      }
+      96% {
+        filter: brightness(1);
+        text-shadow: none;
+        transform: scale(1);
+      }
+    }
+
     .progress {
       position: fixed;
       top: 0;
@@ -141,7 +178,7 @@
   
   <script>
     window.$docsify = {
-      name: '<span style="display:flex;align-items:center;gap:8px"><span style="font-size:24px">⚡</span>Recker</span>',
+      name: '<span style="display:flex;align-items:center;gap:8px"><span class="lightning-anim" style="font-size:24px">⚡</span>Recker</span>',
       nameLink: '#/',
       repo: 'https://github.com/forattini-dev/recker',
       loadSidebar: true,
