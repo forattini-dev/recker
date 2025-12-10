@@ -248,8 +248,8 @@ describe('SEO Analyzer', () => {
 
       const report = await analyzeSeo(html);
 
-      expect(report.jsonLd.count).toBe(1);
-      expect(report.jsonLd.types).toContain('Organization');
+      expect(report.structuredData.count).toBe(1);
+      expect(report.structuredData.types).toContain('Organization');
 
       const structuredCheck = report.checks.find((c) => c.name === 'Structured Data');
       expect(structuredCheck?.status).toBe('pass');

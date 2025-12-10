@@ -181,8 +181,11 @@ export class HybridSearch {
       for (const result of semanticResults) {
         const existing = results.get(result.id);
         if (existing) {
-          // Combine scores using RRF
-          existing.score = combineScores(existing.score, result.score);
+          // Combine scores: docs found in BOTH searches get boosted
+          // Use max + bonus for appearing in both
+          const maxScore = Math.max(existing.score, result.score);
+          const bonus = Math.min(existing.score, result.score) * 0.3; // 30% bonus from other source
+          existing.score = Math.min(1.0, maxScore + bonus);
           existing.source = 'hybrid';
         } else {
           results.set(result.id, result);
