@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import colors from '../utils/colors.js';
 import { formatColumns } from '../utils/columns.js';
 import { summarizeErrors, formatErrorSummary, printError } from './helpers.js';
+import { getVersion, formatVersionInfo } from '../version.js';
 
 /**
  * Read data from stdin if piped
@@ -104,14 +105,8 @@ async function main() {
   const { resolvePreset } = await import('./presets.js');
   const presets = await import('../presets/index.js');
 
-  // Read version from package.json
-  let version = '0.0.0';
-  try {
-    const pkg = await import('../../package.json', { with: { type: 'json' } }) as { default: { version: string } };
-    version = pkg.default?.version || '0.0.0';
-  } catch {
-    // Fallback if JSON import fails
-  }
+  // Get version from centralized module
+  const version = await getVersion();
 
   // Helper to parse headers (Key:Value) and data (key=value)
   function parseMixedArgs(args: string[], hasPreset = false) {
@@ -413,6 +408,32 @@ complete -F _rek_completions rek
 ###-end-rek-completion-###
 `;
       console.log(script);
+    });
+
+  // Version command (detailed version info)
+  // Using 'info' to avoid conflict with Commander's built-in --version
+  program
+    .command('version')
+    .alias('info')
+    .description('Show detailed version information')
+    .option('-s, --short', 'Show only version number')
+    .option('--format <type>', 'Output format: text or json', 'text')
+    .action(async (options: { short?: boolean; format?: string }) => {
+      if (options.short) {
+        console.log(version);
+        return;
+      }
+
+      if (options.format === 'json') {
+        const { getVersionInfo } = await import('../version.js');
+        const info = await getVersionInfo();
+        console.log(JSON.stringify(info, null, 2));
+        return;
+      }
+
+      const versionInfo = await formatVersionInfo(true);
+      console.log(colors.bold(colors.cyan('recker')) + ' ' + colors.green(version));
+      console.log(colors.gray(versionInfo));
     });
 
   // Interactive Shell command

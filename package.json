@@ -152,7 +152,7 @@
     "build:browser:bundle": "pnpm build:browser && node scripts/bundle-browser.js",
     "build:embeddings": "tsx scripts/build-embeddings.ts",
     "prepare": "husky",
-    "prepublishOnly": "pnpm build",
+    "prepublishOnly": "pnpm build && node scripts/inject-version.js",
     "test": "NODE_OPTIONS='--max-old-space-size=512' vitest run",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=512' vitest run --coverage",
     "test:light": "NODE_OPTIONS='--max-old-space-size=256' vitest run --poolOptions.forks.maxForks=1",
