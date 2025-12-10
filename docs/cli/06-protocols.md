@@ -304,9 +304,9 @@ Perform DNS lookups with various record types.
 rek dns google.com
 
 # Specific record type
-rek dns google.com --type MX
-rek dns google.com --type TXT
-rek dns google.com --type AAAA
+rek dns google.com type=MX
+rek dns google.com type=TXT
+rek dns google.com type=AAAA
 ```
 
 ### Record Types
@@ -331,12 +331,12 @@ rek dns api.github.com
 # 140.82.112.6
 
 # Get MX records
-rek dns google.com --type MX
+rek dns google.com type=MX
 # 10 smtp.google.com
 # 20 smtp2.google.com
 
 # Get TXT records (SPF, DKIM, etc.)
-rek dns github.com --type TXT
+rek dns github.com type=TXT
 # "v=spf1 ip4:192.30.252.0/22 include:..."
 ```
 
@@ -344,10 +344,10 @@ rek dns github.com --type TXT
 
 ```bash
 # Use Cloudflare DNS
-rek dns example.com --server 1.1.1.1
+rek dns example.com server=1.1.1.1
 
 # Use Google DNS
-rek dns example.com --server 8.8.8.8
+rek dns example.com server=8.8.8.8
 ```
 
 ## GeoIP
@@ -480,7 +480,7 @@ rek udp://metrics.example.com:9000
 rek whois github.com
 
 # DNS
-rek dns google.com --type MX
+rek dns google.com type=MX
 
 # GeoIP
 rek geoip 1.1.1.1

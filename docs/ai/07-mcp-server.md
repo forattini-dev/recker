@@ -13,64 +13,64 @@ Recker includes a built-in MCP Server that exposes documentation to AI agents li
 rek mcp
 
 # Start HTTP server
-rek mcp -t http -p 3100
+rek mcp transport=http port=3100
 
 # Start with SSE support
-rek mcp -t sse -p 3100
+rek mcp transport=sse port=3100
 
 # Enable debug logging
-rek mcp --debug
+rek mcp debug
 ```
 
 ### Tool Filtering
 
-Control which tools are available to AI agents using command-line flags:
+Control which tools are available to AI agents using command-line options:
 
 ```bash
 # Disable documentation tools (search, get, examples, schema, suggest)
-rek mcp --no-docs
+rek mcp nodocs
 
 # Disable HTTP request tool
-rek mcp --no-http
+rek mcp nohttp
 
 # Disable all network tools (http, dns, whois, ping)
-rek mcp --no-network
+rek mcp nonetwork
 
 # Disable specific tools
-rek mcp --no-dns --no-whois
+rek mcp nodns nowhois
 
 # Only enable specific tools (exclusive mode)
-rek mcp --only rek_search_docs,rek_get_doc
+rek mcp only=rek_search_docs,rek_get_doc
 
 # Custom filter patterns (glob-style)
-rek mcp --filter "rek_*_docs,!rek_http_*"
+rek mcp filter="rek_*_docs,!rek_http_*"
 ```
 
-**Available Flags:**
+**Available Options:**
 
-| Flag | Effect |
-|------|--------|
-| `--no-docs` | Disable `rek_search_docs`, `rek_get_doc`, `rek_code_examples`, `rek_api_schema`, `rek_suggest` |
-| `--no-http` | Disable `rek_http_request` |
-| `--no-dns` | Disable `rek_dns_lookup` |
-| `--no-whois` | Disable `rek_whois_lookup` |
-| `--no-ping` | Disable `rek_network_ping` |
-| `--no-ip` | Disable `rek_ip_lookup` |
-| `--no-network` | Disable all network tools (http, dns, whois, ping) |
-| `--only <tools>` | Only enable specified tools (comma-separated) |
-| `--filter <patterns>` | Custom glob patterns (prefix with `!` to exclude) |
+| Option | Effect |
+|--------|--------|
+| `nodocs` | Disable `rek_search_docs`, `rek_get_doc`, `rek_code_examples`, `rek_api_schema`, `rek_suggest` |
+| `nohttp` | Disable `rek_http_request` |
+| `nodns` | Disable `rek_dns_lookup` |
+| `nowhois` | Disable `rek_whois_lookup` |
+| `noping` | Disable `rek_network_ping` |
+| `noip` | Disable `rek_ip_lookup` |
+| `nonetwork` | Disable all network tools (http, dns, whois, ping) |
+| `only=<tools>` | Only enable specified tools (comma-separated) |
+| `filter=<patterns>` | Custom glob patterns (prefix with `!` to exclude) |
 
 **Use Cases:**
 
 ```bash
 # Documentation-only mode (no network operations)
-rek mcp --no-network --no-ip
+rek mcp nonetwork noip
 
 # Network tools only (no docs, for testing)
-rek mcp --no-docs
+rek mcp nodocs
 
 # Minimal mode for security-conscious environments
-rek mcp --only rek_search_docs,rek_get_doc
+rek mcp only=rek_search_docs,rek_get_doc
 ```
 
 ### Programmatic Usage
@@ -164,7 +164,7 @@ Add to your Cursor MCP settings:
 Start the HTTP server and configure:
 
 ```bash
-rek mcp -t http -p 3100
+rek mcp transport=http port=3100
 ```
 
 ```json
@@ -184,7 +184,7 @@ rek mcp -t http -p 3100
 ### Google Gemini
 
 ```bash
-rek mcp -t http -p 3100
+rek mcp transport=http port=3100
 ```
 
 ```json
@@ -201,7 +201,7 @@ rek mcp -t http -p 3100
 ### xAI Grok
 
 ```bash
-rek mcp -t sse -p 3100
+rek mcp transport=sse port=3100
 ```
 
 ```json
@@ -574,7 +574,7 @@ const customServer = createMCPServer({
 Serve your own project's documentation:
 
 ```bash
-rek mcp -d /path/to/your/docs
+rek mcp docs=/path/to/your/docs
 ```
 
 ```typescript
@@ -592,7 +592,7 @@ Run the MCP server in Docker for remote access:
 FROM node:20-alpine
 RUN npm install -g recker
 EXPOSE 3100
-CMD ["rek", "mcp", "-t", "http", "-p", "3100"]
+CMD ["rek", "mcp", "transport=http", "port=3100"]
 ```
 
 ```bash

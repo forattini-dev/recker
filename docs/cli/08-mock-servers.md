@@ -17,7 +17,7 @@ rek serve http
 rek serve ws
 
 # Start an HLS streaming server
-rek serve hls --mode live
+rek serve hls mode=live
 ```
 
 ## HTTP Server
@@ -29,16 +29,16 @@ The mock HTTP server can echo requests, add delays, and handle CORS.
 rek serve http
 
 # Custom port and host
-rek serve http -p 8080 -h 0.0.0.0
+rek serve http port=8080 host=0.0.0.0
 
 # Echo mode - returns request body in response
-rek serve http --echo
+rek serve http echo
 
 # Add artificial latency (useful for testing timeouts)
-rek serve http --delay 500
+rek serve http delay=500
 
 # Disable CORS
-rek serve http --no-cors
+rek serve http nocors
 ```
 
 ### Endpoints
@@ -54,10 +54,10 @@ rek serve http --no-cors
 
 ```bash
 # Terminal 1: Start server with delay
-rek serve http --delay 2000
+rek serve http delay=2000
 
 # Terminal 2: Test timeout
-rek localhost:3000 --timeout 1000
+rek localhost:3000 timeout=1000
 # Should timeout after 1 second
 ```
 
@@ -72,13 +72,13 @@ rek serve websocket
 rek serve ws
 
 # Custom port
-rek serve ws -p 9000
+rek serve ws port=9000
 
 # Disable echo (server won't respond to messages)
-rek serve ws --no-echo
+rek serve ws noecho
 
 # Add delay to responses
-rek serve ws --delay 100
+rek serve ws delay=100
 ```
 
 ### Example: Testing WebSocket Client
@@ -104,10 +104,10 @@ The SSE server supports automatic events and interactive broadcast mode.
 rek serve sse
 
 # Custom interval between events
-rek serve sse --interval 2000
+rek serve sse interval=2000
 
 # Enable broadcast mode (type messages to broadcast)
-rek serve sse --broadcast
+rek serve sse broadcast
 ```
 
 ### Endpoints
@@ -140,16 +140,16 @@ A complete HLS server supporting VOD, live, and event modes.
 rek serve hls
 
 # Live stream mode
-rek serve hls --mode live
+rek serve hls mode=live
 
 # Event mode (live without sliding window)
-rek serve hls --mode event
+rek serve hls mode=event
 
 # Custom segment configuration
-rek serve hls --segments 20 --duration 4
+rek serve hls segments=20 duration=4
 
 # Multi-quality (adaptive bitrate)
-rek serve hls --qualities 1080p,720p,480p,360p
+rek serve hls qualities=1080p,720p,480p,360p
 ```
 
 ### Stream Modes
@@ -173,7 +173,7 @@ rek serve hls --qualities 1080p,720p,480p,360p
 
 ```bash
 # Terminal 1: Start live HLS server
-rek serve hls --mode live --qualities 720p,480p
+rek serve hls mode=live qualities=720p,480p
 
 # Use with any HLS player (VLC, ffplay, etc.)
 ffplay http://localhost:8082/master.m3u8
@@ -197,10 +197,10 @@ A UDP server for testing datagram protocols.
 rek serve udp
 
 # Custom port
-rek serve udp -p 5353
+rek serve udp port=5353
 
 # Disable echo
-rek serve udp --no-echo
+rek serve udp noecho
 ```
 
 ### Example: Testing UDP Client
@@ -223,10 +223,10 @@ A mock DNS server for testing DNS queries without hitting real nameservers.
 rek serve dns
 
 # Standard DNS port (requires root/sudo)
-sudo rek serve dns -p 53
+sudo rek serve dns port=53
 
 # Add delay for testing timeout handling
-rek serve dns --delay 500
+rek serve dns delay=500
 ```
 
 ### Default Records
@@ -260,10 +260,10 @@ A mock WHOIS server returning realistic domain registration data.
 rek serve whois
 
 # Standard WHOIS port (requires root)
-sudo rek serve whois -p 43
+sudo rek serve whois port=43
 
 # Add delay
-rek serve whois --delay 200
+rek serve whois delay=200
 ```
 
 ### Default Domains
@@ -294,10 +294,10 @@ A mock Telnet server with built-in commands and echo mode.
 rek serve telnet
 
 # Disable echo
-rek serve telnet --no-echo
+rek serve telnet noecho
 
 # Add delay to commands
-rek serve telnet --delay 100
+rek serve telnet delay=100
 ```
 
 ### Built-in Commands
@@ -339,13 +339,13 @@ A mock FTP server with virtual filesystem and authentication.
 rek serve ftp
 
 # Require authentication (no anonymous)
-rek serve ftp --no-anonymous
+rek serve ftp noanonymous
 
 # Custom credentials
-rek serve ftp -u admin --password secret
+rek serve ftp username=admin password=secret
 
 # Add delay
-rek serve ftp --delay 100
+rek serve ftp delay=100
 ```
 
 ### Default Files
@@ -413,13 +413,13 @@ rek serve hls --mode live &
 
 ```bash
 # Test HLS with different qualities
-rek serve hls --qualities 1080p,720p,480p,360p
+rek serve hls qualities=1080p,720p,480p,360p
 
 # Test WebSocket reconnection
-rek serve ws --delay 1000  # Slow responses
+rek serve ws delay=1000  # Slow responses
 
 # Test HTTP retry behavior
-rek serve http --delay 5000  # Very slow
+rek serve http delay=5000  # Very slow
 ```
 
 ## Programmatic Usage
@@ -483,10 +483,10 @@ See [Testing Reference](/reference/03-testing.md) for more details on programmat
 
 | Option | Description |
 |--------|-------------|
-| `-p, --port <n>` | Port to listen on |
-| `-h, --host <addr>` | Host to bind to (default: 127.0.0.1) |
-| `--echo` / `--no-echo` | Enable/disable echo mode |
-| `--delay <ms>` | Add response delay |
+| `port=<n>` | Port to listen on |
+| `host=<addr>` | Host to bind to (default: 127.0.0.1) |
+| `echo` / `noecho` | Enable/disable echo mode |
+| `delay=<ms>` | Add response delay |
 
 ## Next Steps
 
