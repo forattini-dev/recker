@@ -3,6 +3,8 @@
 - **Getting Started**
   - [Installation](/getting-started/installation.md)
   - [Quick Start](/http/01-quickstart.md)
+  - [CLI Overview](/getting-started/cli.md)
+  - [MCP Server](/getting-started/mcp.md)
 
 - **HTTP**
   - [Fundamentals](/http/02-fundamentals.md)
