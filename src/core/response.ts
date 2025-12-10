@@ -8,6 +8,8 @@ import { parseHeaders, type HeaderInfo, type CacheInfo, type RateLimitInfo } fro
 import { parseLinkHeader, type LinkHeaderParser } from '../utils/link-header.js';
 import type { Readable } from 'node:stream';
 import { StreamError } from './errors.js';
+import { parseYaml, type YamlParseOptions } from '../plugins/yaml.js';
+import { parseCsv, type CsvParseOptions } from '../plugins/csv.js';
 
 export class HttpResponse<T = unknown> implements ReckerResponse<T> {
   public readonly timings?: Timings;
@@ -98,6 +100,55 @@ export class HttpResponse<T = unknown> implements ReckerResponse<T> {
 
   async json<R = T>(): Promise<R> {
     return (await this.raw.json()) as R;
+  }
+
+  /**
+   * Parse response body as YAML
+   *
+   * First HTTP client with native YAML support!
+   * Implements RFC 9512 (application/yaml media type).
+   *
+   * @example
+   * ```typescript
+   * // Parse YAML response
+   * const config = await client.get('/config.yaml').yaml();
+   *
+   * // With type parameter
+   * interface Config { server: { port: number } }
+   * const config = await client.get('/config.yaml').yaml<Config>();
+   *
+   * // With options
+   * const data = await client.get('/data.yaml').yaml({ parseDates: false });
+   * ```
+   */
+  async yaml<R = T>(options?: YamlParseOptions): Promise<R> {
+    const text = await this.raw.text();
+    return parseYaml<R>(text, options);
+  }
+
+  /**
+   * Parse response body as CSV
+   *
+   * Native CSV support following RFC 4180 specification.
+   *
+   * @example
+   * ```typescript
+   * // Parse as array of objects (with headers)
+   * const users = await client.get('/users.csv').csv();
+   * // [{ name: 'John', age: '30' }, { name: 'Jane', age: '25' }]
+   *
+   * // Parse as array of arrays (no headers)
+   * const data = await client.get('/data.csv').csv({ headers: false });
+   * // [['John', '30'], ['Jane', '25']]
+   *
+   * // With type parameter
+   * interface User { name: string; age: string }
+   * const users = await client.get('/users.csv').csv<User>();
+   * ```
+   */
+  async csv<R = Record<string, string>>(options?: CsvParseOptions): Promise<R[]> {
+    const text = await this.raw.text();
+    return parseCsv<R>(text, options as any);
   }
 
   async text(): Promise<string> {

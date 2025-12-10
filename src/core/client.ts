@@ -20,6 +20,8 @@ import { dedupPlugin, DedupOptions } from '../plugins/dedup.js';
 import { createXSRFMiddleware, XSRFPluginOptions } from '../plugins/xsrf.js';
 import { createCompressionMiddleware } from '../plugins/compression.js';
 import { serializeXML } from '../plugins/xml.js';
+import { serializeYaml } from '../plugins/yaml.js';
+import { serializeCsv } from '../plugins/csv.js';
 import { MemoryStorage } from '../cache/memory-storage.js';
 import { FileStorage } from '../cache/basic-file-storage.js';
 import { RequestRunner } from '../runner/request-runner.js';
@@ -797,7 +799,7 @@ export class Client {
     actualOptions = actualOptions || {};
 
     // Extract json, form, and xml from options to prevent them from being passed to request()
-    const { json, form, xml, ...restOptions } = actualOptions as any;
+    const { json, form, xml, yaml, csv, ...restOptions } = actualOptions as any;
 
     let finalBody = actualBody;
     let explicitContentType: string | undefined;
@@ -818,7 +820,17 @@ export class Client {
       finalBody = '<?xml version="1.0" encoding="UTF-8"?>\n' + serializeXML(xml);
       explicitContentType = 'application/xml';
     }
-    // Priority 4: explicit body in options
+    // Priority 4: yaml option (application/yaml) - RFC 9512
+    else if (yaml !== undefined) {
+      finalBody = serializeYaml(yaml);
+      explicitContentType = 'application/yaml';
+    }
+    // Priority 5: csv option (text/csv) - RFC 4180
+    else if (csv !== undefined) {
+      finalBody = serializeCsv(csv);
+      explicitContentType = 'text/csv';
+    }
+    // Priority 6: explicit body in options
     else if (restOptions.body !== undefined) {
       finalBody = restOptions.body;
     }
