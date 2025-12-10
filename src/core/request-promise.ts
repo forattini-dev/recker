@@ -5,6 +5,8 @@ import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { tryFn } from '../utils/try-fn.js';
 import { StreamError } from './errors.js';
+import { parseYaml, type YamlParseOptions } from '../plugins/yaml.js';
+import { parseCsv, type CsvParseOptions } from '../plugins/csv.js';
 
 export class RequestPromise<T = unknown> implements Promise<ReckerResponse<T>> {
   private promise: Promise<ReckerResponse<T>>;
@@ -46,6 +48,37 @@ export class RequestPromise<T = unknown> implements Promise<ReckerResponse<T>> {
   async json<R = T>(): Promise<R> {
     const response = await this.promise;
     return response.json<R>();
+  }
+
+  /**
+   * Parse response body as YAML
+   *
+   * First HTTP client with native YAML support!
+   * Implements RFC 9512 (application/yaml media type).
+   *
+   * @example
+   * ```typescript
+   * const config = await client.get('/config.yaml').yaml();
+   * ```
+   */
+  async yaml<R = T>(options?: YamlParseOptions): Promise<R> {
+    const response = await this.promise;
+    const text = await response.text();
+    return parseYaml<R>(text, options);
+  }
+
+  /**
+   * Parse response body as CSV (RFC 4180)
+   *
+   * @example
+   * ```typescript
+   * const users = await client.get('/users.csv').csv();
+   * ```
+   */
+  async csv<R = Record<string, string>>(options?: CsvParseOptions): Promise<R[]> {
+    const response = await this.promise;
+    const text = await response.text();
+    return parseCsv<R>(text, options as any);
   }
 
   async text(): Promise<string> {
