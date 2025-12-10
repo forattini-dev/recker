@@ -437,8 +437,7 @@ complete -F _rek_completions rek
     .command('version')
     .alias('info')
     .description('Show version and environment information')
-    .option('-s, --short', 'Show only version number')
-    .option('--format <type>', 'Output format: text or json', 'text')
+    .argument('[args...]', 'Options: short format=json')
     .addHelpText('after', `
 ${colors.bold(colors.blue('What it does:'))}
   Displays the installed Recker version along with your Node.js version,
@@ -447,17 +446,24 @@ ${colors.bold(colors.blue('What it does:'))}
 
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek version')}                    Show full version info
-  ${colors.green('$ rek version -s')}                 Just the version number (for scripts)
-  ${colors.green('$ rek version --format json')}     Machine-readable JSON output
+  ${colors.green('$ rek version short')}              Just the version number (for scripts)
+  ${colors.green('$ rek version format=json')}        Machine-readable JSON output
   ${colors.green('$ rek info')}                       Alias for version
+
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('short')}             Show only version number
+  ${colors.cyan('format=json')}       Output as JSON
 `)
-    .action(async (options: { short?: boolean; format?: string }) => {
-      if (options.short) {
+    .action(async (args: string[]) => {
+      const isShort = args.includes('short');
+      const formatJson = args.some(a => a === 'format=json' || a === 'json');
+
+      if (isShort) {
         console.log(version);
         return;
       }
 
-      if (options.format === 'json') {
+      if (formatJson) {
         const { getVersionInfo } = await import('../version.js');
         const info = await getVersionInfo();
         console.log(JSON.stringify(info, null, 2));
@@ -632,24 +638,27 @@ ${colors.bold('Details:')}`);
     .alias('audit')
     .description('Analyze a page\'s SEO health (80+ checks)')
     .argument('<url>', 'URL to analyze')
-    .option('-a, --all', 'Show all checks including passed ones')
-    .option('--format <format>', 'Output format: text (default) or json', 'text')
+    .argument('[args...]', 'Options: all format=json')
     .addHelpText('after', `
 ${colors.bold(colors.blue('What it does:'))}
   Performs a comprehensive SEO audit on a single page. Analyzes title, meta
   description, headings hierarchy, images, links, structured data, OpenGraph
   tags, Twitter cards, and technical SEO factors.
 
-  Returns a score with detailed recommendations. Use with --format json for
+  Returns a score with detailed recommendations. Use format=json for
   integration with CI/CD pipelines or automated monitoring.
 
   For full site audits, use ${colors.cyan('rek spider <url> seo')} instead.
 
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek seo example.com')}                    ${colors.gray('Basic SEO analysis')}
-  ${colors.green('$ rek seo example.com -a')}                 ${colors.gray('Show all checks')}
-  ${colors.green('$ rek seo example.com --format json')}      ${colors.gray('Output as JSON')}
-  ${colors.green('$ rek seo example.com --format json | jq')} ${colors.gray('Pipe to jq for processing')}
+  ${colors.green('$ rek seo example.com all')}                ${colors.gray('Show all checks')}
+  ${colors.green('$ rek seo example.com format=json')}        ${colors.gray('Output as JSON')}
+  ${colors.green('$ rek seo example.com format=json | jq')}   ${colors.gray('Pipe to jq for processing')}
+
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('all')}               Show all checks including passed ones
+  ${colors.cyan('format=json')}       Output as JSON
 
 ${colors.bold(colors.yellow('Checks:'))}
   ${colors.cyan('Title Tag')}          Length and presence
@@ -662,9 +671,10 @@ ${colors.bold(colors.yellow('Checks:'))}
   ${colors.cyan('Structured Data')}    JSON-LD presence
   ${colors.cyan('Technical')}          Canonical, viewport, lang
 `)
-    .action(async (url, options: { all?: boolean; format?: string }) => {
+    .action(async (url: string, args: string[]) => {
       if (!url.startsWith('http')) url = `https://${url}`;
-      const isJson = options.format === 'json';
+      const showAll = args.includes('all');
+      const isJson = args.some(a => a === 'format=json' || a === 'json');
 
       const { createClient } = await import('../core/client.js');
       const { analyzeSeo } = await import('../seo/analyzer.js');
@@ -758,12 +768,12 @@ ${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray
 
         // Checks
         console.log(`${colors.bold('Checks:')}`);
-        const checksToShow = options.all
+        const checksToShow = showAll
           ? report.checks
           : report.checks.filter(c => c.status !== 'pass' && c.status !== 'info');
 
-        if (checksToShow.length === 0 && !options.all) {
-          console.log(colors.green('  All checks passed! Use -a to see details.'));
+        if (checksToShow.length === 0 && !showAll) {
+          console.log(colors.green('  All checks passed! Use "all" to see details.'));
         } else {
           for (const check of checksToShow) {
             const icon = check.status === 'pass' ? colors.green('✔')
@@ -801,12 +811,15 @@ ${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray
     .command('robots')
     .description('Validate and analyze robots.txt file')
     .argument('<url>', 'Website URL or direct robots.txt URL')
-    .option('--format <format>', 'Output format: text (default) or json', 'text')
+    .argument('[args...]', 'Options: format=json')
     .addHelpText('after', `
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek robots example.com')}                ${colors.gray('Validate robots.txt')}
   ${colors.green('$ rek robots example.com/robots.txt')}     ${colors.gray('Direct URL')}
-  ${colors.green('$ rek robots example.com --format json')}  ${colors.gray('JSON output')}
+  ${colors.green('$ rek robots example.com format=json')}    ${colors.gray('JSON output')}
+
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('format=json')}         Output as JSON
 
 ${colors.bold(colors.yellow('Checks:'))}
   ${colors.cyan('Syntax')}              Valid robots.txt syntax
@@ -815,7 +828,7 @@ ${colors.bold(colors.yellow('Checks:'))}
   ${colors.cyan('Crawl-delay')}         Aggressive crawl delay
   ${colors.cyan('AI Bots')}             GPTBot, ClaudeBot, Anthropic blocks
 `)
-    .action(async (url, options: { format?: string }) => {
+    .action(async (url: string, args: string[]) => {
       // Normalize URL
       if (!url.startsWith('http')) url = `https://${url}`;
       if (!url.includes('robots.txt')) {
@@ -823,7 +836,7 @@ ${colors.bold(colors.yellow('Checks:'))}
         url = `${urlObj.origin}/robots.txt`;
       }
 
-      const isJson = options.format === 'json';
+      const isJson = args.some(a => a === 'format=json' || a === 'json');
 
       if (!isJson) {
         console.log(colors.gray(`Fetching robots.txt from ${url}...`));
@@ -930,14 +943,17 @@ ${colors.gray('Valid:')} ${result.valid ? colors.green('Yes') : colors.red('No')
     .command('sitemap')
     .description('Validate and analyze sitemap.xml file')
     .argument('<url>', 'Website URL or direct sitemap URL')
-    .option('--format <format>', 'Output format: text (default) or json', 'text')
-    .option('--discover', 'Discover all sitemaps via robots.txt')
+    .argument('[args...]', 'Options: discover format=json')
     .addHelpText('after', `
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek sitemap example.com')}                  ${colors.gray('Validate sitemap')}
   ${colors.green('$ rek sitemap example.com/sitemap.xml')}      ${colors.gray('Direct URL')}
-  ${colors.green('$ rek sitemap example.com --discover')}       ${colors.gray('Find all sitemaps')}
-  ${colors.green('$ rek sitemap example.com --format json')}    ${colors.gray('JSON output')}
+  ${colors.green('$ rek sitemap example.com discover')}         ${colors.gray('Find all sitemaps')}
+  ${colors.green('$ rek sitemap example.com format=json')}      ${colors.gray('JSON output')}
+
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('discover')}        Discover all sitemaps via robots.txt
+  ${colors.cyan('format=json')}     Output as JSON
 
 ${colors.bold(colors.yellow('Checks:'))}
   ${colors.cyan('Structure')}      Valid XML sitemap format
@@ -946,14 +962,15 @@ ${colors.bold(colors.yellow('Checks:'))}
   ${colors.cyan('URLs')}           Valid, no duplicates, same domain
   ${colors.cyan('Lastmod')}        Valid dates, not in future
 `)
-    .action(async (url, options: { format?: string; discover?: boolean }) => {
+    .action(async (url: string, args: string[]) => {
       // Normalize URL
       if (!url.startsWith('http')) url = `https://${url}`;
 
-      const isJson = options.format === 'json';
+      const isJson = args.some(a => a === 'format=json' || a === 'json');
+      const doDiscover = args.includes('discover');
 
       try {
-        if (options.discover) {
+        if (doDiscover) {
           // Discover all sitemaps
           const { discoverSitemaps } = await import('../seo/validators/sitemap.js');
 
@@ -1088,14 +1105,17 @@ ${colors.gray('Type:')} ${result.parseResult?.type === 'sitemapindex' ? 'Sitemap
     .command('llms')
     .description('Validate and analyze llms.txt file (AI/LLM optimization)')
     .argument('[url]', 'Website URL or direct llms.txt URL')
-    .option('--format <format>', 'Output format: text (default) or json', 'text')
-    .option('--template', 'Generate a template llms.txt file')
+    .argument('[args...]', 'Options: template format=json')
     .addHelpText('after', `
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek llms example.com')}                ${colors.gray('Validate llms.txt')}
   ${colors.green('$ rek llms example.com/llms.txt')}       ${colors.gray('Direct URL')}
-  ${colors.green('$ rek llms example.com --format json')}  ${colors.gray('JSON output')}
-  ${colors.green('$ rek llms --template > llms.txt')}      ${colors.gray('Generate template')}
+  ${colors.green('$ rek llms example.com format=json')}    ${colors.gray('JSON output')}
+  ${colors.green('$ rek llms template > llms.txt')}        ${colors.gray('Generate template')}
+
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('template')}        Generate a template llms.txt file
+  ${colors.cyan('format=json')}     Output as JSON
 
 ${colors.bold(colors.yellow('About llms.txt:'))}
   A proposed standard for providing LLM-friendly content.
@@ -1108,11 +1128,12 @@ ${colors.bold(colors.yellow('Checks:'))}
   ${colors.cyan('Description')} Site description block
   ${colors.cyan('Sections')}     Content sections with links
 `)
-    .action(async (url, options: { format?: string; template?: boolean }) => {
-      const isJson = options.format === 'json';
+    .action(async (url: string | undefined, args: string[]) => {
+      const isJson = args.some(a => a === 'format=json' || a === 'json');
+      const isTemplate = args.includes('template') || url === 'template';
 
       // Template mode
-      if (options.template) {
+      if (isTemplate) {
         const { generateLlmsTxtTemplate } = await import('../seo/validators/llms-txt.js');
         const template = generateLlmsTxtTemplate({
           siteName: 'Your Site Name',
@@ -2039,13 +2060,7 @@ ${colors.bold('Images:')}      ${imageCount}
     .alias('ask')
     .description('Chat with AI models (OpenAI, Claude, Groq, etc)')
     .argument('<preset>', 'AI preset to use (e.g., @openai, @anthropic, @groq)')
-    .argument('<prompt...>', 'The prompt to send')
-    .option('-m, --model <model>', 'Override default model')
-    .option('-t, --temperature <temp>', 'Temperature (0-1)', '0.7')
-    .option('--max-tokens <tokens>', 'Max tokens in response', '2048')
-    .option('-w, --wait', 'Wait for full response (disable streaming)')
-    .option('-j, --json', 'Output raw JSON response')
-    .option('-e, --env [path]', 'Load .env file (auto-loads from cwd if exists)')
+    .argument('<prompt...>', 'The prompt and options: "prompt text" model=<model> temperature=<temp> max-tokens=<tokens> wait json env=<path>')
     .addHelpText('after', `
 ${colors.bold(colors.blue('What it does:'))}
   Sends a prompt to an AI language model and streams the response back.
@@ -2055,10 +2070,18 @@ ${colors.bold(colors.blue('What it does:'))}
   Each provider uses sensible defaults but you can override the model,
   temperature, and max tokens. Responses stream in real-time by default.
 
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('model=<model>')}        Override default model
+  ${colors.cyan('temperature=<temp>')}   Temperature (0-1, default: 0.7)
+  ${colors.cyan('max-tokens=<tokens>')}  Max tokens in response (default: 2048)
+  ${colors.cyan('wait')}                 Wait for full response (disable streaming)
+  ${colors.cyan('json')}                 Output raw JSON response
+  ${colors.cyan('env=<path>')}           Load .env file (auto-loads from cwd if exists)
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek ai @openai "What is the capital of France?"')}
-  ${colors.green('$ rek ai @anthropic "Explain quantum computing" -m claude-sonnet-4-20250514')}
-  ${colors.green('$ rek ai @groq "Write a haiku" --wait')}
+  ${colors.green('$ rek ai @anthropic "Explain quantum computing" model=claude-sonnet-4-20250514')}
+  ${colors.green('$ rek ai @groq "Write a haiku" wait')}
   ${colors.green('$ rek ai @openai "Translate to Spanish: Hello world"')}
 
 ${colors.bold(colors.yellow('Available AI Presets:'))}
@@ -2080,16 +2103,36 @@ ${colors.bold(colors.yellow('Note:'))}
   This command sends a single prompt without conversation memory.
   For chat with memory, use: ${colors.cyan('rek shell')} then ${colors.cyan('@openai Your message')}
 `)
-    .action(async (preset: string, promptParts: string[], options: { model?: string; temperature?: string; maxTokens?: string; wait?: boolean; json?: boolean; env?: string | boolean }) => {
+    .action(async (preset: string, promptParts: string[]) => {
+      // Parse options from prompt parts
+      let model: string | undefined;
+      let temperature = '0.7';
+      let maxTokens = '2048';
+      let wait = false;
+      let jsonOutput = false;
+      let envPath: string | boolean | undefined;
+      const actualPromptParts: string[] = [];
+
+      for (const part of promptParts) {
+        if (part.startsWith('model=')) model = part.split('=')[1];
+        else if (part.startsWith('temperature=')) temperature = part.split('=')[1];
+        else if (part.startsWith('max-tokens=')) maxTokens = part.split('=')[1];
+        else if (part === 'wait') wait = true;
+        else if (part === 'json') jsonOutput = true;
+        else if (part.startsWith('env=')) envPath = part.split('=')[1];
+        else if (part === 'env') envPath = true;
+        else actualPromptParts.push(part);
+      }
+
       // Load .env file if requested or by default
       // Auto-load .env from cwd if it exists (silent fail)
-      if (options.env !== undefined) {
-        await loadEnvFile(options.env);
+      if (envPath !== undefined) {
+        await loadEnvFile(envPath);
       } else {
         // Try loading from cwd silently
         try {
-          const envPath = join(process.cwd(), '.env');
-          await fs.access(envPath);
+          const envFilePath = join(process.cwd(), '.env');
+          await fs.access(envFilePath);
           await loadEnvFile(true);
         } catch {
           // .env doesn't exist, that's fine
@@ -2117,7 +2160,7 @@ ${colors.bold(colors.yellow('Note:'))}
         process.exit(1);
       }
 
-      const prompt = promptParts.join(' ');
+      const prompt = actualPromptParts.join(' ');
       if (!prompt.trim()) {
         console.error(colors.red('Error: Prompt is required'));
         process.exit(1);
@@ -2128,20 +2171,20 @@ ${colors.bold(colors.yellow('Note:'))}
         const client = createClient(presetConfig);
 
         // Override model if specified
-        if (options.model) {
+        if (model) {
           client.ai.setMemoryConfig({ systemPrompt: undefined }); // Reset any system prompt
-          (client as any)._aiConfig.model = options.model;
+          (client as any)._aiConfig.model = model;
         }
 
-        if (!options.json) {
+        if (!jsonOutput) {
           console.log(colors.gray(`Using @${presetName} (${(client as any)._aiConfig.model})...\n`));
         }
 
-        if (options.wait || options.json) {
+        if (wait || jsonOutput) {
           // Non-streaming mode (wait for full response)
           const response = await client.ai.prompt(prompt);
 
-          if (options.json) {
+          if (jsonOutput) {
             console.log(JSON.stringify({
               content: response.content,
               model: response.model,
@@ -2360,7 +2403,7 @@ ${colors.bold('Fingerprints:')}
     .command('whois')
     .description('Look up domain registration and ownership info')
     .argument('<query>', 'Domain name or IP address')
-    .option('-r, --raw', 'Show raw WHOIS response')
+    .argument('[args...]', 'Options: raw')
     .addHelpText('after', `
 ${colors.bold(colors.blue('What it does:'))}
   Queries WHOIS servers to retrieve domain registration information.
@@ -2368,6 +2411,9 @@ ${colors.bold(colors.blue('What it does:'))}
   contact information (when available, many use privacy protection).
 
   Also works with IP addresses to find network ownership information.
+
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('raw')}                    Show raw WHOIS response
 
 ${colors.bold(colors.yellow('Information Displayed:'))}
   - Domain status (active, expired, pending delete)
@@ -2378,22 +2424,24 @@ ${colors.bold(colors.yellow('Information Displayed:'))}
 
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek whois github.com')}           Domain registration info
-  ${colors.green('$ rek whois google.com -r')}        Raw WHOIS response
+  ${colors.green('$ rek whois google.com raw')}       Raw WHOIS response
   ${colors.green('$ rek whois 8.8.8.8')}              IP address ownership
   ${colors.green('$ rek whois example.co.uk')}        ccTLD domains work too
 
 ${colors.bold(colors.yellow('See also:'))}
   ${colors.cyan('rek rdap <domain>')}                RDAP (modern WHOIS replacement)
 `)
-    .action(async (query, options) => {
+    .action(async (query: string, args: string[]) => {
       const { whois } = await import('../utils/whois.js');
+
+      const raw = args.includes('raw');
 
       console.log(colors.gray(`Looking up WHOIS for ${query}...`));
 
       try {
         const result = await whois(query);
 
-        if (options.raw) {
+        if (raw) {
           console.log(result.raw);
           return;
         }
@@ -2520,8 +2568,7 @@ ${colors.bold('Status:')} ${result.status?.join(', ') || 'N/A'}
     .command('ping')
     .description('Test TCP connectivity to host:port')
     .argument('<host>', 'Hostname or IP address')
-    .argument('[port]', 'Port number (default: 80 for HTTP, 443 for HTTPS)', '443')
-    .option('-c, --count <n>', 'Number of pings', '4')
+    .argument('[args...]', 'Port and options: [port] count=4')
     .addHelpText('after', `
 ${colors.bold(colors.blue('What it does:'))}
   Tests TCP connectivity to a host and port, measuring connection latency.
@@ -2532,11 +2579,15 @@ ${colors.bold(colors.blue('What it does:'))}
   Perfect for testing if a server is up, measuring network latency, or
   debugging connectivity issues.
 
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('[port]')}             Port number (default: 443)
+  ${colors.cyan('count=<n>')}          Number of pings (default: 4)
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek ping google.com')}              Test HTTPS (port 443)
   ${colors.green('$ rek ping google.com 80')}           Test HTTP (port 80)
   ${colors.green('$ rek ping db.server.com 5432')}      Test PostgreSQL port
-  ${colors.green('$ rek ping redis.local 6379 -c 10')}  10 pings to Redis
+  ${colors.green('$ rek ping redis.local 6379 count=10')}  10 pings to Redis
 
 ${colors.bold(colors.yellow('Output:'))}
   Shows response time for each attempt, then summary statistics:
@@ -2544,11 +2595,18 @@ ${colors.bold(colors.yellow('Output:'))}
   - standard deviation
   - packet loss percentage
 `)
-    .action(async (host, port, options) => {
+    .action(async (host: string, args: string[]) => {
       const net = await import('node:net');
 
-      const count = parseInt(options.count);
-      const portNum = parseInt(port);
+      let port = 443;
+      let count = 4;
+
+      for (const arg of args) {
+        if (arg.startsWith('count=')) count = parseInt(arg.split('=')[1]);
+        else if (!arg.includes('=') && /^\d+$/.test(arg)) port = parseInt(arg);
+      }
+
+      const portNum = port;
       const results: number[] = [];
 
       console.log(colors.gray(`Pinging ${host}:${portNum}...`));
@@ -2608,21 +2666,45 @@ ${colors.bold('Statistics:')}
     .command('ls')
     .description('List files in a remote directory')
     .argument('<host>', 'FTP server hostname')
-    .argument('[path]', 'Remote path to list', '/')
-    .option('-u, --user <username>', 'Username', 'anonymous')
-    .option('-p, --pass <password>', 'Password', 'anonymous@')
-    .option('-P, --port <port>', 'Port number', '21')
-    .option('--secure', 'Use FTPS (explicit TLS)')
-    .option('--implicit', 'Use implicit FTPS (port 990)')
-    .action(async (host, path, options) => {
+    .argument('[args...]', 'Path and options: [path] user=anonymous pass=anonymous@ port=21 secure implicit')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('user=<username>')}    Username (default: anonymous)
+  ${colors.cyan('pass=<password>')}    Password (default: anonymous@)
+  ${colors.cyan('port=<port>')}        Port number (default: 21)
+  ${colors.cyan('secure')}             Use FTPS (explicit TLS)
+  ${colors.cyan('implicit')}           Use implicit FTPS (port 990)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek ftp ls ftp.example.com')}                          ${colors.gray('List root')}
+  ${colors.green('$ rek ftp ls ftp.example.com /pub')}                     ${colors.gray('List /pub directory')}
+  ${colors.green('$ rek ftp ls ftp.example.com user=admin pass=secret')}   ${colors.gray('With credentials')}
+`)
+    .action(async (host: string, args: string[]) => {
       const { createFTP } = await import('../protocols/ftp.js');
 
-      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+      let path = '/';
+      let user = 'anonymous';
+      let pass = 'anonymous@';
+      let port = 21;
+      let secureOption = false;
+      let implicitOption = false;
+
+      for (const arg of args) {
+        if (arg.startsWith('user=')) user = arg.split('=')[1];
+        else if (arg.startsWith('pass=')) pass = arg.split('=')[1];
+        else if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg === 'secure') secureOption = true;
+        else if (arg === 'implicit') implicitOption = true;
+        else if (!arg.includes('=')) path = arg;
+      }
+
+      const secure = implicitOption ? 'implicit' : secureOption ? true : false;
       const client = createFTP({
         host,
-        port: parseInt(options.port),
-        user: options.user,
-        password: options.pass,
+        port,
+        user,
+        password: pass,
         secure,
       });
 
@@ -2674,24 +2756,48 @@ ${colors.bold('Statistics:')}
     .description('Download a file from FTP server')
     .argument('<host>', 'FTP server hostname')
     .argument('<remote>', 'Remote file path')
-    .argument('[local]', 'Local file path (default: same filename)')
-    .option('-u, --user <username>', 'Username', 'anonymous')
-    .option('-p, --pass <password>', 'Password', 'anonymous@')
-    .option('-P, --port <port>', 'Port number', '21')
-    .option('--secure', 'Use FTPS (explicit TLS)')
-    .option('--implicit', 'Use implicit FTPS (port 990)')
-    .action(async (host, remote, local, options) => {
-      const { createFTP } = await import('../protocols/ftp.js');
-      const path = await import('node:path');
+    .argument('[args...]', 'Local path and options: [local] user=anonymous pass=anonymous@ port=21 secure implicit')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('user=<username>')}    Username (default: anonymous)
+  ${colors.cyan('pass=<password>')}    Password (default: anonymous@)
+  ${colors.cyan('port=<port>')}        Port number (default: 21)
+  ${colors.cyan('secure')}             Use FTPS (explicit TLS)
+  ${colors.cyan('implicit')}           Use implicit FTPS (port 990)
 
-      const localPath = local || path.basename(remote);
-      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek ftp get ftp.example.com /pub/file.zip')}                    ${colors.gray('Download file')}
+  ${colors.green('$ rek ftp get ftp.example.com /pub/file.zip myfile.zip')}         ${colors.gray('Save as different name')}
+  ${colors.green('$ rek ftp get ftp.example.com /data.csv user=admin pass=secret')} ${colors.gray('With credentials')}
+`)
+    .action(async (host: string, remote: string, args: string[]) => {
+      const { createFTP } = await import('../protocols/ftp.js');
+      const pathMod = await import('node:path');
+
+      let local: string | undefined;
+      let user = 'anonymous';
+      let pass = 'anonymous@';
+      let port = 21;
+      let secureOption = false;
+      let implicitOption = false;
+
+      for (const arg of args) {
+        if (arg.startsWith('user=')) user = arg.split('=')[1];
+        else if (arg.startsWith('pass=')) pass = arg.split('=')[1];
+        else if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg === 'secure') secureOption = true;
+        else if (arg === 'implicit') implicitOption = true;
+        else if (!arg.includes('=')) local = arg;
+      }
+
+      const localPath = local || pathMod.basename(remote);
+      const secure = implicitOption ? 'implicit' : secureOption ? true : false;
 
       const client = createFTP({
         host,
-        port: parseInt(options.port),
-        user: options.user,
-        password: options.pass,
+        port,
+        user,
+        password: pass,
         secure,
       });
 
@@ -2738,24 +2844,48 @@ ${colors.bold('Statistics:')}
     .description('Upload a file to FTP server')
     .argument('<host>', 'FTP server hostname')
     .argument('<local>', 'Local file path')
-    .argument('[remote]', 'Remote file path (default: same filename)')
-    .option('-u, --user <username>', 'Username', 'anonymous')
-    .option('-p, --pass <password>', 'Password', 'anonymous@')
-    .option('-P, --port <port>', 'Port number', '21')
-    .option('--secure', 'Use FTPS (explicit TLS)')
-    .option('--implicit', 'Use implicit FTPS (port 990)')
-    .action(async (host, local, remote, options) => {
-      const { createFTP } = await import('../protocols/ftp.js');
-      const path = await import('node:path');
+    .argument('[args...]', 'Remote path and options: [remote] user=anonymous pass=anonymous@ port=21 secure implicit')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('user=<username>')}    Username (default: anonymous)
+  ${colors.cyan('pass=<password>')}    Password (default: anonymous@)
+  ${colors.cyan('port=<port>')}        Port number (default: 21)
+  ${colors.cyan('secure')}             Use FTPS (explicit TLS)
+  ${colors.cyan('implicit')}           Use implicit FTPS (port 990)
 
-      const remotePath = remote || '/' + path.basename(local);
-      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek ftp put ftp.example.com myfile.zip')}                         ${colors.gray('Upload file')}
+  ${colors.green('$ rek ftp put ftp.example.com myfile.zip /uploads/data.zip')}       ${colors.gray('Upload with path')}
+  ${colors.green('$ rek ftp put ftp.example.com data.csv user=admin pass=secret')}    ${colors.gray('With credentials')}
+`)
+    .action(async (host: string, local: string, args: string[]) => {
+      const { createFTP } = await import('../protocols/ftp.js');
+      const pathMod = await import('node:path');
+
+      let remote: string | undefined;
+      let user = 'anonymous';
+      let pass = 'anonymous@';
+      let port = 21;
+      let secureOption = false;
+      let implicitOption = false;
+
+      for (const arg of args) {
+        if (arg.startsWith('user=')) user = arg.split('=')[1];
+        else if (arg.startsWith('pass=')) pass = arg.split('=')[1];
+        else if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg === 'secure') secureOption = true;
+        else if (arg === 'implicit') implicitOption = true;
+        else if (!arg.includes('=')) remote = arg;
+      }
+
+      const remotePath = remote || '/' + pathMod.basename(local);
+      const secure = implicitOption ? 'implicit' : secureOption ? true : false;
 
       const client = createFTP({
         host,
-        port: parseInt(options.port),
-        user: options.user,
-        password: options.pass,
+        port,
+        user,
+        password: pass,
         secure,
       });
 
@@ -2802,20 +2932,42 @@ ${colors.bold('Statistics:')}
     .description('Delete a file from FTP server')
     .argument('<host>', 'FTP server hostname')
     .argument('<path>', 'Remote file path to delete')
-    .option('-u, --user <username>', 'Username', 'anonymous')
-    .option('-p, --pass <password>', 'Password', 'anonymous@')
-    .option('-P, --port <port>', 'Port number', '21')
-    .option('--secure', 'Use FTPS (explicit TLS)')
-    .option('--implicit', 'Use implicit FTPS (port 990)')
-    .action(async (host, remotePath, options) => {
+    .argument('[args...]', 'Options: user=anonymous pass=anonymous@ port=21 secure implicit')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('user=<username>')}    Username (default: anonymous)
+  ${colors.cyan('pass=<password>')}    Password (default: anonymous@)
+  ${colors.cyan('port=<port>')}        Port number (default: 21)
+  ${colors.cyan('secure')}             Use FTPS (explicit TLS)
+  ${colors.cyan('implicit')}           Use implicit FTPS (port 990)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek ftp rm ftp.example.com /uploads/old.zip')}                   ${colors.gray('Delete file')}
+  ${colors.green('$ rek ftp rm ftp.example.com /data.txt user=admin pass=secret')}   ${colors.gray('With credentials')}
+`)
+    .action(async (host: string, remotePath: string, args: string[]) => {
       const { createFTP } = await import('../protocols/ftp.js');
 
-      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+      let user = 'anonymous';
+      let pass = 'anonymous@';
+      let port = 21;
+      let secureOption = false;
+      let implicitOption = false;
+
+      for (const arg of args) {
+        if (arg.startsWith('user=')) user = arg.split('=')[1];
+        else if (arg.startsWith('pass=')) pass = arg.split('=')[1];
+        else if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg === 'secure') secureOption = true;
+        else if (arg === 'implicit') implicitOption = true;
+      }
+
+      const secure = implicitOption ? 'implicit' : secureOption ? true : false;
       const client = createFTP({
         host,
-        port: parseInt(options.port),
-        user: options.user,
-        password: options.pass,
+        port,
+        user,
+        password: pass,
         secure,
       });
 
@@ -2851,20 +3003,42 @@ ${colors.bold('Statistics:')}
     .description('Create a directory on FTP server')
     .argument('<host>', 'FTP server hostname')
     .argument('<path>', 'Remote directory path to create')
-    .option('-u, --user <username>', 'Username', 'anonymous')
-    .option('-p, --pass <password>', 'Password', 'anonymous@')
-    .option('-P, --port <port>', 'Port number', '21')
-    .option('--secure', 'Use FTPS (explicit TLS)')
-    .option('--implicit', 'Use implicit FTPS (port 990)')
-    .action(async (host, remotePath, options) => {
+    .argument('[args...]', 'Options: user=anonymous pass=anonymous@ port=21 secure implicit')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('user=<username>')}    Username (default: anonymous)
+  ${colors.cyan('pass=<password>')}    Password (default: anonymous@)
+  ${colors.cyan('port=<port>')}        Port number (default: 21)
+  ${colors.cyan('secure')}             Use FTPS (explicit TLS)
+  ${colors.cyan('implicit')}           Use implicit FTPS (port 990)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek ftp mkdir ftp.example.com /uploads/new-folder')}               ${colors.gray('Create directory')}
+  ${colors.green('$ rek ftp mkdir ftp.example.com /data user=admin pass=secret')}      ${colors.gray('With credentials')}
+`)
+    .action(async (host: string, remotePath: string, args: string[]) => {
       const { createFTP } = await import('../protocols/ftp.js');
 
-      const secure = options.implicit ? 'implicit' : options.secure ? true : false;
+      let user = 'anonymous';
+      let pass = 'anonymous@';
+      let port = 21;
+      let secureOption = false;
+      let implicitOption = false;
+
+      for (const arg of args) {
+        if (arg.startsWith('user=')) user = arg.split('=')[1];
+        else if (arg.startsWith('pass=')) pass = arg.split('=')[1];
+        else if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg === 'secure') secureOption = true;
+        else if (arg === 'implicit') implicitOption = true;
+      }
+
+      const secure = implicitOption ? 'implicit' : secureOption ? true : false;
       const client = createFTP({
         host,
-        port: parseInt(options.port),
-        user: options.user,
-        password: options.pass,
+        port,
+        user,
+        password: pass,
         secure,
       });
 
@@ -2900,17 +3074,33 @@ ${colors.bold('Statistics:')}
     .command('telnet')
     .description('Connect to a Telnet server')
     .argument('<host>', 'Hostname or IP address')
-    .argument('[port]', 'Port number', '23')
-    .option('-t, --timeout <ms>', 'Connection timeout in ms', '30000')
-    .action(async (host, port, options) => {
+    .argument('[args...]', 'Port and options: [port] timeout=30000')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('[port]')}             Port number (default: 23)
+  ${colors.cyan('timeout=<ms>')}       Connection timeout in ms (default: 30000)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek telnet mail.example.com 25')}              ${colors.gray('Connect to SMTP server')}
+  ${colors.green('$ rek telnet host.example.com timeout=60000')}   ${colors.gray('With custom timeout')}
+`)
+    .action(async (host: string, args: string[]) => {
       const { createTelnet } = await import('../protocols/telnet.js');
+
+      let port = 23;
+      let timeout = 30000;
+
+      for (const arg of args) {
+        if (arg.startsWith('timeout=')) timeout = parseInt(arg.split('=')[1]);
+        else if (!arg.includes('=') && /^\d+$/.test(arg)) port = parseInt(arg);
+      }
 
       console.log(colors.gray(`Connecting to ${host}:${port}...`));
 
       const client = createTelnet({
         host,
-        port: parseInt(port),
-        timeout: parseInt(options.timeout),
+        port,
+        timeout,
       });
 
       try {
@@ -3327,32 +3517,56 @@ ${colors.gray('Status:')} ${statusIcon}
   dns
     .command('generate-dmarc')
     .description('Generate a DMARC record interactively')
-    .option('-p, --policy <policy>', 'Policy: none, quarantine, reject', 'none')
-    .option('--subdomain-policy <policy>', 'Subdomain policy')
-    .option('--pct <percent>', 'Percentage of emails to apply policy', '100')
-    .option('--rua <emails>', 'Aggregate report email(s), comma-separated')
-    .option('--ruf <emails>', 'Forensic report email(s), comma-separated')
-    .action(async (options) => {
+    .argument('[args...]', 'Options: policy=none subdomain-policy=<policy> pct=100 rua=<emails> ruf=<emails>')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('policy=<policy>')}            Policy: none, quarantine, reject (default: none)
+  ${colors.cyan('subdomain-policy=<policy>')}  Subdomain policy
+  ${colors.cyan('pct=<percent>')}              Percentage of emails to apply policy (default: 100)
+  ${colors.cyan('rua=<emails>')}               Aggregate report email(s), comma-separated
+  ${colors.cyan('ruf=<emails>')}               Forensic report email(s), comma-separated
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek dns generate-dmarc')}                         ${colors.gray('Generate with defaults')}
+  ${colors.green('$ rek dns generate-dmarc policy=quarantine')}       ${colors.gray('Set quarantine policy')}
+  ${colors.green('$ rek dns generate-dmarc policy=reject pct=50')}    ${colors.gray('Reject 50% of failures')}
+  ${colors.green('$ rek dns generate-dmarc rua=admin@example.com')}   ${colors.gray('Send reports to email')}
+`)
+    .action(async (args: string[]) => {
       const { generateDmarc } = await import('../utils/dns-toolkit.js');
 
+      let policy: 'none' | 'quarantine' | 'reject' = 'none';
+      let subdomainPolicy: string | undefined;
+      let pct = '100';
+      let rua: string | undefined;
+      let ruf: string | undefined;
+
+      for (const arg of args) {
+        if (arg.startsWith('policy=')) policy = arg.split('=')[1] as 'none' | 'quarantine' | 'reject';
+        else if (arg.startsWith('subdomain-policy=')) subdomainPolicy = arg.split('=')[1];
+        else if (arg.startsWith('pct=')) pct = arg.split('=')[1];
+        else if (arg.startsWith('rua=')) rua = arg.split('=')[1];
+        else if (arg.startsWith('ruf=')) ruf = arg.split('=')[1];
+      }
+
       const dmarcOptions: any = {
-        policy: options.policy as 'none' | 'quarantine' | 'reject',
+        policy,
       };
 
-      if (options.subdomainPolicy) {
-        dmarcOptions.subdomainPolicy = options.subdomainPolicy;
+      if (subdomainPolicy) {
+        dmarcOptions.subdomainPolicy = subdomainPolicy;
       }
 
-      if (options.pct && options.pct !== '100') {
-        dmarcOptions.percentage = parseInt(options.pct);
+      if (pct && pct !== '100') {
+        dmarcOptions.percentage = parseInt(pct);
       }
 
-      if (options.rua) {
-        dmarcOptions.aggregateReports = options.rua.split(',').map((e: string) => e.trim());
+      if (rua) {
+        dmarcOptions.aggregateReports = rua.split(',').map((e: string) => e.trim());
       }
 
-      if (options.ruf) {
-        dmarcOptions.forensicReports = options.ruf.split(',').map((e: string) => e.trim());
+      if (ruf) {
+        dmarcOptions.forensicReports = ruf.split(',').map((e: string) => e.trim());
       }
 
       const record = generateDmarc(dmarcOptions);
@@ -3443,11 +3657,7 @@ ${colors.bold(colors.yellow('Record Types:'))}
     .alias('gql')
     .description('Execute GraphQL queries and mutations')
     .argument('<url>', 'GraphQL endpoint URL')
-    .option('-q, --query <query>', 'GraphQL query string')
-    .option('-f, --file <file>', 'Path to GraphQL query file')
-    .option('-v, --variables <json>', 'Variables as JSON string')
-    .option('--var-file <file>', 'Path to variables JSON file')
-    .option('-H, --header <header>', 'Add header (can be used multiple times)', (val: string, prev: string[]) => [...prev, val], [])
+    .argument('[args...]', 'Options: query=<query> file=<file> variables=<json> var-file=<file> Header:Value')
     .addHelpText('after', `
 ${colors.bold(colors.blue('What it does:'))}
   Execute GraphQL queries and mutations against any GraphQL endpoint.
@@ -3457,40 +3667,55 @@ ${colors.bold(colors.blue('What it does:'))}
   Results are displayed as formatted JSON. Headers can be added for
   authentication (Bearer tokens, API keys, etc).
 
-${colors.bold(colors.yellow('Query Options:'))}
-  -q, --query <query>      Inline GraphQL query string
-  -f, --file <file>        Load query from .graphql file
-  -v, --variables <json>   Inline variables as JSON
-  --var-file <file>        Load variables from JSON file
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('query=<query>')}        Inline GraphQL query string
+  ${colors.cyan('file=<file>')}          Load query from .graphql file
+  ${colors.cyan('variables=<json>')}     Inline variables as JSON
+  ${colors.cyan('var-file=<file>')}      Load variables from JSON file
+  ${colors.cyan('Header:Value')}         Add header (can use multiple times)
 
 ${colors.bold(colors.yellow('Examples:'))}
-  ${colors.green('$ rek graphql https://api.github.com/graphql -q "{ viewer { login } }"')}
+  ${colors.green('$ rek graphql https://api.github.com/graphql query="{ viewer { login } }"')}
   ${colors.gray('  Simple query')}
 
-  ${colors.green('$ rek gql https://api.spacex.land/graphql -q "{ rockets { name } }"')}
+  ${colors.green('$ rek gql https://api.spacex.land/graphql query="{ rockets { name } }"')}
   ${colors.gray('  Using the gql alias')}
 
-  ${colors.green('$ rek graphql api.example.com/graphql -f query.graphql -v \'{"id": 123}\'')}
+  ${colors.green('$ rek graphql api.example.com/graphql file=query.graphql variables=\'{"id": 123}\'')}
   ${colors.gray('  Query from file with variables')}
 
-  ${colors.green('$ rek graphql api.com/graphql -q "query User($id: ID!) { user(id: $id) { name } }" --var-file vars.json')}
+  ${colors.green('$ rek graphql api.com/graphql query="query User($id: ID!) { user(id: $id) { name } }" var-file=vars.json')}
   ${colors.gray('  Parameterized query with variable file')}
 
-  ${colors.green('$ rek graphql api.com/graphql -q "{ me { id } }" -H "Authorization: Bearer token123"')}
+  ${colors.green('$ rek graphql api.com/graphql query="{ me { id } }" Authorization:"Bearer token123"')}
   ${colors.gray('  With authentication header')}
 `)
-    .action(async (url, options) => {
+    .action(async (url: string, args: string[]) => {
       const { graphql } = await import('../plugins/graphql.js');
       const { createClient } = await import('../core/client.js');
       const fs = await import('node:fs/promises');
 
-      let query = options.query;
+      let queryStr: string | undefined;
+      let queryFile: string | undefined;
+      let variablesStr: string | undefined;
+      let varFile: string | undefined;
+      const headerArgs: string[] = [];
+
+      for (const arg of args) {
+        if (arg.startsWith('query=')) queryStr = arg.slice(6);
+        else if (arg.startsWith('file=')) queryFile = arg.slice(5);
+        else if (arg.startsWith('variables=')) variablesStr = arg.slice(10);
+        else if (arg.startsWith('var-file=')) varFile = arg.slice(9);
+        else if (arg.includes(':')) headerArgs.push(arg);
+      }
+
+      let query = queryStr;
       let variables: Record<string, unknown> = {};
 
       // Load query from file if provided
-      if (options.file) {
+      if (queryFile) {
         try {
-          query = await fs.readFile(options.file, 'utf-8');
+          query = await fs.readFile(queryFile, 'utf-8');
         } catch (err: any) {
           console.error(colors.red(`Failed to read query file: ${err.message}`));
           process.exit(1);
@@ -3498,22 +3723,22 @@ ${colors.bold(colors.yellow('Examples:'))}
       }
 
       if (!query) {
-        console.error(colors.red('Error: Query is required. Use --query or --file'));
-        console.log(colors.gray('Example: rek graphql https://api.example.com/graphql -q "query { users { id name } }"'));
+        console.error(colors.red('Error: Query is required. Use query= or file='));
+        console.log(colors.gray('Example: rek graphql https://api.example.com/graphql query="query { users { id name } }"'));
         process.exit(1);
       }
 
       // Parse variables
-      if (options.variables) {
+      if (variablesStr) {
         try {
-          variables = JSON.parse(options.variables);
+          variables = JSON.parse(variablesStr);
         } catch {
-          console.error(colors.red('Invalid JSON in --variables'));
+          console.error(colors.red('Invalid JSON in variables='));
           process.exit(1);
         }
-      } else if (options.varFile) {
+      } else if (varFile) {
         try {
-          const content = await fs.readFile(options.varFile, 'utf-8');
+          const content = await fs.readFile(varFile, 'utf-8');
           variables = JSON.parse(content);
         } catch (err: any) {
           console.error(colors.red(`Failed to read variables file: ${err.message}`));
@@ -3525,7 +3750,7 @@ ${colors.bold(colors.yellow('Examples:'))}
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      for (const h of options.header) {
+      for (const h of headerArgs) {
         const [key, ...valueParts] = h.split(':');
         headers[key.trim()] = valueParts.join(':').trim();
       }
@@ -3720,14 +3945,38 @@ ${colors.bold(colors.yellow('Examples:'))}
     .command('download')
     .description('Download an HLS stream')
     .argument('<url>', 'HLS playlist URL')
-    .argument('[output]', 'Output file path', 'output.ts')
-    .option('-q, --quality <quality>', 'Quality: highest, lowest, or resolution (e.g., 720p)')
-    .option('--live', 'Enable live stream mode')
-    .option('-d, --duration <seconds>', 'Duration for live recording in seconds')
-    .option('-c, --concurrency <n>', 'Concurrent segment downloads', '4')
-    .action(async (url, output, options) => {
+    .argument('[args...]', 'Output and options: [output] quality=highest live duration=<seconds> concurrency=4')
+    .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('[output]')}             Output file path (default: output.ts)
+  ${colors.cyan('quality=<quality>')}    Quality: highest, lowest, or resolution (e.g., 720p)
+  ${colors.cyan('live')}                 Enable live stream mode
+  ${colors.cyan('duration=<seconds>')}   Duration for live recording in seconds
+  ${colors.cyan('concurrency=<n>')}      Concurrent segment downloads (default: 4)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek hls download https://example.com/stream.m3u8')}                     ${colors.gray('Download stream')}
+  ${colors.green('$ rek hls download https://example.com/stream.m3u8 video.ts')}            ${colors.gray('Custom output')}
+  ${colors.green('$ rek hls download https://example.com/stream.m3u8 quality=720p')}        ${colors.gray('Select quality')}
+  ${colors.green('$ rek hls download https://example.com/live.m3u8 live duration=60')}      ${colors.gray('Record live stream')}
+`)
+    .action(async (url: string, args: string[]) => {
       const { hls } = await import('../plugins/hls.js');
       const { Client } = await import('../core/client.js');
+
+      let output = 'output.ts';
+      let quality: string | undefined;
+      let live = false;
+      let duration: number | undefined;
+      let concurrency = 4;
+
+      for (const arg of args) {
+        if (arg.startsWith('quality=')) quality = arg.split('=')[1];
+        else if (arg === 'live') live = true;
+        else if (arg.startsWith('duration=')) duration = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('concurrency=')) concurrency = parseInt(arg.split('=')[1]);
+        else if (!arg.includes('=')) output = arg;
+      }
 
       const client = new Client();
 
@@ -3737,7 +3986,7 @@ ${colors.bold(colors.yellow('Examples:'))}
 
       try {
         const hlsOptions: any = {
-          concurrency: parseInt(options.concurrency),
+          concurrency,
           onProgress: (p: any) => {
             const segs = p.totalSegments
               ? `${p.downloadedSegments}/${p.totalSegments}`
@@ -3747,17 +3996,17 @@ ${colors.bold(colors.yellow('Examples:'))}
           },
         };
 
-        if (options.quality) {
-          if (options.quality === 'highest' || options.quality === 'lowest') {
-            hlsOptions.quality = options.quality;
-          } else if (options.quality.includes('p')) {
-            hlsOptions.quality = { resolution: options.quality };
+        if (quality) {
+          if (quality === 'highest' || quality === 'lowest') {
+            hlsOptions.quality = quality;
+          } else if (quality.includes('p')) {
+            hlsOptions.quality = { resolution: quality };
           }
         }
 
-        if (options.live) {
-          hlsOptions.live = options.duration
-            ? { duration: parseInt(options.duration) * 1000 }
+        if (live) {
+          hlsOptions.live = duration
+            ? { duration: duration * 1000 }
             : true;
         }
 
@@ -3958,21 +4207,26 @@ ${colors.bold(colors.yellow('Examples:'))}
     .command('info')
     .description('Show information about a HAR file')
     .argument('<file>', 'HAR file to inspect')
-    .option('--json', 'Output as JSON')
+    .argument('[args...]', 'Options: json')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('json')}               Output as JSON
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek har info api.har')}
-  ${colors.green('$ rek har info api.har --json')}
+  ${colors.green('$ rek har info api.har json')}
 `)
-    .action(async (file: string, options: { json?: boolean }) => {
+    .action(async (file: string, args: string[]) => {
       const { promises: fsPromises } = await import('node:fs');
+
+      const jsonOutput = args.includes('json');
 
       try {
         const content = await fsPromises.readFile(file, 'utf-8');
         const har = JSON.parse(content);
         const entries = har.log?.entries || [];
 
-        if (options.json) {
+        if (jsonOutput) {
           const info = {
             version: har.log?.version,
             creator: har.log?.creator,
@@ -4111,11 +4365,7 @@ ${colors.bold(colors.yellow('Examples:'))}
   serve
     .command('http')
     .description('Start a mock HTTP server for testing')
-    .option('-p, --port <number>', 'Port to listen on', '3000')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('--echo', 'Echo request body back in response')
-    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
-    .option('--cors', 'Enable CORS', true)
+    .argument('[args...]', 'Options: port=3000 host=127.0.0.1 echo delay=0 cors')
     .addHelpText('after', `
 ${colors.bold(colors.blue('What it does:'))}
   Starts a local mock HTTP server for testing HTTP clients, webhooks, or APIs.
@@ -4124,6 +4374,13 @@ ${colors.bold(colors.blue('What it does:'))}
   Supports echo mode (returns the request back), configurable delays for
   testing timeouts, and CORS for browser-based testing. Perfect for
   integration tests, webhook development, or API prototyping.
+
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}      Port to listen on (default: 3000)
+  ${colors.cyan('host=<string>')}      Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('echo')}               Echo request body back in response
+  ${colors.cyan('delay=<ms>')}         Add delay to responses in ms (default: 0)
+  ${colors.cyan('cors')}               Enable CORS (default: true)
 
 ${colors.bold(colors.yellow('Built-in Endpoints:'))}
   GET  /                 Health check, returns { ok: true }
@@ -4135,22 +4392,38 @@ ${colors.bold(colors.yellow('Built-in Endpoints:'))}
 
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve http')}                    Start on port 3000
-  ${colors.green('$ rek serve http -p 8080')}            Start on port 8080
-  ${colors.green('$ rek serve http --echo')}             Echo mode (all routes)
-  ${colors.green('$ rek serve http --delay 500')}        Add 500ms delay to all responses
+  ${colors.green('$ rek serve http port=8080')}          Start on port 8080
+  ${colors.green('$ rek serve http echo')}               Echo mode (all routes)
+  ${colors.green('$ rek serve http delay=500')}          Add 500ms delay to all responses
 `)
-    .action(async (options: { port: string; host: string; echo?: boolean; delay: string; cors?: boolean }) => {
+    .action(async (args: string[]) => {
+      // Parse key=value args
+      let port = 3000;
+      let host = '127.0.0.1';
+      let echo = false;
+      let delay = 0;
+      let cors = true;
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg === 'echo') echo = true;
+        else if (arg.startsWith('delay=')) delay = parseInt(arg.split('=')[1]);
+        else if (arg === 'cors') cors = true;
+        else if (arg === 'nocors') cors = false;
+      }
+
       const { MockHttpServer } = await import('../testing/mock-http-server.js');
 
       const server = await MockHttpServer.create({
-        port: parseInt(options.port),
-        host: options.host,
-        delay: parseInt(options.delay),
-        cors: options.cors,
+        port,
+        host,
+        delay,
+        cors,
       });
 
       // Echo mode: return request body
-      if (options.echo) {
+      if (echo) {
         server.any('/*', (req) => ({
           status: 200,
           body: {
@@ -4168,8 +4441,8 @@ ${colors.bold(colors.yellow('Examples:'))}
 │  ${colors.bold('Recker Mock HTTP Server')}                   │
 ├─────────────────────────────────────────────┤
 │  URL: ${colors.cyan(server.url.padEnd(37))}│
-│  Mode: ${colors.yellow((options.echo ? 'Echo' : 'Default').padEnd(36))}│
-│  Delay: ${colors.gray((options.delay + 'ms').padEnd(35))}│
+│  Mode: ${colors.yellow((echo ? 'Echo' : 'Default').padEnd(36))}│
+│  Delay: ${colors.gray((delay + 'ms').padEnd(35))}│
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘
@@ -4190,15 +4463,18 @@ ${colors.bold(colors.yellow('Examples:'))}
     .command('webhook')
     .alias('wh')
     .description('Start a webhook receiver server')
-    .option('-p, --port <number>', 'Port to listen on', '3000')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('-s, --status <code>', 'Response status code (200 or 204)', '204')
-    .option('-q, --quiet', 'Disable logging', false)
+    .argument('[args...]', 'Options: port=3000 host=127.0.0.1 status=204 quiet')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}      Port to listen on (default: 3000)
+  ${colors.cyan('host=<string>')}      Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('status=<code>')}      Response status code 200 or 204 (default: 204)
+  ${colors.cyan('quiet')}              Disable logging
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve webhook')}                 ${colors.gray('Start on port 3000')}
-  ${colors.green('$ rek serve wh -p 8080')}              ${colors.gray('Start on port 8080')}
-  ${colors.green('$ rek serve webhook --status 200')}    ${colors.gray('Return 200 instead of 204')}
+  ${colors.green('$ rek serve wh port=8080')}            ${colors.gray('Start on port 8080')}
+  ${colors.green('$ rek serve webhook status=200')}      ${colors.gray('Return 200 instead of 204')}
 
 ${colors.bold(colors.yellow('Endpoints:'))}
   * /              ${colors.gray('Receive webhook without ID')}
@@ -4207,20 +4483,32 @@ ${colors.bold(colors.yellow('Endpoints:'))}
 ${colors.bold(colors.yellow('Methods:'))}
   ${colors.gray('GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS')}
 `)
-    .action(async (options: { port: string; host: string; status: string; quiet: boolean }) => {
+    .action(async (args: string[]) => {
+      let port = 3000;
+      let host = '127.0.0.1';
+      let statusCode = 204;
+      let quiet = false;
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg.startsWith('status=')) statusCode = parseInt(arg.split('=')[1]);
+        else if (arg === 'quiet') quiet = true;
+      }
+
       const { createWebhookServer } = await import('../testing/mock-http-server.js');
 
-      const status = parseInt(options.status) as 200 | 204;
+      const status = statusCode as 200 | 204;
       if (status !== 200 && status !== 204) {
         console.error(colors.red('Status must be 200 or 204'));
         process.exit(1);
       }
 
       const server = await createWebhookServer({
-        port: parseInt(options.port),
-        host: options.host,
+        port,
+        host,
         status,
-        log: !options.quiet,
+        log: !quiet,
       });
 
       console.log(colors.green(`
@@ -4249,25 +4537,41 @@ ${colors.bold(colors.yellow('Methods:'))}
     .command('websocket')
     .alias('ws')
     .description('Start a mock WebSocket server')
-    .option('-p, --port <number>', 'Port to listen on', '8080')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('--echo', 'Echo messages back (default: true)', true)
-    .option('--no-echo', 'Disable echo mode')
-    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .argument('[args...]', 'Options: port=8080 host=127.0.0.1 echo noecho delay=0')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}      Port to listen on (default: 8080)
+  ${colors.cyan('host=<string>')}      Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('echo')}               Echo messages back (default)
+  ${colors.cyan('noecho')}             Disable echo mode
+  ${colors.cyan('delay=<ms>')}         Add delay to responses in ms (default: 0)
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve websocket')}               ${colors.gray('Start on port 8080')}
-  ${colors.green('$ rek serve ws -p 9000')}              ${colors.gray('Start on port 9000')}
-  ${colors.green('$ rek serve ws --no-echo')}            ${colors.gray('Disable echo')}
+  ${colors.green('$ rek serve ws port=9000')}            ${colors.gray('Start on port 9000')}
+  ${colors.green('$ rek serve ws noecho')}               ${colors.gray('Disable echo')}
 `)
-    .action(async (options: { port: string; host: string; echo: boolean; delay: string }) => {
+    .action(async (args: string[]) => {
+      let port = 8080;
+      let host = '127.0.0.1';
+      let echo = true;
+      let delay = 0;
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg === 'echo') echo = true;
+        else if (arg === 'noecho') echo = false;
+        else if (arg.startsWith('delay=')) delay = parseInt(arg.split('=')[1]);
+      }
+
       const { MockWebSocketServer } = await import('../testing/mock-websocket-server.js');
 
       const server = await MockWebSocketServer.create({
-        port: parseInt(options.port),
-        host: options.host,
-        echo: options.echo,
-        delay: parseInt(options.delay),
+        port,
+        host,
+        echo,
+        delay,
       });
 
       console.log(colors.green(`
@@ -4275,8 +4579,8 @@ ${colors.bold(colors.yellow('Examples:'))}
 │  ${colors.bold('Recker Mock WebSocket Server')}              │
 ├─────────────────────────────────────────────┤
 │  URL: ${colors.cyan(server.url.padEnd(37))}│
-│  Echo: ${colors.yellow((options.echo ? 'Enabled' : 'Disabled').padEnd(36))}│
-│  Delay: ${colors.gray((options.delay + 'ms').padEnd(35))}│
+│  Echo: ${colors.yellow((echo ? 'Enabled' : 'Disabled').padEnd(36))}│
+│  Delay: ${colors.gray((delay + 'ms').padEnd(35))}│
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘
@@ -4305,31 +4609,46 @@ ${colors.bold(colors.yellow('Examples:'))}
   serve
     .command('sse')
     .description('Start a mock SSE (Server-Sent Events) server')
-    .option('-p, --port <number>', 'Port to listen on', '8081')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('--path <string>', 'SSE endpoint path', '/events')
-    .option('--heartbeat <ms>', 'Send heartbeat every N ms (0 = disabled)', '0')
+    .argument('[args...]', 'Options: port=8081 host=127.0.0.1 path=/events heartbeat=0')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}      Port to listen on (default: 8081)
+  ${colors.cyan('host=<string>')}      Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('path=<string>')}      SSE endpoint path (default: /events)
+  ${colors.cyan('heartbeat=<ms>')}     Send heartbeat every N ms (0 = disabled)
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve sse')}                     ${colors.gray('Start on port 8081')}
-  ${colors.green('$ rek serve sse -p 9000')}             ${colors.gray('Start on port 9000')}
-  ${colors.green('$ rek serve sse --heartbeat 5000')}    ${colors.gray('Send heartbeat every 5s')}
+  ${colors.green('$ rek serve sse port=9000')}           ${colors.gray('Start on port 9000')}
+  ${colors.green('$ rek serve sse heartbeat=5000')}      ${colors.gray('Send heartbeat every 5s')}
 
 ${colors.bold(colors.yellow('Interactive Commands:'))}
   Type a message and press Enter to broadcast it to all clients.
 `)
-    .action(async (options: { port: string; host: string; path: string; heartbeat: string }) => {
+    .action(async (args: string[]) => {
+      let port = 8081;
+      let host = '127.0.0.1';
+      let path = '/events';
+      let heartbeat = 0;
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg.startsWith('path=')) path = arg.split('=')[1];
+        else if (arg.startsWith('heartbeat=')) heartbeat = parseInt(arg.split('=')[1]);
+      }
+
       const { MockSSEServer } = await import('../testing/mock-sse-server.js');
       const readline = await import('node:readline');
 
       const server = await MockSSEServer.create({
-        port: parseInt(options.port),
-        host: options.host,
-        path: options.path,
+        port,
+        host,
+        path,
       });
 
-      if (parseInt(options.heartbeat) > 0) {
-        server.startPeriodicEvents('heartbeat', parseInt(options.heartbeat));
+      if (heartbeat > 0) {
+        server.startPeriodicEvents('heartbeat', heartbeat);
       }
 
       console.log(colors.green(`
@@ -4337,7 +4656,7 @@ ${colors.bold(colors.yellow('Interactive Commands:'))}
 │  ${colors.bold('Recker Mock SSE Server')}                    │
 ├─────────────────────────────────────────────┤
 │  URL: ${colors.cyan(server.url.padEnd(37))}│
-│  Heartbeat: ${colors.yellow((options.heartbeat === '0' ? 'Disabled' : options.heartbeat + 'ms').padEnd(31))}│
+│  Heartbeat: ${colors.yellow((heartbeat === 0 ? 'Disabled' : heartbeat + 'ms').padEnd(31))}│
 ├─────────────────────────────────────────────┤
 │  Type message + Enter to broadcast          │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
@@ -4376,31 +4695,48 @@ ${colors.bold(colors.yellow('Interactive Commands:'))}
   serve
     .command('hls')
     .description('Start a mock HLS streaming server')
-    .option('-p, --port <number>', 'Port to listen on', '8082')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('--mode <type>', 'Stream mode: vod, live, event', 'vod')
-    .option('--segments <number>', 'Number of segments (VOD mode)', '10')
-    .option('--duration <seconds>', 'Segment duration in seconds', '6')
-    .option('--qualities <list>', 'Comma-separated quality variants', '720p,480p,360p')
+    .argument('[args...]', 'Options: port=8082 host=127.0.0.1 mode=vod segments=10 duration=6 qualities=720p,480p,360p')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}      Port to listen on (default: 8082)
+  ${colors.cyan('host=<string>')}      Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('mode=<type>')}        Stream mode: vod, live, event (default: vod)
+  ${colors.cyan('segments=<n>')}       Number of segments for VOD (default: 10)
+  ${colors.cyan('duration=<sec>')}     Segment duration in seconds (default: 6)
+  ${colors.cyan('qualities=<list>')}   Comma-separated quality variants (default: 720p,480p,360p)
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve hls')}                     ${colors.gray('Start VOD server')}
-  ${colors.green('$ rek serve hls --mode live')}         ${colors.gray('Start live stream')}
-  ${colors.green('$ rek serve hls --segments 20')}       ${colors.gray('VOD with 20 segments')}
-  ${colors.green('$ rek serve hls --qualities 1080p,720p,480p')}
+  ${colors.green('$ rek serve hls mode=live')}           ${colors.gray('Start live stream')}
+  ${colors.green('$ rek serve hls segments=20')}         ${colors.gray('VOD with 20 segments')}
+  ${colors.green('$ rek serve hls qualities=1080p,720p,480p')}
 
 ${colors.bold(colors.yellow('Endpoints:'))}
   ${colors.cyan('/master.m3u8')}     Master playlist (multi-quality)
   ${colors.cyan('/playlist.m3u8')}   Single quality playlist
   ${colors.cyan('/<quality>/playlist.m3u8')}  Quality-specific playlist
 `)
-    .action(async (options: { port: string; host: string; mode: string; segments: string; duration: string; qualities: string }) => {
+    .action(async (args: string[]) => {
+      let port = 8082;
+      let host = '127.0.0.1';
+      let mode = 'vod';
+      let segments = 10;
+      let duration = 6;
+      let qualitiesStr = '720p,480p,360p';
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg.startsWith('mode=')) mode = arg.split('=')[1];
+        else if (arg.startsWith('segments=')) segments = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('duration=')) duration = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('qualities=')) qualitiesStr = arg.split('=')[1];
+      }
+
       const { MockHlsServer } = await import('../testing/mock-hls-server.js');
       const http = await import('node:http');
 
-      const port = parseInt(options.port);
-      const host = options.host;
-      const qualities = options.qualities.split(',').map(q => q.trim());
+      const qualities = qualitiesStr.split(',').map(q => q.trim());
       const resolutions = ['1920x1080', '1280x720', '854x480', '640x360', '426x240'];
       const bandwidths = [5000000, 2500000, 1400000, 800000, 500000];
 
@@ -4413,9 +4749,9 @@ ${colors.bold(colors.yellow('Endpoints:'))}
       const baseUrl = `http://${host}:${port}`;
       const hlsServer = await MockHlsServer.create({
         baseUrl,
-        mode: options.mode as 'vod' | 'live' | 'event',
-        segmentCount: parseInt(options.segments),
-        segmentDuration: parseInt(options.duration),
+        mode: mode as 'vod' | 'live' | 'event',
+        segmentCount: segments,
+        segmentDuration: duration,
         multiQuality: variants.length > 1,
         variants: variants.length > 1 ? variants : undefined,
       });
@@ -4444,9 +4780,9 @@ ${colors.bold(colors.yellow('Endpoints:'))}
 │  ${colors.bold('Recker Mock HLS Server')}                    │
 ├─────────────────────────────────────────────┤
 │  Master: ${colors.cyan((hlsServer.manifestUrl).padEnd(34))}│
-│  Mode: ${colors.yellow(options.mode.padEnd(36))}│
-│  Segments: ${colors.gray(options.segments.padEnd(32))}│
-│  Duration: ${colors.gray((options.duration + 's').padEnd(32))}│
+│  Mode: ${colors.yellow(mode.padEnd(36))}│
+│  Segments: ${colors.gray(String(segments).padEnd(32))}│
+│  Duration: ${colors.gray((duration + 's').padEnd(32))}│
 │  Qualities: ${colors.cyan(qualities.join(', ').padEnd(31))}│
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
@@ -4465,23 +4801,37 @@ ${colors.bold(colors.yellow('Endpoints:'))}
   serve
     .command('udp')
     .description('Start a mock UDP server')
-    .option('-p, --port <number>', 'Port to listen on', '9000')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('--echo', 'Echo messages back (default: true)', true)
-    .option('--no-echo', 'Disable echo mode')
+    .argument('[args...]', 'Options: port=9000 host=127.0.0.1 echo noecho')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}      Port to listen on (default: 9000)
+  ${colors.cyan('host=<string>')}      Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('echo')}               Echo messages back (default)
+  ${colors.cyan('noecho')}             Disable echo mode
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve udp')}                     ${colors.gray('Start on port 9000')}
-  ${colors.green('$ rek serve udp -p 5353')}             ${colors.gray('Start on port 5353')}
-  ${colors.green('$ rek serve udp --no-echo')}           ${colors.gray('Disable echo')}
+  ${colors.green('$ rek serve udp port=5353')}           ${colors.gray('Start on port 5353')}
+  ${colors.green('$ rek serve udp noecho')}              ${colors.gray('Disable echo')}
 `)
-    .action(async (options: { port: string; host: string; echo: boolean }) => {
+    .action(async (args: string[]) => {
+      let port = 9000;
+      let host = '127.0.0.1';
+      let echo = true;
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg === 'echo') echo = true;
+        else if (arg === 'noecho') echo = false;
+      }
+
       const { MockUDPServer } = await import('../testing/mock-udp-server.js');
 
       const server = new MockUDPServer({
-        port: parseInt(options.port),
-        host: options.host,
-        echo: options.echo,
+        port,
+        host,
+        echo,
       });
 
       await server.start();
@@ -4490,8 +4840,8 @@ ${colors.bold(colors.yellow('Examples:'))}
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock UDP Server')}                    │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
-│  Echo: ${colors.yellow((options.echo ? 'Enabled' : 'Disabled').padEnd(36))}│
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}│
+│  Echo: ${colors.yellow((echo ? 'Enabled' : 'Disabled').padEnd(36))}│
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘
@@ -4512,13 +4862,16 @@ ${colors.bold(colors.yellow('Examples:'))}
   serve
     .command('dns')
     .description('Start a mock DNS server')
-    .option('-p, --port <number>', 'Port to listen on', '5353')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .argument('[args...]', 'Options: port=5353 host=127.0.0.1 delay=0')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}      Port to listen on (default: 5353)
+  ${colors.cyan('host=<string>')}      Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('delay=<ms>')}         Add delay to responses in ms (default: 0)
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve dns')}                     ${colors.gray('Start on port 5353')}
-  ${colors.green('$ rek serve dns -p 53')}               ${colors.gray('Start on standard port (requires root)')}
+  ${colors.green('$ rek serve dns port=53')}             ${colors.gray('Start on standard port (requires root)')}
   ${colors.green('$ dig @127.0.0.1 -p 5353 example.com')} ${colors.gray('Test with dig')}
 
 ${colors.bold(colors.yellow('Default Records:'))}
@@ -4526,23 +4879,33 @@ ${colors.bold(colors.yellow('Default Records:'))}
   ${colors.cyan('example.com')}    A, AAAA, NS, MX, TXT records
   ${colors.cyan('test.local')}     A: 192.168.1.100
 `)
-    .action(async (options: { port: string; host: string; delay: string }) => {
+    .action(async (args: string[]) => {
+      let port = 5353;
+      let host = '127.0.0.1';
+      let delay = 0;
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg.startsWith('delay=')) delay = parseInt(arg.split('=')[1]);
+      }
+
       const { MockDnsServer } = await import('../testing/mock-dns-server.js');
 
       const server = await MockDnsServer.create({
-        port: parseInt(options.port),
-        host: options.host,
-        delay: parseInt(options.delay),
+        port,
+        host,
+        delay,
       });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock DNS Server')}                    │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}│
 │  Protocol: ${colors.yellow('UDP'.padEnd(32))}│
 ├─────────────────────────────────────────────┤
-│  Test: dig @${options.host} -p ${options.port} example.com        │
+│  Test: dig @${host} -p ${port} example.com        │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘
 `));
@@ -4561,10 +4924,13 @@ ${colors.bold(colors.yellow('Default Records:'))}
   serve
     .command('whois')
     .description('Start a mock WHOIS server')
-    .option('-p, --port <number>', 'Port to listen on', '4343')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .argument('[args...]', 'Options: port=4343 host=127.0.0.1 delay=0')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}      Port to listen on (default: 4343)
+  ${colors.cyan('host=<string>')}      Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('delay=<ms>')}         Add delay to responses in ms (default: 0)
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve whois')}                    ${colors.gray('Start on port 4343')}
   ${colors.green('$ whois -h 127.0.0.1 -p 4343 example.com')} ${colors.gray('Test with whois')}
@@ -4574,23 +4940,33 @@ ${colors.bold(colors.yellow('Default Domains:'))}
   ${colors.cyan('google.com')}     MarkMonitor registrar
   ${colors.cyan('test.local')}     Test domain
 `)
-    .action(async (options: { port: string; host: string; delay: string }) => {
+    .action(async (args: string[]) => {
+      let port = 4343;
+      let host = '127.0.0.1';
+      let delay = 0;
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg.startsWith('delay=')) delay = parseInt(arg.split('=')[1]);
+      }
+
       const { MockWhoisServer } = await import('../testing/mock-whois-server.js');
 
       const server = await MockWhoisServer.create({
-        port: parseInt(options.port),
-        host: options.host,
-        delay: parseInt(options.delay),
+        port,
+        host,
+        delay,
       });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock WHOIS Server')}                  │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}│
 │  Protocol: ${colors.yellow('TCP'.padEnd(32))}│
 ├─────────────────────────────────────────────┤
-│  Test: whois -h ${options.host} -p ${options.port} example.com │
+│  Test: whois -h ${host} -p ${port} example.com │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘
 `));
@@ -4609,12 +4985,15 @@ ${colors.bold(colors.yellow('Default Domains:'))}
   serve
     .command('telnet')
     .description('Start a mock Telnet server')
-    .option('-p, --port <number>', 'Port to listen on', '2323')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('--echo', 'Echo input back (default: true)', true)
-    .option('--no-echo', 'Disable echo mode')
-    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .argument('[args...]', 'Options: port=2323 host=127.0.0.1 echo noecho delay=0')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}      Port to listen on (default: 2323)
+  ${colors.cyan('host=<string>')}      Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('echo')}               Echo input back (default)
+  ${colors.cyan('noecho')}             Disable echo mode
+  ${colors.cyan('delay=<ms>')}         Add delay to responses in ms (default: 0)
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve telnet')}                   ${colors.gray('Start on port 2323')}
   ${colors.green('$ telnet localhost 2323')}              ${colors.gray('Connect to server')}
@@ -4627,24 +5006,37 @@ ${colors.bold(colors.yellow('Built-in Commands:'))}
   ${colors.cyan('ping')}        Returns "pong"
   ${colors.cyan('quit')}        Disconnect
 `)
-    .action(async (options: { port: string; host: string; echo: boolean; delay: string }) => {
+    .action(async (args: string[]) => {
+      let port = 2323;
+      let host = '127.0.0.1';
+      let echo = true;
+      let delay = 0;
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg === 'echo') echo = true;
+        else if (arg === 'noecho') echo = false;
+        else if (arg.startsWith('delay=')) delay = parseInt(arg.split('=')[1]);
+      }
+
       const { MockTelnetServer } = await import('../testing/mock-telnet-server.js');
 
       const server = await MockTelnetServer.create({
-        port: parseInt(options.port),
-        host: options.host,
-        echo: options.echo,
-        delay: parseInt(options.delay),
+        port,
+        host,
+        echo,
+        delay,
       });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock Telnet Server')}                 │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
-│  Echo: ${colors.yellow((options.echo ? 'Enabled' : 'Disabled').padEnd(36))}│
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}│
+│  Echo: ${colors.yellow((echo ? 'Enabled' : 'Disabled').padEnd(36))}│
 ├─────────────────────────────────────────────┤
-│  Connect: telnet ${options.host} ${options.port}               │
+│  Connect: telnet ${host} ${port}               │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘
 `));
@@ -4671,18 +5063,21 @@ ${colors.bold(colors.yellow('Built-in Commands:'))}
   serve
     .command('ftp')
     .description('Start a mock FTP server')
-    .option('-p, --port <number>', 'Port to listen on', '2121')
-    .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
-    .option('-u, --username <user>', 'Username for auth', 'user')
-    .option('--password <pass>', 'Password for auth', 'pass')
-    .option('--anonymous', 'Allow anonymous login (default: true)', true)
-    .option('--no-anonymous', 'Disable anonymous login')
-    .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
+    .argument('[args...]', 'Options: port=2121 host=127.0.0.1 username=user password=pass anonymous noanonymous delay=0')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('port=<number>')}       Port to listen on (default: 2121)
+  ${colors.cyan('host=<string>')}       Host to bind to (default: 127.0.0.1)
+  ${colors.cyan('username=<user>')}     Username for auth (default: user)
+  ${colors.cyan('password=<pass>')}     Password for auth (default: pass)
+  ${colors.cyan('anonymous')}           Allow anonymous login (default)
+  ${colors.cyan('noanonymous')}         Disable anonymous login
+  ${colors.cyan('delay=<ms>')}          Add delay to responses (default: 0)
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek serve ftp')}                      ${colors.gray('Start on port 2121')}
   ${colors.green('$ ftp localhost 2121')}                 ${colors.gray('Connect to server')}
-  ${colors.green('$ rek serve ftp --no-anonymous')}       ${colors.gray('Require authentication')}
+  ${colors.green('$ rek serve ftp noanonymous')}          ${colors.gray('Require authentication')}
 
 ${colors.bold(colors.yellow('Default Files:'))}
   ${colors.cyan('/welcome.txt')}        Welcome message
@@ -4694,27 +5089,44 @@ ${colors.bold(colors.yellow('Credentials:'))}
   Username: ${colors.cyan('user')}  Password: ${colors.cyan('pass')}
   Or use anonymous login with user: ${colors.cyan('anonymous')}
 `)
-    .action(async (options: { port: string; host: string; username: string; password: string; anonymous: boolean; delay: string }) => {
+    .action(async (args: string[]) => {
       const { MockFtpServer } = await import('../testing/mock-ftp-server.js');
 
+      let port = 2121;
+      let host = '127.0.0.1';
+      let username = 'user';
+      let password = 'pass';
+      let anonymous = true;
+      let delay = 0;
+
+      for (const arg of args) {
+        if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('host=')) host = arg.split('=')[1];
+        else if (arg.startsWith('username=')) username = arg.split('=')[1];
+        else if (arg.startsWith('password=')) password = arg.split('=')[1];
+        else if (arg === 'anonymous') anonymous = true;
+        else if (arg === 'noanonymous') anonymous = false;
+        else if (arg.startsWith('delay=')) delay = parseInt(arg.split('=')[1]);
+      }
+
       const server = await MockFtpServer.create({
-        port: parseInt(options.port),
-        host: options.host,
-        username: options.username,
-        password: options.password,
-        anonymous: options.anonymous,
-        delay: parseInt(options.delay),
+        port,
+        host,
+        username,
+        password,
+        anonymous,
+        delay,
       });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock FTP Server')}                    │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${options.host}:${options.port}`.padEnd(33))}│
-│  Anonymous: ${colors.yellow((options.anonymous ? 'Allowed' : 'Disabled').padEnd(31))}│
-│  User: ${colors.cyan(options.username.padEnd(36))}│
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}│
+│  Anonymous: ${colors.yellow((anonymous ? 'Allowed' : 'Disabled').padEnd(31))}│
+│  User: ${colors.cyan(username.padEnd(36))}│
 ├─────────────────────────────────────────────┤
-│  Connect: ftp ${options.host} ${options.port}                  │
+│  Connect: ftp ${host} ${port}                  │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘
 `));
@@ -4742,22 +5154,25 @@ ${colors.bold(colors.yellow('Credentials:'))}
   program
     .command('mcp')
     .description('Start MCP server for AI agents to access Recker documentation')
-    .option('-t, --transport <mode>', 'Transport mode: stdio, http, sse', 'stdio')
-    .option('-p, --port <number>', 'Server port (for http/sse modes)', '3100')
-    .option('-d, --docs <path>', 'Path to documentation folder')
-    .option('-T, --tools <paths...>', 'Paths to external tool modules to load')
-    .option('--debug', 'Enable debug logging')
+    .argument('[args...]', 'Options: transport=stdio port=3100 docs=<path> tools=<paths> debug')
     .addHelpText('after', `
+${colors.bold(colors.yellow('Options:'))}
+  ${colors.cyan('transport=<mode>')}    Transport mode: stdio, http, sse (default: stdio)
+  ${colors.cyan('port=<number>')}       Server port for http/sse modes (default: 3100)
+  ${colors.cyan('docs=<path>')}         Path to documentation folder
+  ${colors.cyan('tools=<paths>')}       Paths to external tool modules (comma-separated)
+  ${colors.cyan('debug')}               Enable debug logging
+
 ${colors.bold(colors.yellow('Transport Modes:'))}
   ${colors.cyan('stdio')}  ${colors.gray('(default)')} For Claude Code and other CLI tools
   ${colors.cyan('http')}   Simple HTTP POST endpoint
   ${colors.cyan('sse')}    HTTP + Server-Sent Events for real-time notifications
 
-${colors.bold(colors.yellow('Usage:'))}
-  ${colors.green('$ rek mcp')}                    ${colors.gray('Start in stdio mode (for Claude Code)')}
-  ${colors.green('$ rek mcp -t http')}            ${colors.gray('Start HTTP server on port 3100')}
-  ${colors.green('$ rek mcp -t sse -p 8080')}     ${colors.gray('Start SSE server on custom port')}
-  ${colors.green('$ rek mcp --debug')}            ${colors.gray('Enable debug logging')}
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek mcp')}                           ${colors.gray('Start in stdio mode (for Claude Code)')}
+  ${colors.green('$ rek mcp transport=http')}            ${colors.gray('Start HTTP server on port 3100')}
+  ${colors.green('$ rek mcp transport=sse port=8080')}   ${colors.gray('Start SSE server on custom port')}
+  ${colors.green('$ rek mcp debug')}                     ${colors.gray('Enable debug logging')}
 
 ${colors.bold(colors.yellow('Tools provided:'))}
   ${colors.cyan('search_docs')}  Search documentation by keyword
@@ -4773,16 +5188,29 @@ ${colors.bold(colors.yellow('Claude Code config (~/.claude.json):'))}
     }
   }`)}
 `)
-    .action(async (options: { transport: string; port: string; docs?: string; debug?: boolean; tools?: string[] }) => {
+    .action(async (args: string[]) => {
       const { MCPServer } = await import('../mcp/server.js');
-      const transport = options.transport as 'stdio' | 'http' | 'sse';
+
+      let transport: 'stdio' | 'http' | 'sse' = 'stdio';
+      let port = 3100;
+      let docsPath: string | undefined;
+      let debug = false;
+      let toolPaths: string[] | undefined;
+
+      for (const arg of args) {
+        if (arg.startsWith('transport=')) transport = arg.split('=')[1] as 'stdio' | 'http' | 'sse';
+        else if (arg.startsWith('port=')) port = parseInt(arg.split('=')[1]);
+        else if (arg.startsWith('docs=')) docsPath = arg.split('=')[1];
+        else if (arg.startsWith('tools=')) toolPaths = arg.split('=')[1].split(',');
+        else if (arg === 'debug') debug = true;
+      }
 
       const server = new MCPServer({
         transport,
-        port: parseInt(options.port),
-        docsPath: options.docs,
-        debug: options.debug,
-        toolPaths: options.tools,
+        port,
+        docsPath,
+        debug,
+        toolPaths,
       });
 
       // For stdio mode, start silently (output goes to stderr if debug)
@@ -4808,7 +5236,7 @@ ${colors.bold(colors.yellow('Claude Code config (~/.claude.json):'))}
 │  ${colors.bold('Recker MCP Server')}                         │
 ├─────────────────────────────────────────────┤
 │  Transport: ${colors.cyan(transport.padEnd(31))}│
-│  Endpoint: ${colors.cyan(`http://localhost:${options.port}`.padEnd(32))}│
+│  Endpoint: ${colors.cyan(`http://localhost:${port}`.padEnd(32))}│
 │  Docs indexed: ${colors.yellow(String(server.getDocsCount()).padEnd(28))}│
 ├─────────────────────────────────────────────┤${endpoints}
 ├─────────────────────────────────────────────┤
