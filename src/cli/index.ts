@@ -596,6 +596,23 @@ ${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray
         if (report.metaDescription) {
           console.log(`${colors.bold('Description:')} ${colors.gray(report.metaDescription.text.slice(0, 80))}${report.metaDescription.text.length > 80 ? '...' : ''}`);
         }
+
+        // OpenGraph
+        if (report.openGraph) {
+          console.log(`${colors.bold('OpenGraph:')} ${report.openGraph.title ? colors.green('✔') : colors.red('✖')} title, ${report.openGraph.description ? colors.green('✔') : colors.red('✖')} description, ${report.openGraph.image ? colors.green('✔') : colors.red('✖')} image`);
+        }
+
+        // Twitter Card
+        if (report.twitterCard) {
+          console.log(`${colors.bold('Twitter Card:')} ${report.twitterCard.card || 'none'} ${report.twitterCard.title ? colors.green('✔') : colors.red('✖')} title, ${report.twitterCard.image ? colors.green('✔') : colors.red('✖')} image`);
+        }
+
+        // Structured Data (JSON-LD)
+        if (report.structuredData.count > 0) {
+          console.log(`${colors.bold('Structured Data:')} ${report.structuredData.count} schema(s) - ${report.structuredData.types.join(', ')}`);
+        } else {
+          console.log(`${colors.bold('Structured Data:')} ${colors.yellow('None detected')}`);
+        }
         console.log('');
 
         // Content metrics
@@ -639,12 +656,6 @@ ${colors.gray('Grade:')} ${gradeColor(colors.bold(report.grade))}  ${colors.gray
           }
         }
         console.log('');
-
-        // Structured Data
-        if (report.structuredData.count > 0) {
-          console.log(`${colors.bold('Structured Data:')} ${report.structuredData.types.join(', ') || 'Present'}`);
-          console.log('');
-        }
 
       } catch (error: any) {
         console.error(colors.red(`SEO analysis failed: ${error.message}`));
