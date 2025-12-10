@@ -24,9 +24,11 @@
 - **Mini Client**
   - [Overview](/mini/01-overview.md)
 
-- **Web Automation**
-  - [Scraping](/web-automation/01-scraping.md)
-  - [SEO Analysis](/web-automation/02-seo.md)
+- **Scraping**
+  - [Overview](/scraping/01-overview.md)
+  - [Selectors](/scraping/02-selectors.md)
+  - [Extractors](/scraping/03-extractors.md)
+  - [Schemas](/scraping/04-schemas.md)
 
 - **SEO Analysis**
   - [Overview](/seo/01-overview.md)
