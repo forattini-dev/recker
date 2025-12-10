@@ -133,6 +133,34 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify Published Package
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          echo "Waiting for npm registry to update..."
+          sleep 30
+
+          echo "Testing npx recker@next version..."
+          PUBLISHED_VERSION=$(npx -y recker@next version --short 2>/dev/null || echo "FAILED")
+
+          if [ "$PUBLISHED_VERSION" = "FAILED" ]; then
+            echo "❌ Failed to run 'npx recker@next version'"
+            exit 1
+          fi
+
+          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$PUBLISHED_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "⚠️ Version mismatch!"
+            echo "Expected: $EXPECTED_VERSION"
+            echo "Got: $PUBLISHED_VERSION"
+            # Don't fail - version might not match exactly for @next
+          else
+            echo "✅ Version verified: $PUBLISHED_VERSION"
+          fi
+
+          echo ""
+          echo "Full version info:"
+          npx -y recker@next version --format json || true
+
       - name: Job Summary
         if: steps.check.outputs.skip != 'true'
         run: |
@@ -231,6 +259,34 @@ jobs:
           pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Published Package
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Waiting for npm registry to update..."
+          sleep 30
+
+          echo "Testing npx recker@latest version..."
+          PUBLISHED_VERSION=$(npx -y recker@latest version --short 2>/dev/null || echo "FAILED")
+
+          if [ "$PUBLISHED_VERSION" = "FAILED" ]; then
+            echo "❌ Failed to run 'npx recker@latest version'"
+            echo "This might be a CLI issue in the published package!"
+            exit 1
+          fi
+
+          if [ "$PUBLISHED_VERSION" != "$VERSION" ]; then
+            echo "⚠️ Version mismatch!"
+            echo "Expected: $VERSION"
+            echo "Got: $PUBLISHED_VERSION"
+            echo "Note: Registry might still be updating..."
+          else
+            echo "✅ Version verified: $PUBLISHED_VERSION"
+          fi
+
+          echo ""
+          echo "Full version info:"
+          npx -y recker@latest version --format json || true
 
       - name: Generate Changelog
         id: changelog

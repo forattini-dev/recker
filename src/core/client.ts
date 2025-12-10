@@ -11,6 +11,7 @@ import { AgentManager } from '../utils/agent-manager.js';
 import { RequestPool } from '../utils/request-pool.js';
 import { normalizeConcurrency, createBatchConfig, type NormalizedConcurrencyConfig } from '../utils/concurrency.js';
 import { getDefaultUserAgent } from '../utils/user-agent.js';
+import { getVersion, getVersionSync, getVersionInfo, type VersionInfo } from '../version.js';
 
 // Plugins and Storage for auto-wiring
 import { paginate, PaginationOptions, streamPages } from '../plugins/pagination.js';
@@ -47,6 +48,36 @@ export interface ExtendedClientOptions extends ClientOptions {
 }
 
 export class Client {
+  // ============================================================================
+  // Static version info
+  // ============================================================================
+
+  /**
+   * Get the Recker version synchronously (may return '0.0.0' if not yet loaded)
+   * For guaranteed accuracy, use Client.getVersion() instead
+   */
+  static get version(): string {
+    return getVersionSync();
+  }
+
+  /**
+   * Get the Recker version (async, guaranteed accurate)
+   */
+  static getVersion(): Promise<string> {
+    return getVersion();
+  }
+
+  /**
+   * Get detailed version information
+   */
+  static getVersionInfo(): Promise<VersionInfo> {
+    return getVersionInfo();
+  }
+
+  // ============================================================================
+  // Instance properties
+  // ============================================================================
+
   private baseUrl: string;
   private middlewares: Middleware[];
   private hooks: Hooks;

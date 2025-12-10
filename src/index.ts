@@ -75,6 +75,9 @@ export * from './mcp/contract.js';
 // Mini client (maximum performance mode)
 export * from './mini.js';
 
+// Version
+export * from './version.js';
+
 // Branded alias for the Client class
 export { Client as Recker } from './core/client.js';
 

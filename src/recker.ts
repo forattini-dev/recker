@@ -39,6 +39,7 @@
  */
 
 import { Client, createClient, type ExtendedClientOptions } from './core/client.js';
+import { getVersion, getVersionSync, getVersionInfo, type VersionInfo } from './version.js';
 import { type RequestPromise } from './core/request-promise.js';
 import type { RequestOptions } from './types/index.js';
 import { FetchTransport } from './transport/fetch.js';
@@ -312,6 +313,26 @@ export const recker = {
     _defaultDns = null;
     _defaultAi = null;
   },
+
+  // ========== Version ==========
+
+  /**
+   * Get version synchronously (may return '0.0.0' if not loaded yet)
+   * For guaranteed accuracy, use recker.getVersion()
+   */
+  get version(): string {
+    return getVersionSync();
+  },
+
+  /**
+   * Get version (async, guaranteed accurate)
+   */
+  getVersion,
+
+  /**
+   * Get detailed version information
+   */
+  getVersionInfo,
 };
 
 // Default export

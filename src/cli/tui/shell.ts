@@ -22,6 +22,7 @@ import { analyzeSeo, SeoSpider, type SeoReport, type SeoSpiderResult, type SiteW
 import { resolvePreset } from '../presets.js';
 import type { Client } from '../../core/client.js';
 import { summarizeErrors, formatErrorSummary, printError, classifyError, formatCliError } from '../helpers.js';
+import { getVersion } from '../../version.js';
 
 // Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
@@ -147,8 +148,11 @@ export class RekShell {
     // Set up scroll buffer output interception
     this.setupScrollCapture();
 
+    // Get version for display
+    const version = await getVersion();
+
     console.clear();
-    console.log(colors.bold(colors.cyan('Rek Console')));
+    console.log(colors.bold(colors.cyan('Rek Console')) + ' ' + colors.gray(`v${version}`));
     console.log(colors.gray('Chat with your APIs. Type "help" for magic.'));
     console.log(colors.gray('Use Page Up/Down to view history.'));
     console.log(colors.gray('--------------------------------------------\n'));
