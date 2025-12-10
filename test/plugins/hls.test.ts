@@ -607,8 +607,26 @@ segment.ts`;  // No ENDLIST = live
             const client = createClient({
                 transport: {
                     dispatch: async (req: any) => {
-                        // Simulate slow response
-                        await new Promise(r => setTimeout(r, 100));
+                        // Check if request was aborted
+                        if (req.signal?.aborted) {
+                            const error = new Error('The operation was aborted');
+                            error.name = 'AbortError';
+                            throw error;
+                        }
+
+                        // Simulate slow response that respects abort signal
+                        await new Promise<void>((resolve, reject) => {
+                            const timeout = setTimeout(resolve, 100);
+                            if (req.signal) {
+                                req.signal.addEventListener('abort', () => {
+                                    clearTimeout(timeout);
+                                    const error = new Error('The operation was aborted');
+                                    error.name = 'AbortError';
+                                    reject(error);
+                                }, { once: true });
+                            }
+                        });
+
                         return {
                             ok: true,
                             status: 200,
@@ -628,8 +646,13 @@ segment.ts`;  // No ENDLIST = live
             // Cancel after a short delay
             setTimeout(() => hlsDownload.cancel(), 200);
 
-            // Should complete (by cancellation) without hanging
-            await downloadPromise;
+            // Should complete (by cancellation) without hanging - may throw AbortError
+            try {
+                await downloadPromise;
+            } catch (error: any) {
+                // AbortError is expected when cancelling
+                expect(error.name === 'AbortError' || error.message.includes('abort')).toBe(true);
+            }
         });
     });
 
