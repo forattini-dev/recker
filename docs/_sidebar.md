@@ -51,6 +51,8 @@
   - [Cookie Jar](/plugins/08-cookie-jar.md)
   - [Rate Limit](/plugins/09-rate-limit.md)
   - [Certificate Pinning](/plugins/10-certificate-pinning.md)
+  - [YAML](/plugins/19-yaml.md)
+  - [CSV](/plugins/20-csv.md)
 
 - **AI & LLM**
   - [Overview](/ai/01-overview.md)
@@ -92,6 +94,7 @@
   - [Testing](/reference/03-testing.md)
   - [Presets](/reference/04-presets.md)
   - [Troubleshooting](/reference/05-troubleshooting.md)
+  - [Error Handling](/reference/06-error-handling.md)
 
 - **Resources**
   - [Benchmarks](/benchmarks.md)

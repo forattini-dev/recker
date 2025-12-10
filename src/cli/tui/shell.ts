@@ -6,21 +6,22 @@ import { requireOptional } from '../../utils/optional-require.js';
 import { createClient } from '../../core/client.js';
 import { startInteractiveWebSocket } from './websocket.js';
 import { whois, isDomainAvailable } from '../../utils/whois.js';
-import { inspectTLS, TLSInfo } from '../../utils/tls-inspector.js'; // Import TLSInfo
+import { inspectTLS, TLSInfo } from '../../utils/tls-inspector.js';
 import { getSecurityRecords, DnsSecurityRecords } from '../../utils/dns-toolkit.js';
-import { rdap } from '../../utils/rdap.js'; // Import RDAPResult
+import { rdap } from '../../utils/rdap.js';
 import { ScrapeDocument } from '../../scrape/document.js';
 import { Spider, type SpiderPageResult, type SpiderResult } from '../../scrape/spider.js';
 import colors from '../../utils/colors.js';
 import { getShellSearch } from './shell-search.js';
 import { openSearchPanel } from './search-panel.js';
 import { ScrollBuffer, parseScrollKey, parseMouseScroll, enableMouseReporting, disableMouseReporting } from './scroll-buffer.js';
-import { analyzeSecurityHeaders, SecurityReport } from '../../utils/security-grader.js'; // Import security grader
-import { getIpInfo, IpInfo } from '../../mcp/ip-intel.js'; // Import IP Intel (MaxMind)
-import { checkPropagation, formatPropagationReport, PropagationResult } from '../../dns/propagation.js'; // Import DNS Propagation
-import { analyzeSeo, SeoSpider, type SeoReport, type SeoSpiderResult, type SiteWideIssue } from '../../seo/index.js'; // Import SEO Analyzer and Spider
-import { resolvePreset } from '../presets.js'; // Import preset resolver
-import type { Client } from '../../core/client.js'; // Import Client type for AI
+import { analyzeSecurityHeaders, SecurityReport } from '../../utils/security-grader.js';
+import { getIpInfo, IpInfo } from '../../mcp/ip-intel.js';
+import { checkPropagation, formatPropagationReport, PropagationResult } from '../../dns/propagation.js';
+import { analyzeSeo, SeoSpider, type SeoReport, type SeoSpiderResult, type SiteWideIssue } from '../../seo/index.js';
+import { resolvePreset } from '../presets.js';
+import type { Client } from '../../core/client.js';
+import { summarizeErrors, formatErrorSummary, printError, classifyError, formatCliError } from '../helpers.js';
 
 // Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
@@ -515,7 +516,11 @@ export class RekShell {
 
     switch (cmd) {
       case 'help':
-        this.printHelp();
+        if (parts[1]) {
+          this.printCommandHelp(parts[1]);
+        } else {
+          this.printHelp();
+        }
         return;
       case 'clear':
         console.clear();
@@ -2985,27 +2990,10 @@ ${colors.bold('Network:')}
           }
         }
 
-        // Show errors if any
-        const formatError = (error: string): string => {
-          const statusMatch = error.match(/status code (\d{3})/i);
-          if (statusMatch) {
-            return `HTTP ${statusMatch[1]}`;
-          }
-          return error.length > 50 ? error.slice(0, 47) + '...' : error;
-        };
-
-        if (result.errors.length > 0 && result.errors.length <= 10) {
-          console.log(colors.bold('\n  Errors:'));
-          for (const err of result.errors) {
-            const path = new URL(err.url).pathname;
-            console.log(`    ${colors.red('✗')} ${path.padEnd(25)} ${colors.gray('→')} ${formatError(err.error)}`);
-          }
-        } else if (result.errors.length > 10) {
-          console.log(colors.yellow(`\n  ${result.errors.length} errors (showing first 10):`));
-          for (const err of result.errors.slice(0, 10)) {
-            const path = new URL(err.url).pathname;
-            console.log(`    ${colors.red('✗')} ${path.padEnd(25)} ${colors.gray('→')} ${formatError(err.error)}`);
-          }
+        // Show errors using centralized error handler
+        if (result.errors.length > 0) {
+          const errorSummary = summarizeErrors(result.errors);
+          console.log(formatErrorSummary(errorSummary));
         }
 
         // Save to JSON if output specified
@@ -5427,6 +5415,737 @@ ${colors.bold('Network:')}
     › @openai What is the capital of France?
     › @anthropic Explain quantum computing
     › spider example.com depth=2 limit=50
+
+  ${colors.bold('For detailed help on a specific command:')}
+    ${colors.green('help <command>')}       ${colors.gray('e.g., help spider, help seo, help dns')}
     `);
+  }
+
+  /**
+   * Print detailed help for a specific command
+   */
+  private printCommandHelp(command: string) {
+    const cmd = command.toLowerCase().replace(/^help\s+/, '');
+
+    const helpContent: Record<string, string> = {
+      // HTTP Commands
+      'get': `
+  ${colors.bold(colors.cyan('GET - HTTP GET Request'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('get <path>')}              Make a GET request
+    ${colors.green('get <url>')}               Make a GET request to full URL
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Simple request (requires url to be set first)')}
+    › url api.example.com
+    › get /users
+
+    ${colors.gray('# Full URL request')}
+    › get https://api.example.com/users
+
+    ${colors.gray('# With headers')}
+    › get /users Authorization:"Bearer token123"
+
+    ${colors.gray('# With query params (encoded in URL)')}
+    › get /search?q=test&page=1
+      `,
+
+      'post': `
+  ${colors.bold(colors.cyan('POST - HTTP POST Request'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('post <path> [key=value...]')}    Make a POST request with data
+
+  ${colors.bold('Parameters:')}
+    ${colors.white('key=value')}       String value
+    ${colors.white('key:=value')}      Typed value (number, boolean, null)
+    ${colors.white('Key:value')}       Header
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Simple POST with string data')}
+    › post /users name="John Doe" email="john@example.com"
+
+    ${colors.gray('# POST with typed values')}
+    › post /users name="John" age:=30 active:=true
+
+    ${colors.gray('# POST with headers')}
+    › post /login Content-Type:application/json username="admin" password="secret"
+
+    ${colors.gray('# POST to full URL')}
+    › post https://api.example.com/users name="Test"
+      `,
+
+      // Spider
+      'spider': `
+  ${colors.bold(colors.cyan('SPIDER - Web Crawler'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('spider <url> [options]')}
+
+  ${colors.bold('Options:')}
+    ${colors.white('depth=N')}         Max crawl depth (default: 5)
+    ${colors.white('limit=N')}         Max pages to crawl (default: 100)
+    ${colors.white('concurrency=N')}   Parallel requests (default: 5)
+    ${colors.white('seo')}             Enable SEO analysis mode
+    ${colors.white('output=file')}     Save JSON report to file
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Basic crawl with defaults')}
+    › spider example.com
+
+    ${colors.gray('# Shallow crawl (only 2 levels deep)')}
+    › spider example.com depth=2
+
+    ${colors.gray('# Quick audit (limited pages)')}
+    › spider example.com limit=20 depth=3
+
+    ${colors.gray('# Full SEO analysis')}
+    › spider example.com seo
+
+    ${colors.gray('# SEO with report export')}
+    › spider example.com seo output=seo-report.json
+
+    ${colors.gray('# High concurrency for fast crawl')}
+    › spider example.com concurrency=10 limit=500
+
+  ${colors.bold('Error Handling:')}
+    ${colors.gray('Errors are categorized by type:')}
+    • ${colors.red('HTTP 4xx/5xx')} - Server returned error status
+    • ${colors.red('Timeout')} - Request took too long (default: 10s)
+    • ${colors.red('DNS')} - Could not resolve hostname
+    • ${colors.red('Network')} - Connection refused/reset
+    • ${colors.red('Parse')} - Invalid HTML/content type
+
+  ${colors.bold('Tips:')}
+    • Use ${colors.white('seo')} mode for comprehensive website audits
+    • Start with low ${colors.white('limit')} to test, then increase
+    • Results stored in ${colors.white('lastResponse')} for further analysis
+    • Use ${colors.white('output=')} to save large reports
+      `,
+
+      // SEO
+      'seo': `
+  ${colors.bold(colors.cyan('SEO - Search Engine Optimization Analysis'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('seo <url> [options]')}
+
+  ${colors.bold('Options:')}
+    ${colors.white('-a, --all')}        Show all checks (including passed)
+    ${colors.white('--format json')}    Output as JSON (for scripts/tools)
+
+  ${colors.bold('What it analyzes:')}
+    • Title tag (length, presence, keywords)
+    • Meta description (length, presence)
+    • Headings (H1 presence, hierarchy)
+    • Images (alt text, optimization)
+    • Links (internal/external balance)
+    • OpenGraph tags (social sharing)
+    • Twitter Card tags
+    • JSON-LD structured data
+    • Technical SEO (canonical, viewport, lang)
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Basic SEO analysis')}
+    › seo example.com
+
+    ${colors.gray('# Show all checks including passed')}
+    › seo example.com -a
+
+    ${colors.gray('# Export as JSON for CI/CD')}
+    › seo example.com --format json
+
+    ${colors.gray('# Using current base URL')}
+    › url example.com
+    › seo
+
+  ${colors.bold('Grades:')}
+    ${colors.green('A')} = 80-100   Excellent
+    ${colors.blue('B')} = 60-79    Good
+    ${colors.yellow('C')} = 40-59    Needs work
+    ${colors.red('D/F')} = 0-39    Poor
+
+  ${colors.bold('Tips:')}
+    • Run ${colors.white('spider example.com seo')} for site-wide analysis
+    • JSON output can be piped to tools like ${colors.white('jq')}
+    • Result stored in ${colors.white('lastResponse')} for inspection
+      `,
+
+      // DNS
+      'dns': `
+  ${colors.bold(colors.cyan('DNS - Domain Name System Lookup'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('dns <domain>')}
+
+  ${colors.bold('Record types resolved:')}
+    • A, AAAA (IP addresses)
+    • MX (mail servers)
+    • NS (name servers)
+    • TXT (SPF, DMARC, domain verification)
+    • CNAME (aliases)
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Full DNS lookup')}
+    › dns example.com
+
+    ${colors.gray('# Using current base URL domain')}
+    › url https://api.example.com
+    › dns
+
+  ${colors.bold('Related commands:')}
+    ${colors.green('dns:propagate <domain> <type>')}  Check DNS propagation worldwide
+    ${colors.green('dns:email <domain>')}             Email-specific DNS (MX, SPF, DMARC)
+    ${colors.green('dns:health <domain>')}            Overall DNS health check
+    ${colors.green('dns:spf <domain>')}               SPF record validation
+    ${colors.green('dns:dmarc <domain>')}             DMARC record validation
+    ${colors.green('dns:dkim <domain> <selector>')}   DKIM record lookup
+    ${colors.green('dns:dig <domain> [type]')}        Raw DNS query (like dig)
+    ${colors.green('dns:generate <type> [options]')} Generate DNS records
+
+  ${colors.bold('Examples:')}
+    › dns:propagate example.com A
+    › dns:email example.com
+    › dns:dkim example.com google
+      `,
+
+      // WHOIS
+      'whois': `
+  ${colors.bold(colors.cyan('WHOIS - Domain/IP Registration Lookup'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('whois <domain>')}    Lookup domain registration
+    ${colors.green('whois <ip>')}        Lookup IP allocation
+
+  ${colors.bold('Information provided:')}
+    • Registrar details
+    • Creation/expiration dates
+    • Name servers
+    • Domain status
+    • Registrant info (if public)
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Domain lookup')}
+    › whois google.com
+
+    ${colors.gray('# IP lookup')}
+    › whois 8.8.8.8
+
+    ${colors.gray('# Using current base URL')}
+    › url example.com
+    › whois
+
+  ${colors.bold('Related commands:')}
+    ${colors.green('rdap <domain>')}    Modern WHOIS using RDAP protocol
+      `,
+
+      // TLS/SSL
+      'tls': `
+  ${colors.bold(colors.cyan('TLS/SSL - Certificate Inspection'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('tls <host> [port]')}    Inspect TLS certificate (default port: 443)
+
+  ${colors.bold('Information provided:')}
+    • Certificate subject/issuer
+    • Validity period (expiration warning)
+    • Protocol version (TLS 1.2/1.3)
+    • Cipher suite
+    • Certificate chain
+    • SAN (Subject Alternative Names)
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Standard HTTPS inspection')}
+    › tls example.com
+
+    ${colors.gray('# Custom port (e.g., SMTP with STARTTLS)')}
+    › tls mail.example.com 587
+
+    ${colors.gray('# Using current base URL')}
+    › url https://secure.example.com
+    › tls
+
+  ${colors.bold('Aliases:')}
+    ${colors.green('ssl')} is an alias for ${colors.green('tls')}
+      `,
+
+      // Security
+      'security': `
+  ${colors.bold(colors.cyan('SECURITY - HTTP Security Headers Analysis'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('security <url>')}
+
+  ${colors.bold('Headers analyzed:')}
+    • Strict-Transport-Security (HSTS)
+    • Content-Security-Policy (CSP)
+    • X-Frame-Options
+    • X-Content-Type-Options
+    • X-XSS-Protection
+    • Referrer-Policy
+    • Permissions-Policy
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Analyze security headers')}
+    › security example.com
+
+    ${colors.gray('# Using current base URL')}
+    › url example.com
+    › security
+
+  ${colors.bold('Grades:')}
+    ${colors.green('A+')} ${colors.green('A')} = Excellent security posture
+    ${colors.blue('B')} = Good, minor improvements possible
+    ${colors.yellow('C')} = Acceptable, several headers missing
+    ${colors.red('D')} ${colors.red('F')} = Poor, critical headers missing
+      `,
+
+      // Load Test
+      'load': `
+  ${colors.bold(colors.cyan('LOAD - HTTP Load Testing'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('load <url> [options]')}
+
+  ${colors.bold('Options:')}
+    ${colors.white('users=N')}        Concurrent virtual users (default: 50)
+    ${colors.white('duration=N')}     Test duration in seconds (default: 300)
+    ${colors.white('ramp=N')}         Ramp-up time in seconds (default: 5)
+    ${colors.white('mode=MODE')}      Test mode (see below)
+    ${colors.white('http2')}          Enable HTTP/2
+
+  ${colors.bold('Modes:')}
+    ${colors.cyan('realistic')}    Simulates real users with think time (default)
+    ${colors.cyan('throughput')}   Maximum requests per second
+    ${colors.cyan('stress')}       Find breaking point with increasing load
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Quick load test (50 users, 5 minutes)')}
+    › load https://api.example.com/endpoint
+
+    ${colors.gray('# Stress test with 100 users')}
+    › load /api/endpoint users=100 mode=stress
+
+    ${colors.gray('# Short throughput test')}
+    › load /api/health users=20 duration=30 mode=throughput
+
+    ${colors.gray('# HTTP/2 enabled')}
+    › load /api/endpoint http2 users=50
+
+  ${colors.bold('Dashboard:')}
+    • Real-time RPS, latency percentiles
+    • Error rate monitoring
+    • Progress bar and ETA
+    • Press ${colors.white('Ctrl+C')} to stop early
+
+  ${colors.bold('Tips:')}
+    • Start with low users and increase gradually
+    • Use ${colors.white('mode=stress')} to find limits
+    • ${colors.white('ramp')} helps avoid thundering herd
+      `,
+
+      // WebSocket
+      'ws': `
+  ${colors.bold(colors.cyan('WS - WebSocket Client'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('ws <url>')}    Connect to WebSocket server
+
+  ${colors.bold('Interactive mode commands:')}
+    • Type message and press Enter to send
+    • ${colors.white('/close')} - Close connection
+    • ${colors.white('/ping')} - Send ping frame
+    • ${colors.white('Ctrl+C')} - Exit
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Connect to WebSocket server')}
+    › ws wss://echo.websocket.org
+
+    ${colors.gray('# Local development server')}
+    › ws ws://localhost:8080/socket
+
+  ${colors.bold('Protocol notes:')}
+    • Supports both ${colors.white('ws://')} and ${colors.white('wss://')} (secure)
+    • Automatic reconnection not enabled by default
+    • JSON messages are pretty-printed
+      `,
+
+      // Scraping
+      'scrap': `
+  ${colors.bold(colors.cyan('SCRAP - Web Scraping'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('scrap <url>')}    Fetch and parse HTML document
+
+  ${colors.bold('After scraping, use these commands:')}
+    ${colors.green('$ <selector>')}         Query elements (CSS selector)
+    ${colors.green('$text <selector>')}     Extract text content
+    ${colors.green('$attr <name> <sel>')}   Get attribute values
+    ${colors.green('$html <selector>')}     Get inner HTML
+    ${colors.green('$links [selector]')}    List all links
+    ${colors.green('$images [selector]')}   List all images
+    ${colors.green('$scripts')}             List all scripts
+    ${colors.green('$css')}                 List all stylesheets
+    ${colors.green('$table <selector>')}    Extract table as JSON
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Scrape a page')}
+    › scrap https://example.com
+
+    ${colors.gray('# Get all H1 tags')}
+    › $ h1
+
+    ${colors.gray('# Get link hrefs')}
+    › $attr href a
+
+    ${colors.gray('# Extract table data')}
+    › $table table.data
+
+    ${colors.gray('# Get specific element text')}
+    › $text .product-price
+
+  ${colors.bold('Advanced:')}
+    ${colors.green('$sourcemaps')}          Find sourcemaps
+    ${colors.green('$unmap <url>')}         Parse sourcemap
+    ${colors.green('$beautify <url>')}      Beautify minified code
+      `,
+
+      // GraphQL
+      'graphql': `
+  ${colors.bold(colors.cyan('GRAPHQL - GraphQL Client'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('graphql <url> <query>')}                  Inline query
+    ${colors.green('graphql <url> @file.graphql')}            Query from file
+    ${colors.green('graphql <url> <query> var=value...')}     With variables
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Simple query')}
+    › graphql https://api.example.com/graphql "{ users { id name } }"
+
+    ${colors.gray('# With variables')}
+    › graphql https://api.example.com/graphql "query($id: ID!) { user(id: $id) { name } }" id=123
+
+    ${colors.gray('# From file')}
+    › graphql https://api.example.com/graphql @queries/getUser.graphql id=123
+
+  ${colors.bold('Tips:')}
+    • Use ${colors.white('@file.graphql')} for complex queries
+    • Variables are passed as ${colors.white('key=value')} pairs
+    • Response stored in ${colors.white('lastResponse')}
+      `,
+
+      // AI
+      'ai': `
+  ${colors.bold(colors.cyan('AI - AI Chat Interface'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('ai [provider]')}           Enter interactive AI mode
+    ${colors.green('@<provider> <message>')}   Quick one-shot message
+
+  ${colors.bold('Providers:')}
+    ${colors.cyan('openai')}      GPT-4/GPT-3.5 (default)
+    ${colors.cyan('anthropic')}   Claude
+    ${colors.cyan('groq')}        Fast inference
+    ${colors.cyan('google')}      Gemini
+    ${colors.cyan('xai')}         Grok
+    ${colors.cyan('mistral')}     Mistral AI
+    ${colors.cyan('cohere')}      Command
+    ${colors.cyan('deepseek')}    DeepSeek
+    ${colors.cyan('fireworks')}   Fireworks AI
+    ${colors.cyan('together')}    Together AI
+    ${colors.cyan('perplexity')} Perplexity
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Enter interactive mode with OpenAI')}
+    › ai
+    › ai openai
+
+    ${colors.gray('# Quick message (no mode switch)')}
+    › @openai What is the capital of France?
+    › @anthropic Explain quantum computing
+
+    ${colors.gray('# Different providers')}
+    › @groq Summarize this text...
+    › @google Translate to Spanish: Hello
+
+  ${colors.bold('Environment variables:')}
+    ${colors.white('OPENAI_API_KEY')}      OpenAI
+    ${colors.white('ANTHROPIC_API_KEY')}   Anthropic
+    ${colors.white('GROQ_API_KEY')}        Groq
+    ${colors.white('GOOGLE_API_KEY')}      Google
+    ${colors.white('XAI_API_KEY')}         xAI
+    ... (${colors.white('<PROVIDER>_API_KEY')})
+
+  ${colors.bold('Memory:')}
+    • Each provider maintains ${colors.white('12 message pairs')} (24 msgs)
+    • Use ${colors.green('ai:clear')} to reset all memories
+    • Use ${colors.green('ai:clear openai')} to reset specific provider
+      `,
+
+      // FTP
+      'ftp': `
+  ${colors.bold(colors.cyan('FTP - FTP Client'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('ftp <host> <command> [options]')}
+
+  ${colors.bold('Commands:')}
+    ${colors.white('ls [path]')}       List directory contents
+    ${colors.white('get <file>')}      Download file
+    ${colors.white('put <file>')}      Upload file
+    ${colors.white('rm <file>')}       Delete file
+    ${colors.white('mkdir <dir>')}     Create directory
+
+  ${colors.bold('Options:')}
+    ${colors.white('user=username')}   FTP username
+    ${colors.white('pass=password')}   FTP password
+    ${colors.white('port=21')}         FTP port
+    ${colors.white('secure')}          Use FTPS (TLS)
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# List files')}
+    › ftp ftp.example.com ls /pub
+
+    ${colors.gray('# Download with auth')}
+    › ftp ftp.example.com get /file.zip user=admin pass=secret
+
+    ${colors.gray('# Upload file')}
+    › ftp ftp.example.com put ./local.txt user=admin pass=secret
+
+    ${colors.gray('# Secure FTP')}
+    › ftp ftp.example.com ls secure user=admin pass=secret
+      `,
+
+      // HAR
+      'har': `
+  ${colors.bold(colors.cyan('HAR - HTTP Archive Recording/Playback'))}
+
+  ${colors.bold('Commands:')}
+    ${colors.green('har:record <file>')}    Start recording to HAR file
+    ${colors.green('har:stop')}             Stop recording
+    ${colors.green('har:play <file>')}      Replay requests from HAR
+    ${colors.green('har:info <file>')}      Show HAR file information
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Record a session')}
+    › har:record session.har
+    › get /api/users
+    › post /api/users name="Test"
+    › har:stop
+
+    ${colors.gray('# Replay the session')}
+    › har:play session.har
+
+    ${colors.gray('# Inspect HAR file')}
+    › har:info session.har
+
+  ${colors.bold('Use cases:')}
+    • Capture API flows for documentation
+    • Replay for testing/debugging
+    • Share reproducible API interactions
+    • Performance analysis
+      `,
+
+      // Robots/Sitemap/LLMS
+      'robots': `
+  ${colors.bold(colors.cyan('ROBOTS - robots.txt Analysis'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('robots [url]')}    Analyze robots.txt (uses base URL if set)
+
+  ${colors.bold('What it checks:')}
+    • Syntax validity
+    • User-Agent blocks
+    • Sitemap directives
+    • Crawl-delay settings
+    • AI bot restrictions (GPTBot, ClaudeBot, etc.)
+
+  ${colors.bold('Examples:')}
+    › robots example.com
+    › url example.com
+    › robots
+      `,
+
+      'sitemap': `
+  ${colors.bold(colors.cyan('SITEMAP - sitemap.xml Analysis'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('sitemap [url]')}    Analyze sitemap.xml (uses base URL if set)
+
+  ${colors.bold('What it checks:')}
+    • Valid XML structure
+    • URL count (max 50,000)
+    • File size (max 50MB)
+    • URL validity
+    • lastmod dates
+    • Duplicate detection
+
+  ${colors.bold('Examples:')}
+    › sitemap example.com
+    › sitemap example.com/custom-sitemap.xml
+      `,
+
+      'llms': `
+  ${colors.bold(colors.cyan('LLMS - llms.txt Analysis'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('llms [url]')}    Analyze llms.txt file
+
+  ${colors.bold('About llms.txt:')}
+    A proposed standard for LLM-friendly content.
+    Learn more: https://llmstxt.org
+
+  ${colors.bold('What it checks:')}
+    • Valid format
+    • Site name and description
+    • Content sections
+    • Link validity
+
+  ${colors.bold('Examples:')}
+    › llms example.com
+    › llms https://example.com/llms.txt
+      `,
+
+      // URL/Set/Vars
+      'url': `
+  ${colors.bold(colors.cyan('URL - Set Base URL'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('url <url>')}    Set the base URL for subsequent requests
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Set base URL')}
+    › url api.example.com
+    › url https://api.example.com
+
+    ${colors.gray('# Then make requests without full URL')}
+    › get /users
+    › post /users name="Test"
+
+  ${colors.bold('Benefits:')}
+    • Shorter commands
+    • Enables commands that use domain (whois, dns, tls)
+    • Prompt shows current host
+      `,
+
+      'set': `
+  ${colors.bold(colors.cyan('SET - Session Variables'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('set <key>=<value>')}    Set a variable
+
+  ${colors.bold('Usage in requests:')}
+    Use ${colors.white('$key')} to reference variable value
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Set variables')}
+    › set token=abc123
+    › set user_id=42
+
+    ${colors.gray('# Use in requests')}
+    › get /users/$user_id Authorization:"Bearer $token"
+
+  ${colors.bold('Related:')}
+    ${colors.green('vars')}    List all variables
+    ${colors.green('env')}     Load from .env file
+      `,
+
+      'env': `
+  ${colors.bold(colors.cyan('ENV - Load Environment Variables'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('env [path]')}    Load .env file (default: ./.env)
+
+  ${colors.bold('Examples:')}
+    ${colors.gray('# Load from current directory')}
+    › env
+
+    ${colors.gray('# Load specific file')}
+    › env ./config/.env.local
+
+  ${colors.bold('File format:')}
+    ${colors.gray('# .env file')}
+    API_KEY=your-key-here
+    BASE_URL=https://api.example.com
+    DEBUG=true
+
+  ${colors.bold('Note:')}
+    Variables are available via ${colors.white('$VAR_NAME')} in requests
+      `,
+
+      // IP
+      'ip': `
+  ${colors.bold(colors.cyan('IP - IP Intelligence'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('ip <address>')}    Lookup IP information
+
+  ${colors.bold('Information provided:')}
+    • Geolocation (city, country)
+    • ASN information
+    • Network details
+    • Hostname (reverse DNS)
+
+  ${colors.bold('Examples:')}
+    › ip 8.8.8.8
+    › ip 2001:4860:4860::8888
+      `,
+
+      // Ping
+      'ping': `
+  ${colors.bold(colors.cyan('PING - TCP Connectivity Check'))}
+
+  ${colors.bold('Usage:')}
+    ${colors.green('ping <host>')}    Quick TCP ping to host
+
+  ${colors.bold('Note:')}
+    This is a TCP connection test, not ICMP ping.
+    It verifies the host is reachable on port 80/443.
+
+  ${colors.bold('Examples:')}
+    › ping example.com
+    › ping 192.168.1.1
+      `,
+
+      // Default help for unknown commands
+      'default': `
+  ${colors.bold(colors.yellow('Unknown command'))}
+
+  Try one of these:
+    ${colors.green('help')}              Show all commands
+    ${colors.green('help spider')}       Spider/crawler help
+    ${colors.green('help seo')}          SEO analysis help
+    ${colors.green('help dns')}          DNS lookup help
+    ${colors.green('help ai')}           AI chat help
+    ${colors.green('help load')}         Load testing help
+      `,
+    };
+
+    // Find the help content (handle aliases)
+    const aliases: Record<string, string> = {
+      'ssl': 'tls',
+      'chat': 'ai',
+      '@openai': 'ai',
+      '@anthropic': 'ai',
+      'crawl': 'spider',
+      'crawler': 'spider',
+      'scrape': 'scrap',
+      'websocket': 'ws',
+      'vars': 'set',
+      'dns:propagate': 'dns',
+      'dns:email': 'dns',
+      'dns:health': 'dns',
+      'har:record': 'har',
+      'har:play': 'har',
+      'har:stop': 'har',
+      'har:info': 'har',
+    };
+
+    const normalizedCmd = aliases[cmd] || cmd;
+    const content = helpContent[normalizedCmd] || helpContent['default'];
+
+    console.log(content);
   }
 }

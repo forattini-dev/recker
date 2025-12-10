@@ -71,6 +71,8 @@ Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 | GraphQL | `graphqlPlugin` | Integrated GraphQL client |
 | SOAP | `soapPlugin` | SOAP/XML client |
 | XML | `xmlPlugin` | XML parsing and building |
+| [YAML](./19-yaml.md) | `yamlPlugin` | **First HTTP client with native YAML support!** RFC 9512 |
+| [CSV](./20-csv.md) | `csvPlugin` | Native CSV support with streaming (RFC 4180) |
 | JSON-RPC | `jsonrpcPlugin` | JSON-RPC 2.0 client |
 | gRPC-Web | `grpcWebPlugin` | gRPC-Web client |
 | OData | `odataPlugin` | OData client |
