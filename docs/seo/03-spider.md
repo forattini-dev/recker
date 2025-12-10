@@ -1,6 +1,186 @@
 # SEO Spider
 
-The SEO Spider crawls entire websites, performing SEO analysis on each page and detecting site-wide issues like duplicate titles, orphan pages, and meta description conflicts.
+The SEO Spider crawls entire websites with rich reporting capabilities. **Even without SEO analysis enabled**, the spider provides comprehensive site structure data. With `seo: true`, reports become even richer with per-page SEO scores and site-wide issue detection.
+
+## Rich Reports by Default
+
+The spider's base report is already comprehensive:
+
+```typescript
+import { spider } from 'recker/scrape';
+
+// Base spider (no SEO analysis)
+const result = await spider('https://example.com', {
+  maxPages: 50,
+  depth: 3
+});
+
+// Rich base report includes:
+console.log(`Pages: ${result.pages.length}`);
+console.log(`Duration: ${result.duration}ms`);
+console.log(`Errors: ${result.errors.length}`);
+
+// Per-page data
+for (const page of result.pages) {
+  console.log(`${page.status} ${page.url}`);
+  console.log(`  Title: ${page.title}`);
+  console.log(`  Depth: ${page.depth}`);
+  console.log(`  Links: ${page.links.length}`);
+  console.log(`  Duration: ${page.duration}ms`);
+}
+
+// Sitemap analysis (automatic)
+console.log(`Orphan URLs: ${result.sitemap.orphanUrls.length}`);
+console.log(`Missing from sitemap: ${result.sitemap.missingFromSitemap.length}`);
+
+// Robots.txt analysis (automatic)
+console.log(`Blocked paths: ${result.robots.blockedPaths.length}`);
+```
+
+### Base Report Structure
+
+```typescript
+interface SpiderResult {
+  startUrl: string;
+  pages: SpiderPageResult[];
+  visited: Set<string>;
+  duration: number;
+  errors: Array<{ url: string; error: string }>;
+
+  // Always included (even without seo: true)
+  sitemap: SitemapAnalysis;
+  robots: RobotsAnalysis;
+}
+
+interface SpiderPageResult {
+  url: string;
+  status: number;
+  title: string;
+  depth: number;
+  links: ExtractedLink[];
+  duration: number;
+  error?: string;
+}
+
+interface SitemapAnalysis {
+  found: boolean;
+  url?: string;
+  urlCount: number;
+  orphanUrls: string[];           // URLs in sitemap but not found
+  missingFromSitemap: string[];   // Crawled URLs not in sitemap
+  blockedBySitemapRobots: string[];
+}
+
+interface RobotsAnalysis {
+  found: boolean;
+  url?: string;
+  sitemapUrls: string[];
+  blockedPaths: string[];
+  allowedPaths: string[];
+  crawlDelay?: number;
+}
+```
+
+## Even Richer with SEO Analysis
+
+Enable `seo: true` to unlock per-page SEO reports and site-wide issue detection:
+
+```typescript
+import { seoSpider } from 'recker/seo';
+
+const result = await seoSpider('https://example.com', {
+  seo: true,  // Enable SEO analysis
+  maxPages: 50,
+  depth: 3
+});
+
+// Everything from base report PLUS:
+
+// Per-page SEO scores (250+ checks each!)
+for (const page of result.pages) {
+  console.log(`${page.url}`);
+  console.log(`  SEO Score: ${page.seoReport?.score}/100`);
+  console.log(`  Grade: ${page.seoReport?.grade}`);
+  console.log(`  Errors: ${page.seoReport?.summary.errors}`);
+  console.log(`  Warnings: ${page.seoReport?.summary.warnings}`);
+}
+
+// Site-wide issue detection
+for (const issue of result.siteWideIssues) {
+  console.log(`${issue.type}: ${issue.message}`);
+  console.log(`  Affected: ${issue.affectedUrls.length} pages`);
+}
+
+// Aggregate statistics
+console.log(`Average Score: ${result.summary.avgScore}`);
+console.log(`Duplicate Titles: ${result.summary.duplicateTitles}`);
+console.log(`Duplicate Descriptions: ${result.summary.duplicateDescriptions}`);
+console.log(`Orphan Pages: ${result.summary.orphanPages}`);
+```
+
+### SEO Report Structure
+
+```typescript
+interface SeoSpiderResult extends SpiderResult {
+  /** Pages now include full SEO reports */
+  pages: SeoPageResult[];
+
+  /** Site-wide SEO issues (duplicates, orphans, etc.) */
+  siteWideIssues: SiteWideIssue[];
+
+  /** Aggregate statistics */
+  summary: {
+    totalPages: number;
+    pagesWithErrors: number;
+    pagesWithWarnings: number;
+    avgScore: number;
+    duplicateTitles: number;
+    duplicateDescriptions: number;
+    duplicateH1s: number;
+    orphanPages: number;
+  };
+}
+
+interface SeoPageResult extends SpiderPageResult {
+  /** Full SEO report with 250+ checks */
+  seoReport?: SeoReport;
+}
+
+interface SeoReport {
+  score: number;        // 0-100
+  grade: string;        // A, B, C, D, F
+  summary: {
+    totalChecks: number;
+    passed: number;
+    warnings: number;
+    errors: number;
+    passRate: number;
+    topIssues: Issue[];
+    quickWins: Issue[];
+  };
+  checks: Check[];      // All 250+ checks with results
+  categories: { [category: string]: CategoryResult };
+}
+```
+
+## Report Comparison
+
+| Feature | Base Spider | SEO Spider |
+|---------|-------------|------------|
+| Page status codes | ✅ | ✅ |
+| Page titles | ✅ | ✅ |
+| Internal/external links | ✅ | ✅ |
+| Crawl depth tracking | ✅ | ✅ |
+| Request timing | ✅ | ✅ |
+| Sitemap analysis | ✅ | ✅ |
+| Robots.txt analysis | ✅ | ✅ |
+| Per-page SEO score | ❌ | ✅ |
+| 250+ SEO checks per page | ❌ | ✅ |
+| Duplicate title detection | ❌ | ✅ |
+| Duplicate description detection | ❌ | ✅ |
+| Duplicate H1 detection | ❌ | ✅ |
+| Orphan page detection | ❌ | ✅ |
+| Aggregate statistics | ❌ | ✅ |
 
 ## Quick Start
 
@@ -86,46 +266,6 @@ spider.abort();
 // Check if still running
 if (spider.isRunning()) {
   console.log('Crawling in progress...');
-}
-```
-
-## Result Structure
-
-```typescript
-interface SeoSpiderResult {
-  /** All crawled pages with SEO reports */
-  pages: SeoPageResult[];
-
-  /** Site-wide SEO issues */
-  siteWideIssues: SiteWideIssue[];
-
-  /** Summary statistics */
-  summary: {
-    totalPages: number;
-    pagesWithErrors: number;
-    pagesWithWarnings: number;
-    avgScore: number;
-    duplicateTitles: number;
-    duplicateDescriptions: number;
-    duplicateH1s: number;
-    orphanPages: number;
-  };
-
-  /** URLs visited */
-  visited: Set<string>;
-
-  /** Crawl duration */
-  duration: number;
-}
-
-interface SeoPageResult {
-  url: string;
-  status: number;
-  title?: string;
-  links: ExtractedLink[];
-  depth: number;
-  seoReport?: SeoReport;
-  error?: string;
 }
 ```
 
@@ -268,7 +408,10 @@ await fs.writeFile('custom-report.json', JSON.stringify(report, null, 2));
 ## CLI Usage
 
 ```bash
-# Basic spider with SEO
+# Basic spider (rich base report)
+rek spider https://example.com
+
+# With SEO analysis (even richer)
 rek spider https://example.com seo=true
 
 # With depth and limit
@@ -309,6 +452,18 @@ console.log('Done!');
 3. **Limit Depth** - `depth: 3-5` is usually sufficient
 4. **Focus When Possible** - Use `focusCategories` to reduce analysis time
 5. **Monitor Progress** - Use `onSeoAnalysis` callback for real-time feedback
+6. **Use Base Spider First** - Start without `seo: true` to map site structure quickly
+
+## When to Use Each Mode
+
+| Scenario | Recommended Mode |
+|----------|------------------|
+| Quick site structure check | Base spider (`spider()`) |
+| Find broken links | Base spider |
+| Sitemap validation | Base spider |
+| Full SEO audit | SEO spider (`seo: true`) |
+| Duplicate content detection | SEO spider |
+| CI/CD quality gates | SEO spider with thresholds |
 
 ## Next Steps
 
