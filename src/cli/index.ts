@@ -1280,6 +1280,7 @@ ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek spider example.com seo focus=links')}           ${colors.gray('Focus on link issues')}
   ${colors.green('$ rek spider example.com seo focus=security')}        ${colors.gray('Focus on security issues')}
   ${colors.green('$ rek spider example.com seo focus=duplicates')}      ${colors.gray('Focus on duplicate content')}
+  ${colors.green('$ rek spider example.com seo format=json')}           ${colors.gray('JSON output to stdout')}
 
 ${colors.bold(colors.yellow('Options:'))}
   ${colors.cyan('depth=N')}           Max link depth to follow (default: 5)
@@ -1287,6 +1288,7 @@ ${colors.bold(colors.yellow('Options:'))}
   ${colors.cyan('concurrency=N')}     Parallel requests (default: 5)
   ${colors.cyan('seo')}               Enable SEO analysis mode
   ${colors.cyan('focus=MODE')}        Focus analysis on specific area (requires seo)
+  ${colors.cyan('format=json')}       Output JSON to stdout (for piping)
   ${colors.cyan('output=file.json')}  Save JSON report to file
 
 ${colors.bold(colors.yellow('Focus Modes:'))}
@@ -1304,6 +1306,7 @@ ${colors.bold(colors.yellow('Focus Modes:'))}
       let concurrency = 5;
       let seoEnabled = false;
       let outputFile = '';
+      let formatJson = false;
       let focusMode: 'all' | 'links' | 'duplicates' | 'security' | 'ai' | 'resources' = 'all';
 
       // Focus mode to rule categories mapping
@@ -1327,6 +1330,8 @@ ${colors.bold(colors.yellow('Focus Modes:'))}
           seoEnabled = true;
         } else if (arg.startsWith('output=')) {
           outputFile = arg.split('=')[1] || '';
+        } else if (arg === 'format=json' || arg === '--format=json') {
+          formatJson = true;
         } else if (arg.startsWith('focus=')) {
           const mode = arg.split('=')[1] || 'all';
           if (mode in focusCategories) {
@@ -1341,14 +1346,17 @@ ${colors.bold(colors.yellow('Focus Modes:'))}
 
       if (!url.startsWith('http')) url = `https://${url}`;
 
-      const modeLabel = seoEnabled ? colors.magenta(' + SEO') : '';
-      const focusLabel = focusMode !== 'all' ? colors.cyan(` [focus: ${focusMode}]`) : '';
-      console.log(colors.cyan(`\nSpider starting: ${url}`));
-      console.log(colors.gray(`  Depth: ${maxDepth} | Limit: ${maxPages} | Concurrency: ${concurrency}${modeLabel}${focusLabel}`));
-      if (outputFile) {
-        console.log(colors.gray(`  Output: ${outputFile}`));
+      // Don't print visual output in JSON mode
+      if (!formatJson) {
+        const modeLabel = seoEnabled ? colors.magenta(' + SEO') : '';
+        const focusLabel = focusMode !== 'all' ? colors.cyan(` [focus: ${focusMode}]`) : '';
+        console.log(colors.cyan(`\nSpider starting: ${url}`));
+        console.log(colors.gray(`  Depth: ${maxDepth} | Limit: ${maxPages} | Concurrency: ${concurrency}${modeLabel}${focusLabel}`));
+        if (outputFile) {
+          console.log(colors.gray(`  Output: ${outputFile}`));
+        }
+        console.log('');
       }
-      console.log('');
 
       try {
         // SEO Spider mode
@@ -1365,17 +1373,107 @@ ${colors.bold(colors.yellow('Focus Modes:'))}
             output: outputFile || undefined,
             focusCategories: focusCategories[focusMode],
             focusMode,
-            onProgress: (progress) => {
+            onProgress: formatJson ? undefined : (progress) => {
               process.stdout.write(`\r${colors.gray('  Crawling:')} ${colors.cyan(progress.crawled.toString())} pages | ${colors.gray('Queue:')} ${progress.queued} | ${colors.gray('Depth:')} ${progress.depth}   `);
             },
           });
 
           const result = await seoSpider.crawl(url);
 
+          // JSON output mode - print structured data and exit
+          if (formatJson) {
+            // Calculate metrics for JSON output
+            const responseTimes = result.pages.filter(p => p.duration > 0).map(p => p.duration);
+            const avgResponseTime = responseTimes.length > 0
+              ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+              : 0;
+
+            // Calculate status distribution
+            const statusCounts: Record<string, number> = {};
+            for (const page of result.pages) {
+              const key = page.status?.toString() || 'error';
+              statusCounts[key] = (statusCounts[key] || 0) + 1;
+            }
+
+            // Calculate content stats
+            let totalInternalLinks = 0;
+            let totalExternalLinks = 0;
+            let totalImages = 0;
+            let imagesWithoutAlt = 0;
+
+            for (const page of result.pages) {
+              if (page.seoReport) {
+                totalInternalLinks += page.seoReport.links?.internal || 0;
+                totalExternalLinks += page.seoReport.links?.external || 0;
+                totalImages += page.seoReport.images?.total || 0;
+                imagesWithoutAlt += page.seoReport.images?.withoutAlt || 0;
+              }
+            }
+
+            const jsonOutput = {
+              startUrl: url,
+              crawledAt: new Date().toISOString(),
+              duration: result.duration,
+              config: {
+                maxDepth,
+                maxPages,
+                concurrency,
+                focusMode,
+              },
+              summary: {
+                totalPages: result.pages.length,
+                uniqueUrls: result.visited.size,
+                avgSeoScore: result.summary.avgScore,
+                avgResponseTime,
+                pagesWithErrors: result.summary.pagesWithErrors,
+                pagesWithWarnings: result.summary.pagesWithWarnings,
+                duplicateTitles: result.summary.duplicateTitles,
+                duplicateDescriptions: result.summary.duplicateDescriptions,
+                duplicateH1s: result.summary.duplicateH1s,
+                orphanPages: result.summary.orphanPages,
+              },
+              content: {
+                totalInternalLinks,
+                totalExternalLinks,
+                totalImages,
+                imagesWithoutAlt,
+              },
+              httpStatus: statusCounts,
+              siteWideIssues: result.siteWideIssues.map(issue => ({
+                type: issue.type,
+                severity: issue.severity,
+                message: issue.message,
+                value: issue.value,
+                affectedUrls: issue.affectedUrls,
+              })),
+              pages: result.pages.map(page => ({
+                url: page.url,
+                status: page.status,
+                depth: page.depth,
+                duration: page.duration,
+                title: page.title,
+                error: page.error,
+                seo: page.seoReport ? {
+                  score: page.seoReport.score,
+                  grade: page.seoReport.grade,
+                  title: page.seoReport.title,
+                  metaDescription: page.seoReport.metaDescription,
+                  headings: page.seoReport.headings,
+                  links: page.seoReport.links,
+                  images: page.seoReport.images,
+                  checks: page.seoReport.checks,
+                } : null,
+              })),
+            };
+
+            console.log(JSON.stringify(jsonOutput, null, 2));
+            return;
+          }
+
           // Clear progress line
           process.stdout.write('\r' + ' '.repeat(80) + '\r');
 
-          // Print SEO Spider results
+          // Print SEO Spider results (visual mode)
           console.log(colors.green(`\n✔ SEO Spider complete`) + colors.gray(` (${(result.duration / 1000).toFixed(1)}s)`));
           console.log(`  ${colors.cyan('Pages crawled')}: ${result.pages.length}`);
           console.log(`  ${colors.cyan('Unique URLs')}: ${result.visited.size}`);
@@ -1581,17 +1679,49 @@ ${colors.bold(colors.yellow('Focus Modes:'))}
             concurrency,
             sameDomain: true,
             delay: 100,
-            onProgress: (progress) => {
+            onProgress: formatJson ? undefined : (progress) => {
               process.stdout.write(`\r${colors.gray('  Crawling:')} ${colors.cyan(progress.crawled.toString())} pages | ${colors.gray('Queue:')} ${progress.queued} | ${colors.gray('Depth:')} ${progress.depth}   `);
             },
           });
 
           const result = await spider.crawl(url);
 
+          // JSON output mode
+          if (formatJson) {
+            const jsonOutput = {
+              startUrl: result.startUrl,
+              crawledAt: new Date().toISOString(),
+              duration: result.duration,
+              config: {
+                maxDepth,
+                maxPages,
+                concurrency,
+              },
+              summary: {
+                totalPages: result.pages.length,
+                successCount: result.pages.filter(p => !p.error).length,
+                errorCount: result.errors.length,
+                uniqueUrls: result.visited.size,
+              },
+              pages: result.pages.map(p => ({
+                url: p.url,
+                status: p.status,
+                title: p.title,
+                depth: p.depth,
+                linksCount: p.links.length,
+                duration: p.duration,
+                error: p.error,
+              })),
+              errors: result.errors,
+            };
+            console.log(JSON.stringify(jsonOutput, null, 2));
+            return;
+          }
+
           // Clear progress line
           process.stdout.write('\r' + ' '.repeat(80) + '\r');
 
-          // Print results
+          // Print results (visual mode)
           console.log(colors.green(`\n✔ Spider complete`) + colors.gray(` (${(result.duration / 1000).toFixed(1)}s)`));
           console.log(`  ${colors.cyan('Pages crawled')}: ${result.pages.length}`);
           console.log(`  ${colors.cyan('Unique URLs')}: ${result.visited.size}`);
