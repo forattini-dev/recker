@@ -17,3 +17,40 @@ section.cover.show {
   height: 40px !important;
   z-index: 999 !important;
 }
+
+/* Lightning Animation */
+.lightning-anim {
+  display: inline-block;
+  animation: lightning-flash 5s infinite;
+  transform-origin: center;
+}
+
+@keyframes lightning-flash {
+  0%, 90%, 100% {
+    filter: brightness(1);
+    text-shadow: none;
+    transform: scale(1);
+    opacity: 1;
+  }
+  92% {
+    filter: brightness(3) drop-shadow(0 0 5px #ff8a00);
+    text-shadow: 0 0 10px #ffd166, 0 0 20px #ff8a00;
+    transform: scale(1.15) rotate(-3deg);
+    opacity: 1;
+  }
+  93% {
+    filter: brightness(1);
+    text-shadow: none;
+    transform: scale(1);
+  }
+  94% {
+    filter: brightness(5) drop-shadow(0 0 8px #ffd166);
+    text-shadow: 0 0 15px #ffd166, 0 0 30px #ff8a00;
+    transform: scale(1.25) rotate(3deg);
+  }
+  96% {
+    filter: brightness(1);
+    text-shadow: none;
+    transform: scale(1);
+  }
+}
