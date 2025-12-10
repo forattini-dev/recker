@@ -364,7 +364,27 @@ Error: ${error.message}`));
   // Completion command
   program
     .command('completion')
-    .description('Generate shell completion script')
+    .description('Generate shell auto-completion script')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Generates a shell completion script for bash/zsh that enables tab-completion
+  for rek commands, options, HTTP methods, and API presets (@github, @openai, etc).
+
+  Once installed, pressing TAB will auto-complete commands and show suggestions,
+  making the CLI much faster to use.
+
+${colors.bold(colors.yellow('Installation:'))}
+  ${colors.cyan('# Bash (add to ~/.bashrc)')}
+  ${colors.green('$ rek completion >> ~/.bashrc')}
+  ${colors.green('$ source ~/.bashrc')}
+
+  ${colors.cyan('# Zsh (add to ~/.zshrc)')}
+  ${colors.green('$ rek completion >> ~/.zshrc')}
+  ${colors.green('$ source ~/.zshrc')}
+
+  ${colors.cyan('# One-time use (current session only)')}
+  ${colors.green('$ source <(rek completion)')}
+`)
     .action(() => {
       const script = `
 ###-begin-rek-completion-###
@@ -415,9 +435,21 @@ complete -F _rek_completions rek
   program
     .command('version')
     .alias('info')
-    .description('Show detailed version information')
+    .description('Show version and environment information')
     .option('-s, --short', 'Show only version number')
     .option('--format <type>', 'Output format: text or json', 'text')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Displays the installed Recker version along with your Node.js version,
+  operating system, and architecture. Useful for debugging, reporting issues,
+  or verifying which version is running in production environments.
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek version')}                    Show full version info
+  ${colors.green('$ rek version -s')}                 Just the version number (for scripts)
+  ${colors.green('$ rek version --format json')}     Machine-readable JSON output
+  ${colors.green('$ rek info')}                       Alias for version
+`)
     .action(async (options: { short?: boolean; format?: string }) => {
       if (options.short) {
         console.log(version);
@@ -443,6 +475,27 @@ complete -F _rek_completions rek
     .alias('repl')
     .description('Start the interactive Rek Shell')
     .option('-e, --env [path]', 'Load .env file (auto-loads from cwd by default)')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Launches an interactive REPL (Read-Eval-Print Loop) for exploring APIs.
+  The shell provides auto-completion, command history, and a rich set of
+  built-in commands for HTTP requests, DNS lookups, WHOIS queries, and more.
+
+  Perfect for API exploration, debugging, and quick prototyping without
+  writing scripts. Environment variables from .env are loaded automatically.
+
+${colors.bold(colors.yellow('Shell Commands:'))}
+  get/post/put/delete <url>    Make HTTP requests
+  whois <domain>               WHOIS lookup
+  dns <domain>                 DNS resolution
+  tls <domain>                 TLS certificate inspection
+  help                         Show all available commands
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek shell')}                      Start interactive shell
+  ${colors.green('$ rek shell -e .env.local')}       Load custom env file
+  ${colors.green('$ rek repl')}                       Alias for shell
+`)
     .action(async (options: { env?: string | boolean }) => {
       // Auto-load .env from cwd by default (unless explicitly disabled with --env=false)
       if (options.env !== false) {
@@ -464,7 +517,22 @@ complete -F _rek_completions rek
   program
     .command('docs [query...]')
     .alias('?')
-    .description('Search Recker documentation (opens fullscreen panel)')
+    .description('Search Recker documentation')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Opens a fullscreen interactive panel to search Recker's documentation.
+  Uses fuzzy search to find relevant docs about HTTP clients, plugins,
+  authentication, caching, and all other features.
+
+  The search is powered by semantic embeddings for accurate results.
+  Navigate with arrow keys, press Enter to view, Esc to close.
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek docs')}                       Open documentation browser
+  ${colors.green('$ rek docs retry')}                 Search for retry-related docs
+  ${colors.green('$ rek docs "rate limit"')}          Search for rate limiting
+  ${colors.green('$ rek ? oauth')}                    Quick search with ? alias
+`)
     .action(async (queryParts: string[]) => {
       const query = queryParts.join(' ').trim();
       const { openSearchPanel } = await import('./tui/search-panel.js');
@@ -475,8 +543,39 @@ complete -F _rek_completions rek
   program
     .command('security')
     .alias('headers')
-    .description('Analyze HTTP response headers for security best practices')
+    .alias('grade')
+    .description('Grade a website\'s security headers (A+ to F)')
     .argument('<url>', 'URL to analyze')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Fetches a URL and analyzes its HTTP response headers for security best
+  practices. Assigns a grade from A+ to F based on the presence and correct
+  configuration of security headers.
+
+  Checks for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, and other
+  important security headers. Great for security audits, DevSecOps pipelines,
+  or verifying your site's security configuration.
+
+${colors.bold(colors.yellow('Headers Analyzed:'))}
+  - Strict-Transport-Security (HSTS)
+  - Content-Security-Policy (CSP)
+  - X-Frame-Options (clickjacking protection)
+  - X-Content-Type-Options (MIME sniffing)
+  - Referrer-Policy
+  - Permissions-Policy
+  - X-XSS-Protection (legacy)
+
+${colors.bold(colors.yellow('Grade Scale:'))}
+  ${colors.green('A+/A/A-')}  Excellent - all critical headers present
+  ${colors.blue('B+/B/B-')}  Good - most headers present
+  ${colors.yellow('C+/C/C-')}  Fair - some headers missing
+  ${colors.red('D/F')}      Poor - critical headers missing
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek security github.com')}         Grade GitHub's headers
+  ${colors.green('$ rek headers api.stripe.com')}      Using headers alias
+  ${colors.green('$ rek grade mysite.com')}            Using grade alias
+`)
     .action(async (url) => {
       if (!url.startsWith('http')) url = `https://${url}`;
       
@@ -529,11 +628,22 @@ ${colors.bold('Details:')}`);
   // SEO Analyzer
   program
     .command('seo')
-    .description('Analyze page SEO (title, meta, headings, links, images, structured data)')
+    .alias('audit')
+    .description('Analyze a page\'s SEO health (80+ checks)')
     .argument('<url>', 'URL to analyze')
     .option('-a, --all', 'Show all checks including passed ones')
     .option('--format <format>', 'Output format: text (default) or json', 'text')
     .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Performs a comprehensive SEO audit on a single page. Analyzes title, meta
+  description, headings hierarchy, images, links, structured data, OpenGraph
+  tags, Twitter cards, and technical SEO factors.
+
+  Returns a score with detailed recommendations. Use with --format json for
+  integration with CI/CD pipelines or automated monitoring.
+
+  For full site audits, use ${colors.cyan('rek spider <url> seo')} instead.
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek seo example.com')}                    ${colors.gray('Basic SEO analysis')}
   ${colors.green('$ rek seo example.com -a')}                 ${colors.gray('Show all checks')}
@@ -1147,10 +1257,20 @@ ${colors.gray('Valid:')} ${result.valid ? colors.green('Yes') : colors.red('No')
   // Spider - Web Crawler
   program
     .command('spider')
-    .description('Crawl a website following internal links')
+    .alias('crawl')
+    .description('Crawl a website and analyze all pages')
     .argument('<url>', 'Starting URL to crawl')
     .argument('[args...]', 'Options: depth=N limit=N concurrency=N seo focus=MODE output=file.json')
     .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Crawls a website starting from the given URL, following internal links up to
+  a specified depth. Discovers all pages, collects metadata, and optionally
+  performs comprehensive SEO analysis.
+
+  The crawler respects robots.txt, handles JavaScript-rendered content, and
+  provides detailed reports on site structure, broken links, and SEO issues.
+  Perfect for site audits, migration planning, or competitive analysis.
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek spider example.com')}                           ${colors.gray('Crawl with defaults')}
   ${colors.green('$ rek spider example.com depth=3 limit=50')}          ${colors.gray('Depth 3, max 50 pages')}
@@ -1545,10 +1665,19 @@ ${colors.bold(colors.yellow('Focus Modes:'))}
   // Scrape Command - Web scraping with CSS selectors
   program
     .command('scrape')
-    .description('Scrape data from a web page using CSS selectors')
+    .alias('extract')
+    .description('Extract data from web pages with CSS selectors')
     .argument('<url>', 'URL to scrape')
     .argument('[args...]', 'Options: select=SELECTOR, attr=NAME, links, images, meta, tables, scripts, jsonld')
     .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Fetches a web page and extracts data using CSS selectors. Can extract
+  text content, specific attributes, links, images, meta tags, tables,
+  scripts, and JSON-LD structured data.
+
+  Perfect for quick data extraction, competitive research, price monitoring,
+  or building datasets. Outputs clean, structured data ready for processing.
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek scrape example.com')}                      ${colors.gray('# Basic page info')}
   ${colors.green('$ rek scrape example.com select="h1"')}          ${colors.gray('# Extract h1 text')}
@@ -1775,7 +1904,9 @@ ${colors.bold('Images:')}      ${imageCount}
   // AI Command (single-shot prompt without memory)
   program
     .command('ai')
-    .description('Send a single AI prompt (no memory/context)')
+    .alias('chat')
+    .alias('ask')
+    .description('Chat with AI models (OpenAI, Claude, Groq, etc)')
     .argument('<preset>', 'AI preset to use (e.g., @openai, @anthropic, @groq)')
     .argument('<prompt...>', 'The prompt to send')
     .option('-m, --model <model>', 'Override default model')
@@ -1785,6 +1916,14 @@ ${colors.bold('Images:')}      ${imageCount}
     .option('-j, --json', 'Output raw JSON response')
     .option('-e, --env [path]', 'Load .env file (auto-loads from cwd if exists)')
     .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Sends a prompt to an AI language model and streams the response back.
+  Supports all major AI providers including OpenAI, Anthropic, Google, Groq,
+  Mistral, and more. API keys are loaded from environment variables.
+
+  Each provider uses sensible defaults but you can override the model,
+  temperature, and max tokens. Responses stream in real-time by default.
+
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek ai @openai "What is the capital of France?"')}
   ${colors.green('$ rek ai @anthropic "Explain quantum computing" -m claude-sonnet-4-20250514')}
@@ -1909,8 +2048,36 @@ ${colors.bold(colors.yellow('Note:'))}
   // IP Intelligence (uses local MaxMind GeoLite2 database)
   program
     .command('ip')
-    .description('Get IP address intelligence using local GeoLite2 database')
+    .alias('geo')
+    .alias('geoip')
+    .description('Look up geolocation and ISP info for an IP address')
     .argument('<address>', 'IP address to lookup')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Looks up geographic location and network information for an IP address
+  using the MaxMind GeoLite2 database (downloaded automatically on first use).
+
+  Shows city, region, country, coordinates, timezone, ISP/organization, and
+  whether it's a bogon (private/reserved) address. Works offline after the
+  initial database download.
+
+${colors.bold(colors.yellow('Information Displayed:'))}
+  - City, region, country
+  - Geographic coordinates (lat/long)
+  - Timezone
+  - ISP/Organization name
+  - ASN (Autonomous System Number)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek ip 8.8.8.8')}                  Google DNS
+  ${colors.green('$ rek geo 1.1.1.1')}                 Cloudflare DNS
+  ${colors.green('$ rek geoip 151.101.1.140')}         GitHub's IP
+  ${colors.green('$ rek ip 192.168.1.1')}              Shows "Bogon/Private IP"
+
+${colors.bold(colors.yellow('Note:'))}
+  The GeoLite2 database (~70MB) is downloaded on first use and cached
+  in ~/.cache/recker/. Updates automatically when stale.
+`)
     .action(async (address) => {
         const { getIpInfo, isGeoIPAvailable } = await import('../mcp/ip-intel.js');
 
@@ -1954,9 +2121,34 @@ ${colors.bold('Network:')}
   program
     .command('tls')
     .alias('ssl')
+    .alias('cert')
     .description('Inspect TLS/SSL certificate of a host')
     .argument('<host>', 'Hostname or IP address')
     .argument('[port]', 'Port number (default: 443)', '443')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Connects to a server and inspects its TLS/SSL certificate. Shows the
+  certificate issuer, validity dates, days until expiration, subject
+  alternative names (SANs), and whether the certificate is trusted.
+
+  Useful for debugging SSL issues, checking certificate expiration before
+  it causes outages, or verifying a site's security configuration.
+
+${colors.bold(colors.yellow('Information Displayed:'))}
+  - Certificate validity status (valid/expired)
+  - Trust status (CA-signed or self-signed)
+  - Days remaining until expiration
+  - Issuer (Certificate Authority)
+  - Subject (domain name)
+  - Serial number and fingerprints
+  - Subject Alternative Names (SANs)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek tls google.com')}              Inspect Google's cert
+  ${colors.green('$ rek ssl api.stripe.com')}          Using ssl alias
+  ${colors.green('$ rek cert example.com 8443')}       Custom port
+  ${colors.green('$ rek tls 192.168.1.1 443')}         Check IP directly
+`)
     .action(async (host, port) => {
       const { inspectTLS } = await import('../utils/tls-inspector.js');
 
@@ -2035,9 +2227,33 @@ ${colors.bold('Fingerprints:')}
   // WHOIS Lookup
   program
     .command('whois')
-    .description('WHOIS lookup for domains and IP addresses')
+    .description('Look up domain registration and ownership info')
     .argument('<query>', 'Domain name or IP address')
     .option('-r, --raw', 'Show raw WHOIS response')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Queries WHOIS servers to retrieve domain registration information.
+  Shows registrar, creation/expiration dates, nameservers, and registrant
+  contact information (when available, many use privacy protection).
+
+  Also works with IP addresses to find network ownership information.
+
+${colors.bold(colors.yellow('Information Displayed:'))}
+  - Domain status (active, expired, pending delete)
+  - Registrar name
+  - Creation/update/expiration dates
+  - Name servers
+  - Registrant, admin, tech contacts (if public)
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek whois github.com')}           Domain registration info
+  ${colors.green('$ rek whois google.com -r')}        Raw WHOIS response
+  ${colors.green('$ rek whois 8.8.8.8')}              IP address ownership
+  ${colors.green('$ rek whois example.co.uk')}        ccTLD domains work too
+
+${colors.bold(colors.yellow('See also:'))}
+  ${colors.cyan('rek rdap <domain>')}                RDAP (modern WHOIS replacement)
+`)
     .action(async (query, options) => {
       const { whois } = await import('../utils/whois.js');
 
@@ -2085,8 +2301,33 @@ ${colors.bold('Server:')} ${result.server}
   // RDAP Lookup (modern WHOIS)
   program
     .command('rdap')
-    .description('RDAP lookup (modern WHOIS replacement)')
+    .description('RDAP lookup (modern WHOIS with JSON)')
     .argument('<domain>', 'Domain name to lookup')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Performs an RDAP (Registration Data Access Protocol) lookup for a domain.
+  RDAP is the modern, standardized replacement for WHOIS that returns
+  structured JSON data instead of unstructured text.
+
+  RDAP provides better data consistency, supports internationalized domain
+  names (IDN), and follows HTTP redirects to find authoritative servers.
+  All major TLDs now support RDAP.
+
+${colors.bold(colors.yellow('Advantages over WHOIS:'))}
+  - Structured JSON output (machine-readable)
+  - Better internationalization support
+  - Standardized by IETF (RFC 7480-7484)
+  - Bootstrap mechanism for TLD discovery
+  - Rate limiting with proper error codes
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek rdap github.com')}             Domain registration info
+  ${colors.green('$ rek rdap google.co.uk')}           ccTLD domains
+  ${colors.green('$ rek rdap cloudflare.com')}         Check registrar info
+
+${colors.bold(colors.yellow('See also:'))}
+  ${colors.cyan('rek whois <domain>')}               Traditional WHOIS lookup
+`)
     .action(async (domain) => {
       const { rdap } = await import('../utils/rdap.js');
       const { Client } = await import('../core/client.js');
@@ -2146,10 +2387,32 @@ ${colors.bold('Status:')} ${result.status?.join(', ') || 'N/A'}
   // Ping (TCP connectivity check)
   program
     .command('ping')
-    .description('TCP connectivity check to a host')
+    .description('Test TCP connectivity to host:port')
     .argument('<host>', 'Hostname or IP address')
     .argument('[port]', 'Port number (default: 80 for HTTP, 443 for HTTPS)', '443')
     .option('-c, --count <n>', 'Number of pings', '4')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Tests TCP connectivity to a host and port, measuring connection latency.
+  Unlike ICMP ping, this actually establishes TCP connections, so it works
+  through most firewalls and accurately tests if a service is reachable.
+
+  Shows individual response times and calculates min/avg/max/stddev stats.
+  Perfect for testing if a server is up, measuring network latency, or
+  debugging connectivity issues.
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek ping google.com')}              Test HTTPS (port 443)
+  ${colors.green('$ rek ping google.com 80')}           Test HTTP (port 80)
+  ${colors.green('$ rek ping db.server.com 5432')}      Test PostgreSQL port
+  ${colors.green('$ rek ping redis.local 6379 -c 10')}  10 pings to Redis
+
+${colors.bold(colors.yellow('Output:'))}
+  Shows response time for each attempt, then summary statistics:
+  - min/avg/max response times
+  - standard deviation
+  - packet loss percentage
+`)
     .action(async (host, port, options) => {
       const net = await import('node:net');
 
@@ -2581,9 +2844,37 @@ ${colors.bold('Statistics:')}
 
   dns
     .command('lookup')
-    .description('Perform DNS lookup for any record type')
+    .alias('resolve')
+    .description('Look up DNS records (A, MX, TXT, etc)')
     .argument('<domain>', 'Domain name to lookup')
     .argument('[type]', 'Record type (A, AAAA, CNAME, MX, NS, TXT, SOA, CAA, SRV, ANY)', 'A')
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Queries DNS servers to resolve domain records. Returns IP addresses (A/AAAA),
+  mail servers (MX), name servers (NS), text records (TXT), and more.
+
+  Uses your system's configured DNS resolvers. For advanced queries with
+  custom nameservers, use ${colors.cyan('rek dns dig')} instead.
+
+${colors.bold(colors.yellow('Record Types:'))}
+  A         IPv4 address
+  AAAA      IPv6 address
+  CNAME     Canonical name (alias)
+  MX        Mail exchange servers
+  NS        Name servers
+  TXT       Text records (SPF, DKIM, etc)
+  SOA       Start of Authority
+  CAA       Certificate Authority Authorization
+  SRV       Service location
+  ANY       All available records
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek dns lookup google.com')}         A records (default)
+  ${colors.green('$ rek dns lookup google.com MX')}      Mail servers
+  ${colors.green('$ rek dns lookup google.com TXT')}     Text records
+  ${colors.green('$ rek dns lookup google.com ANY')}     All records
+  ${colors.green('$ rek dns resolve github.com AAAA')}   IPv6 addresses
+`)
     .action(async (domain, type) => {
       const { dnsLookup } = await import('../utils/dns-toolkit.js');
 
@@ -3018,13 +3309,45 @@ ${colors.bold(colors.yellow('Record Types:'))}
   // GraphQL command
   program
     .command('graphql')
-    .description('Execute a GraphQL query')
+    .alias('gql')
+    .description('Execute GraphQL queries and mutations')
     .argument('<url>', 'GraphQL endpoint URL')
     .option('-q, --query <query>', 'GraphQL query string')
     .option('-f, --file <file>', 'Path to GraphQL query file')
     .option('-v, --variables <json>', 'Variables as JSON string')
     .option('--var-file <file>', 'Path to variables JSON file')
     .option('-H, --header <header>', 'Add header (can be used multiple times)', (val: string, prev: string[]) => [...prev, val], [])
+    .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Execute GraphQL queries and mutations against any GraphQL endpoint.
+  Supports inline queries, query files (.graphql), and variables from
+  JSON files or inline. Perfect for testing GraphQL APIs quickly.
+
+  Results are displayed as formatted JSON. Headers can be added for
+  authentication (Bearer tokens, API keys, etc).
+
+${colors.bold(colors.yellow('Query Options:'))}
+  -q, --query <query>      Inline GraphQL query string
+  -f, --file <file>        Load query from .graphql file
+  -v, --variables <json>   Inline variables as JSON
+  --var-file <file>        Load variables from JSON file
+
+${colors.bold(colors.yellow('Examples:'))}
+  ${colors.green('$ rek graphql https://api.github.com/graphql -q "{ viewer { login } }"')}
+  ${colors.gray('  Simple query')}
+
+  ${colors.green('$ rek gql https://api.spacex.land/graphql -q "{ rockets { name } }"')}
+  ${colors.gray('  Using the gql alias')}
+
+  ${colors.green('$ rek graphql api.example.com/graphql -f query.graphql -v \'{"id": 123}\'')}
+  ${colors.gray('  Query from file with variables')}
+
+  ${colors.green('$ rek graphql api.com/graphql -q "query User($id: ID!) { user(id: $id) { name } }" --var-file vars.json')}
+  ${colors.gray('  Parameterized query with variable file')}
+
+  ${colors.green('$ rek graphql api.com/graphql -q "{ me { id } }" -H "Authorization: Bearer token123"')}
+  ${colors.gray('  With authentication header')}
+`)
     .action(async (url, options) => {
       const { graphql } = await import('../plugins/graphql.js');
       const { createClient } = await import('../core/client.js');
@@ -3656,18 +3979,34 @@ ${colors.bold(colors.yellow('Examples:'))}
 
   serve
     .command('http')
-    .description('Start a mock HTTP server')
+    .description('Start a mock HTTP server for testing')
     .option('-p, --port <number>', 'Port to listen on', '3000')
     .option('-h, --host <string>', 'Host to bind to', '127.0.0.1')
     .option('--echo', 'Echo request body back in response')
     .option('--delay <ms>', 'Add delay to responses (milliseconds)', '0')
     .option('--cors', 'Enable CORS', true)
     .addHelpText('after', `
+${colors.bold(colors.blue('What it does:'))}
+  Starts a local mock HTTP server for testing HTTP clients, webhooks, or APIs.
+  Provides useful built-in endpoints for testing various HTTP scenarios.
+
+  Supports echo mode (returns the request back), configurable delays for
+  testing timeouts, and CORS for browser-based testing. Perfect for
+  integration tests, webhook development, or API prototyping.
+
+${colors.bold(colors.yellow('Built-in Endpoints:'))}
+  GET  /                 Health check, returns { ok: true }
+  GET  /json             Sample JSON response
+  GET  /delay/:ms        Delayed response
+  POST /echo             Echo request body back
+  *    /status/:code     Return specific HTTP status code
+  GET  /headers          Return request headers
+
 ${colors.bold(colors.yellow('Examples:'))}
-  ${colors.green('$ rek serve http')}                    ${colors.gray('Start on port 3000')}
-  ${colors.green('$ rek serve http -p 8080')}            ${colors.gray('Start on port 8080')}
-  ${colors.green('$ rek serve http --echo')}             ${colors.gray('Echo mode')}
-  ${colors.green('$ rek serve http --delay 500')}        ${colors.gray('Add 500ms delay')}
+  ${colors.green('$ rek serve http')}                    Start on port 3000
+  ${colors.green('$ rek serve http -p 8080')}            Start on port 8080
+  ${colors.green('$ rek serve http --echo')}             Echo mode (all routes)
+  ${colors.green('$ rek serve http --delay 500')}        Add 500ms delay to all responses
 `)
     .action(async (options: { port: string; host: string; echo?: boolean; delay: string; cors?: boolean }) => {
       const { MockHttpServer } = await import('../testing/mock-http-server.js');
@@ -5100,21 +5439,39 @@ ${colors.bold(colors.yellow('Examples:'))}
   // ============================================================================
   program
     .command('proxy')
-    .description('Make a request through a proxy')
+    .description('Route requests through HTTP or SOCKS proxy')
     .argument('<proxy>', 'Proxy URL (http://host:port or socks5://host:port)')
     .argument('<url>', 'Target URL')
     .argument('[args...]', 'Request arguments: method=x key=value key:=json Header:value')
     .addHelpText('after', `
-${colors.bold(colors.yellow('Parameters:'))}
-  method=<method>    HTTP method (default: GET)
-  key=value          String data
-  key:=json          JSON data
-  Header:value       HTTP headers (Key:Value format)
+${colors.bold(colors.blue('What it does:'))}
+  Routes HTTP requests through a proxy server. Supports HTTP, HTTPS, and SOCKS5
+  proxies. Useful for bypassing geo-restrictions, debugging traffic, accessing
+  internal networks, or anonymizing requests.
+
+  The proxy URL can include authentication (user:pass@host:port).
+  All standard rek request options (headers, body, method) work normally.
+
+${colors.bold(colors.yellow('Supported Proxy Types:'))}
+  http://host:port         HTTP proxy
+  https://host:port        HTTPS proxy
+  socks5://host:port       SOCKS5 proxy (Tor, SSH tunnels)
+
+${colors.bold(colors.yellow('Request Syntax:'))}
+  method=<method>          HTTP method (default: GET)
+  key=value                String data (form/JSON body)
+  key:=json                JSON value (numbers, booleans, objects)
+  Header:value             HTTP headers
 
 ${colors.bold(colors.yellow('Examples:'))}
-  ${colors.green('$ rek proxy http://proxy.example.com:8080 https://api.com/data')}
-  ${colors.green('$ rek proxy socks5://127.0.0.1:1080 https://api.com/users')}
-  ${colors.green('$ rek proxy http://user:pass@proxy.com:3128 api.com/endpoint method=POST data=test')}
+  ${colors.green('$ rek proxy http://proxy.example.com:8080 api.com/data')}
+  ${colors.gray('  Simple GET through HTTP proxy')}
+
+  ${colors.green('$ rek proxy socks5://127.0.0.1:9050 api.com/users')}
+  ${colors.gray('  Route through Tor (SOCKS5 on port 9050)')}
+
+  ${colors.green('$ rek proxy http://user:pass@proxy.com:3128 api.com method=POST name="John"')}
+  ${colors.gray('  POST with authentication')}
 `)
     .action(async (proxy: string, url: string, args: string[]) => {
       const { createClient } = await import('../core/client.js');
