@@ -19,7 +19,7 @@ MCP is a standard protocol for connecting AI models to external tools and data s
 ### One-liner for Claude Code
 
 ```bash
-claude mcp add recker-docs npx recker@latest mcp
+claude mcp add recker npx recker@latest mcp
 ```
 
 That's it! Claude Code now has access to Recker documentation and network tools.
@@ -31,7 +31,7 @@ Add to your AI tool's MCP configuration:
 ```json
 {
   "mcpServers": {
-    "recker-docs": {
+    "recker": {
       "command": "npx",
       "args": ["recker@latest", "mcp"]
     }

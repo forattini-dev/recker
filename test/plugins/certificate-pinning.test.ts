@@ -16,6 +16,39 @@ import {
 import { HttpRequest } from '../../src/core/request.js';
 import * as crypto from 'node:crypto';
 
+// Mock node:tls to avoid network dependencies in tests
+vi.mock('node:tls', () => ({
+  connect: vi.fn((options, callback) => {
+    const socket = {
+      getPeerCertificate: (detailed: boolean) => ({
+        fingerprint256: 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
+        pubkey: Buffer.from('mock-pubkey'),
+      }),
+      destroy: vi.fn(),
+      on: vi.fn(),
+    };
+
+    // Simulate connection for known hosts
+    if (['google.com', 'github.com', 'example.com'].includes(options.host)) {
+      if (typeof callback === 'function') {
+        setTimeout(callback, 10);
+      }
+    } else {
+      // Simulate error for others
+      setTimeout(() => {
+        // Find the error handler if registered
+        // This is a simplified mock; real EventEmitter is more complex
+        const errorCall = socket.on.mock.calls.find((call) => call[0] === 'error');
+        if (errorCall && errorCall[1]) {
+          errorCall[1](new Error('Connection failed'));
+        }
+      }, 10);
+    }
+
+    return socket;
+  }),
+}));
+
 describe('CertificatePinning Plugin', () => {
   let next: ReturnType<typeof vi.fn>;
 

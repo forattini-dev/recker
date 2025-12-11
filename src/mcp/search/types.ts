@@ -79,6 +79,8 @@ export interface EmbeddingEntry {
   section?: string;
   /** Parent document path if this is a chunk */
   parentPath?: string;
+  /** Full content or snippet for display */
+  content?: string;
   /** The embedding vector */
   vector: number[];
 }

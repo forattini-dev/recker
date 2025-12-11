@@ -201,6 +201,17 @@ function cleanContentForEmbedding(content: string): string {
   return cleaned.trim();
 }
 
+// Prepare content for display (keep code blocks and formatting)
+function prepareDisplayContent(content: string): string {
+  // Remove frontmatter
+  let cleaned = content.replace(/^---[\s\S]*?---\n?/, '');
+
+  // Remove images
+  cleaned = cleaned.replace(/!\[[^\]]*\]\([^)]+\)/g, '');
+
+  return cleaned.trim();
+}
+
 interface IndexedDoc {
   id: string;
   path: string;
@@ -208,6 +219,8 @@ interface IndexedDoc {
   category: string;
   keywords: string[];
   content: string;
+  /** Content optimized for display (preserves code blocks) */
+  displayContent?: string;
   /** Section heading if this is a chunk */
   section?: string;
   /** Parent document path if this is a chunk */
@@ -306,18 +319,22 @@ function indexDocs(docsPath: string): IndexedDoc[] {
         category,
         keywords: extractKeywords(content, docTitle),
         content: cleanContentForEmbedding(content),
+        displayContent: prepareDisplayContent(content),
       });
     } else {
       // Large document - create chunks for each major section
       // First, add the document itself with just title + intro for overview queries
       const introSection = sections.find(s => s.level === 1) || sections[0];
+      const introContent = `${docTitle}. ${introSection?.content || ''}`;
+      
       docs.push({
         id: `doc-${docIndex++}`,
         path: relativePath,
         title: docTitle,
         category,
         keywords: extractKeywords(content, docTitle),
-        content: cleanContentForEmbedding(`${docTitle}. ${introSection?.content || ''}`).slice(0, 500),
+        content: cleanContentForEmbedding(introContent).slice(0, 500),
+        displayContent: prepareDisplayContent(introContent),
       });
 
       // Then add each H2 section as a separate chunk
@@ -333,6 +350,7 @@ function indexDocs(docsPath: string): IndexedDoc[] {
             category,
             keywords: sectionKeywords,
             content: cleanContentForEmbedding(section.content),
+            displayContent: prepareDisplayContent(section.content),
             section: section.heading,
             parentPath: relativePath,
           });
@@ -420,6 +438,7 @@ async function main() {
         keywords: doc.keywords,
         section: doc.section,
         parentPath: doc.parentPath,
+        content: doc.displayContent || doc.content,
         vector: [], // Empty vector - fuzzy search only
       })),
     };
@@ -477,6 +496,7 @@ async function main() {
       keywords: doc.keywords,
       section: doc.section,
       parentPath: doc.parentPath,
+      content: doc.displayContent || doc.content,
       // Round vectors to 4 decimal places to reduce file size
       vector: vectors[i]?.map((v) => Math.round(v * 10000) / 10000) || [],
     })),
