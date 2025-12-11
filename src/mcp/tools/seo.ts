@@ -143,7 +143,6 @@ function generateQuickWins(report: SeoReport): Array<{
 async function seoAnalyze(args: Record<string, unknown>): Promise<MCPToolResult> {
   const url = String(args.url || '');
   const categories = args.categories as string[] | undefined;
-  const verbose = Boolean(args.verbose);
 
   if (!url) {
     return {
@@ -205,28 +204,23 @@ async function seoAnalyze(args: Record<string, unknown>): Promise<MCPToolResult>
 
     // Add warnings
     if (summary.warnings.length > 0) {
-      output.warnings = summary.warnings.slice(0, verbose ? undefined : 10).map(c => ({
+      output.warnings = summary.warnings.map(c => ({
         name: c.name,
         message: c.message,
         recommendation: c.recommendation,
       }));
-      if (!verbose && summary.warnings.length > 10) {
-        output.warningsNote = `Showing 10 of ${summary.warnings.length} warnings. Use verbose=true to see all.`;
-      }
     }
 
-    // Add detailed analysis in verbose mode
-    if (verbose) {
-      output.detailedAnalysis = {
-        title: report.title,
-        metaDescription: report.metaDescription,
-        headings: report.headings,
-        content: report.content,
-        links: report.links,
-        images: report.images,
-        technical: report.technical,
-      };
-    }
+    // Always include detailed analysis
+    output.detailedAnalysis = {
+      title: report.title,
+      metaDescription: report.metaDescription,
+      headings: report.headings,
+      content: report.content,
+      links: report.links,
+      images: report.images,
+      technical: report.technical,
+    };
 
     return {
       content: [{
@@ -471,11 +465,6 @@ Perfect for analyzing your localhost dev server or any public URL. Categories in
           type: 'array',
           items: { type: 'string' },
           description: 'Filter by specific categories (e.g., ["meta", "security", "performance"]). Leave empty for all.',
-        },
-        verbose: {
-          type: 'boolean',
-          description: 'Include detailed analysis (headings, links, images breakdown)',
-          default: false,
         },
       },
       required: ['url'],

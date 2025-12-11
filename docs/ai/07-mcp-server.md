@@ -1,8 +1,8 @@
 # MCP Server
 
-Recker includes a built-in MCP Server that exposes documentation to AI agents like Claude Code, Cursor, and other AI-powered tools.
+Recker includes a built-in MCP Server that exposes documentation, network, security, scraping, and SEO tools to AI agents like Claude Code, Cursor, and other AI-powered tools.
 
-> **TL;DR**: Run `rek mcp` and add the configuration to your AI tool to get Recker documentation assistance.
+> **TL;DR**: Run `rek mcp` and add the configuration to your AI tool to get access to 18 powerful tools.
 
 ## Quick Start
 
@@ -36,11 +36,20 @@ rek mcp nohttp
 # Disable all network tools (http, dns, whois, ping)
 rek mcp nonetwork
 
+# Disable security tools (tls, rdap, geoip, security headers, dns toolkit)
+rek mcp nosecurity
+
+# Disable SEO tools (analyze, spider, quick wins)
+rek mcp noseo
+
+# Disable scraping tool
+rek mcp noscrape
+
 # Disable specific tools
 rek mcp nodns nowhois
 
 # Only enable specific tools (exclusive mode)
-rek mcp only=rek_search_docs,rek_get_doc
+rek mcp only=rek_search_docs,rek_get_doc,rek_seo_analyze
 
 # Custom filter patterns (glob-style)
 rek mcp filter="rek_*_docs,!rek_http_*"
@@ -55,8 +64,10 @@ rek mcp filter="rek_*_docs,!rek_http_*"
 | `nodns` | Disable `rek_dns_lookup` |
 | `nowhois` | Disable `rek_whois_lookup` |
 | `noping` | Disable `rek_network_ping` |
-| `noip` | Disable `rek_ip_lookup` |
 | `nonetwork` | Disable all network tools (http, dns, whois, ping) |
+| `nosecurity` | Disable all security tools (tls, rdap, geoip, security headers, dns toolkit) |
+| `noseo` | Disable all SEO tools (analyze, spider, quick wins) |
+| `noscrape` | Disable `rek_scrape` |
 | `only=<tools>` | Only enable specified tools (comma-separated) |
 | `filter=<patterns>` | Custom glob patterns (prefix with `!` to exclude) |
 
@@ -64,10 +75,13 @@ rek mcp filter="rek_*_docs,!rek_http_*"
 
 ```bash
 # Documentation-only mode (no network operations)
-rek mcp nonetwork noip
+rek mcp nonetwork nosecurity noseo noscrape
 
 # Network tools only (no docs, for testing)
-rek mcp nodocs
+rek mcp nodocs nosecurity noseo noscrape
+
+# SEO audit mode
+rek mcp only=rek_seo_analyze,rek_seo_spider,rek_seo_quick_wins,rek_scrape
 
 # Minimal mode for security-conscious environments
 rek mcp only=rek_search_docs,rek_get_doc
@@ -236,20 +250,28 @@ curl -X POST http://localhost:3100 \
 
 ## Available Tools
 
-The MCP Server provides **10 tools** organized in two categories. All tools use the `rek_` prefix for consistency.
+The MCP Server provides **18 tools** organized in five categories. All tools use the `rek_` prefix for consistency.
 
 | Tool | Category | Description |
 |------|----------|-------------|
-| `rek_search_docs` | Documentation | Search Recker docs by keyword |
+| `rek_search_docs` | Documentation | Search Recker docs by keyword (hybrid/fuzzy/semantic) |
 | `rek_get_doc` | Documentation | Get full content of a doc file |
 | `rek_code_examples` | Documentation | Get runnable code examples |
 | `rek_api_schema` | Documentation | Get TypeScript types and interfaces |
 | `rek_suggest` | Documentation | Get implementation suggestions |
-| `rek_ip_lookup` | Network | IP geolocation lookup |
-| `rek_http_request` | Network | Perform HTTP requests (GET, POST, etc.) |
-| `rek_dns_lookup` | Network | Resolve DNS records (A, MX, TXT, etc.) |
+| `rek_http_request` | Network | Perform HTTP requests (GET, POST, PUT, DELETE, etc.) |
+| `rek_dns_lookup` | Network | Resolve DNS records (A, AAAA, MX, TXT, NS, ALL) |
 | `rek_whois_lookup` | Network | WHOIS lookup for domains/IPs |
 | `rek_network_ping` | Network | TCP ping with latency measurement |
+| `rek_tls_inspect` | Security | Inspect SSL/TLS certificates and connections |
+| `rek_rdap_lookup` | Security | Modern WHOIS (RDAP) for domains and IPs |
+| `rek_geoip_lookup` | Security | IP geolocation with bogon detection (MaxMind) |
+| `rek_security_headers` | Security | Analyze HTTP security headers (grade A+ to F) |
+| `rek_dns_toolkit` | Security | DNS security analysis (SPF, DMARC, DKIM, CAA) |
+| `rek_scrape` | Scraping | Web scraping with CSS selectors |
+| `rek_seo_analyze` | SEO | Analyze page SEO with 250+ rules (21 categories) |
+| `rek_seo_spider` | SEO | Crawl site and detect duplicates, orphan pages |
+| `rek_seo_quick_wins` | SEO | Get prioritized SEO fixes (high/medium/low) |
 
 ### Documentation Tools
 
@@ -348,22 +370,6 @@ Get implementation suggestions based on use case:
 **Parameters:**
 - `useCase` (required): Description of what you want to achieve
 - `constraints` (optional): Array of constraints or requirements
-
-#### rek_ip_lookup
-
-Get geolocation and network information for an IP address:
-
-```json
-{
-  "name": "rek_ip_lookup",
-  "arguments": {
-    "ip": "8.8.8.8"
-  }
-}
-```
-
-**Parameters:**
-- `ip` (required): IPv4 or IPv6 address
 
 ### Network Tools
 
@@ -465,6 +471,244 @@ Check TCP connectivity and measure latency:
 }
 ```
 
+### Security Tools
+
+Tools for security analysis and network intelligence.
+
+#### rek_tls_inspect
+
+Inspect SSL/TLS certificate and connection details:
+
+```json
+{
+  "name": "rek_tls_inspect",
+  "arguments": {
+    "host": "github.com",
+    "port": 443
+  }
+}
+```
+
+**Parameters:**
+- `host` (required): Hostname to inspect
+- `port` (optional): Port number (default: 443)
+
+**Response includes:**
+- Certificate validity and expiration (days remaining)
+- Subject and issuer details
+- Subject Alternative Names (SANs)
+- TLS protocol version and cipher suite
+- Public key algorithm and size
+- Warnings for expiring certs, weak keys, or trust issues
+
+#### rek_rdap_lookup
+
+Perform RDAP lookup (modern WHOIS) for a domain or IP:
+
+```json
+{
+  "name": "rek_rdap_lookup",
+  "arguments": {
+    "query": "google.com"
+  }
+}
+```
+
+**Parameters:**
+- `query` (required): Domain name or IP address
+
+**Note:** Some TLDs (.io, .ai, etc.) don't support RDAP yet - use `rek_whois_lookup` for those.
+
+#### rek_geoip_lookup
+
+Get geolocation data for an IP address using MaxMind GeoLite2:
+
+```json
+{
+  "name": "rek_geoip_lookup",
+  "arguments": {
+    "ip": "8.8.8.8"
+  }
+}
+```
+
+**Parameters:**
+- `ip` (required): IPv4 or IPv6 address
+
+**Response includes:**
+- City, region, country, continent
+- Coordinates (latitude, longitude)
+- Timezone and postal code
+- Accuracy radius
+- Bogon detection (identifies private/reserved IPs)
+
+#### rek_security_headers
+
+Analyze HTTP security headers for a URL:
+
+```json
+{
+  "name": "rek_security_headers",
+  "arguments": {
+    "url": "https://github.com"
+  }
+}
+```
+
+**Parameters:**
+- `url` (required): URL to analyze
+
+**Grades (A+ to F) based on:**
+- HSTS (Strict-Transport-Security)
+- CSP (Content-Security-Policy) with detailed analysis
+- X-Frame-Options / frame-ancestors
+- X-Content-Type-Options
+- Referrer-Policy
+- Permissions-Policy
+- Cross-Origin policies (COOP, COEP, CORP)
+- Information leakage (Server, X-Powered-By)
+
+#### rek_dns_toolkit
+
+Advanced DNS security analysis for email authentication:
+
+```json
+{
+  "name": "rek_dns_toolkit",
+  "arguments": {
+    "domain": "github.com",
+    "check": "all"
+  }
+}
+```
+
+**Parameters:**
+- `domain` (required): Domain to analyze
+- `check` (optional): Which check to run - all, health, spf, dmarc, dkim, records (default: all)
+- `dkimSelector` (optional): Specific DKIM selector to check
+
+**Checks include:**
+- SPF validation (syntax, lookup count, mechanisms)
+- DMARC validation (policy, reporting, alignment)
+- DKIM discovery (tries common selectors)
+- CAA records (certificate authority authorization)
+- MX records
+- Overall DNS health score
+
+### Scraping Tools
+
+Tools for web scraping and data extraction.
+
+#### rek_scrape
+
+Scrape a web page and extract data using CSS selectors:
+
+```json
+{
+  "name": "rek_scrape",
+  "arguments": {
+    "url": "https://news.ycombinator.com",
+    "selectors": {
+      "title": "title",
+      "headlines[]": ".titleline > a"
+    },
+    "extract": ["links", "meta"]
+  }
+}
+```
+
+**Parameters:**
+- `url` (required): URL to scrape
+- `selector` (optional): Single CSS selector to extract elements
+- `selectors` (optional): Map of field names to CSS selectors (add `[]` suffix for multiple values)
+- `extract` (optional): Built-in extractors to run: links, images, meta, og, twitter, jsonld, tables, forms, headings, all
+
+**Examples:**
+- Get all product titles: `selector: ".product-title"`
+- Extract multiple fields: `selectors: {"title":"h1","price":".price"}`
+- Full extraction: `extract: ["all"]`
+
+### SEO Tools
+
+Tools for SEO analysis and optimization.
+
+#### rek_seo_analyze
+
+Analyze a single web page for SEO issues using 250+ rules across 21 categories:
+
+```json
+{
+  "name": "rek_seo_analyze",
+  "arguments": {
+    "url": "https://example.com",
+    "categories": ["meta", "content", "performance"]
+  }
+}
+```
+
+**Parameters:**
+- `url` (required): URL to analyze (works with localhost too)
+- `categories` (optional): Filter by specific categories
+
+**Categories:** meta, content, links, images, technical, security, performance, mobile, accessibility, schema, structural, i18n, PWA, social, e-commerce, local SEO, Core Web Vitals, readability, crawlability, internal linking, best practices
+
+**Response includes:**
+- SEO score (0-100) and grade (A-F)
+- Critical issues and warnings with recommendations
+- OpenGraph/social meta analysis
+- Detailed analysis (title, description, headings, content, links, images, technical)
+
+#### rek_seo_spider
+
+Crawl an entire website and analyze SEO across all pages:
+
+```json
+{
+  "name": "rek_seo_spider",
+  "arguments": {
+    "url": "https://example.com",
+    "maxPages": 50,
+    "maxDepth": 3
+  }
+}
+```
+
+**Parameters:**
+- `url` (required): Starting URL to crawl
+- `maxPages` (optional): Maximum pages to crawl (default: 100)
+- `maxDepth` (optional): Maximum link depth to follow (default: 5)
+- `concurrency` (optional): Parallel requests (default: 3)
+
+**Detects site-wide issues:**
+- Duplicate titles, descriptions, and H1s
+- Orphan pages (no internal links pointing to them)
+- Pages with low SEO scores
+- Crawl errors
+
+#### rek_seo_quick_wins
+
+Get prioritized, actionable SEO improvements for a page:
+
+```json
+{
+  "name": "rek_seo_quick_wins",
+  "arguments": {
+    "url": "https://example.com",
+    "limit": 10
+  }
+}
+```
+
+**Parameters:**
+- `url` (required): URL to analyze
+- `limit` (optional): Maximum number of quick wins to return (default: 10)
+
+**Response includes issues sorted by priority (high/medium/low) with:**
+- What to fix
+- How to fix it
+- Expected impact
+- Category
+
 ## How It Works
 
 Once configured, your AI assistant can use these tools autonomously.
@@ -520,6 +764,58 @@ Response (200 OK):
     "title": "Sample Slideshow"
   }
 }
+```
+
+### SEO Analysis Example
+
+```
+User: Analyze my site's SEO at https://mysite.com
+
+AI: Let me run an SEO analysis...
+[Uses rek_seo_analyze with url "https://mysite.com"]
+
+SEO Analysis Results:
+- Score: 72/100 (Grade: C)
+- 3 critical issues found
+- 8 warnings
+
+Critical Issues:
+1. Missing meta description - Add a unique description (150-160 chars)
+2. Multiple H1 tags - Use only one H1 per page
+3. Images missing alt text - Add descriptive alt attributes
+
+Would you like me to get prioritized quick wins or crawl the entire site?
+
+User: Yes, get the quick wins
+
+AI: [Uses rek_seo_quick_wins with url "https://mysite.com"]
+
+Top SEO Quick Wins (High Priority):
+1. Add meta description → Improves CTR in search results
+2. Fix H1 structure → Better semantic hierarchy
+3. Add alt text to 5 images → Accessibility + image SEO
+```
+
+### Security Analysis Example
+
+```
+User: Check the security headers for github.com
+
+AI: [Uses rek_security_headers with url "https://github.com"]
+[Uses rek_tls_inspect with host "github.com"]
+
+Security Analysis:
+- Security Headers Grade: A
+- TLS Certificate: Valid, expires in 89 days
+- Protocol: TLS 1.3, Cipher: AES-256-GCM
+
+Headers Present:
+✓ Strict-Transport-Security (HSTS)
+✓ Content-Security-Policy
+✓ X-Content-Type-Options
+✓ X-Frame-Options
+
+No critical issues found. The site follows security best practices.
 ```
 
 ## Configuration Options

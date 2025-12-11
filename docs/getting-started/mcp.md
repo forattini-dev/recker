@@ -1,6 +1,6 @@
 # MCP Server Overview
 
-Recker includes a built-in MCP (Model Context Protocol) server that exposes documentation and network tools to AI assistants like Claude Code, Cursor, and other AI-powered tools.
+Recker includes a built-in MCP (Model Context Protocol) server that exposes documentation, network, security, scraping, and SEO tools to AI assistants like Claude Code, Cursor, and other AI-powered tools.
 
 ## What is MCP?
 
@@ -9,7 +9,10 @@ MCP is a standard protocol for connecting AI models to external tools and data s
 - Search and read Recker documentation
 - Get code examples and API schemas
 - Make HTTP requests, DNS lookups, WHOIS queries
-- Ping servers and check connectivity
+- Inspect TLS certificates and analyze security headers
+- Perform GeoIP lookups and RDAP queries
+- Scrape web pages with CSS selectors
+- Analyze SEO with 250+ rules across 21 categories
 
 ## Quick Setup
 
@@ -43,27 +46,50 @@ Add to your AI tool's MCP configuration:
 
 ## Available Tools
 
-The MCP server provides 10 tools in two categories:
+The MCP server provides **18 tools** in five categories:
 
-### Documentation Tools
+### Documentation Tools (5)
 
 | Tool | Description |
 |------|-------------|
-| `rek_search_docs` | Search documentation by keyword |
+| `rek_search_docs` | Search documentation by keyword (hybrid/fuzzy/semantic) |
 | `rek_get_doc` | Get full content of a doc file |
 | `rek_code_examples` | Get runnable code examples |
 | `rek_api_schema` | Get TypeScript types and interfaces |
 | `rek_suggest` | Get implementation suggestions |
 
-### Network Tools
+### Network Tools (4)
 
 | Tool | Description |
 |------|-------------|
-| `rek_http_request` | Make HTTP requests |
-| `rek_dns_lookup` | Resolve DNS records |
-| `rek_whois_lookup` | WHOIS domain lookup |
-| `rek_network_ping` | TCP ping with latency |
-| `rek_ip_lookup` | IP geolocation |
+| `rek_http_request` | Make HTTP requests (GET, POST, PUT, DELETE, etc.) |
+| `rek_dns_lookup` | Resolve DNS records (A, AAAA, MX, TXT, NS, ALL) |
+| `rek_whois_lookup` | WHOIS domain/IP lookup |
+| `rek_network_ping` | TCP ping with latency measurement |
+
+### Security Tools (5)
+
+| Tool | Description |
+|------|-------------|
+| `rek_tls_inspect` | Inspect SSL/TLS certificates and connection details |
+| `rek_rdap_lookup` | Modern WHOIS (RDAP) for domains and IPs |
+| `rek_geoip_lookup` | IP geolocation with bogon detection (MaxMind) |
+| `rek_security_headers` | Analyze HTTP security headers (grade A+ to F) |
+| `rek_dns_toolkit` | DNS security analysis (SPF, DMARC, DKIM, CAA) |
+
+### Scraping Tools (1)
+
+| Tool | Description |
+|------|-------------|
+| `rek_scrape` | Web scraping with CSS selectors, tables, forms, JSON-LD |
+
+### SEO Tools (3)
+
+| Tool | Description |
+|------|-------------|
+| `rek_seo_analyze` | Analyze page SEO with 250+ rules (score 0-100, grade A-F) |
+| `rek_seo_spider` | Crawl site and detect duplicates, orphan pages |
+| `rek_seo_quick_wins` | Get prioritized SEO fixes (high/medium/low) |
 
 ## Example Usage
 
@@ -100,14 +126,17 @@ const client = createClient({
 Control which tools are available:
 
 ```bash
-# Documentation only (no network operations)
-rek mcp --no-network
+# Documentation only (no network, security, scraping, SEO)
+rek mcp nodocs
 
 # Network tools only
-rek mcp --no-docs
+rek mcp nonetwork
+
+# Disable specific categories
+rek mcp nosecurity noseo noscrape
 
 # Specific tools only
-rek mcp --only rek_search_docs,rek_get_doc
+rek mcp only=rek_search_docs,rek_get_doc,rek_seo_analyze
 ```
 
 ## AI Tools Support
