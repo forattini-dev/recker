@@ -5181,7 +5181,7 @@ ${colors.bold(colors.yellow('Tools provided:'))}
 ${colors.bold(colors.yellow('Claude Code config (~/.claude.json):'))}
   ${colors.gray(`{
     "mcpServers": {
-      "recker-docs": {
+      "recker": {
         "command": "npx",
         "args": ["recker", "mcp"]
       }

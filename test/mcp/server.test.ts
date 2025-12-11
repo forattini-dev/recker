@@ -61,7 +61,7 @@ describe('MCP Server', () => {
 
         expect(result.result).toBeDefined();
         expect(result.result.protocolVersion).toBe('2024-11-05');
-        expect(result.result.serverInfo.name).toBe('recker-docs');
+        expect(result.result.serverInfo.name).toBe('recker');
         expect(result.result.capabilities.tools).toBeDefined();
       });
 
@@ -121,7 +121,11 @@ describe('MCP Server', () => {
 
       it('should handle prompts/list', async () => {
         const result = await sendRequest('prompts/list');
-        expect(result.result.prompts).toEqual([]);
+        expect(result.result.prompts).toHaveLength(3);
+        const names = result.result.prompts.map((p: any) => p.name);
+        expect(names).toContain('recker-expert');
+        expect(names).toContain('generate-http-client');
+        expect(names).toContain('seo-audit');
       });
 
       it('should return error for unknown method', async () => {
@@ -373,7 +377,7 @@ describe('MCP Server', () => {
 
       expect(response.status).toBe(200);
       expect(data.status).toBe('ok');
-      expect(data.name).toBe('recker-docs');
+      expect(data.name).toBe('recker');
       expect(data.docsCount).toBeGreaterThan(0);
     });
 

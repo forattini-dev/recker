@@ -25,6 +25,7 @@ import { scrapeTools, scrapeToolHandlers } from './tools/scrape.js';
 import { securityTools, securityToolHandlers } from './tools/security.js';
 import { ToolRegistry } from './tools/registry.js';
 import { loadToolModules } from './tools/loader.js';
+import { PromptRegistry } from './prompts/index.js';
 
 export type MCPTransportMode = 'stdio' | 'http' | 'sse';
 
@@ -106,11 +107,12 @@ export class MCPServer {
   private sseClients: Set<ServerResponse> = new Set();
   private initialized = false;
   private toolRegistry: ToolRegistry;
+  private promptRegistry: PromptRegistry;
   private aiClient?: AIClient;
 
   constructor(options: MCPServerOptions = {}) {
     this.options = {
-      name: options.name || 'recker-docs',
+      name: options.name || 'recker',
       version: options.version || '1.0.0',
       docsPath: options.docsPath || this.findDocsPath(),
       examplesPath: options.examplesPath || this.findExamplesPath(),
@@ -131,6 +133,7 @@ export class MCPServer {
     });
 
     this.toolRegistry = new ToolRegistry();
+    this.promptRegistry = new PromptRegistry();
     
     // Register built-in tools
     this.registerInternalTools();
@@ -1492,8 +1495,24 @@ const client = createClient({
           }
         }
 
-        case 'prompts/list':
-          return { jsonrpc: '2.0', id: id!, result: { prompts: [] } };
+        case 'prompts/list': {
+          const prompts = this.promptRegistry.listPrompts();
+          return { jsonrpc: '2.0', id: id!, result: { prompts } };
+        }
+
+        case 'prompts/get': {
+          const { name, arguments: args } = params as { name: string; arguments?: Record<string, string> };
+          try {
+            const messages = await this.promptRegistry.getPrompt(name, args);
+            return { jsonrpc: '2.0', id: id!, result: { messages } };
+          } catch (error) {
+            return {
+              jsonrpc: '2.0',
+              id: id!,
+              error: { code: -32602, message: (error as Error).message },
+            };
+          }
+        }
 
         default:
           return {

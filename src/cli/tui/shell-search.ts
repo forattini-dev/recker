@@ -435,9 +435,10 @@ const { results, stats } = await client.batch([
 
       if (data && data.documents && data.documents.length > 0) {
         for (const doc of data.documents) {
-          // Load full content for non-chunked docs (if filesystem available)
-          let content = '';
-          if (!doc.section) {
+          // Use content from embedding if available (new format), or load from filesystem
+          let content = doc.content || '';
+          
+          if (!content && !doc.section) {
             const fullPath = join(this.docsPath, doc.path);
             if (existsSync(fullPath)) {
               content = readFileSync(fullPath, 'utf-8');

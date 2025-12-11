@@ -115,7 +115,7 @@ await server.start();
 **One-liner installation:**
 
 ```bash
-claude mcp add recker-docs npx recker@latest mcp
+claude mcp add recker npx recker@latest mcp
 ```
 
 Or add manually to `~/.claude.json`:
@@ -123,7 +123,7 @@ Or add manually to `~/.claude.json`:
 ```json
 {
   "mcpServers": {
-    "recker-docs": {
+    "recker": {
       "command": "npx",
       "args": ["recker@latest", "mcp"]
     }
@@ -136,7 +136,7 @@ Or with a local installation:
 ```json
 {
   "mcpServers": {
-    "recker-docs": {
+    "recker": {
       "command": "rek",
       "args": ["mcp"]
     }
@@ -151,7 +151,7 @@ Add to your Cursor MCP settings:
 ```json
 {
   "mcpServers": {
-    "recker-docs": {
+    "recker": {
       "command": "npx",
       "args": ["recker@latest", "mcp"]
     }
@@ -164,7 +164,7 @@ Add to your Cursor MCP settings:
 ```json
 {
   "mcpServers": {
-    "recker-docs": {
+    "recker": {
       "command": "npx",
       "args": ["recker@latest", "mcp"],
       "env": {}
@@ -204,7 +204,7 @@ rek mcp transport=http port=3100
 ```json
 {
   "mcpServers": {
-    "recker-docs": {
+    "recker": {
       "transport": "http",
       "url": "http://localhost:3100"
     }
@@ -221,7 +221,7 @@ rek mcp transport=sse port=3100
 ```json
 {
   "mcpServers": {
-    "recker-docs": {
+    "recker": {
       "transport": "sse",
       "url": "http://localhost:3100/sse",
       "postUrl": "http://localhost:3100"
@@ -823,7 +823,7 @@ No critical issues found. The site follows security best practices.
 ```typescript
 interface MCPServerOptions {
   // Server identification
-  name?: string;        // Default: 'recker-docs'
+  name?: string;        // Default: 'recker'
   version?: string;     // Default: '1.0.0'
 
   // Transport
@@ -901,7 +901,7 @@ Configure your AI tool to connect remotely:
 ```json
 {
   "mcpServers": {
-    "recker-docs": {
+    "recker": {
       "transport": "http",
       "url": "http://your-server:3100"
     }
@@ -918,7 +918,7 @@ curl http://localhost:3100/health
 ```json
 {
   "status": "ok",
-  "name": "recker-docs",
+  "name": "recker",
   "version": "1.0.0",
   "docsCount": 58,
   "sseClients": 2
