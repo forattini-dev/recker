@@ -150,6 +150,8 @@
     "build:node": "tsc",
     "build:browser": "tsc -p tsconfig.browser.json",
     "build:browser:bundle": "pnpm build:browser && node scripts/bundle-browser.js",
+    "build:cli": "node scripts/bundle-cli.js",
+    "build:binary": "npx pkg ./dist/bin/rek.cjs --output dist/bin/recker --targets node18-linux-x64,node18-macos-x64,node18-win-x64",
     "build:embeddings": "tsx scripts/build-embeddings.ts",
     "prepare": "husky",
     "prepublishOnly": "pnpm build && pnpm build:embeddings && mkdir -p dist/mcp/data && cp src/mcp/data/embeddings.json dist/mcp/data/embeddings.json && node scripts/inject-version.js",
