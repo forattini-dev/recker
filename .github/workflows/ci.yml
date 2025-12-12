@@ -422,6 +422,7 @@ jobs:
           prerelease: false
           generate_release_notes: false
           files: |
+            install.sh
             src/mcp/data/embeddings.json
             dist/bin/recker-linux-x64
             dist/bin/recker-macos-x64
