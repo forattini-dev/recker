@@ -106,6 +106,25 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: pnpm run build
 
+      - name: Build CLI & Binaries (Next)
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          pnpm run build:cli
+          pnpm run build:binary
+          
+          cd dist/bin
+          mv recker-linux recker-linux-x64 || true
+          mv recker-macos recker-macos-x64 || true
+          mv recker-win.exe recker-win-x64.exe || true
+
+      - name: Upload Binaries as Artifacts
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: recker-binaries-next
+          path: dist/bin/recker-*
+          retention-days: 5
+
       - name: Publish to NPM (Next)
         if: steps.check.outputs.skip != 'true'
         run: pnpm publish --tag next --no-git-checks
@@ -235,6 +254,22 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Build CLI Bundle
+        run: pnpm run build:cli
+
+      - name: Build Binaries (pkg)
+        run: pnpm run build:binary
+
+      - name: Rename Binaries for Release
+        run: |
+          cd dist/bin
+          # Rename pkg outputs to standardized release names
+          # Note: pkg names files based on targets (e.g., recker-linux, recker-macos, recker-win.exe)
+          mv recker-linux recker-linux-x64 || true
+          mv recker-macos recker-macos-x64 || true
+          mv recker-win.exe recker-win-x64.exe || true
+          ls -la
 
       - name: Publish to NPM (Stable)
         run: pnpm publish --no-git-checks
@@ -375,6 +410,9 @@ jobs:
           echo "# GitHub Packages" >> CHANGELOG_BODY.md
           echo "npm install @forattini-dev/recker@$CURRENT_TAG --registry=https://npm.pkg.github.com" >> CHANGELOG_BODY.md
           echo "\`\`\`" >> CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+          echo "## 💻 Standalone Binaries" >> CHANGELOG_BODY.md
+          echo "No Node.js required! Download the binary for your OS below." >> CHANGELOG_BODY.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -385,6 +423,9 @@ jobs:
           generate_release_notes: false
           files: |
             src/mcp/data/embeddings.json
+            dist/bin/recker-linux-x64
+            dist/bin/recker-macos-x64
+            dist/bin/recker-win-x64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
