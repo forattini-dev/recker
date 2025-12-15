@@ -34,43 +34,6 @@
 
   <!-- Progress Bar & Lightning Animation -->
   <style>
-    /* Lightning Animation (Inlined for reliability) */
-    .lightning-anim {
-      display: inline-block;
-      animation: lightning-flash 5s infinite;
-      transform-origin: center;
-    }
-
-    @keyframes lightning-flash {
-      0%, 90%, 100% {
-        filter: brightness(1);
-        text-shadow: none;
-        transform: scale(1);
-        opacity: 1;
-      }
-      92% {
-        filter: brightness(3) drop-shadow(0 0 5px #ff8a00);
-        text-shadow: 0 0 10px #ffd166, 0 0 20px #ff8a00;
-        transform: scale(1.15) rotate(-3deg);
-        opacity: 1;
-      }
-      93% {
-        filter: brightness(1);
-        text-shadow: none;
-        transform: scale(1);
-      }
-      94% {
-        filter: brightness(5) drop-shadow(0 0 8px #ffd166);
-        text-shadow: 0 0 15px #ffd166, 0 0 30px #ff8a00;
-        transform: scale(1.25) rotate(3deg);
-      }
-      96% {
-        filter: brightness(1);
-        text-shadow: none;
-        transform: scale(1);
-      }
-    }
-
     .progress {
       position: fixed;
       top: 0;
@@ -178,7 +141,7 @@
   
   <script>
     window.$docsify = {
-      name: '<span style="display:flex;align-items:center;gap:8px"><span class="lightning-anim" style="font-size:24px">⚡</span>Recker</span>',
+      name: '<span style="display:flex;align-items:center;gap:8px"><span style="font-size:24px">⚡</span>Recker</span>',
       nameLink: '#/',
       repo: 'https://github.com/forattini-dev/recker',
       loadSidebar: true,
@@ -454,6 +417,684 @@
         return html + footer;
       });
     }, window.$docsify.plugins || []);
+  </script>
+  <!-- Recker Browser SDK -->
+  <script src="./static/recker.min.js"></script>
+  <script>
+    // Expose Recker to window for console debugging
+    window.recker = Recker.recker || Recker.default || Recker;
+    console.log('%c⚡ Recker Loaded', 'color: #ff8a00; font-size: 20px; font-weight: bold;');
+
+    // ===== File Upload State =====
+    let selectedFile = null;
+
+    window.handleFileSelect = function(files) {
+      if (files && files[0]) {
+        selectedFile = files[0];
+        const dropZone = document.getElementById('drop-zone');
+        if (dropZone) {
+          dropZone.innerHTML = `📄 ${selectedFile.name} (${(selectedFile.size/1024).toFixed(1)} KB)`;
+          dropZone.style.borderColor = '#ff8a00';
+          dropZone.style.opacity = '1';
+        }
+      }
+    };
+
+    // Initialize Drop Zone
+    setTimeout(() => {
+      const dropZone = document.getElementById('drop-zone');
+      if (dropZone) {
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.style.background = 'rgba(255, 138, 0, 0.1)';
+        });
+        dropZone.addEventListener('dragleave', (e) => {
+          e.preventDefault();
+          dropZone.style.background = 'transparent';
+        });
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.style.background = 'transparent';
+          window.handleFileSelect(e.dataTransfer.files);
+        });
+      }
+    }, 1000);
+
+    // ===== Preset Definitions =====
+    const PRESETS = {
+      chrome: {
+        name: 'Chrome Desktop',
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+      },
+      desktop: {
+        name: 'Chrome Desktop',
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+      },
+      mobile: {
+        name: 'iPhone Safari',
+        headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' }
+      },
+      bot: {
+        name: 'Googlebot',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }
+      },
+      google: {
+        name: 'Googlebot',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }
+      },
+      curl: {
+        name: 'cURL',
+        headers: { 'User-Agent': 'curl/7.88.1' }
+      },
+      json: {
+        name: 'Accept JSON',
+        headers: { 'Accept': 'application/json' }
+      },
+      xml: {
+        name: 'Accept XML',
+        headers: { 'Accept': 'application/xml, text/xml' }
+      },
+      text: {
+        name: 'Accept Text',
+        headers: { 'Accept': 'text/plain' }
+      },
+      html: {
+        name: 'Accept HTML',
+        headers: { 'Accept': 'text/html' }
+      },
+      nocache: {
+        name: 'No Cache',
+        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+      },
+      retry: {
+        name: 'Retry Enabled',
+        retry: { maxAttempts: 3, backoff: 'exponential', delay: 1000 }
+      }
+    };
+
+    // ===== Advanced CLI Parser =====
+    function parseArgs(input) {
+      const regex = /[^\s"]+|"([^"]*)"/gi;
+      const args = [];
+      let match;
+      while ((match = regex.exec(input)) !== null) {
+        args.push(match[1] ? match[1] : match[0]);
+      }
+
+      const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
+      const unsupported = ['whois', 'dns', 'tcp', 'udp', 'ping', 'hls', 'spider', 'bench', 'shell', 'serve'];
+
+      let method = 'GET';
+      let methodExplicit = false;
+      let url = '';
+      const presets = [];
+      const headers = {};
+      const data = {};
+
+      for (const arg of args) {
+        // Check unsupported commands
+        if (unsupported.includes(arg.toLowerCase())) {
+          throw new Error(`Command '${arg}' requires Node.js runtime. Try it in your terminal!`);
+        }
+
+        // Presets: +chrome, +mobile, etc.
+        if (arg.startsWith('+')) {
+          const presetName = arg.slice(1).toLowerCase();
+          if (PRESETS[presetName]) {
+            presets.push(presetName);
+          } else {
+            console.warn(`Unknown preset: ${arg}`);
+          }
+          continue;
+        }
+
+        // HTTP Methods
+        if (methods.includes(arg.toUpperCase())) {
+          method = arg.toUpperCase();
+          methodExplicit = true;
+          continue;
+        }
+
+        // Headers: Key:Value (but not :=)
+        if (arg.includes(':') && !arg.includes('://') && !arg.includes(':=')) {
+          const colonIdx = arg.indexOf(':');
+          const key = arg.slice(0, colonIdx).trim();
+          const val = arg.slice(colonIdx + 1).trim();
+          if (key && val) {
+            headers[key] = val;
+          }
+          continue;
+        }
+
+        // Data: key=value or key:=value
+        if (arg.includes('=')) {
+          const isTyped = arg.includes(':=');
+          const sep = isTyped ? ':=' : '=';
+          const idx = arg.indexOf(sep);
+          const key = arg.slice(0, idx);
+          const val = arg.slice(idx + sep.length);
+
+          if (isTyped) {
+            if (val === 'true') data[key] = true;
+            else if (val === 'false') data[key] = false;
+            else if (val === 'null') data[key] = null;
+            else if (!isNaN(Number(val))) data[key] = Number(val);
+            else data[key] = val;
+          } else {
+            data[key] = val;
+          }
+          continue;
+        }
+
+        // URL (first unrecognized arg)
+        if (!url && arg) {
+          url = arg;
+        }
+      }
+
+      // Auto POST when data present and method not explicit
+      if (!methodExplicit && Object.keys(data).length > 0) {
+        method = 'POST';
+      }
+
+      return { method, url, presets, headers, data };
+    }
+
+    // ===== Render Parsed CLI =====
+    function renderParsedCli(parsed) {
+      const { method, url, presets, headers, data } = parsed;
+      let html = '<table style="width:100%; border-collapse: collapse; font-size: 12px;">';
+
+      // Method
+      html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <td style="padding: 6px 8px; color: #4ade80; font-weight: 600; width: 100px;">Method</td>
+        <td style="padding: 6px 8px;"><span style="background: rgba(74,222,128,0.2); padding: 2px 8px; border-radius: 4px;">${method}</span></td>
+      </tr>`;
+
+      // URL
+      html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <td style="padding: 6px 8px; color: #60a5fa; font-weight: 600;">URL</td>
+        <td style="padding: 6px 8px; word-break: break-all;">${url || '<span style="opacity:0.5">none</span>'}</td>
+      </tr>`;
+
+      // Presets
+      if (presets.length > 0) {
+        const presetBadges = presets.map(p => {
+          const info = PRESETS[p];
+          return `<span style="background: rgba(255,138,0,0.2); color: #ff8a00; padding: 2px 8px; border-radius: 4px; margin-right: 4px;" title="${info?.name || p}">+${p}</span>`;
+        }).join('');
+        html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <td style="padding: 6px 8px; color: #ff8a00; font-weight: 600;">Presets</td>
+          <td style="padding: 6px 8px;">${presetBadges}</td>
+        </tr>`;
+      }
+
+      // Headers
+      if (Object.keys(headers).length > 0) {
+        const headerRows = Object.entries(headers).map(([k,v]) =>
+          `<div style="margin: 2px 0;"><span style="color: #60a5fa;">${k}</span>: ${v}</div>`
+        ).join('');
+        html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <td style="padding: 6px 8px; color: #60a5fa; font-weight: 600; vertical-align: top;">Headers</td>
+          <td style="padding: 6px 8px;">${headerRows}</td>
+        </tr>`;
+      }
+
+      // Data
+      if (Object.keys(data).length > 0) {
+        const dataRows = Object.entries(data).map(([k,v]) => {
+          const type = typeof v;
+          const color = type === 'number' ? '#f472b6' : type === 'boolean' ? '#fbbf24' : '#c084fc';
+          return `<div style="margin: 2px 0;"><span style="color: ${color};">${k}</span>: ${JSON.stringify(v)} <span style="opacity:0.5; font-size:10px;">(${type})</span></div>`;
+        }).join('');
+        html += `<tr>
+          <td style="padding: 6px 8px; color: #c084fc; font-weight: 600; vertical-align: top;">Body Data</td>
+          <td style="padding: 6px 8px;">${dataRows}</td>
+        </tr>`;
+      }
+
+      html += '</table>';
+      return html;
+    }
+
+    // ===== Render Request Details =====
+    function renderRequestDetails(method, url, allHeaders, bodyData, options) {
+      let html = '<table style="width:100%; border-collapse: collapse; font-size: 12px;">';
+
+      html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <td style="padding: 6px 8px; color: #4ade80; font-weight: 600; width: 100px;">Method</td>
+        <td style="padding: 6px 8px;"><span style="background: rgba(74,222,128,0.2); padding: 2px 8px; border-radius: 4px;">${method}</span></td>
+      </tr>`;
+
+      html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <td style="padding: 6px 8px; color: #60a5fa; font-weight: 600;">Final URL</td>
+        <td style="padding: 6px 8px; word-break: break-all; font-size: 11px;">${url}</td>
+      </tr>`;
+
+      // Options
+      const optionsList = [];
+      if (options.proxy) optionsList.push('CORS Proxy');
+      if (options.har) optionsList.push('HAR Recording');
+      if (options.slow) optionsList.push('Slow Network');
+
+      if (optionsList.length > 0) {
+        html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <td style="padding: 6px 8px; color: #fbbf24; font-weight: 600;">Options</td>
+          <td style="padding: 6px 8px;">${optionsList.map(o => `<span style="background: rgba(251,191,36,0.2); padding: 2px 6px; border-radius: 4px; margin-right: 4px; font-size: 11px;">${o}</span>`).join('')}</td>
+        </tr>`;
+      }
+
+      // All Headers (merged)
+      if (Object.keys(allHeaders).length > 0) {
+        const headerRows = Object.entries(allHeaders).map(([k,v]) =>
+          `<div style="margin: 2px 0;"><span style="color: #60a5fa;">${k}</span>: <span style="opacity: 0.8; font-size: 11px;">${v.length > 60 ? v.slice(0,60) + '...' : v}</span></div>`
+        ).join('');
+        html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <td style="padding: 6px 8px; color: #60a5fa; font-weight: 600; vertical-align: top;">Headers</td>
+          <td style="padding: 6px 8px;">${headerRows}</td>
+        </tr>`;
+      }
+
+      // Body
+      if (bodyData && Object.keys(bodyData).length > 0) {
+        html += `<tr>
+          <td style="padding: 6px 8px; color: #c084fc; font-weight: 600; vertical-align: top;">Body</td>
+          <td style="padding: 6px 8px;"><pre style="margin:0; font-size:11px; opacity:0.9;">${JSON.stringify(bodyData, null, 2)}</pre></td>
+        </tr>`;
+      }
+
+      html += '</table>';
+      return html;
+    }
+
+    // ===== Render Timings Bar =====
+    function renderTimings(timings, totalMs) {
+      const colors = {
+        dns: '#60a5fa',
+        tcp: '#4ade80',
+        tls: '#fbbf24',
+        ttfb: '#f472b6',
+        download: '#c084fc',
+        total: '#ff8a00'
+      };
+
+      const timingBar = document.getElementById('timing-visual');
+      const timingLabels = document.getElementById('timing-labels');
+      const timingsBar = document.getElementById('timings-bar');
+
+      if (!timingsBar) return;
+
+      // Simple timing breakdown (simulated for browser)
+      const segments = [
+        { name: 'Request', time: totalMs * 0.3, color: '#4ade80' },
+        { name: 'TTFB', time: totalMs * 0.4, color: '#fbbf24' },
+        { name: 'Download', time: totalMs * 0.3, color: '#c084fc' }
+      ];
+
+      timingBar.innerHTML = segments.map(s =>
+        `<div style="flex: ${s.time}; background: ${s.color}; min-width: 2px;" title="${s.name}: ${Math.round(s.time)}ms"></div>`
+      ).join('');
+
+      timingLabels.innerHTML = segments.map(s =>
+        `<span><span style="display:inline-block; width:8px; height:8px; background:${s.color}; border-radius:2px; margin-right:4px;"></span>${s.name}: ${Math.round(s.time)}ms</span>`
+      ).join('') + `<span style="margin-left: auto; font-weight: 600; color: #ff8a00;">Total: ${Math.round(totalMs)}ms</span>`;
+
+      timingsBar.style.display = 'block';
+    }
+
+    // ===== Main Terminal Runner =====
+    window.runTerminal = async function() {
+      const input = document.getElementById('cli-input')?.value || '';
+      const cliParsed = document.getElementById('cli-parsed');
+      const requestDetails = document.getElementById('request-details');
+      const responseBody = document.getElementById('response-body');
+      const responseStatus = document.getElementById('response-status');
+      const timingsBar = document.getElementById('timings-bar');
+
+      const useProxy = document.getElementById('useProxy')?.checked ?? true;
+      const recordHar = document.getElementById('recordHar')?.checked ?? false;
+      const simulateSlow = document.getElementById('simulateSlow')?.checked ?? false;
+
+      if (!responseBody) return;
+
+      // Reset UI
+      if (cliParsed) cliParsed.innerHTML = '<div style="opacity:0.5">Parsing...</div>';
+      if (requestDetails) requestDetails.innerHTML = '<div style="opacity:0.5">Preparing request...</div>';
+      responseBody.textContent = 'Sending request...';
+      if (responseStatus) responseStatus.textContent = '';
+      if (timingsBar) timingsBar.style.display = 'none';
+
+      try {
+        // 1. Parse CLI
+        const parsed = parseArgs(input);
+        if (cliParsed) cliParsed.innerHTML = renderParsedCli(parsed);
+
+        if (!parsed.url) {
+          responseBody.textContent = 'Error: URL is required';
+          return;
+        }
+
+        // 2. Build final URL and headers
+        let url = parsed.url;
+        if (!url.startsWith('http')) url = 'https://' + url;
+
+        // Merge preset headers
+        const mergedHeaders = {};
+        for (const presetName of parsed.presets) {
+          const preset = PRESETS[presetName];
+          if (preset?.headers) {
+            Object.assign(mergedHeaders, preset.headers);
+          }
+        }
+        // User headers override presets
+        Object.assign(mergedHeaders, parsed.headers);
+
+        // Apply CORS proxy
+        let finalUrl = url;
+        if (useProxy) {
+          finalUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+        }
+
+        // 3. Render request details
+        if (requestDetails) {
+          requestDetails.innerHTML = renderRequestDetails(
+            parsed.method,
+            finalUrl,
+            mergedHeaders,
+            Object.keys(parsed.data).length > 0 ? parsed.data : null,
+            { proxy: useProxy, har: recordHar, slow: simulateSlow }
+          );
+        }
+
+        // 4. Execute request
+        const start = performance.now();
+
+        const client = recker.client({ headers: mergedHeaders });
+
+        if (simulateSlow) {
+          client.use(recker.simulateNetwork({ latency: 1000 }));
+        }
+
+        if (recordHar) {
+          client.use(recker.har.plugin());
+          recker.har.start();
+        }
+
+        const options = { method: parsed.method };
+        if (Object.keys(parsed.data).length > 0) {
+          options.json = parsed.data;
+        }
+
+        // File upload
+        if (selectedFile) {
+          delete options.json;
+          options.form = { file: selectedFile, ...parsed.data };
+        }
+
+        const res = await client[parsed.method.toLowerCase()](finalUrl, options);
+
+        if (recordHar) {
+          recker.har.stop();
+          recker.har.download(`recker-playground-${Date.now()}.har`);
+        }
+
+        const duration = performance.now() - start;
+
+        // 5. Render response
+        const contentType = res.headers.get('content-type') || '';
+        let bodyData;
+        if (contentType.includes('application/json')) {
+          bodyData = await res.json();
+        } else {
+          bodyData = await res.text();
+        }
+
+        const statusColor = res.status < 300 ? '#4ade80' : res.status < 400 ? '#fbbf24' : '#ef4444';
+        if (responseStatus) {
+          responseStatus.innerHTML = `<span style="color:${statusColor}">${res.status}</span> • ${Math.round(duration)}ms`;
+        }
+
+        renderTimings({}, duration);
+
+        const formatted = typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData, null, 2);
+        responseBody.textContent = formatted;
+
+      } catch (err) {
+        responseBody.textContent = `Error: ${err.message}\n\n(If CORS error, make sure "CORS Proxy" is checked)`;
+        console.error(err);
+      }
+    };
+
+    // ===== SEO Analysis =====
+    window.runSeoAnalysis = async function() {
+      const urlInput = document.getElementById('seo-url');
+      const useProxy = document.getElementById('seo-proxy')?.checked ?? true;
+      const resultsDiv = document.getElementById('seo-results');
+      const placeholder = document.getElementById('seo-placeholder');
+
+      if (!urlInput || !resultsDiv) return;
+
+      let url = urlInput.value.trim();
+      if (!url) return;
+      if (!url.startsWith('http')) url = 'https://' + url;
+
+      // Show loading
+      if (placeholder) placeholder.innerHTML = '<div style="font-size: 48px; margin-bottom: 15px;">⏳</div><div>Analyzing...</div>';
+
+      try {
+        const start = performance.now();
+
+        let fetchUrl = url;
+        if (useProxy) {
+          fetchUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+        }
+
+        const res = await recker.get(fetchUrl);
+        const html = await res.text();
+
+        const report = await recker.seo(html, { baseUrl: url });
+        const duration = Math.round(performance.now() - start);
+
+        // Hide placeholder, show results
+        if (placeholder) placeholder.style.display = 'none';
+        resultsDiv.style.display = 'block';
+
+        // Grade Badge
+        const gradeColors = { A: '#4ade80', B: '#a3e635', C: '#fbbf24', D: '#f97316', F: '#ef4444' };
+        const gradeBadge = document.getElementById('seo-grade-badge');
+        if (gradeBadge) {
+          gradeBadge.textContent = report.grade;
+          gradeBadge.style.background = `linear-gradient(135deg, ${gradeColors[report.grade] || '#888'}, ${gradeColors[report.grade] || '#888'}88)`;
+        }
+
+        // Score
+        const scoreEl = document.getElementById('seo-score');
+        if (scoreEl) scoreEl.textContent = report.score;
+
+        // Summary
+        const summaryEl = document.getElementById('seo-summary');
+        if (summaryEl) {
+          summaryEl.textContent = `${report.title?.text || 'No title'} • ${report.metaDescription?.text?.slice(0, 60) || 'No description'}...`;
+        }
+
+        // Timing
+        const timingEl = document.getElementById('seo-timing');
+        if (timingEl) timingEl.textContent = `Analyzed in ${duration}ms`;
+
+        // Stats
+        const checks = report.checks || [];
+        const passed = checks.filter(c => c.status === 'pass').length;
+        const warnings = checks.filter(c => c.status === 'warn').length;
+        const errors = checks.filter(c => c.status === 'fail').length;
+        const info = checks.filter(c => c.status === 'info').length;
+
+        document.getElementById('seo-passed').textContent = passed;
+        document.getElementById('seo-warnings').textContent = warnings;
+        document.getElementById('seo-errors').textContent = errors;
+        document.getElementById('seo-info').textContent = info;
+
+        // Completeness bars
+        const completenessDiv = document.getElementById('completeness-bars');
+        if (completenessDiv && report.summary?.completeness) {
+          const categories = [
+            { key: 'meta', label: 'Meta Tags', color: '#ff8a00' },
+            { key: 'social', label: 'Social', color: '#60a5fa' },
+            { key: 'technical', label: 'Technical', color: '#4ade80' },
+            { key: 'content', label: 'Content', color: '#c084fc' },
+            { key: 'images', label: 'Images', color: '#f472b6' }
+          ];
+
+          completenessDiv.innerHTML = categories.map(cat => {
+            const value = report.summary.completeness[cat.key] || 0;
+            return `
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 80px; font-size: 12px; opacity: 0.8;">${cat.label}</span>
+                <div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                  <div style="width: ${value}%; height: 100%; background: ${cat.color}; border-radius: 4px; transition: width 0.5s;"></div>
+                </div>
+                <span style="width: 40px; text-align: right; font-size: 12px; font-weight: 600;">${value}%</span>
+              </div>
+            `;
+          }).join('');
+        }
+
+        // Keywords cloud
+        const keywordsDiv = document.getElementById('keywords-cloud');
+        if (keywordsDiv && report.keywords) {
+          const topKeywords = report.keywords.slice(0, 15);
+          keywordsDiv.innerHTML = topKeywords.map((kw, i) => {
+            const size = Math.max(12, 20 - i);
+            const opacity = Math.max(0.5, 1 - i * 0.05);
+            return `<span style="background: rgba(255,138,0,0.15); color: #ff8a00; padding: 4px 10px; border-radius: 20px; font-size: ${size}px; opacity: ${opacity};">${kw.keyword} <span style="opacity:0.6; font-size:10px;">${kw.count}</span></span>`;
+          }).join('');
+        }
+
+        // Issues
+        const issuesDiv = document.getElementById('seo-issues');
+        if (issuesDiv) {
+          const issues = checks.filter(c => c.status === 'fail' || c.status === 'warn').slice(0, 10);
+          if (issues.length === 0) {
+            issuesDiv.innerHTML = '<div style="color: #4ade80; text-align: center; padding: 20px;">✅ All checks passed!</div>';
+          } else {
+            issuesDiv.innerHTML = issues.map(issue => {
+              const icon = issue.status === 'fail' ? '❌' : '⚠️';
+              const bgColor = issue.status === 'fail' ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)';
+              return `<div style="background: ${bgColor}; padding: 10px 12px; border-radius: 6px; font-size: 13px;">
+                <span style="margin-right: 8px;">${icon}</span>${issue.message}
+              </div>`;
+            }).join('');
+          }
+        }
+
+      } catch (err) {
+        if (placeholder) {
+          placeholder.innerHTML = `<div style="font-size: 48px; margin-bottom: 15px;">❌</div><div>Error: ${err.message}</div>`;
+          placeholder.style.display = 'block';
+        }
+        resultsDiv.style.display = 'none';
+        console.error(err);
+      }
+    };
+
+    // ===== Tabs Logic =====
+    window.switchMode = function(mode) {
+      const modes = ['terminal', 'seo', 'chat'];
+      const colors = { terminal: '#ff8a00', seo: '#10b981', chat: '#ff8a00' };
+
+      modes.forEach(m => {
+        const modeDiv = document.getElementById(`mode-${m}`);
+        const btn = document.getElementById(`btn-${m}`);
+
+        if (modeDiv) modeDiv.style.display = m === mode ? 'block' : 'none';
+        if (btn) {
+          if (m === mode) {
+            btn.style.color = colors[m];
+            btn.style.borderBottom = `2px solid ${colors[m]}`;
+            btn.style.background = `rgba(${m === 'seo' ? '16,185,129' : '255,138,0'}, 0.15)`;
+            btn.style.opacity = '1';
+          } else {
+            btn.style.color = 'var(--text-color)';
+            btn.style.borderBottom = 'none';
+            btn.style.background = 'none';
+            btn.style.opacity = '0.7';
+          }
+        }
+      });
+    };
+
+    // ===== AI Chat Logic =====
+    let aiClient = null;
+
+    window.saveKey = function() {
+      const key = document.getElementById('ai-key')?.value;
+      if (key) localStorage.setItem('recker_openai_key', key);
+    };
+
+    window.sendChat = async function() {
+      const input = document.getElementById('chat-input');
+      const history = document.getElementById('chat-history');
+      const keyInput = document.getElementById('ai-key');
+
+      if (!input || !history) return;
+
+      const msg = input.value.trim();
+      if (!msg) return;
+
+      let apiKey = keyInput?.value || localStorage.getItem('recker_openai_key');
+      if (!apiKey) {
+        alert('Please enter an OpenAI API Key');
+        return;
+      }
+      if (keyInput) keyInput.value = apiKey;
+
+      // Clear placeholder
+      if (history.children.length === 1 && history.children[0].textContent.includes('Enter your API key')) {
+        history.innerHTML = '';
+      }
+
+      // Add user message
+      const userDiv = document.createElement('div');
+      userDiv.style.cssText = 'align-self: flex-end; background: #ff8a00; color: white; padding: 8px 12px; border-radius: 12px 12px 0 12px; max-width: 80%;';
+      userDiv.textContent = msg;
+      history.appendChild(userDiv);
+      input.value = '';
+
+      // Add bot message (loading)
+      const botDiv = document.createElement('div');
+      botDiv.style.cssText = 'align-self: flex-start; background: rgba(128, 128, 128, 0.1); padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 80%;';
+      botDiv.textContent = '...';
+      history.appendChild(botDiv);
+      history.scrollTop = history.scrollHeight;
+
+      try {
+        if (!aiClient) {
+          aiClient = recker.ai({
+            defaultProvider: 'openai',
+            providers: { openai: { apiKey } }
+          });
+        }
+
+        const stream = await aiClient.stream({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: msg }]
+        });
+
+        let fullText = '';
+        botDiv.textContent = '';
+
+        for await (const event of stream) {
+          if (event.type === 'text') {
+            fullText += event.content;
+            botDiv.textContent = fullText;
+            history.scrollTop = history.scrollHeight;
+          }
+        }
+      } catch (err) {
+        botDiv.textContent = 'Error: ' + err.message;
+        botDiv.style.color = '#ff4444';
+        console.error(err);
+      }
+    };
   </script>
 </body>
 </html>
