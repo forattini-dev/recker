@@ -35,8 +35,12 @@ import { Client, createClient, type ExtendedClientOptions } from '../core/client
 import { type RequestPromise } from '../core/request-promise.js';
 import type { RequestOptions } from '../types/index.js';
 import { FetchTransport } from '../transport/fetch.js';
+import { analyzeSeo } from '../seo/analyzer.js';
+import { createAI } from '../ai/index.js';
+import { harRecorder } from '../plugins/har-recorder.js';
+import { simulateNetwork } from '../plugins/network-simulation.js';
 
-// NOTE: WebSocket and AI are excluded from browser build due to Node.js dependencies
+// NOTE: WebSocket uses native browser API
 // Users can use native WebSocket API directly in the browser
 
 // ============================================================================
@@ -131,11 +135,13 @@ export function ws(url: string, protocols?: string | string[]): WebSocket {
  * Available features:
  * - HTTP: recker.get(), recker.post(), etc.
  * - WebSocket: recker.ws() (native browser WebSocket)
+ * - AI: recker.ai() - full AI layer support
+ * - SEO: recker.seo() - SEO analysis
+ * - HAR: recker.har - record/export HAR files
  *
  * NOT available in browser (Node.js only):
  * - WHOIS: recker.whois() - requires raw sockets
  * - DNS: recker.dns() - requires Node.js dns module
- * - AI: recker.ai - requires Node.js for some providers
  *
  * @example
  * ```typescript
@@ -147,6 +153,10 @@ export function ws(url: string, protocols?: string | string[]): WebSocket {
  * // WebSocket (native browser API)
  * const socket = recker.ws('wss://api.example.com/ws');
  * socket.onmessage = (event) => console.log(event.data);
+ *
+ * // AI
+ * const ai = recker.ai({ defaultProvider: 'openai', providers: { openai: { apiKey: '...' } } });
+ * const response = await ai.chat('Hello!');
  * ```
  */
 export const recker = {
@@ -171,6 +181,39 @@ export const recker = {
 
   /** WebSocket connection (native browser API) */
   ws,
+
+  // ========== SEO ==========
+
+  /** 
+   * Analyze SEO for HTML content 
+   * @example const report = await recker.seo(html, { baseUrl: 'https://example.com' })
+   */
+  seo: analyzeSeo,
+
+  // ========== AI ==========
+
+  /**
+   * Create an AI client
+   * @example const ai = recker.ai({ defaultProvider: 'openai', providers: { openai: { apiKey: '...' } } })
+   */
+  ai: createAI,
+
+  // ========== Debugging ==========
+
+  /**
+   * Browser HAR Recorder
+   * @example
+   * recker.har.start();
+   * await recker.get('/api');
+   * recker.har.download();
+   */
+  har: harRecorder,
+
+  /**
+   * Simulate poor network conditions
+   * @example recker.client({ plugins: [recker.simulateNetwork({ latency: 1000 })] })
+   */
+  simulateNetwork,
 
   // ========== Configuration ==========
 
@@ -205,8 +248,6 @@ export const recker = {
     'dnsSecurity',
     'dnsClient',
     'whoisClient',
-    'ai',
-    'aiClient',
   ] as const,
 };
 

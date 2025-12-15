@@ -6,11 +6,14 @@ This document provides a complete comparison between the browser and Node.js bui
 
 | Aspect | Node.js | Browser |
 |--------|---------|---------|
-| **Features** | 100% | ~70% |
+| **Features** | 100% | ~85% |
+| **Bundle Size** | N/A | 800KB minified |
 | **Transport** | Undici (high-performance) | Fetch API |
 | **Crypto** | Node.js crypto (sync) | SubtleCrypto (async) |
-| **Cache** | Memory, File, Redis | Memory, IndexedDB |
+| **Cache** | Memory, File, Redis | Memory, IndexedDB, Service Worker |
 | **Protocols** | HTTP, WS, FTP, SFTP, DNS, WHOIS | HTTP, WS only |
+| **AI** | ✅ Full | ✅ Full |
+| **Presets** | ✅ 38 APIs | ✅ 38 APIs |
 
 ## Complete Feature Matrix
 
@@ -63,8 +66,8 @@ This document provides a complete comparison between the browser and Node.js bui
 |--------|:-------:|:-------:|-------|
 | logger | ✅ | ✅ | Uses console.log in browser |
 | server-timing | ✅ | ✅ | Header parsing |
-| har-recorder | ✅ | ❌ | Requires file I/O |
-| har-player | ✅ | ❌ | Requires file I/O |
+| har-recorder | ✅ | ✅ | Browser uses Blob + download |
+| har-player | ✅ | ⚠️ | Browser needs manual HAR import |
 
 ### Plugins (Performance)
 
@@ -122,13 +125,15 @@ This document provides a complete comparison between the browser and Node.js bui
 
 | Feature | Node.js | Browser | Notes |
 |---------|:-------:|:-------:|-------|
-| AI Layer | ✅ | ❌ | Node.js dependencies |
-| 38 API Presets | ✅ | ❌ | Some require AI layer |
+| AI Layer | ✅ | ✅ | Full support via Fetch |
+| 38 API Presets | ✅ | ✅ | All presets available |
 | CLI (`rek`) | ✅ | ❌ | Terminal-only |
 | MCP Server | ✅ | ❌ | Node.js process |
 | GeoIP | ✅ | ❌ | MaxMind database |
 | Proxy rotation | ✅ | ❌ | Network access |
 | Interface rotation | ✅ | ❌ | Network access |
+| Service Worker Cache | ❌ | ✅ | Persistent cache via Cache API |
+| Network Simulation | ✅ | ✅ | Simulate latency/offline |
 
 ## Why Features Are Missing
 
@@ -141,9 +146,9 @@ Browsers don't provide raw TCP/UDP socket access for security reasons. This affe
 
 ### File System Access
 Browsers have limited file system access:
-- **HAR Recording**: Needs to write files
-- **File Cache**: Needs persistent storage (use IndexedDB instead)
-- **GeoIP**: Needs to read MaxMind database files
+- **HAR Recording**: ✅ Works! Uses Blob + download for export
+- **File Cache**: Use IndexedDB or Service Worker Cache instead
+- **GeoIP**: Needs to read MaxMind database files (Node.js only)
 
 ### Client Certificates (mTLS)
 Browsers don't expose APIs for programmatic client certificates:
@@ -151,8 +156,8 @@ Browsers don't expose APIs for programmatic client certificates:
 
 ### Node.js Dependencies
 Some features depend on Node.js-specific modules:
-- **AI Layer**: Some providers use Node.js streams
-- **CLI**: Uses terminal APIs
+- **AI Layer**: ✅ Available in browser via Fetch transport
+- **CLI**: Uses terminal APIs (Node.js only)
 
 ## Transport Differences
 
@@ -176,7 +181,7 @@ const client = createClient({
 - Request pipelining
 - Low-level timing hooks
 
-### Browser: FetchTransport
+### Browser: FetchTransport (Default)
 
 ```typescript
 import { createClient, FetchTransport } from 'recker/browser';
@@ -195,6 +200,35 @@ const client = createClient({
 - Automatic HTTP/2 and HTTP/3
 - Built-in CORS handling
 - Service Worker compatible
+- Streaming support (SSE, chunked responses)
+
+### Browser: WorkerTransport (Background)
+
+```typescript
+import { createClient, WorkerTransport } from 'recker/browser';
+
+// Requests run in Web Worker pool (non-blocking)
+const client = createClient({
+  transport: new WorkerTransport({
+    poolSize: 4  // Number of workers (default: CPU cores)
+  })
+});
+
+// Check support before using
+if (WorkerTransport.isSupported()) {
+  const workerClient = createClient({ transport: new WorkerTransport() });
+}
+```
+
+**Benefits:**
+- Non-blocking: Requests don't block main UI thread
+- Better UX: Smooth scrolling during large downloads
+- Parallelism: True multi-threaded HTTP requests
+
+**Limitations:**
+- No streaming: Response body fully buffered
+- No SSE: Use FetchTransport for Server-Sent Events
+- No progress: Download progress not available
 
 ## Crypto Differences
 
@@ -245,20 +279,39 @@ client.use(cache({ storage: new RedisStorage('redis://localhost') }));
 ### Browser Options
 
 ```typescript
-import { createClient, MemoryStorage, IndexedDBStorage } from 'recker/browser';
+import { createClient, MemoryStorage, IndexedDBStorage, ServiceWorkerCache } from 'recker/browser';
 import { cache } from 'recker/plugins';
 
 // Memory (lost on page reload)
 client.use(cache({ storage: new MemoryStorage() }));
 
 // IndexedDB (persistent across sessions)
-const storage = new IndexedDBStorage({
-  dbName: 'my-cache',
-  maxEntries: 1000,
-  ttl: 3600000 // 1 hour
-});
-await storage.init();
-client.use(cache({ storage }));
+const idbStorage = new IndexedDBStorage('my-cache');
+client.use(cache({ storage: idbStorage }));
+
+// Service Worker Cache (modern, persistent, fast)
+// Best for production - uses browser's Cache API
+const swCache = new ServiceWorkerCache({ cacheName: 'my-app-v1' });
+client.use(cache({ storage: swCache }));
+
+// Check if Service Worker Cache is supported
+if (ServiceWorkerCache.isSupported()) {
+  client.use(cache({ storage: new ServiceWorkerCache() }));
+}
+```
+
+### Service Worker Cache Features
+
+```typescript
+import { ServiceWorkerCache } from 'recker/browser';
+
+const swCache = new ServiceWorkerCache({ cacheName: 'api-cache' });
+
+// Manual cache operations
+const keys = await swCache.keys();     // List all cached keys
+const size = await swCache.size();     // Get cache size
+await swCache.prune();                 // Remove expired entries
+await swCache.clear();                 // Clear entire cache
 ```
 
 ## Checking Availability at Runtime
@@ -273,7 +326,8 @@ if (recker.isBrowser) {
 
 // List unavailable features
 console.log('Unavailable:', recker.unavailable);
-// ['whois', 'whoisAvailable', 'dns', 'dnsSecurity', 'dnsClient', 'whoisClient', 'ai', 'aiClient']
+// ['whois', 'whoisAvailable', 'dns', 'dnsSecurity', 'dnsClient', 'whoisClient']
+// Note: AI and presets ARE available in browser!
 
 // Feature detection
 function hasFeature(feature: string): boolean {
