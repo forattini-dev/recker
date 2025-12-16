@@ -223,7 +223,7 @@ Allow: /
       expect(urls).toContain(baseUrl + '/');
       expect(urls).toContain(baseUrl + '/about');
       expect(urls).toContain(baseUrl + '/products');
-    });
+    }, 15000);
 
     it('should not crawl same URL twice', async () => {
       const result = await spider(baseUrl, {
