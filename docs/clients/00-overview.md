@@ -6,25 +6,25 @@ Recker provides three HTTP clients for different use cases, all with consistent 
 
 | Feature | Standard Client | Mini Client | Browser Client |
 |---------|-----------------|-------------|----------------|
-| **Transport** | undici | undici (direct) | fetch |
+| **Transport** | undici | undici | fetch |
 | **Environment** | Node.js | Node.js | Browser |
-| **HTTP Methods** | All (10) | All (10) | 8 shortcuts* |
+| **HTTP Methods** | 10 | 10 | 8* |
 | **Middleware/Plugins** | Yes | No | Yes |
 | **Hooks (before/after)** | Yes | No | Yes |
 | **Retry** | Yes | No | Yes |
-| **Cache** | Yes | No | Yes (IndexedDB) |
+| **Cache** | Yes | No | Yes |
 | **Rate Limiting** | Yes | No | Yes |
-| **Auth Plugins** | Yes | No | Yes (15/16) |
+| **Auth Plugins** | Yes | No | Yes |
 | **Timeout Handling** | Yes | Manual | Yes |
 | **Chainable Response** | Yes | No | Yes |
 | **JSON Auto-parse** | Yes | Yes | Yes |
 | **HAR Recording** | Yes | No | Yes |
-| **WebSocket** | Yes | No | Yes (native) |
+| **WebSocket** | Yes | No | Yes |
 | **SEO Analysis** | Yes | No | Yes |
 | **AI Integration** | Yes | No | Yes |
 | **Overhead** | ~86µs | ~2µs | ~50µs |
 
-> *Browser shortcuts expose 8 methods. Full Client via `recker.client()` has all 10, but TRACE/CONNECT are blocked by fetch spec.
+> *TRACE/CONNECT blocked by fetch spec
 
 ## HTTP Methods Support
 
