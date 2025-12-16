@@ -22,7 +22,15 @@ export const structuralRules: SeoRule[] = [
           { id: 'h1-exists', name: 'H1 Tag', category: 'headings', severity: 'error' },
           'fail',
           'Missing H1 heading',
-          { recommendation: 'Add a single H1 heading. It should be the main headline and include your primary keyword.' }
+          {
+            recommendation: 'Add a single H1 heading. It should be the main headline and include your primary keyword.',
+            evidence: {
+              found: 'No H1 tags detected on the page',
+              expected: 'Exactly one <h1> tag',
+              impact: 'The H1 tag is the most important heading for SEO. It tells search engines and users what the main topic of the page is. Pages without an H1 have poor semantic structure and may rank lower.',
+              example: '<h1>Your Main Page Title Here</h1>'
+            }
+          }
         );
       }
       if (ctx.h1Count > 1) {
@@ -30,7 +38,16 @@ export const structuralRules: SeoRule[] = [
           { id: 'h1-exists', name: 'H1 Tag', category: 'headings', severity: 'error' },
           'warn',
           `Multiple H1 tags (${ctx.h1Count} found)`,
-          { value: ctx.h1Count, recommendation: 'Use only one H1 per page to clearly signal the main topic.' }
+          {
+            value: ctx.h1Count,
+            recommendation: 'Use only one H1 per page to clearly signal the main topic.',
+            evidence: {
+              found: `${ctx.h1Count} H1 tags on the page`,
+              expected: 'Exactly one <h1> tag',
+              impact: 'Multiple H1 tags dilute the main topic signal and confuse search engines about which heading is the primary page title. This can hurt topical relevance and rankings.',
+              example: '<h1>Main Title</h1>\n<!-- Use H2 for subtopics instead -->\n<h2>Subtopic One</h2>\n<h2>Subtopic Two</h2>'
+            }
+          }
         );
       }
       return createResult(
@@ -63,7 +80,16 @@ export const structuralRules: SeoRule[] = [
           { id: 'h1-length', name: 'H1 Length', category: 'headings', severity: 'warning' },
           'warn',
           `H1 too short (${len} chars, min: ${minLength})`,
-          { value: len, recommendation: `Expand H1 to at least ${minLength} characters` }
+          {
+            value: len,
+            recommendation: `Expand H1 to at least ${minLength} characters`,
+            evidence: {
+              found: `H1 with ${len} characters: "${ctx.h1Text}"`,
+              expected: `${minLength}-${maxLength} characters`,
+              impact: 'Very short H1 tags may not provide enough context for search engines and users to understand the page topic. Descriptive H1s improve relevance signals and click-through rates.',
+              example: '<h1>Complete Guide to SEO Best Practices</h1>'
+            }
+          }
         );
       }
       if (len > maxLength) {
@@ -71,7 +97,16 @@ export const structuralRules: SeoRule[] = [
           { id: 'h1-length', name: 'H1 Length', category: 'headings', severity: 'warning' },
           'warn',
           `H1 too long (${len} chars, max: ${maxLength})`,
-          { value: len, recommendation: `Shorten H1 to under ${maxLength} characters` }
+          {
+            value: len,
+            recommendation: `Shorten H1 to under ${maxLength} characters`,
+            evidence: {
+              found: `H1 with ${len} characters: "${ctx.h1Text}"`,
+              expected: `${minLength}-${maxLength} characters`,
+              impact: 'Overly long H1 tags can be truncated in search results and may appear unfocused. Concise H1s are more scannable and effective for both users and search engines.',
+              example: '<h1>SEO Guide: On-Page Optimization Tips</h1>'
+            }
+          }
         );
       }
       return createResult(
@@ -103,7 +138,15 @@ export const structuralRules: SeoRule[] = [
           { id: 'heading-hierarchy', name: 'Heading Hierarchy', category: 'headings', severity: 'warning' },
           'warn',
           `Heading levels are skipped (${skipped})`,
-          { recommendation: 'Use sequential heading levels (H1 → H2 → H3)' }
+          {
+            recommendation: 'Use sequential heading levels (H1 → H2 → H3)',
+            evidence: {
+              found: `Skipped heading levels: ${skipped}`,
+              expected: 'Sequential heading structure (H1 → H2 → H3 → H4, etc.)',
+              impact: 'Skipping heading levels disrupts the document outline and can confuse screen readers and search engine crawlers trying to understand content hierarchy. This weakens accessibility and semantic structure.',
+              example: '<h1>Main Title</h1>\n<h2>Section Title</h2>\n<h3>Subsection Title</h3>\n<!-- Do NOT skip from H1 to H3 -->'
+            }
+          }
         );
       }
       return createResult(
@@ -303,7 +346,8 @@ export const structuralRules: SeoRule[] = [
             evidence: {
               found: `H1: "${ctx.h1Text}"`,
               expected: `Should contain one of: ${ctx.topKeywords.join(', ')}`,
-              impact: 'Keywords in H1 confirm relevance to the user and search engines.'
+              impact: 'Keywords in H1 confirm relevance to the user and search engines. The H1 should naturally include your primary target keyword to reinforce the page topic and improve rankings for that term.',
+              example: `<h1>Complete Guide to ${ctx.topKeywords?.[0] || 'Your Primary Keyword'}</h1>`
             }
           }
         );

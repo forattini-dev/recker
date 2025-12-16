@@ -165,7 +165,15 @@ export const metaRules: SeoRule[] = [
           { id: 'title-h1-different', name: 'Title vs H1', category: 'title', severity: 'warning' },
           'warn',
           'Title and H1 are identical',
-          { recommendation: 'Consider making H1 slightly different from title for variety' }
+          {
+            recommendation: 'Consider making H1 slightly different from title for variety',
+            evidence: {
+              found: `Both are: "${ctx.title}"`,
+              expected: 'Similar but not identical text (variation helps SEO)',
+              impact: 'Identical title and H1 waste an opportunity to include related keywords and may appear redundant',
+              example: 'Title: "Buy Running Shoes Online - Free Shipping"\nH1: "Best Running Shoes - Shop Now"'
+            }
+          }
         );
       }
       return createResult(
@@ -300,7 +308,15 @@ export const metaRules: SeoRule[] = [
             { id: 'meta-description-unique', name: 'Description Quality', category: 'meta', severity: 'info' },
             'warn',
             'Meta description appears to be a placeholder',
-            { recommendation: 'Replace with a unique, compelling description for better CTR' }
+            {
+              recommendation: 'Replace with a unique, compelling description for better CTR',
+              evidence: {
+                found: `Contains placeholder text: "${placeholder}"`,
+                expected: 'Unique, compelling description that summarizes page content',
+                impact: 'Placeholder text looks unprofessional and will hurt click-through rates in search results',
+                example: 'Instead of "Description here", use "Shop premium running shoes with free shipping on orders over $50. 30-day returns."'
+              }
+            }
           );
         }
       }
@@ -368,7 +384,16 @@ export const metaRules: SeoRule[] = [
           { id: 'og-title-length', name: 'OG Title Length', category: 'og', severity: 'warning' },
           'warn',
           `og:title too long (${len} chars, truncates at ~${max})`,
-          { value: len, recommendation: `Shorten to ${ideal.max} characters` }
+          {
+            value: len,
+            recommendation: `Shorten to ${ideal.max} characters`,
+            evidence: {
+              found: `${len} characters`,
+              expected: `${ideal.min}-${ideal.max} characters (max ${max})`,
+              impact: 'Long titles get truncated on Facebook, LinkedIn, and other platforms, potentially hiding key information',
+              example: 'Instead of a 100-char title, use "Amazing Product - 50% Off Today | YourBrand" (48 chars)'
+            }
+          }
         );
       }
       if (len >= ideal.min && len <= ideal.max) {
@@ -409,7 +434,15 @@ export const metaRules: SeoRule[] = [
           { id: 'og-title-no-emoji', name: 'OG Title Emoji', category: 'og', severity: 'warning' },
           'warn',
           'og:title contains emojis (some networks remove them)',
-          { recommendation: 'Remove emojis from og:title for consistent display' }
+          {
+            recommendation: 'Remove emojis from og:title for consistent display',
+            evidence: {
+              found: `Title contains emojis: "${ctx.ogTitle}"`,
+              expected: 'Text without emoji characters',
+              impact: 'Facebook, LinkedIn, and some other platforms strip emojis from titles, causing inconsistent display',
+              example: 'Instead of "🚀 Amazing Product", use "Amazing Product - Fast Delivery"'
+            }
+          }
         );
       }
       return createResult(
@@ -474,7 +507,16 @@ export const metaRules: SeoRule[] = [
           { id: 'og-description-length', name: 'OG Description Length', category: 'og', severity: 'warning' },
           'warn',
           `og:description too long (${len} chars, truncates at ~${max})`,
-          { value: len, recommendation: `Shorten to ${ideal.max} characters` }
+          {
+            value: len,
+            recommendation: `Shorten to ${ideal.max} characters`,
+            evidence: {
+              found: `${len} characters`,
+              expected: `${ideal.min}-${ideal.max} characters (max ${max})`,
+              impact: 'Descriptions longer than 200 chars get truncated on social platforms, hiding important information',
+              example: 'Keep description concise: "Shop premium running shoes. Free shipping over $50. 30-day returns." (85 chars)'
+            }
+          }
         );
       }
       if (len >= ideal.min && len <= ideal.max) {
@@ -545,7 +587,16 @@ export const metaRules: SeoRule[] = [
           { id: 'og-image-https', name: 'OG Image HTTPS', category: 'og', severity: 'error' },
           'fail',
           'og:image uses HTTP instead of HTTPS',
-          { value: ctx.ogImage, recommendation: 'Always use HTTPS for og:image URLs' }
+          {
+            value: ctx.ogImage,
+            recommendation: 'Always use HTTPS for og:image URLs',
+            evidence: {
+              found: `HTTP URL: ${ctx.ogImage}`,
+              expected: 'HTTPS URL (https://...)',
+              impact: 'Facebook and other platforms may block HTTP images due to mixed content security policies',
+              example: `Change http://yoursite.com/image.jpg to https://yoursite.com/image.jpg`
+            }
+          }
         );
       }
       return createResult(
@@ -567,7 +618,15 @@ export const metaRules: SeoRule[] = [
           { id: 'og-url-exists', name: 'OG URL', category: 'og', severity: 'warning' },
           'warn',
           'Missing og:url',
-          { recommendation: 'Add og:url with the canonical URL of the page' }
+          {
+            recommendation: 'Add og:url with the canonical URL of the page',
+            evidence: {
+              found: 'No og:url meta tag',
+              expected: '<meta property="og:url" content="https://yoursite.com/page">',
+              impact: 'Without og:url, social platforms may use incorrect URLs, causing share count fragmentation',
+              example: '<meta property="og:url" content="https://yoursite.com/products/shoes">'
+            }
+          }
         );
       }
       return createResult(
@@ -590,7 +649,15 @@ export const metaRules: SeoRule[] = [
           { id: 'og-type-exists', name: 'OG Type', category: 'og', severity: 'warning' },
           'warn',
           'Missing og:type',
-          { recommendation: 'Add og:type (website, article, product, etc.)' }
+          {
+            recommendation: 'Add og:type (website, article, product, etc.)',
+            evidence: {
+              found: 'No og:type meta tag',
+              expected: '<meta property="og:type" content="website"> or "article"',
+              impact: 'Social platforms use og:type to determine how to display the content (website vs article vs product)',
+              example: '<meta property="og:type" content="article"> for blog posts\n<meta property="og:type" content="website"> for general pages'
+            }
+          }
         );
       }
       return createResult(
@@ -621,7 +688,16 @@ export const metaRules: SeoRule[] = [
           { id: 'og-image-url-length', name: 'OG Image URL Length', category: 'og', severity: 'warning' },
           'warn',
           `og:image URL too long (${ctx.ogImage.length} chars, max: ${maxLen})`,
-          { value: ctx.ogImage.length, recommendation: 'Shorten the image URL path' }
+          {
+            value: ctx.ogImage.length,
+            recommendation: 'Shorten the image URL path',
+            evidence: {
+              found: `${ctx.ogImage.length} characters`,
+              expected: `Less than ${maxLen} characters`,
+              impact: 'Very long URLs may be truncated or rejected by some social platforms',
+              example: 'Use shorter paths: "/og-images/product-123.jpg" instead of "/assets/generated/optimized/social-media/open-graph/product-images/..."'
+            }
+          }
         );
       }
       return createResult(
@@ -657,7 +733,15 @@ export const metaRules: SeoRule[] = [
             { id: 'og-image-url-quality', name: 'OG Image URL Quality', category: 'og', severity: 'warning' },
             'warn',
             'og:image URL may have expiring tokens (Meta caches images)',
-            { recommendation: 'Use permanent URLs without expiration tokens for og:image' }
+            {
+              recommendation: 'Use permanent URLs without expiration tokens for og:image',
+              evidence: {
+                found: `URL contains expiring parameters: ${ctx.ogImage}`,
+                expected: 'Permanent URL without time-based tokens',
+                impact: 'Meta caches images for weeks. Expiring URLs will break after cache, showing broken images on shares',
+                example: 'Instead of "...?token=abc&expires=123", use a permanent path like "/og-images/product.jpg"'
+              }
+            }
           );
         }
         if (Array.from(params.keys()).length > 5) {
@@ -745,7 +829,16 @@ export const metaRules: SeoRule[] = [
           { id: 'og-title-caps', name: 'OG Title Caps', category: 'og', severity: 'warning' },
           'warn',
           `og:title has ${percentage}% uppercase (Meta may flag as low quality)`,
-          { value: percentage, recommendation: 'Use normal capitalization in og:title' }
+          {
+            value: percentage,
+            recommendation: 'Use normal capitalization in og:title',
+            evidence: {
+              found: `${percentage}% uppercase letters in "${ctx.ogTitle}"`,
+              expected: `Less than ${maxCaps}% uppercase`,
+              impact: 'Meta may flag posts with excessive capitals as spam or low quality, reducing reach',
+              example: 'Instead of "BUY NOW - HUGE SALE", use "Buy Now - Huge Sale on All Items"'
+            }
+          }
         );
       }
       return createResult(
@@ -779,7 +872,15 @@ export const metaRules: SeoRule[] = [
           { id: 'og-meta-complete', name: 'Meta Complete', category: 'og', severity: 'warning' },
           'warn',
           `Missing required Meta tags: ${missing.join(', ')}`,
-          { recommendation: 'Meta (Facebook/Instagram) requires all 5 OG tags for proper previews' }
+          {
+            recommendation: 'Meta (Facebook/Instagram) requires all 5 OG tags for proper previews',
+            evidence: {
+              found: `Missing: ${missing.join(', ')}`,
+              expected: 'All 5 tags: og:title, og:description, og:image, og:url, og:type',
+              impact: 'Incomplete Open Graph data leads to poor or broken previews on Facebook, Instagram, and LinkedIn',
+              example: 'Add all required tags:\n<meta property="og:title" content="...">\n<meta property="og:description" content="...">\n<meta property="og:image" content="...">\n<meta property="og:url" content="...">\n<meta property="og:type" content="website">'
+            }
+          }
         );
       }
       return createResult(
@@ -838,7 +939,15 @@ export const metaRules: SeoRule[] = [
             { id: 'og-image-redirects', name: 'OG Image Redirects', category: 'og', severity: 'warning' },
             'warn',
             'og:image URL may contain redirects (Meta blocks >2 redirect chains)',
-            { recommendation: 'Use direct, permanent image URLs for og:image' }
+            {
+              recommendation: 'Use direct, permanent image URLs for og:image',
+              evidence: {
+                found: `URL contains redirect pattern: ${ctx.ogImage}`,
+                expected: 'Direct URL to the image file',
+                impact: 'Facebook blocks images with more than 2 redirects, causing broken previews',
+                example: 'Instead of "/redirect?url=image.jpg", use direct URL: "/images/og-image.jpg"'
+              }
+            }
           );
         }
       } catch {
@@ -874,7 +983,15 @@ export const metaRules: SeoRule[] = [
             { id: 'og-image-public', name: 'OG Image Public', category: 'og', severity: 'warning' },
             'fail',
             'og:image URL contains credentials (will fail on social platforms)',
-            { recommendation: 'Use publicly accessible URLs without authentication' }
+            {
+              recommendation: 'Use publicly accessible URLs without authentication',
+              evidence: {
+                found: 'URL contains username/password credentials',
+                expected: 'Public URL without authentication',
+                impact: 'Social platforms cannot fetch images with HTTP authentication, resulting in broken previews',
+                example: 'Instead of "https://user:pass@site.com/image.jpg", host image publicly at "https://cdn.site.com/og-image.jpg"'
+              }
+            }
           );
         }
         const hostname = url.hostname.toLowerCase();
@@ -884,7 +1001,15 @@ export const metaRules: SeoRule[] = [
             { id: 'og-image-public', name: 'OG Image Public', category: 'og', severity: 'warning' },
             'fail',
             'og:image URL points to localhost/private IP (not accessible)',
-            { recommendation: 'Use publicly accessible URLs for og:image' }
+            {
+              recommendation: 'Use publicly accessible URLs for og:image',
+              evidence: {
+                found: `Private/local URL: ${ctx.ogImage}`,
+                expected: 'Public URL accessible from the internet',
+                impact: 'Social platforms cannot access localhost or private IPs, resulting in broken image previews',
+                example: 'Instead of "http://localhost:3000/image.jpg", deploy to "https://yoursite.com/og-image.jpg"'
+              }
+            }
           );
         }
       } catch {
@@ -912,7 +1037,15 @@ export const metaRules: SeoRule[] = [
           { id: 'twitter-card-exists', name: 'Twitter Card', category: 'twitter', severity: 'warning' },
           'warn',
           'Missing twitter:card',
-          { recommendation: 'Add twitter:card (summary or summary_large_image)' }
+          {
+            recommendation: 'Add twitter:card (summary or summary_large_image)',
+            evidence: {
+              found: 'No twitter:card meta tag',
+              expected: '<meta name="twitter:card" content="summary_large_image">',
+              impact: 'Twitter will use a default card type, which may not display optimally',
+              example: '<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:card" content="summary"> for smaller images'
+            }
+          }
         );
       }
       const validCards = ['summary', 'summary_large_image', 'player', 'app'];
@@ -921,7 +1054,15 @@ export const metaRules: SeoRule[] = [
           { id: 'twitter-card-exists', name: 'Twitter Card', category: 'twitter', severity: 'warning' },
           'warn',
           `Invalid twitter:card value: ${ctx.twitterCard}`,
-          { recommendation: 'Use summary or summary_large_image' }
+          {
+            recommendation: 'Use summary or summary_large_image',
+            evidence: {
+              found: `Invalid value: "${ctx.twitterCard}"`,
+              expected: 'One of: summary, summary_large_image, player, app',
+              impact: 'Invalid card types are ignored by Twitter, falling back to default display',
+              example: '<meta name="twitter:card" content="summary_large_image">'
+            }
+          }
         );
       }
       return createResult(
@@ -955,7 +1096,16 @@ export const metaRules: SeoRule[] = [
           { id: 'twitter-title-length', name: 'Twitter Title Length', category: 'twitter', severity: 'warning' },
           'warn',
           `twitter:title too long (${len} chars, max: ${max})`,
-          { value: len, recommendation: `Shorten to ${ideal.max} characters` }
+          {
+            value: len,
+            recommendation: `Shorten to ${ideal.max} characters`,
+            evidence: {
+              found: `${len} characters`,
+              expected: `${ideal.min}-${ideal.max} characters (max ${max})`,
+              impact: 'Twitter truncates long titles, potentially hiding key information in card previews',
+              example: 'Keep it concise: "New Product Launch - 50% Off" (34 chars)'
+            }
+          }
         );
       }
       return createResult(
@@ -990,7 +1140,16 @@ export const metaRules: SeoRule[] = [
           { id: 'twitter-description-length', name: 'Twitter Description Length', category: 'twitter', severity: 'warning' },
           'warn',
           `twitter:description too long (${len} chars, max: ${max})`,
-          { value: len, recommendation: `Shorten to ${max} characters` }
+          {
+            value: len,
+            recommendation: `Shorten to ${max} characters`,
+            evidence: {
+              found: `${len} characters`,
+              expected: `125-${max} characters`,
+              impact: 'Twitter truncates descriptions over 200 characters, potentially hiding your call-to-action',
+              example: 'Concise description: "Discover the best deals on electronics. Free shipping & 30-day returns." (89 chars)'
+            }
+          }
         );
       }
       return createResult(

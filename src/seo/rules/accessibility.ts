@@ -642,8 +642,10 @@ export const accessibilityRules: SeoRule[] = [
           {
             recommendation: 'Add a <main> element or role="main" to identify the main content area',
             evidence: {
+              found: 'No <main> element or role="main"',
               expected: '<main> or role="main"',
               impact: 'Screen reader users cannot quickly navigate to main content',
+              example: '<main>\n  <!-- Main content here -->\n</main>',
               learnMore: 'https://dequeuniversity.com/rules/axe/4.4/landmark-one-main',
             },
           }
@@ -682,8 +684,10 @@ export const accessibilityRules: SeoRule[] = [
           {
             recommendation: 'Add a skip link, <main> landmark, or at least one heading for navigation',
             evidence: {
+              found: 'No skip link, <main>, or heading',
               expected: 'Skip link, <main>, or heading',
               impact: 'Keyboard users must tab through all navigation to reach content',
+              example: '<a href="#main-content" class="skip-link">Skip to main content</a>',
               learnMore: 'https://dequeuniversity.com/rules/axe/4.4/bypass',
             },
           }
@@ -815,6 +819,7 @@ export const accessibilityRules: SeoRule[] = [
               found: count,
               expected: 0,
               impact: 'Screen readers cannot describe SVG content',
+              example: '<svg aria-label="Descriptive label">\n  <title>Icon description</title>\n  <!-- SVG content -->\n</svg>',
             },
           }
         );
@@ -900,8 +905,10 @@ export const accessibilityRules: SeoRule[] = [
           {
             recommendation: 'Add a descriptive <title> element to the document',
             evidence: {
+              found: ctx.title || 'Empty or missing <title>',
               expected: '<title>Page Title</title>',
               impact: 'Screen reader users cannot identify the page',
+              example: '<head>\n  <title>My Page - Site Name</title>\n</head>',
               learnMore: 'https://dequeuniversity.com/rules/axe/4.4/document-title',
             },
           }
@@ -937,8 +944,10 @@ export const accessibilityRules: SeoRule[] = [
           {
             recommendation: 'Add lang attribute to html element (e.g., <html lang="en">)',
             evidence: {
+              found: '<html> without lang attribute',
               expected: '<html lang="en">',
               impact: 'Screen readers may pronounce content incorrectly',
+              example: '<html lang="en">\n  <!-- page content -->\n</html>',
               learnMore: 'https://dequeuniversity.com/rules/axe/4.4/html-has-lang',
             },
           }
@@ -979,6 +988,8 @@ export const accessibilityRules: SeoRule[] = [
             evidence: {
               found: ctx.langValue,
               expected: 'Valid BCP 47 language tag',
+              impact: 'Invalid language tags prevent screen readers from selecting correct voice/pronunciation',
+              example: '<html lang="en"> or <html lang="pt-BR">',
               learnMore: 'https://dequeuniversity.com/rules/axe/4.4/html-lang-valid',
             },
           }

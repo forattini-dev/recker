@@ -170,7 +170,15 @@ export const linkRules: SeoRule[] = [
           { id: 'links-external-count', name: 'External Links', category: 'links', severity: 'info' },
           'warn',
           `Too many external links (${ctx.externalLinks})`,
-          { value: ctx.externalLinks, recommendation: `Reduce external links to under ${max}` }
+          {
+            value: ctx.externalLinks,
+            recommendation: `Reduce external links to under ${max}`,
+            evidence: {
+              found: `${ctx.externalLinks} external links`,
+              expected: `Less than ${max} external links`,
+              impact: 'Too many external links can dilute page authority and may appear spammy',
+            },
+          }
         );
       }
       return createResult(

@@ -33,8 +33,10 @@ export const canonicalRules: SeoRule[] = [
           {
             recommendation: 'Add <link rel="canonical" href="..."> to specify the preferred URL',
             evidence: {
+              found: 'No canonical tag',
               expected: '<link rel="canonical" href="https://example.com/page">',
-              impact: 'Without canonical, search engines may index duplicate versions'
+              impact: 'Without canonical, search engines may index duplicate versions',
+              example: '<head>\n  <link rel="canonical" href="https://example.com/page" />\n</head>',
             }
           }
         );
@@ -78,7 +80,8 @@ export const canonicalRules: SeoRule[] = [
             evidence: {
               found: ctx.canonicalUrls || [],
               expected: 'Single canonical tag',
-              impact: 'Multiple canonicals confuse search engines about preferred URL'
+              impact: 'Multiple canonicals confuse search engines about preferred URL',
+              example: '<link rel="canonical" href="https://example.com/page" /> <!-- Keep only one -->',
             }
           }
         );
@@ -123,7 +126,8 @@ export const canonicalRules: SeoRule[] = [
             evidence: {
               found: ctx.canonicalUrl,
               expected: ctx.url,
-              impact: 'This page signals to search engines that another URL is preferred'
+              impact: 'This page signals to search engines that another URL is preferred',
+              example: `Current URL: ${ctx.url}\nCanonical: ${ctx.canonicalUrl}`,
             }
           }
         );
@@ -167,7 +171,8 @@ export const canonicalRules: SeoRule[] = [
             evidence: {
               found: `${ctx.canonicalUrl} → 404`,
               expected: '200 OK',
-              impact: 'Broken canonical prevents proper indexing'
+              impact: 'Broken canonical prevents proper indexing',
+              example: '<link rel="canonical" href="https://example.com/existing-page" />',
             }
           }
         );
@@ -184,7 +189,8 @@ export const canonicalRules: SeoRule[] = [
             evidence: {
               found: `${ctx.canonicalUrl} → ${ctx.canonicalStatus}`,
               expected: '200 OK',
-              impact: 'Canonical errors prevent proper indexing'
+              impact: 'Canonical errors prevent proper indexing',
+              example: '<link rel="canonical" href="https://example.com/accessible-page" />',
             }
           }
         );
@@ -202,7 +208,8 @@ export const canonicalRules: SeoRule[] = [
             evidence: {
               found: `${ctx.canonicalUrl} → ${ctx.canonicalFinalUrl}`,
               expected: 'Direct URL without redirect',
-              impact: 'Canonical redirects waste crawl budget'
+              impact: 'Canonical redirects waste crawl budget',
+              example: `<link rel="canonical" href="${ctx.canonicalFinalUrl}" />`,
             }
           }
         );
@@ -246,7 +253,8 @@ export const canonicalRules: SeoRule[] = [
             evidence: {
               found: ctx.canonicalUrl,
               expected: ctx.canonicalUrl.replace('http://', 'https://'),
-              impact: 'HTTP canonicals may cause indexing preference issues'
+              impact: 'HTTP canonicals may cause indexing preference issues',
+              example: `<link rel="canonical" href="${ctx.canonicalUrl.replace('http://', 'https://')}" />`,
             }
           }
         );
@@ -294,7 +302,8 @@ export const canonicalRules: SeoRule[] = [
             evidence: {
               found: ctx.canonicalUrl,
               expected: 'https://example.com/page',
-              impact: 'Relative canonicals may be misinterpreted by crawlers'
+              impact: 'Relative canonicals may be misinterpreted by crawlers',
+              example: '<link rel="canonical" href="https://example.com/page" />',
             }
           }
         );
@@ -338,7 +347,8 @@ export const canonicalRules: SeoRule[] = [
             evidence: {
               found: ctx.canonicalChain || [],
               expected: 'Direct canonical to final URL',
-              impact: 'Canonical chains may cause consolidation issues'
+              impact: 'Canonical chains may cause consolidation issues',
+              example: `<link rel="canonical" href="${ctx.canonicalChain?.[ctx.canonicalChain.length - 1] || 'https://example.com/final-page'}" />`,
             }
           }
         );
@@ -434,7 +444,9 @@ export const canonicalRules: SeoRule[] = [
               recommendation: 'Remove canonical or noindex - conflicting signals',
               evidence: {
                 found: `noindex + canonical to self (${ctx.canonicalUrl})`,
-                impact: 'Google ignores noindex if page has canonical to itself'
+                expected: 'Either noindex OR canonical, not both',
+                impact: 'Google ignores noindex if page has canonical to itself',
+                example: '<meta name="robots" content="noindex" /> <!-- Remove this -->\n<!-- OR -->\n<link rel="canonical" href="..." /> <!-- Remove this -->',
               }
             }
           );

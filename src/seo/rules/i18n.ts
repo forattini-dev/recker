@@ -93,6 +93,7 @@ export const i18nRules: SeoRule[] = [
               found: `Current URL: ${ctx.url}`,
               expected: `<link rel="alternate" hreflang="${ctx.langValue || 'en'}" href="${ctx.url}">`,
               impact: 'Google recommends including a self-referencing hreflang tag for clarity',
+              example: `<link rel="alternate" hreflang="en" href="${ctx.url}">\n<link rel="alternate" hreflang="es" href="${ctx.url.replace(/\/en\//, '/es/')}">`,
             },
           }
         );
@@ -197,6 +198,8 @@ export const i18nRules: SeoRule[] = [
             evidence: {
               found: invalidTags,
               expected: 'Valid ISO 639-1 codes like: en, es, fr, de, pt-BR, zh-CN',
+              impact: 'Invalid language codes will be ignored by search engines, breaking international targeting',
+              example: '<link rel="alternate" hreflang="en-US" href="https://example.com/en/">\n<link rel="alternate" hreflang="es-ES" href="https://example.com/es/">',
               learnMore: 'https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes',
             },
           }
@@ -288,6 +291,11 @@ export const i18nRules: SeoRule[] = [
             `Content-Language (${headerLang}) doesn't match html lang (${ctx.langValue})`,
             {
               recommendation: 'Ensure Content-Language header matches the html lang attribute',
+              evidence: {
+                found: `Content-Language: ${headerLang}, html lang="${ctx.langValue}"`,
+                expected: 'Both should declare the same language',
+                impact: 'Mismatched language declarations can confuse browsers and search engines',
+              },
             }
           );
         }
@@ -343,7 +351,9 @@ export const i18nRules: SeoRule[] = [
             recommendation: 'Ensure html lang and og:locale represent the same language',
             evidence: {
               found: [`html lang="${ctx.langValue}"`, `og:locale="${ctx.ogLocale}"`],
+              expected: 'Both attributes should use the same language code',
               impact: 'Inconsistent language signals can confuse search engines and social platforms',
+              example: '<html lang="en">\n<meta property="og:locale" content="en_US">',
             },
           }
         );
@@ -444,9 +454,10 @@ export const i18nRules: SeoRule[] = [
             {
               recommendation: 'Verify the hreflang attribute matches the actual page language',
               evidence: {
-                found: `hreflang="${selfHreflang.lang}"`,
-                expected: `Content language: ${ctx.detectedLanguage}`,
-                impact: 'Language mismatch may confuse search engines and affect international SEO'
+                found: `hreflang="${selfHreflang.lang}", detected content language: "${ctx.detectedLanguage}"`,
+                expected: `hreflang="${ctx.detectedLanguage}"`,
+                impact: 'Language mismatch may confuse search engines and affect international SEO',
+                example: `<link rel="alternate" hreflang="${ctx.detectedLanguage}" href="${ctx.url}">`,
               }
             }
           );

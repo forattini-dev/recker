@@ -230,7 +230,17 @@ export const imageRules: SeoRule[] = [
           { id: 'images-alt-length', name: 'Alt Text Length', category: 'images', severity: 'warning' },
           'warn',
           `${shortAlts} alt text(s) are too short (min: ${minLength} chars)`,
-          { value: shortAlts, recommendation: `Make alt texts more descriptive, at least ${minLength} characters.` }
+          {
+            value: shortAlts,
+            recommendation: `Make alt texts more descriptive, at least ${minLength} characters.`,
+            evidence: {
+              found: `${shortAlts} alt text(s) with less than ${minLength} characters`,
+              expected: `Alt text should be at least ${minLength} characters to be meaningful`,
+              impact: 'Very short alt text (like "logo" or "pic") doesn\'t provide enough context for screen readers or search engines, reducing accessibility and SEO value.',
+              example: 'Instead of alt="logo", use alt="Acme Corp logo - handshake symbol representing trust"',
+              learnMore: 'https://www.w3.org/WAI/tutorials/images/'
+            }
+          }
         );
       }
       if (longAlts > 0) {
@@ -238,7 +248,17 @@ export const imageRules: SeoRule[] = [
           { id: 'images-alt-length', name: 'Alt Text Length', category: 'images', severity: 'warning' },
           'warn',
           `${longAlts} alt text(s) are too long (max: ${maxLength} chars)`,
-          { value: longAlts, recommendation: `Shorten alt texts to be concise, under ${maxLength} characters.` }
+          {
+            value: longAlts,
+            recommendation: `Shorten alt texts to be concise, under ${maxLength} characters.`,
+            evidence: {
+              found: `${longAlts} alt text(s) exceeding ${maxLength} characters`,
+              expected: `Alt text should be under ${maxLength} characters for optimal accessibility`,
+              impact: 'Excessively long alt text can be tedious for screen reader users and may get truncated in search results. Keep it concise while still being descriptive.',
+              example: 'Instead of a long paragraph, use concise descriptions like: alt="Professional headshot of Jane Smith, CEO, wearing navy blue suit"',
+              learnMore: 'https://www.w3.org/WAI/tutorials/images/'
+            }
+          }
         );
       }
       if (nonIdealAlts > 0) {

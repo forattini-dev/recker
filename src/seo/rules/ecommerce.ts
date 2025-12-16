@@ -32,6 +32,24 @@ export const ecommerceRules: SeoRule[] = [
           'Product page has no JSON-LD structured data',
           {
             recommendation: 'Add Product structured data for rich snippets',
+            evidence: {
+              found: 'No JSON-LD structured data',
+              expected: 'Product schema with name, image, price, availability',
+              impact: 'Missing product schema prevents rich snippets in search results',
+              example: `<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "Product Name",
+  "image": "https://example.com/image.jpg",
+  "offers": {
+    "@type": "Offer",
+    "price": "99.99",
+    "priceCurrency": "USD"
+  }
+}
+</script>`,
+            },
           }
         );
       }
@@ -101,8 +119,10 @@ export const ecommerceRules: SeoRule[] = [
           {
             recommendation: 'Add price to Product offers for price display in search results',
             evidence: {
+              found: 'Product offers without price',
               expected: 'offers.price or offers.lowPrice with priceCurrency',
               impact: 'Products without price may not show in Google Shopping results',
+              example: '"offers": {\n  "@type": "Offer",\n  "price": "99.99",\n  "priceCurrency": "USD"\n}',
             },
           }
         );
@@ -118,6 +138,8 @@ export const ecommerceRules: SeoRule[] = [
             evidence: {
               found: `price: ${ctx.productSchema.offers?.price}`,
               expected: 'priceCurrency: "USD" or similar ISO 4217 code',
+              impact: 'Currency is required for Google Shopping and price display in search results',
+              example: '"priceCurrency": "USD"',
             },
           }
         );
@@ -204,8 +226,10 @@ export const ecommerceRules: SeoRule[] = [
           {
             recommendation: 'Add product images for visual search results',
             evidence: {
+              found: 'Product schema without image',
               expected: 'At least one high-quality product image',
               impact: 'Products without images are less likely to appear in image search and shopping results',
+              example: '"image": "https://example.com/product-image.jpg"',
             },
           }
         );
@@ -409,10 +433,12 @@ export const ecommerceRules: SeoRule[] = [
             'warn',
             'Offer priceValidUntil date has passed',
             {
+              recommendation: 'Update or remove expired priceValidUntil date',
               evidence: {
                 found: priceValidUntil,
-                issue: 'Expired offer dates should be updated or removed',
+                expected: 'Future date or no priceValidUntil',
                 impact: 'Expired dates may cause Google to distrust your pricing data',
+                example: `"priceValidUntil": "${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}"`,
               },
             }
           );
@@ -429,9 +455,12 @@ export const ecommerceRules: SeoRule[] = [
             'warn',
             'Offer validThrough date has passed',
             {
+              recommendation: 'Update or remove expired validThrough date',
               evidence: {
                 found: validThrough,
-                issue: 'Expired validity dates should be updated',
+                expected: 'Future date or no validThrough',
+                impact: 'Expired validity dates may prevent offer from showing in search results',
+                example: `"validThrough": "${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}"`,
               },
             }
           );

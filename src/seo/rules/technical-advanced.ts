@@ -410,8 +410,9 @@ export const technicalAdvancedRules: SeoRule[] = [
             recommendation: 'Fix URL syntax',
             evidence: {
               found: ctx.url,
-              expected: 'Valid URL',
-              impact: 'Invalid URLs cannot be crawled or indexed'
+              expected: 'Valid URL format (e.g., https://example.com/path)',
+              impact: 'Invalid URLs cannot be crawled or indexed',
+              example: 'https://example.com/valid-path-with-hyphens',
             }
           }
         );

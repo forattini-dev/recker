@@ -90,7 +90,17 @@ export const performanceRules: SeoRule[] = [
           { id: 'perf-render-blocking', name: 'Render Blocking', category: 'performance', severity: 'warning' },
           'warn',
           `${blocking} render-blocking resources in <head>`,
-          { value: blocking, recommendation: 'Use async/defer for scripts, preload for critical CSS' }
+          {
+            value: blocking,
+            recommendation: 'Use async/defer for scripts, preload for critical CSS',
+            evidence: {
+              found: `${blocking} render-blocking resources`,
+              expected: '≤ 5 render-blocking resources',
+              impact: 'Render-blocking resources delay First Contentful Paint (FCP) and Largest Contentful Paint (LCP)',
+              example: '<script src="app.js" defer></script> or <link rel="preload" as="style" href="critical.css">',
+              learnMore: 'https://web.dev/render-blocking-resources/'
+            }
+          }
         );
       }
       if (blocking > 0) {
@@ -145,7 +155,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'cwv-lcp-lazy', name: 'LCP Image Lazy', category: 'performance', severity: 'warning' },
           'warn',
           'First large image uses lazy loading (may hurt LCP)',
-          { recommendation: 'Remove loading="lazy" from above-the-fold images' }
+          {
+            recommendation: 'Remove loading="lazy" from above-the-fold images',
+            evidence: {
+              found: 'Above-the-fold image with loading="lazy"',
+              expected: 'LCP images should not use lazy loading',
+              impact: 'Lazy loading delays the Largest Contentful Paint (LCP), hurting Core Web Vitals',
+              example: '<img src="hero.jpg" alt="Hero"> <!-- Remove loading="lazy" from hero images -->',
+              learnMore: 'https://web.dev/lcp-lazy-loading/'
+            }
+          }
         );
       }
       return createResult(
@@ -190,7 +209,17 @@ export const performanceRules: SeoRule[] = [
           { id: 'cwv-cls-images', name: 'CLS Image Dimensions', category: 'performance', severity: 'warning' },
           'warn',
           `${missing} image(s) without width/height (causes CLS)`,
-          { value: missing, recommendation: 'Add width and height attributes to all images' }
+          {
+            value: missing,
+            recommendation: 'Add width and height attributes to all images',
+            evidence: {
+              found: `${missing} images without dimensions`,
+              expected: 'All images should have width and height attributes',
+              impact: 'Images without dimensions cause layout shifts (CLS) when they load, hurting Core Web Vitals',
+              example: '<img src="photo.jpg" alt="Photo" width="800" height="600">',
+              learnMore: 'https://web.dev/optimize-cls/'
+            }
+          }
         );
       }
       return createResult(
@@ -242,14 +271,32 @@ export const performanceRules: SeoRule[] = [
           { id: 'timing-ttfb', name: 'TTFB', category: 'performance', severity: 'error' },
           'warn',
           `Slow TTFB (${ttfb}ms)`,
-          { value: ttfb, recommendation: 'Optimize server, use CDN, enable caching' }
+          {
+            value: ttfb,
+            recommendation: 'Optimize server, use CDN, enable caching',
+            evidence: {
+              found: `${ttfb}ms TTFB`,
+              expected: `≤ ${needsImprovement}ms`,
+              impact: 'Slow server response delays page rendering and all subsequent resources',
+              learnMore: 'https://web.dev/ttfb/'
+            }
+          }
         );
       }
       return createResult(
         { id: 'timing-ttfb', name: 'TTFB', category: 'performance', severity: 'error' },
         'fail',
         `Very slow TTFB (${ttfb}ms)`,
-        { value: ttfb, recommendation: 'Critical: Server is too slow. Check server, database, and network' }
+        {
+          value: ttfb,
+          recommendation: 'Critical: Server is too slow. Check server, database, and network',
+          evidence: {
+            found: `${ttfb}ms TTFB`,
+            expected: `≤ ${poor}ms (ideally ≤ ${good}ms)`,
+            impact: 'Critical server performance issue. Users will experience very slow page loads',
+            learnMore: 'https://web.dev/ttfb/'
+          }
+        }
       );
     },
   },
@@ -293,14 +340,32 @@ export const performanceRules: SeoRule[] = [
           { id: 'timing-total', name: 'Load Time', category: 'performance', severity: 'warning' },
           'warn',
           `Slow page load (${total}ms)`,
-          { value: total, recommendation: 'Optimize assets, enable compression, use CDN' }
+          {
+            value: total,
+            recommendation: 'Optimize assets, enable compression, use CDN',
+            evidence: {
+              found: `${total}ms total load time`,
+              expected: `≤ ${needsImprovement}ms`,
+              impact: 'Slow page loads increase bounce rate and reduce user engagement',
+              learnMore: 'https://web.dev/performance-scoring/'
+            }
+          }
         );
       }
       return createResult(
         { id: 'timing-total', name: 'Load Time', category: 'performance', severity: 'warning' },
         'fail',
         `Very slow page load (${total}ms)`,
-        { value: total, recommendation: 'Critical performance issue. Full optimization needed.' }
+        {
+          value: total,
+          recommendation: 'Critical performance issue. Full optimization needed.',
+          evidence: {
+            found: `${total}ms total load time`,
+            expected: `≤ ${poor}ms (ideally ≤ ${good}ms)`,
+            impact: 'Critical performance issue. Very slow load times severely hurt SEO rankings and user experience',
+            learnMore: 'https://web.dev/performance-scoring/'
+          }
+        }
       );
     },
   },
@@ -343,7 +408,17 @@ export const performanceRules: SeoRule[] = [
         { id: 'timing-dns', name: 'DNS Lookup', category: 'performance', severity: 'info' },
         'warn',
         `Slow DNS lookup (${dns}ms)`,
-        { value: dns, recommendation: 'DNS is slow. Consider Cloudflare, Google DNS, or dns-prefetch' }
+        {
+          value: dns,
+          recommendation: 'DNS is slow. Consider Cloudflare, Google DNS, or dns-prefetch',
+          evidence: {
+            found: `${dns}ms DNS lookup`,
+            expected: `≤ ${poor}ms (ideally ≤ ${good}ms)`,
+            impact: 'Slow DNS resolution delays connection establishment and increases page load time',
+            example: '<link rel="dns-prefetch" href="//api.example.com">',
+            learnMore: 'https://web.dev/dns-prefetch/'
+          }
+        }
       );
     },
   },
@@ -386,7 +461,16 @@ export const performanceRules: SeoRule[] = [
         { id: 'timing-tls', name: 'TLS Handshake', category: 'performance', severity: 'info' },
         'warn',
         `Slow TLS handshake (${tls}ms)`,
-        { value: tls, recommendation: 'TLS is slow. Check server configuration and certificate chain' }
+        {
+          value: tls,
+          recommendation: 'TLS is slow. Check server configuration and certificate chain',
+          evidence: {
+            found: `${tls}ms TLS handshake`,
+            expected: `≤ ${poor}ms (ideally ≤ ${good}ms)`,
+            impact: 'Slow TLS handshake delays secure connection establishment, especially on mobile networks',
+            learnMore: 'https://web.dev/uses-http2/'
+          }
+        }
       );
     },
   },
@@ -433,14 +517,32 @@ export const performanceRules: SeoRule[] = [
           { id: 'response-html-size', name: 'HTML Size', category: 'performance', severity: 'warning' },
           'warn',
           `HTML is large (${sizeKb}KB)`,
-          { value: sizeKb, recommendation: 'Reduce HTML size. Check for inline data, remove unused code' }
+          {
+            value: sizeKb,
+            recommendation: 'Reduce HTML size. Check for inline data, remove unused code',
+            evidence: {
+              found: `${sizeKb}KB HTML`,
+              expected: `≤ ${Math.round(warning / 1024)}KB (ideally ≤ ${Math.round(good / 1024)}KB)`,
+              impact: 'Large HTML increases parsing time and delays time to interactive',
+              learnMore: 'https://web.dev/dom-size/'
+            }
+          }
         );
       }
       return createResult(
         { id: 'response-html-size', name: 'HTML Size', category: 'performance', severity: 'warning' },
         'fail',
         `HTML is very large (${sizeKb}KB)`,
-        { value: sizeKb, recommendation: 'Critical: HTML too large. Use pagination, lazy loading, or split content' }
+        {
+          value: sizeKb,
+          recommendation: 'Critical: HTML too large. Use pagination, lazy loading, or split content',
+          evidence: {
+            found: `${sizeKb}KB HTML`,
+            expected: `≤ ${Math.round(poor / 1024)}KB (ideally ≤ ${Math.round(good / 1024)}KB)`,
+            impact: 'Very large HTML severely impacts page parsing performance and user experience',
+            learnMore: 'https://web.dev/dom-size/'
+          }
+        }
       );
     },
   },
@@ -466,7 +568,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'response-compression', name: 'Compression', category: 'performance', severity: 'warning' },
           'warn',
           'Response is not compressed',
-          { recommendation: 'Enable gzip or brotli compression on server' }
+          {
+            recommendation: 'Enable gzip or brotli compression on server',
+            evidence: {
+              found: 'No compression (Content-Encoding header missing)',
+              expected: 'Content-Encoding: gzip or Content-Encoding: br',
+              impact: 'Uncompressed responses are 60-80% larger, wasting bandwidth and slowing downloads',
+              example: '# Apache\nAddOutputFilterByType DEFLATE text/html text/css application/javascript\n\n# Nginx\ngzip on;\ngzip_types text/html text/css application/javascript;',
+              learnMore: 'https://web.dev/uses-text-compression/'
+            }
+          }
         );
       }
       if (ctx.isCompressed === true) {
@@ -977,8 +1088,10 @@ export const performanceRules: SeoRule[] = [
           {
             recommendation: 'Add font-display: swap to @font-face declarations',
             evidence: {
+              found: 'Custom fonts without font-display: swap',
               expected: '@font-face { font-display: swap; }',
-              impact: 'Without font-display, text may be invisible until fonts load (FOIT)',
+              impact: 'Without font-display, text may be invisible until fonts load (FOIT), hurting perceived performance',
+              example: '@font-face {\n  font-family: "Open Sans";\n  src: url("/fonts/OpenSans.woff2");\n  font-display: swap; /* Add this */\n}',
               learnMore: 'https://web.dev/font-display/'
             }
           }

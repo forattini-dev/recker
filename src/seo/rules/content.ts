@@ -27,7 +27,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-depth-word-count', name: 'Content Depth', category: 'content', severity: 'error' },
           'fail',
           `Very thin content (${ctx.wordCount} words, min: ${veryThinWords})`,
-          { recommendation: 'Add more substantial content (at least 150-300 words).' }
+          {
+            recommendation: 'Add more substantial content (at least 150-300 words).',
+            evidence: {
+              found: `${ctx.wordCount} words on page`,
+              expected: `At least ${veryThinWords} words for minimal content`,
+              impact: 'Search engines may consider very thin content as low-quality and not rank it well. Users expect more comprehensive information.',
+              example: 'Pages with <100 words are often flagged as thin content by Google and may be penalized in rankings.',
+            },
+          }
         );
       }
       if (ctx.wordCount < minWordsSimple) {
@@ -35,7 +43,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-depth-word-count', name: 'Content Depth', category: 'content', severity: 'warning' },
           'warn',
           `Thin content (${ctx.wordCount} words, min for simple: ${minWordsSimple})`,
-          { recommendation: `Consider expanding to at least ${minWordsSimple} words for simple pages, or more for ranking.` }
+          {
+            recommendation: `Consider expanding to at least ${minWordsSimple} words for simple pages, or more for ranking.`,
+            evidence: {
+              found: `${ctx.wordCount} words on page`,
+              expected: `At least ${minWordsSimple} words for simple pages, ${minWordsRanking}+ for competitive ranking`,
+              impact: 'Thin content may rank poorly for competitive keywords. More comprehensive content typically performs better.',
+              example: 'Simple landing pages need 300+ words, blog posts need 600+ for ranking potential.',
+            },
+          }
         );
       }
       if (ctx.wordCount < minWordsRanking) {
@@ -43,7 +59,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-depth-word-count', name: 'Content Depth', category: 'content', severity: 'info' },
           'warn',
           `Content may be too short to rank (${ctx.wordCount} words, min for ranking: ${minWordsRanking})`,
-          { recommendation: `Expand content to at least ${minWordsRanking} words for competitive keywords.` }
+          {
+            recommendation: `Expand content to at least ${minWordsRanking} words for competitive keywords.`,
+            evidence: {
+              found: `${ctx.wordCount} words on page`,
+              expected: `At least ${minWordsRanking} words for competitive ranking`,
+              impact: 'Pages competing for competitive keywords typically need 600-1000+ words. Shorter content may not rank in top positions.',
+              example: 'Top-ranking blog posts average 1,500-2,500 words. Product pages need 600-1,000 words.',
+            },
+          }
         );
       }
       if (ctx.wordCount < minWordsAuthority) {
@@ -84,7 +108,16 @@ export const contentRules: SeoRule[] = [
           { id: 'content-readability-sentence-length', name: 'Readability', category: 'content', severity: 'info' },
           'warn',
           `Long sentences (avg ${ctx.avgWordsPerSentence} words/sentence)`,
-          { value: ctx.avgWordsPerSentence, recommendation: `Aim for under ${max} words per sentence for better readability.` }
+          {
+            value: ctx.avgWordsPerSentence,
+            recommendation: `Aim for under ${max} words per sentence for better readability.`,
+            evidence: {
+              found: `Average sentence length: ${ctx.avgWordsPerSentence.toFixed(1)} words`,
+              expected: `Target: under ${max} words per sentence`,
+              impact: 'Long sentences reduce readability, especially on mobile. They can increase bounce rates and decrease user engagement.',
+              example: 'Break up complex sentences: "Our service helps businesses grow by providing tools, analytics, and support" → "Our service helps businesses grow. We provide tools, analytics, and support."',
+            },
+          }
         );
       }
       return createResult(
@@ -135,7 +168,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-paragraph-length', name: 'Paragraph Length', category: 'content', severity: 'warning' },
           'warn',
           message.trim(),
-          { recommendation: `Aim for paragraphs between ${minWordsPerParagraph}-${maxWordsPerParagraph} words. ${recs.join(' ')}` }
+          {
+            recommendation: `Aim for paragraphs between ${minWordsPerParagraph}-${maxWordsPerParagraph} words. ${recs.join(' ')}`,
+            evidence: {
+              found: `${tooShort} paragraph(s) too short, ${tooLong} paragraph(s) too long`,
+              expected: `All paragraphs should be ${minWordsPerParagraph}-${maxWordsPerParagraph} words`,
+              impact: 'Very short paragraphs appear incomplete. Very long paragraphs are hard to read on mobile and reduce engagement.',
+              example: '<p>Short.</p> is too brief. <p>Very long paragraph with 200+ words that goes on and on...</p> should be broken into 2-3 smaller paragraphs.',
+            },
+          }
         );
       }
       return createResult(
@@ -183,7 +224,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-subheading-frequency', name: 'Subheading Frequency', category: 'content', severity: 'info' },
           'warn',
           `Low subheading frequency (${(ctx.subheadingFrequency ?? 0).toFixed(2)} per 100 words)`,
-          { recommendation: `Add more subheadings (H2/H3) to break up long text blocks.` }
+          {
+            recommendation: `Add more subheadings (H2/H3) to break up long text blocks.`,
+            evidence: {
+              found: `${(ctx.subheadingFrequency ?? 0).toFixed(2)} subheadings per 100 words`,
+              expected: `At least ${idealFrequencyPer100Words} subheadings per 100 words (roughly 1 every 200 words)`,
+              impact: 'Insufficient subheadings make content difficult to scan. Users and search engines prefer well-structured, scannable content.',
+              example: '<h2>Main Topic</h2><p>300+ words...</p> → Add <h3> subheadings every 150-200 words to improve structure.',
+            },
+          }
         );
       }
       return createResult(
@@ -217,7 +266,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-emphasis-tags', name: 'Emphasis Tags Usage', category: 'content', severity: 'warning' },
           'warn',
           `Potentially excessive emphasis tags (${totalEmphasisTags} tags for ${ctx.wordCount} words)`,
-          { recommendation: 'Moderate the use of <strong> and <em> tags to avoid over-optimization.' }
+          {
+            recommendation: 'Moderate the use of <strong> and <em> tags to avoid over-optimization.',
+            evidence: {
+              found: `${totalEmphasisTags} emphasis tags in ${ctx.wordCount} words (${(emphasisRatio * 100).toFixed(1)}% of content)`,
+              expected: `Less than ${(maxEmphasisRatio * 100).toFixed(0)}% of content should be emphasized`,
+              impact: 'Excessive emphasis can be seen as keyword stuffing and may trigger spam filters. It also reduces the impact of actual important content.',
+              example: '<strong>best</strong> <strong>product</strong> for <strong>keyword</strong> → Use emphasis sparingly on truly important terms only.',
+            },
+          }
         );
       }
       return createResult(
@@ -310,7 +367,16 @@ export const contentRules: SeoRule[] = [
           { id: 'content-flesch-readability', name: 'Flesch Reading Ease', category: 'content', severity: 'warning' },
           'warn',
           `Low Flesch Reading Ease score: ${score.toFixed(2)} (target > 60)`,
-          { value: score, recommendation: 'Simplify sentence structure and vocabulary to improve readability for a broader audience.' }
+          {
+            value: score,
+            recommendation: 'Simplify sentence structure and vocabulary to improve readability for a broader audience.',
+            evidence: {
+              found: `Flesch Reading Ease score: ${score.toFixed(1)}`,
+              expected: 'Target score: 60+ (plain English, 8th-9th grade level)',
+              impact: 'Low readability scores indicate difficult text. Most web users prefer content at 8th-9th grade reading level. Difficult content increases bounce rates.',
+              example: 'Score 0-30: College graduate. 60-70: 8th-9th grade. 90-100: 5th grade. Aim for 60+ for broad appeal.',
+            },
+          }
         );
       }
       return createResult(
@@ -333,7 +399,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-faq-mandatory', name: 'FAQ Section', category: 'content', severity: 'info' },
           'warn',
           'Consider adding a dedicated FAQ section for comprehensive content',
-          { recommendation: 'Include 3-7 common questions as H3s and optionally use Schema.org FAQPage markup for rich results.' }
+          {
+            recommendation: 'Include 3-7 common questions as H3s and optionally use Schema.org FAQPage markup for rich results.',
+            evidence: {
+              found: `${ctx.faqCount ?? 0} FAQ items detected`,
+              expected: 'At least 3-7 FAQ items for comprehensive content (1000+ words)',
+              impact: 'FAQ sections help with featured snippets, voice search, and AI overviews. They address common user questions directly.',
+              example: '<h2>Frequently Asked Questions</h2>\n<h3>What is X?</h3>\n<p>Answer...</p>\n<h3>How do I use Y?</h3>\n<p>Answer...</p>',
+            },
+          }
         );
       }
       return createResult(
@@ -368,7 +442,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-image-text-proportion', name: 'Image-Text Proportion', category: 'content', severity: 'info' },
           'warn',
           `Low image density (1 image per ${actualWordsPerImage.toFixed(0)} words, ideal: 1 per ${minWords}-${maxWords})`,
-          { recommendation: 'Add more relevant images to break up text and improve engagement.' }
+          {
+            recommendation: 'Add more relevant images to break up text and improve engagement.',
+            evidence: {
+              found: `1 image per ${actualWordsPerImage.toFixed(0)} words (${ctx.totalImages} images for ${ctx.wordCount} words)`,
+              expected: `Ideal ratio: 1 image per ${minWords}-${maxWords} words`,
+              impact: 'Too few images makes content appear text-heavy and less engaging. Images help break up content and improve visual appeal.',
+              example: 'For a 1,000-word article, include 3-5 relevant images (screenshots, diagrams, photos) to maintain reader interest.',
+            },
+          }
         );
       }
       if (actualWordsPerImage < minWords) {
@@ -376,7 +458,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-image-text-proportion', name: 'Image-Text Proportion', category: 'content', severity: 'info' },
           'warn',
           `High image density (1 image per ${actualWordsPerImage.toFixed(0)} words, ideal: 1 per ${minWords}-${maxWords})`,
-          { recommendation: 'Ensure images are relevant and not excessive, as too many can be distracting.' }
+          {
+            recommendation: 'Ensure images are relevant and not excessive, as too many can be distracting.',
+            evidence: {
+              found: `1 image per ${actualWordsPerImage.toFixed(0)} words (${ctx.totalImages} images for ${ctx.wordCount} words)`,
+              expected: `Ideal ratio: 1 image per ${minWords}-${maxWords} words`,
+              impact: 'Too many images can slow page load, distract from content, and reduce text-to-HTML ratio. Quality over quantity.',
+              example: 'A 500-word article with 10 images is excessive. Aim for 2-3 high-quality, relevant images instead.',
+            },
+          }
         );
       }
       return createResult(
@@ -424,7 +514,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-main-keyword-redundancy', name: 'Main Keyword Redundancy', category: 'content', severity: 'warning' },
           'warn',
           `Main keyword "${ctx.mainKeyword}" appears too often in key SEO elements.`,
-          { recommendation: 'Ensure natural language use of keywords. Avoid over-optimization (keyword stuffing) in title, H1, meta description, and alt texts.' }
+          {
+            recommendation: 'Ensure natural language use of keywords. Avoid over-optimization (keyword stuffing) in title, H1, meta description, and alt texts.',
+            evidence: {
+              found: `Keyword appears in ${redundancyCount} of ${SEO_THRESHOLDS.content.redundancyTolerance} tracked elements`,
+              expected: `Keyword should appear naturally, not forced into every element`,
+              impact: 'Keyword stuffing across all SEO elements can trigger over-optimization penalties. Use synonyms and natural language.',
+              example: 'Instead of repeating "best dog food" everywhere, vary with "quality pet nutrition", "premium canine meals", etc.',
+            },
+          }
         );
       }
       return createResult(
