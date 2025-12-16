@@ -55,3 +55,6 @@ src/mcp/data/embeddings.json
 .claude/
 .gemini/
 openspec/
+
+# Secret files - never commit
+suggs-*.txt
