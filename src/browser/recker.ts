@@ -113,6 +113,11 @@ export function options(url: string, options?: RequestOptions): RequestPromise {
   return getDefaultClient().options(url, options);
 }
 
+// NOTE: TRACE and CONNECT are NOT supported in browsers
+// - TRACE: Blocked for security (XST attacks)
+// - CONNECT: Blocked for security (HTTP tunneling)
+// - PURGE: Non-standard CDN method, may be rejected
+
 // ============================================================================
 // WebSocket (use native browser WebSocket API)
 // ============================================================================
@@ -176,6 +181,7 @@ export const recker = {
   head,
   /** OPTIONS request */
   options,
+  // NOTE: TRACE and CONNECT are NOT available in browsers (security restrictions)
 
   // ========== WebSocket ==========
 

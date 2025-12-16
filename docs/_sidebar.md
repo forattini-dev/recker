@@ -25,9 +25,9 @@
   - [OData](/http/16-odata.md)
 
 - **Clients**
+  - [Overview](/clients/00-overview.md)
   - [Mini Client](/mini/01-overview.md)
   - [Browser](/browser/01-quickstart.md)
-  - [Node vs Browser](/browser/02-differences.md)
 
 - **Scraping**
   - [Overview](/scraping/01-overview.md)

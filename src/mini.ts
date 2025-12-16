@@ -38,8 +38,9 @@ export interface MiniClient {
   head<T = unknown>(path: string): Promise<MiniResponse<T>>;
   options<T = unknown>(path: string): Promise<MiniResponse<T>>;
   trace<T = unknown>(path: string): Promise<MiniResponse<T>>;
+  connect<T = unknown>(path: string): Promise<MiniResponse<T>>;
   purge<T = unknown>(path: string): Promise<MiniResponse<T>>;
-  /** Generic request method for any HTTP method (except CONNECT) */
+  /** Generic request method for any HTTP method */
   request<T = unknown>(method: string, path: string, body?: unknown): Promise<MiniResponse<T>>;
   /** Close the underlying connection pool */
   close(): Promise<void>;
@@ -132,6 +133,10 @@ export function createMiniClient(options: MiniClientOptions): MiniClient {
 
     async trace<T>(path: string): Promise<MiniResponse<T>> {
       return doRequest<T>('TRACE', path);
+    },
+
+    async connect<T>(path: string): Promise<MiniResponse<T>> {
+      return doRequest<T>('CONNECT', path);
     },
 
     async purge<T>(path: string): Promise<MiniResponse<T>> {
