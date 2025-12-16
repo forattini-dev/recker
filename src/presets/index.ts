@@ -13,6 +13,8 @@ export * from './deepseek.js';
 export * from './fireworks.js';
 export * from './xai.js';
 export * from './azure-openai.js';
+export * from './elevenlabs.js';
+export * from './pinecone.js';
 
 // Cloud Providers & DevTools
 export * from './aws.js';
@@ -36,11 +38,23 @@ export * from './tiktok.js';
 export * from './stripe.js';
 export * from './twilio.js';
 export * from './mailgun.js';
+export * from './sendgrid.js';
 export * from './sinch.js';
 export * from './linear.js';
 export * from './notion.js';
 export * from './slack.js';
 export * from './discord.js';
+export * from './hubspot.js';
+export * from './square.js';
+export * from './sentry.js';
+
+// Device & Browser Presets
+export { default as android } from './android.js';
+export { default as ios } from './ios.js';
+export { default as chaturbate } from './chaturbate.js';
+
+// Enhancers (Stackable Presets)
+export * from './enhancers.js';
 
 // Registry & Auto-detection
 export * from './registry.js';

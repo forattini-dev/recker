@@ -43,6 +43,12 @@ import { linear } from './linear.js';
 import { notion } from './notion.js';
 import { slack } from './slack.js';
 import { discord } from './discord.js';
+import { hubspot } from './hubspot.js';
+import { sendgrid } from './sendgrid.js';
+import { pinecone, pineconeControl } from './pinecone.js';
+import { elevenlabs } from './elevenlabs.js';
+import { sentry, sentryIngest } from './sentry.js';
+import { square } from './square.js';
 
 /**
  * Preset factory function type
@@ -473,6 +479,62 @@ export const presetRegistry: PresetInfo[] = [
     category: 'saas',
     requiredAuth: ['token'],
     docsUrl: 'https://discord.com/developers/docs',
+  },
+
+  // New presets
+  {
+    name: 'hubspot',
+    displayName: 'HubSpot CRM',
+    patterns: [/api\.hubapi\.com/],
+    factory: hubspot,
+    category: 'saas',
+    requiredAuth: ['accessToken'],
+    docsUrl: 'https://developers.hubspot.com/docs/api/overview',
+  },
+  {
+    name: 'sendgrid',
+    displayName: 'SendGrid',
+    patterns: [/api\.sendgrid\.com/],
+    factory: sendgrid,
+    category: 'saas',
+    requiredAuth: ['apiKey'],
+    docsUrl: 'https://docs.sendgrid.com/api-reference/',
+  },
+  {
+    name: 'pinecone',
+    displayName: 'Pinecone Vector DB',
+    patterns: [/\.pinecone\.io/, /api\.pinecone\.io/],
+    factory: pinecone,
+    category: 'ai',
+    requiredAuth: ['apiKey'],
+    docsUrl: 'https://docs.pinecone.io/',
+  },
+  {
+    name: 'elevenlabs',
+    displayName: 'ElevenLabs TTS',
+    patterns: [/api\.elevenlabs\.io/],
+    factory: elevenlabs,
+    category: 'ai',
+    requiredAuth: ['apiKey'],
+    docsUrl: 'https://elevenlabs.io/docs/api-reference',
+  },
+  {
+    name: 'sentry',
+    displayName: 'Sentry',
+    patterns: [/sentry\.io\/api/, /\.ingest\.sentry\.io/],
+    factory: sentry,
+    category: 'devtools',
+    requiredAuth: ['authToken'],
+    docsUrl: 'https://docs.sentry.io/api/',
+  },
+  {
+    name: 'square',
+    displayName: 'Square Payments',
+    patterns: [/connect\.squareup\.com/, /connect\.squareupsandbox\.com/],
+    factory: square,
+    category: 'saas',
+    requiredAuth: ['accessToken'],
+    docsUrl: 'https://developer.squareup.com/reference/square',
   },
 ];
 
