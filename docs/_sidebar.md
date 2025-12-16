@@ -24,8 +24,10 @@
   - [JSON-RPC](/http/15-jsonrpc.md)
   - [OData](/http/16-odata.md)
 
-- **Mini Client**
-  - [Overview](/mini/01-overview.md)
+- **Clients**
+  - [Mini Client](/mini/01-overview.md)
+  - [Browser](/browser/01-quickstart.md)
+  - [Node vs Browser](/browser/02-differences.md)
 
 - **Scraping**
   - [Overview](/scraping/01-overview.md)
@@ -77,10 +79,6 @@
   - [Protocols](/cli/06-protocols.md)
   - [Presets](/cli/07-presets.md)
   - [Mock Servers](/cli/08-mock-servers.md)
-
-- **Browser**
-  - [Quickstart](/browser/01-quickstart.md)
-  - [Node vs Browser](/browser/02-differences.md)
 
 - **Protocols**
   - [WebSocket](/protocols/01-websocket.md)
