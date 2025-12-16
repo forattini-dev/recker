@@ -729,3 +729,43 @@ export const technicalRules: SeoRule[] = [
           },
         },
       ];
+
+/**
+ * Humans.txt rules - for checking human-readable site information
+ * Note: These rules are informational and checked at spider/site level
+ */
+export const humansTxtRules: SeoRule[] = [
+  {
+    id: 'humans-txt-hint',
+    name: 'Humans.txt',
+    category: 'technical',
+    severity: 'info',
+    description: 'humans.txt provides information about the team behind the website',
+    check: (_ctx) => {
+      // This is a hint - actual validation happens at spider level
+      return createResult(
+        { id: 'humans-txt-hint', name: 'Humans.txt', category: 'technical', severity: 'info' },
+        'info',
+        'humans.txt should exist at /humans.txt',
+        {
+          recommendation: 'Create a humans.txt file to credit your team and provide contact information.',
+          evidence: {
+            expected: 'A humans.txt file at /humans.txt',
+            impact: 'humans.txt is a standard way to credit the people behind a website. It helps with transparency, trust, and can improve E-E-A-T signals for search engines.',
+            example: `/* TEAM */
+Creator: John Doe
+Contact: john@example.com
+Twitter: @johndoe
+
+/* SITE */
+Last update: 2025/01/15
+Language: English
+Standards: HTML5, CSS3
+Components: React, Node.js`,
+            learnMore: 'https://humanstxt.org/'
+          }
+        }
+      );
+    },
+  },
+];

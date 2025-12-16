@@ -10,7 +10,7 @@ import { contentRules } from './content.js';
 import { imageRules } from './images.js';
 import { linkRules } from './links.js';
 import { performanceRules } from './performance.js';
-import { technicalRules } from './technical.js';
+import { technicalRules, humansTxtRules } from './technical.js';
 import { securityRules } from './security.js';
 import { schemaRules } from './schema.js';
 import { accessibilityRules } from './accessibility.js';
@@ -22,6 +22,7 @@ import { cwvRules } from './cwv.js';
 import { crawlRules } from './crawl.js';
 import { readabilityRules } from './readability.js';
 import { pwaRules } from './pwa.js';
+import { manifestRules } from './manifest.js';
 import { socialRules } from './social.js';
 import { internalLinkingRules } from './internal-linking.js';
 import { bestPracticesRules } from './best-practices.js';
@@ -57,9 +58,12 @@ export const ALL_SEO_RULES: SeoRule[] = [
   ...crawlRules,
   ...readabilityRules,
   ...pwaRules,
+  ...manifestRules,
   ...socialRules,
   ...internalLinkingRules,
   ...bestPracticesRules,
+  // Site-level discovery rules
+  ...humansTxtRules,
   // Advanced SEO rules
   ...aiSearchRules,
   ...resourceRules,
@@ -100,6 +104,7 @@ export const SCORING_WEIGHTS = {
     'structured-data': 1.0, // Rich snippets
     performance: 1.4, // Core Web Vitals
     accessibility: 0.8, // Accessibility
+    i18n: 0.9, // Internationalization
     // Advanced categories
     'ai-search': 0.7, // AI/LLM optimization
     resources: 1.1, // Resource optimization

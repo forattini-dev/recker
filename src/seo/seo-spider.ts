@@ -53,10 +53,12 @@ export interface SeoSpiderResult extends Omit<SpiderResult, 'pages'> {
   pages: SeoPageResult[];
   /** Site-wide SEO issues detected across multiple pages */
   siteWideIssues: SiteWideIssue[];
-  /** Discovery of text files (humans.txt, llms.txt) */
-  txtFiles?: {
+  /** Discovery of important site files */
+  discovery?: {
     humans: { found: boolean; content?: string; url: string };
     llms: { found: boolean; content?: string; url: string };
+    sitemap: { found: boolean; url: string; urlCount?: number };
+    manifest: { found: boolean; url: string; content?: Record<string, unknown>; valid?: boolean; issues?: string[] };
   };
   /** Discovered RSS/Atom feeds */
   rssFeeds?: Array<{
@@ -128,8 +130,8 @@ export class SeoSpider {
     // Calculate summary
     const summary = this.calculateSummary(seoPages, siteWideIssues);
 
-    // Check for text files (humans.txt, llms.txt)
-    const txtFiles = await this.checkTextFiles(startUrl);
+    // Check for site files (humans.txt, llms.txt, sitemap.xml, manifest.json)
+    const discovery = await this.checkSiteFiles(startUrl);
 
     // Discover RSS feeds
     let homeHtml = '';
@@ -147,7 +149,7 @@ export class SeoSpider {
       ...result,
       pages: seoPages,
       siteWideIssues,
-      txtFiles,
+      discovery,
       rssFeeds,
       sitemapValidation,
       summary,
@@ -162,15 +164,17 @@ export class SeoSpider {
   }
 
   /**
-   * Check for humans.txt and llms.txt
+   * Check for site discovery files: humans.txt, llms.txt, sitemap.xml, manifest.json
    */
-  private async checkTextFiles(startUrl: string): Promise<SeoSpiderResult['txtFiles']> {
+  private async checkSiteFiles(startUrl: string): Promise<SeoSpiderResult['discovery']> {
     try {
       const baseUrl = new URL(startUrl).origin;
       const client = createClient({ timeout: 5000 });
-      const results = {
-        humans: { found: false, content: undefined as string | undefined, url: `${baseUrl}/humans.txt` },
-        llms: { found: false, content: undefined as string | undefined, url: `${baseUrl}/llms.txt` },
+      const results: NonNullable<SeoSpiderResult['discovery']> = {
+        humans: { found: false, content: undefined, url: `${baseUrl}/humans.txt` },
+        llms: { found: false, content: undefined, url: `${baseUrl}/llms.txt` },
+        sitemap: { found: false, url: `${baseUrl}/sitemap.xml`, urlCount: undefined },
+        manifest: { found: false, url: `${baseUrl}/manifest.json`, content: undefined, valid: undefined, issues: undefined },
       };
 
       // Check humans.txt
@@ -191,10 +195,106 @@ export class SeoSpider {
         }
       } catch {}
 
+      // Check sitemap.xml
+      try {
+        const res = await client.get(results.sitemap.url);
+        if (res.status === 200) {
+          results.sitemap.found = true;
+          const content = await res.text();
+          // Count URLs in sitemap
+          const urlMatches = content.match(/<loc>/g);
+          results.sitemap.urlCount = urlMatches ? urlMatches.length : 0;
+        }
+      } catch {}
+
+      // Check manifest.json (also try /site.webmanifest)
+      try {
+        let res = await client.get(results.manifest.url);
+        if (res.status !== 200) {
+          // Try alternate location
+          results.manifest.url = `${baseUrl}/site.webmanifest`;
+          res = await client.get(results.manifest.url);
+        }
+        if (res.status === 200) {
+          results.manifest.found = true;
+          const text = await res.text();
+          try {
+            const manifest = JSON.parse(text);
+            results.manifest.content = manifest;
+            results.manifest.valid = true;
+            results.manifest.issues = this.validateManifest(manifest);
+          } catch {
+            results.manifest.valid = false;
+            results.manifest.issues = ['Invalid JSON format'];
+          }
+        }
+      } catch {}
+
       return results;
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * Validate manifest.json structure
+   */
+  private validateManifest(manifest: Record<string, unknown>): string[] {
+    const issues: string[] = [];
+
+    // Required fields
+    if (!manifest.name && !manifest.short_name) {
+      issues.push('Missing required field: name or short_name');
+    }
+
+    // Icons validation
+    if (!manifest.icons || !Array.isArray(manifest.icons) || manifest.icons.length === 0) {
+      issues.push('Missing icons array');
+    } else {
+      const icons = manifest.icons as Array<{ src?: string; sizes?: string; type?: string; purpose?: string }>;
+      const sizes = icons.map(i => i.sizes).filter(Boolean);
+
+      // Check for required sizes
+      const has192 = sizes.some(s => s?.includes('192'));
+      const has512 = sizes.some(s => s?.includes('512'));
+
+      if (!has192) issues.push('Missing 192x192 icon (required for Add to Home Screen)');
+      if (!has512) issues.push('Missing 512x512 icon (required for splash screen)');
+
+      // Check for maskable icon
+      const hasMaskable = icons.some(i => i.purpose?.includes('maskable'));
+      if (!hasMaskable) issues.push('No maskable icon found (recommended for Android adaptive icons)');
+    }
+
+    // Display mode
+    if (!manifest.display) {
+      issues.push('Missing display mode (recommended: standalone)');
+    }
+
+    // Start URL
+    if (!manifest.start_url) {
+      issues.push('Missing start_url');
+    }
+
+    // Colors
+    if (!manifest.theme_color) {
+      issues.push('Missing theme_color');
+    }
+    if (!manifest.background_color) {
+      issues.push('Missing background_color');
+    }
+
+    // Scope
+    if (!manifest.scope) {
+      issues.push('Missing scope (defines navigation boundaries)');
+    }
+
+    // Short name length
+    if (manifest.short_name && typeof manifest.short_name === 'string' && manifest.short_name.length > 12) {
+      issues.push(`short_name too long (${manifest.short_name.length} chars, max 12)`);
+    }
+
+    return issues;
   }
 
   /**

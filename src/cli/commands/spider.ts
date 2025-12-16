@@ -154,9 +154,14 @@ Spider starting: ${url}`));
             duplicateH1s: result.summary.duplicateH1s,
             orphanPages: result.summary.orphanPages,
           },
-          discovery: result.txtFiles ? {
-            humans: result.txtFiles.humans.found,
-            llms: result.txtFiles.llms.found
+          discovery: result.discovery ? {
+            humans: result.discovery.humans.found,
+            llms: result.discovery.llms.found,
+            sitemap: result.discovery.sitemap.found,
+            manifest: result.discovery.manifest.found ? {
+              valid: result.discovery.manifest.valid,
+              issues: result.discovery.manifest.issues,
+            } : undefined,
           } : undefined,
           rssFeeds: result.rssFeeds,
           content: {
@@ -282,13 +287,31 @@ Spider starting: ${url}`));
       console.log(`    ${colors.magenta('⚐')} Duplicate H1s:         ${summary.duplicateH1s}`);
       console.log(`    ${colors.gray('○')} Orphan pages:          ${summary.orphanPages}`);
 
-      // Show discovered text files
-      if (result.txtFiles) {
+      // Show discovered site files
+      if (result.discovery) {
         console.log(colors.bold('\n  Discovery:'));
-        const { humans, llms } = result.txtFiles;
+        const { humans, llms, sitemap, manifest } = result.discovery;
         if (humans.found) console.log(`    ${colors.green('✔')} humans.txt found`);
         if (llms.found) console.log(`    ${colors.green('✔')} llms.txt found`);
-        if (!humans.found && !llms.found) console.log(`    ${colors.gray('○')} No special text files found`);
+        if (sitemap.found) {
+          const urlCount = sitemap.urlCount ? ` (${sitemap.urlCount} URLs)` : '';
+          console.log(`    ${colors.green('✔')} sitemap.xml found${urlCount}`);
+        }
+        if (manifest.found) {
+          const status = manifest.valid ? colors.green('valid') : colors.yellow('invalid');
+          console.log(`    ${colors.green('✔')} manifest.json found (${status})`);
+          if (manifest.issues && manifest.issues.length > 0) {
+            manifest.issues.slice(0, 3).forEach(issue => {
+              console.log(`      ${colors.yellow('⚠')} ${issue}`);
+            });
+            if (manifest.issues.length > 3) {
+              console.log(`      ${colors.gray(`...and ${manifest.issues.length - 3} more issues`)}`);
+            }
+          }
+        }
+        if (!humans.found && !llms.found && !sitemap.found && !manifest.found) {
+          console.log(`    ${colors.gray('○')} No discovery files found`);
+        }
       }
 
       // Show RSS feeds

@@ -22,6 +22,7 @@ export type RuleCategory =
   | 'structured-data'
   | 'performance'
   | 'accessibility'
+  | 'i18n'
   // Advanced categories
   | 'ai-search'
   | 'resources'
@@ -451,6 +452,26 @@ export interface RuleContext {
   manifestShortName?: string;
   manifestName?: string;
   manifestBackgroundColor?: string;
+  /** Theme color from manifest */
+  manifestThemeColor?: string;
+  /** App description */
+  manifestDescription?: string;
+  /** Preferred orientation */
+  manifestOrientation?: string;
+  /** App language */
+  manifestLang?: string;
+  /** Text direction (ltr, rtl, auto) */
+  manifestDir?: string;
+  /** App categories for store listing */
+  manifestCategories?: string[];
+  /** Unique app identifier */
+  manifestId?: string;
+  /** App screenshots for store listing */
+  manifestScreenshots?: Array<{ src: string; sizes?: string; type?: string; form_factor?: string; label?: string }>;
+  /** App shortcuts for quick actions */
+  manifestShortcuts?: Array<{ name: string; url: string; description?: string }>;
+  /** Whether a service worker is registered */
+  hasServiceWorker?: boolean;
 
   // ==========================================================================
   // Social Media Context
