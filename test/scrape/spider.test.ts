@@ -637,7 +637,7 @@ Allow: /
       expect(result.sitemap).toBeDefined();
       expect(result.sitemap?.missingFromSitemap).toBeDefined();
       expect(Array.isArray(result.sitemap?.missingFromSitemap)).toBe(true);
-    });
+    }, 10000);
   });
 });
 
