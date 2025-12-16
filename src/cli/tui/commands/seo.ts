@@ -8,7 +8,8 @@ const schema: CommandSchema = {
   name: 'seo',
   description: 'Analyze page SEO',
   params: {
-    format: { type: 'string', choices: ['json'], description: 'Output format' }
+    format: { type: 'string', choices: ['json'], description: 'Output format' },
+    category: { type: 'string', description: 'Filter by category (e.g., performance, security, content, links, images, meta, technical, accessibility, og, twitter, i18n)' }
   },
   flags: {
     all: { description: 'Show all checks', alias: 'a' },
@@ -36,12 +37,13 @@ export async function runSeo(ctx: ShellContext, rawArgs: string[]) {
       // Try to use current document or base URL
       url = ctx.currentDocUrl || ctx.baseUrl || '';
       if (!url) {
-        console.log(colors.yellow('Usage: seo <url> [-a] [-e] [--format json]'));
-        console.log(colors.gray('  Examples: seo google.com | seo https://example.com -a'));
-        console.log(colors.gray('  -a, --all       Show all checks (including passed)'));
-        console.log(colors.gray('  -e, --evidence  Show detailed evidence for issues'));
-        console.log(colors.gray('  -c, --compact   Compact output mode'));
-        console.log(colors.gray('  --format json   Output raw JSON for programmatic use'));
+        console.log(colors.yellow('Usage: seo <url> [-a] [-e] [category=<cat>] [--format json]'));
+        console.log(colors.gray('  Examples: seo google.com | seo example.com category=performance'));
+        console.log(colors.gray('  -a, --all        Show all checks (including passed)'));
+        console.log(colors.gray('  -e, --evidence   Show detailed evidence for issues'));
+        console.log(colors.gray('  -c, --compact    Compact output mode'));
+        console.log(colors.gray('  category=<cat>   Filter by category (performance, security, content, links, images, meta, technical, accessibility, og, twitter, i18n)'));
+        console.log(colors.gray('  --format json    Output raw JSON for programmatic use'));
         console.log(colors.gray('  Or set a base URL first: url https://example.com'));
         return;
       }
@@ -61,7 +63,44 @@ export async function runSeo(ctx: ShellContext, rawArgs: string[]) {
       const duration = Math.round(performance.now() - startTime);
 
       // Run SEO analysis
-      const report = await analyzeSeo(html, { baseUrl: url });
+      let report = await analyzeSeo(html, { baseUrl: url });
+
+      // Filter by category if specified
+      const categoryFilter = data.category as string | undefined;
+      if (categoryFilter) {
+        const normalizedFilter = categoryFilter.toLowerCase();
+        const filteredChecks = report.checks.filter(
+          check => check.category.toLowerCase() === normalizedFilter
+        );
+
+        // Recalculate summary for filtered checks
+        const passed = filteredChecks.filter(c => c.status === 'pass').length;
+        const warnings = filteredChecks.filter(c => c.status === 'warn').length;
+        const errors = filteredChecks.filter(c => c.status === 'fail').length;
+        const infos = filteredChecks.filter(c => c.status === 'info').length;
+        const totalChecks = filteredChecks.length;
+
+        report = {
+          ...report,
+          checks: filteredChecks,
+          summary: {
+            ...report.summary,
+            totalChecks,
+            passed,
+            warnings,
+            errors,
+            infos,
+            passRate: totalChecks > 0 ? Math.round((passed / totalChecks) * 100) : 0,
+            topIssues: report.summary.topIssues.filter(
+              issue => issue.category.toLowerCase() === normalizedFilter
+            ),
+          },
+        };
+
+        if (!jsonOutput) {
+          console.log(colors.gray(`Filtered to category: ${categoryFilter} (${totalChecks} checks)`));
+        }
+      }
 
       // Inject timing data from undici's diagnostics
       const t = res.timings;
