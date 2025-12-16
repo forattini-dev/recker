@@ -244,10 +244,13 @@ export interface ReckerRequest {
   followRedirects?: boolean;
   /** Per-request HTTP/2 override */
   http2?: boolean;
+  /** Per-request Curl usage override */
+  useCurl?: boolean;
+  /** Per-request User-Agent string for fingerprinting */
+  userAgent?: string;
 
   // Helpers for immutability
   withHeader(name: string, value: string): ReckerRequest;
-  withBody(body: BodyInit): ReckerRequest;
 
   /** @internal */
   _hooks?: {
@@ -1159,6 +1162,18 @@ export interface ClientOptions {
     jitter?: boolean;
     statusCodes?: number[];
   };
+
+  /**
+   * Use system 'curl' binary for transport.
+   * Useful for bypassing JA3 if system has curl-impersonate or robust curl.
+   * @default false
+   */
+  useCurl?: boolean;
+
+  /**
+   * Custom User-Agent string for fingerprinting.
+   */
+  userAgent?: string;
 }
 
 export interface ReckerResponse<T = unknown> {

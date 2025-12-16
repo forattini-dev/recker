@@ -1,4 +1,32 @@
 import { Readable } from 'node:stream';
+import { openAsBlob } from 'node:fs';
+import type { Client } from '../core/client.js';
+
+export interface FileUploadOptions {
+  fieldName?: string;
+  headers?: Record<string, string>;
+}
+
+/**
+ * Upload a file from disk using multipart/form-data.
+ * Uses Node.js 18+ openAsBlob for memory efficiency.
+ */
+export async function uploadFile(
+  client: Client,
+  url: string,
+  filePath: string,
+  options: FileUploadOptions = {}
+) {
+  const blob = await openAsBlob(filePath);
+  const fieldName = options.fieldName || 'file';
+  
+  return client.post(url, {
+    headers: options.headers,
+    form: {
+      [fieldName]: blob
+    }
+  });
+}
 
 export interface UploadOptions {
   file: Readable | Buffer;

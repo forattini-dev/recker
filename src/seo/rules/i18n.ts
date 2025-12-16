@@ -14,7 +14,7 @@ export const i18nRules: SeoRule[] = [
     description: 'Multi-language sites should have hreflang tags for proper language targeting',
     check: (ctx) => {
       if (!ctx.hreflangTags || ctx.hreflangTags.length === 0) {
-        // Only warn if the page appears to be multi-language (has lang attribute)
+        // Warn more strongly if the page appears to be multi-language (has non-english lang attribute)
         if (ctx.hasLang && ctx.langValue && ctx.langValue !== 'en') {
           return createResult(
             { id: 'i18n-hreflang-exists', name: 'Hreflang Tags', category: 'technical', severity: 'warning' },
@@ -33,7 +33,14 @@ export const i18nRules: SeoRule[] = [
             }
           );
         }
-        return null;
+        return createResult(
+          { id: 'i18n-hreflang-exists', name: 'Hreflang Tags', category: 'technical', severity: 'warning' },
+          'info',
+          'No hreflang tags found',
+          {
+            recommendation: 'Consider adding hreflang tags if you have multi-language versions of this page',
+          }
+        );
       }
       return createResult(
         { id: 'i18n-hreflang-exists', name: 'Hreflang Tags', category: 'technical', severity: 'warning' },
@@ -50,8 +57,24 @@ export const i18nRules: SeoRule[] = [
     severity: 'warning',
     description: 'Hreflang tags should include a self-referencing tag for the current page',
     check: (ctx) => {
-      if (!ctx.hreflangTags || ctx.hreflangTags.length === 0) return null;
-      if (!ctx.url) return null;
+      if (!ctx.hreflangTags || ctx.hreflangTags.length === 0) {
+        return createResult(
+          { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (no hreflang tags)',
+          {
+            recommendation: 'Add hreflang tags first, then ensure self-reference is included',
+          }
+        );
+      }
+
+      if (!ctx.url) {
+        return createResult(
+          { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'technical', severity: 'warning' },
+          'info',
+          'Cannot verify (URL not available)',
+        );
+      }
 
       const currentUrl = ctx.url.toLowerCase().replace(/\/$/, '');
       const hasSelfRef = ctx.hreflangTags.some((tag) => {
@@ -74,7 +97,12 @@ export const i18nRules: SeoRule[] = [
           }
         );
       }
-      return null;
+
+      return createResult(
+        { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'technical', severity: 'warning' },
+        'pass',
+        'Self-referencing hreflang tag present'
+      );
     },
   },
   {
@@ -84,7 +112,16 @@ export const i18nRules: SeoRule[] = [
     severity: 'info',
     description: 'Include x-default hreflang for users outside defined regions',
     check: (ctx) => {
-      if (!ctx.hreflangTags || ctx.hreflangTags.length < 2) return null;
+      if (!ctx.hreflangTags || ctx.hreflangTags.length < 2) {
+        return createResult(
+          { id: 'i18n-hreflang-x-default', name: 'Hreflang X-Default', category: 'technical', severity: 'info' },
+          'info',
+          'Not applicable (need 2+ hreflang tags for x-default)',
+          {
+            recommendation: 'Add multiple hreflang tags to support international visitors',
+          }
+        );
+      }
 
       const hasXDefault = ctx.hreflangTags.some((tag) => tag.lang === 'x-default');
 
@@ -116,7 +153,13 @@ export const i18nRules: SeoRule[] = [
     severity: 'warning',
     description: 'Hreflang language codes must be valid ISO 639-1 codes',
     check: (ctx) => {
-      if (!ctx.hreflangTags || ctx.hreflangTags.length === 0) return null;
+      if (!ctx.hreflangTags || ctx.hreflangTags.length === 0) {
+        return createResult(
+          { id: 'i18n-hreflang-valid-codes', name: 'Hreflang Valid Codes', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (no hreflang tags)',
+        );
+      }
 
       // Common valid language codes (ISO 639-1)
       const validLanguageCodes = new Set([
@@ -159,7 +202,12 @@ export const i18nRules: SeoRule[] = [
           }
         );
       }
-      return null;
+
+      return createResult(
+        { id: 'i18n-hreflang-valid-codes', name: 'Hreflang Valid Codes', category: 'technical', severity: 'warning' },
+        'pass',
+        'All hreflang codes are valid ISO 639-1'
+      );
     },
   },
   {
@@ -170,7 +218,16 @@ export const i18nRules: SeoRule[] = [
     description: 'All hreflang URLs should return links back to this page (bidirectional)',
     check: (ctx) => {
       // This is a hint-only check since we can't verify remote pages
-      if (!ctx.hreflangTags || ctx.hreflangTags.length < 2) return null;
+      if (!ctx.hreflangTags || ctx.hreflangTags.length < 2) {
+        return createResult(
+          { id: 'i18n-hreflang-return-links', name: 'Hreflang Return Links', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (need 2+ hreflang tags)',
+          {
+            recommendation: 'Add hreflang tags to enable return link verification',
+          }
+        );
+      }
 
       return createResult(
         { id: 'i18n-hreflang-return-links', name: 'Hreflang Return Links', category: 'technical', severity: 'warning' },
@@ -193,27 +250,29 @@ export const i18nRules: SeoRule[] = [
     severity: 'info',
     description: 'Content-Language header can indicate the language of the document',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'i18n-content-language', name: 'Content-Language Header', category: 'technical', severity: 'info' },
+          'info',
+          'Cannot verify (response headers not available)',
+        );
+      }
 
       const contentLang =
         ctx.responseHeaders['content-language'] || ctx.responseHeaders['Content-Language'];
 
       if (!contentLang) {
-        // Only suggest if page has explicit lang attribute
-        if (ctx.hasLang) {
-          return createResult(
-            { id: 'i18n-content-language', name: 'Content-Language Header', category: 'technical', severity: 'info' },
-            'info',
-            'Content-Language header not set',
-            {
-              recommendation: `Consider adding Content-Language: ${ctx.langValue || 'en'} header`,
-              evidence: {
-                impact: 'While not critical for SEO, it helps with content negotiation',
-              },
-            }
-          );
-        }
-        return null;
+        return createResult(
+          { id: 'i18n-content-language', name: 'Content-Language Header', category: 'technical', severity: 'info' },
+          'info',
+          'Content-Language header not set',
+          {
+            recommendation: `Consider adding Content-Language: ${ctx.langValue || 'en'} header`,
+            evidence: {
+              impact: 'While not critical for SEO, it helps with content negotiation',
+            },
+          }
+        );
       }
 
       // Check if Content-Language matches html lang
@@ -248,7 +307,29 @@ export const i18nRules: SeoRule[] = [
     severity: 'warning',
     description: 'HTML lang attribute should match the og:locale if present',
     check: (ctx) => {
-      if (!ctx.hasLang || !ctx.ogLocale) return null;
+      if (!ctx.hasLang && !ctx.ogLocale) {
+        return createResult(
+          { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'technical', severity: 'warning' },
+          'info',
+          'No lang attribute or og:locale to compare',
+          {
+            recommendation: 'Add html lang attribute and og:locale for language consistency',
+          }
+        );
+      }
+
+      if (!ctx.hasLang || !ctx.ogLocale) {
+        return createResult(
+          { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'technical', severity: 'warning' },
+          'info',
+          ctx.hasLang ? 'No og:locale to compare with html lang' : 'No html lang to compare with og:locale',
+          {
+            recommendation: ctx.hasLang
+              ? 'Add og:locale meta tag for social platforms'
+              : 'Add html lang attribute for language declaration',
+          }
+        );
+      }
 
       const htmlLang = ctx.langValue?.toLowerCase().split('-')[0];
       const ogLocaleLang = ctx.ogLocale.toLowerCase().split('_')[0];
@@ -267,7 +348,12 @@ export const i18nRules: SeoRule[] = [
           }
         );
       }
-      return null;
+
+      return createResult(
+        { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'technical', severity: 'warning' },
+        'pass',
+        `Language consistent: html lang="${ctx.langValue}", og:locale="${ctx.ogLocale}"`
+      );
     },
   },
   {
@@ -277,7 +363,16 @@ export const i18nRules: SeoRule[] = [
     severity: 'info',
     description: 'Consider using region-specific language codes for better targeting',
     check: (ctx) => {
-      if (!ctx.hasLang || !ctx.langValue) return null;
+      if (!ctx.hasLang || !ctx.langValue) {
+        return createResult(
+          { id: 'i18n-lang-region', name: 'Language Region Specificity', category: 'technical', severity: 'info' },
+          'info',
+          'No lang attribute to analyze',
+          {
+            recommendation: 'Add html lang attribute first',
+          }
+        );
+      }
 
       // Check if using region-specific codes for common multi-regional languages
       const multiRegionalLangs = ['en', 'es', 'pt', 'zh', 'fr', 'de', 'ar'];
@@ -298,7 +393,12 @@ export const i18nRules: SeoRule[] = [
           }
         );
       }
-      return null;
+
+      return createResult(
+        { id: 'i18n-lang-region', name: 'Language Region Specificity', category: 'technical', severity: 'info' },
+        'pass',
+        `Lang attribute: ${ctx.langValue}`
+      );
     },
   },
 
@@ -312,7 +412,21 @@ export const i18nRules: SeoRule[] = [
     severity: 'warning',
     description: 'Hreflang language should match page content language',
     check: (ctx) => {
-      if (!ctx.hreflangTags || !ctx.detectedLanguage) return null;
+      if (!ctx.hreflangTags || ctx.hreflangTags.length === 0) {
+        return createResult(
+          { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (no hreflang tags)',
+        );
+      }
+
+      if (!ctx.detectedLanguage) {
+        return createResult(
+          { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'technical', severity: 'warning' },
+          'info',
+          'Cannot verify (language detection not available)',
+        );
+      }
 
       const selfHreflang = ctx.hreflangTags.find(tag =>
         tag.href === ctx.url || tag.href === ctx.canonicalUrl
@@ -339,7 +453,11 @@ export const i18nRules: SeoRule[] = [
         }
       }
 
-      return null;
+      return createResult(
+        { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'technical', severity: 'warning' },
+        'pass',
+        'Hreflang language matches detected content language'
+      );
     },
   },
 ];

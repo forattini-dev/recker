@@ -67,6 +67,8 @@ export interface LlmsTxtValidationResult {
 const MAX_FILE_SIZE = 100 * 1024; // 100KB recommended max
 const MIN_DESCRIPTION_LENGTH = 50;
 const MAX_DESCRIPTION_LENGTH = 500;
+const OPTIMAL_MIN_LINKS = 10;
+const OPTIMAL_MAX_LINKS = 30;
 
 /**
  * Parse llms.txt file content
@@ -294,6 +296,24 @@ export function validateLlmsTxt(content: string, baseUrl?: string): LlmsTxtValid
     } else {
       seenUrls.add(normalized);
     }
+  }
+
+  // Check optimal link count (10-30 recommended)
+  const linkCount = parseResult.links.length;
+  if (linkCount > 0 && linkCount < OPTIMAL_MIN_LINKS) {
+    issues.push({
+      type: 'info',
+      code: 'FEW_LINKS',
+      message: `Only ${linkCount} link(s) found in llms.txt`,
+      recommendation: `Consider adding ${OPTIMAL_MIN_LINKS}-${OPTIMAL_MAX_LINKS} of your most valuable pages for better AI coverage`,
+    });
+  } else if (linkCount > OPTIMAL_MAX_LINKS) {
+    issues.push({
+      type: 'info',
+      code: 'MANY_LINKS',
+      message: `${linkCount} links found in llms.txt`,
+      recommendation: `Focus on quality over quantity. ${OPTIMAL_MIN_LINKS}-${OPTIMAL_MAX_LINKS} high-value links are recommended to help AI systems identify your truly important content`,
+    });
   }
 
   return {

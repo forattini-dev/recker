@@ -61,7 +61,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'error',
     description: 'Check if page is blocked from indexing',
     check: (ctx) => {
-      if (!ctx.metaRobots) return null;
+      if (!ctx.metaRobots) {
+        return createResult(
+          { id: 'crawl-robots-noindex', name: 'Robots Noindex', category: 'technical', severity: 'error' },
+          'info',
+          'Not applicable (robots meta tag not present)',
+          { recommendation: 'This rule checks for noindex directives when robots meta tags are present' }
+        );
+      }
 
       const hasNoindex = ctx.metaRobots.some(r =>
         r.toLowerCase().includes('noindex')
@@ -82,7 +89,12 @@ export const crawlRules: SeoRule[] = [
         );
       }
 
-      return null; // Don't report if no noindex
+      return createResult(
+        { id: 'crawl-robots-noindex', name: 'Robots Noindex', category: 'technical', severity: 'error' },
+        'info',
+        'Not applicable (noindex not detected)',
+        { recommendation: 'This rule checks for noindex directives that would prevent page indexing' }
+      );
     },
   },
   {
@@ -92,7 +104,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'warning',
     description: 'Check if page links are blocked from following',
     check: (ctx) => {
-      if (!ctx.metaRobots) return null;
+      if (!ctx.metaRobots) {
+        return createResult(
+          { id: 'crawl-robots-nofollow', name: 'Robots Nofollow', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (robots meta tag not present)',
+          { recommendation: 'This rule checks for nofollow directives when robots meta tags are present' }
+        );
+      }
 
       const hasNofollow = ctx.metaRobots.some(r =>
         r.toLowerCase().includes('nofollow')
@@ -113,7 +132,12 @@ export const crawlRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'crawl-robots-nofollow', name: 'Robots Nofollow', category: 'technical', severity: 'warning' },
+        'info',
+        'Not applicable (nofollow not detected)',
+        { recommendation: 'This rule checks for nofollow directives that would prevent link following' }
+      );
     },
   },
   {
@@ -171,12 +195,26 @@ export const crawlRules: SeoRule[] = [
     severity: 'warning',
     description: 'Check X-Robots-Tag HTTP header for indexing directives',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'crawl-x-robots-tag', name: 'X-Robots-Tag Header', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for X-Robots-Tag headers when HTTP response headers are available' }
+        );
+      }
 
       const xRobotsTag = ctx.responseHeaders['x-robots-tag'] ||
                          ctx.responseHeaders['X-Robots-Tag'];
 
-      if (!xRobotsTag) return null;
+      if (!xRobotsTag) {
+        return createResult(
+          { id: 'crawl-x-robots-tag', name: 'X-Robots-Tag Header', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (X-Robots-Tag header not present)',
+          { recommendation: 'This rule checks for X-Robots-Tag headers when the header is present' }
+        );
+      }
 
       const tagValue = Array.isArray(xRobotsTag) ? xRobotsTag.join(', ') : xRobotsTag;
 
@@ -243,7 +281,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'info',
     description: 'Canonical should point to the current page or explicit alternate',
     check: (ctx) => {
-      if (!ctx.hasCanonical || !ctx.canonicalUrl || !ctx.url) return null;
+      if (!ctx.hasCanonical || !ctx.canonicalUrl || !ctx.url) {
+        return createResult(
+          { id: 'crawl-canonical-self', name: 'Canonical Self-Reference', category: 'technical', severity: 'info' },
+          'info',
+          'Not applicable (canonical URL or page URL unavailable)',
+          { recommendation: 'This rule checks canonical self-reference when canonical and page URL information is available' }
+        );
+      }
 
       // Normalize URLs for comparison
       const normalizeUrl = (url: string) => {
@@ -275,7 +320,12 @@ export const crawlRules: SeoRule[] = [
         );
       }
 
-      return null; // Self-referencing canonical is expected
+      return createResult(
+        { id: 'crawl-canonical-self', name: 'Canonical Self-Reference', category: 'technical', severity: 'info' },
+        'info',
+        'Not applicable (canonical is self-referencing)',
+        { recommendation: 'This rule checks for non-self-referencing canonicals which may indicate URL consolidation' }
+      );
     },
   },
   {
@@ -285,7 +335,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'warning',
     description: 'Canonical URL should be absolute, not relative',
     check: (ctx) => {
-      if (!ctx.canonicalUrl) return null;
+      if (!ctx.canonicalUrl) {
+        return createResult(
+          { id: 'crawl-canonical-absolute', name: 'Canonical Absolute URL', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (canonical URL not present)',
+          { recommendation: 'This rule checks canonical URL format when a canonical URL exists' }
+        );
+      }
 
       const isAbsolute = ctx.canonicalUrl.startsWith('http://') ||
                          ctx.canonicalUrl.startsWith('https://');
@@ -305,7 +362,12 @@ export const crawlRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'crawl-canonical-absolute', name: 'Canonical Absolute URL', category: 'technical', severity: 'warning' },
+        'info',
+        'Not applicable (canonical URL is absolute)',
+        { recommendation: 'This rule checks for relative canonical URLs which should be avoided' }
+      );
     },
   },
   {
@@ -315,7 +377,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'warning',
     description: 'Canonical URL should use HTTPS',
     check: (ctx) => {
-      if (!ctx.canonicalUrl) return null;
+      if (!ctx.canonicalUrl) {
+        return createResult(
+          { id: 'crawl-canonical-https', name: 'Canonical HTTPS', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (canonical URL not present)',
+          { recommendation: 'This rule checks canonical URL protocol when a canonical URL exists' }
+        );
+      }
 
       if (ctx.canonicalUrl.startsWith('http://')) {
         return createResult(
@@ -332,7 +401,12 @@ export const crawlRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'crawl-canonical-https', name: 'Canonical HTTPS', category: 'technical', severity: 'warning' },
+        'info',
+        'Not applicable (canonical URL uses HTTPS)',
+        { recommendation: 'This rule checks for HTTP canonical URLs which should use HTTPS instead' }
+      );
     },
   },
 
@@ -346,7 +420,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'info',
     description: 'URLs with tracking parameters should have proper canonical',
     check: (ctx) => {
-      if (!ctx.url) return null;
+      if (!ctx.url) {
+        return createResult(
+          { id: 'crawl-url-parameters', name: 'URL Parameters', category: 'technical', severity: 'info' },
+          'info',
+          'Not applicable (page URL unavailable)',
+          { recommendation: 'This rule checks for tracking parameters when page URL information is available' }
+        );
+      }
 
       try {
         const url = new URL(ctx.url);
@@ -373,7 +454,12 @@ export const crawlRules: SeoRule[] = [
         // Invalid URL, skip
       }
 
-      return null;
+      return createResult(
+        { id: 'crawl-url-parameters', name: 'URL Parameters', category: 'technical', severity: 'info' },
+        'info',
+        'Not applicable (no tracking parameters detected or canonical is present)',
+        { recommendation: 'This rule checks for tracking parameters without canonical tags' }
+      );
     },
   },
   {
@@ -383,7 +469,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'info',
     description: 'Paginated content should use proper rel attributes',
     check: (ctx) => {
-      if (!ctx.isPaginatedPage) return null;
+      if (!ctx.isPaginatedPage) {
+        return createResult(
+          { id: 'crawl-pagination-rel', name: 'Pagination Links', category: 'technical', severity: 'info' },
+          'info',
+          'Not applicable (page is not paginated)',
+          { recommendation: 'This rule checks pagination links on paginated pages only' }
+        );
+      }
 
       const hasPrevNext = ctx.hasRelPrev || ctx.hasRelNext;
 
@@ -417,7 +510,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'info',
     description: 'Check for noarchive and nocache directives',
     check: (ctx) => {
-      if (!ctx.metaRobots) return null;
+      if (!ctx.metaRobots) {
+        return createResult(
+          { id: 'crawl-noarchive', name: 'Cache Directives', category: 'technical', severity: 'info' },
+          'info',
+          'Not applicable (robots meta tag not present)',
+          { recommendation: 'This rule checks for cache directives when robots meta tags are present' }
+        );
+      }
 
       const directives = ctx.metaRobots.join(', ').toLowerCase();
 
@@ -444,7 +544,12 @@ export const crawlRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'crawl-noarchive', name: 'Cache Directives', category: 'technical', severity: 'info' },
+        'info',
+        'Not applicable (no cache restriction directives present)',
+        { recommendation: 'This rule checks for cache restriction directives in robots meta tags' }
+      );
     },
   },
 
@@ -458,7 +563,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'info',
     description: 'Website should have a robots.txt file',
     check: (ctx) => {
-      if (ctx.robotsTxtExists === undefined) return null;
+      if (ctx.robotsTxtExists === undefined) {
+        return createResult(
+          { id: 'robots-txt-exists', name: 'robots.txt Exists', category: 'crawlability', severity: 'info' },
+          'info',
+          'Not applicable (robots.txt status unavailable)',
+          { recommendation: 'This rule checks for robots.txt file when robots.txt information is available' }
+        );
+      }
 
       if (!ctx.robotsTxtExists) {
         return createResult(
@@ -494,7 +606,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'warning',
     description: 'robots.txt should reference sitemap.xml location',
     check: (ctx) => {
-      if (ctx.robotsTxtHasSitemap === undefined) return null;
+      if (ctx.robotsTxtHasSitemap === undefined) {
+        return createResult(
+          { id: 'sitemap-in-robots', name: 'Sitemap Reference in robots.txt', category: 'crawlability', severity: 'warning' },
+          'info',
+          'Not applicable (robots.txt sitemap reference status unavailable)',
+          { recommendation: 'This rule checks for sitemap references in robots.txt when robots.txt information is available' }
+        );
+      }
 
       if (!ctx.robotsTxtHasSitemap) {
         return createResult(
@@ -530,7 +649,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'warning',
     description: 'CSS/JS resources should not be blocked by robots.txt',
     check: (ctx) => {
-      if (ctx.blockedResources === undefined) return null;
+      if (ctx.blockedResources === undefined) {
+        return createResult(
+          { id: 'blocked-resources', name: 'Blocked Resources', category: 'crawlability', severity: 'warning' },
+          'info',
+          'Not applicable (blocked resources information unavailable)',
+          { recommendation: 'This rule checks for blocked resources when resource blocking information is available' }
+        );
+      }
 
       if (ctx.blockedResources > 0) {
         return createResult(
@@ -550,7 +676,12 @@ export const crawlRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'blocked-resources', name: 'Blocked Resources', category: 'crawlability', severity: 'warning' },
+        'info',
+        'Not applicable (no resources blocked by robots.txt)',
+        { recommendation: 'This rule checks for CSS/JS resources blocked by robots.txt' }
+      );
     },
   },
 
@@ -564,7 +695,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'warning',
     description: 'X-Robots-Tag should not block important pages',
     check: (ctx) => {
-      if (!ctx.xRobotsTag) return null;
+      if (!ctx.xRobotsTag) {
+        return createResult(
+          { id: 'x-robots-tag-noindex', name: 'X-Robots-Tag Noindex', category: 'crawlability', severity: 'warning' },
+          'info',
+          'Not applicable (X-Robots-Tag header not present)',
+          { recommendation: 'This rule checks X-Robots-Tag for noindex directives when the header is present' }
+        );
+      }
 
       const tag = ctx.xRobotsTag.toLowerCase();
       if (tag.includes('noindex')) {
@@ -583,7 +721,12 @@ export const crawlRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'x-robots-tag-noindex', name: 'X-Robots-Tag Noindex', category: 'crawlability', severity: 'warning' },
+        'info',
+        'Not applicable (X-Robots-Tag does not contain noindex)',
+        { recommendation: 'This rule checks for noindex in X-Robots-Tag header' }
+      );
     },
   },
 
@@ -597,7 +740,14 @@ export const crawlRules: SeoRule[] = [
     severity: 'info',
     description: 'External resources blocked by robots.txt may affect rendering',
     check: (ctx) => {
-      if (ctx.blockedExternalResources === undefined) return null;
+      if (ctx.blockedExternalResources === undefined) {
+        return createResult(
+          { id: 'blocked-external-resources', name: 'Blocked External Resources', category: 'crawlability', severity: 'info' },
+          'info',
+          'Not applicable (blocked external resources information unavailable)',
+          { recommendation: 'This rule checks for blocked external resources when resource blocking information is available' }
+        );
+      }
 
       if (ctx.blockedExternalResources > 0) {
         return createResult(
@@ -615,7 +765,12 @@ export const crawlRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'blocked-external-resources', name: 'Blocked External Resources', category: 'crawlability', severity: 'info' },
+        'info',
+        'Not applicable (no external resources blocked by robots.txt)',
+        { recommendation: 'This rule checks for external resources blocked by robots.txt' }
+      );
     },
   },
 ];

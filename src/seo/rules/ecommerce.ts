@@ -13,10 +13,28 @@ export const ecommerceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Product pages should have Product schema for rich snippets',
     check: (ctx) => {
-      if (!ctx.jsonLdTypes) return null;
-
       // Only check if page appears to be a product page
-      if (!ctx.isProductPage) return null;
+      if (!ctx.isProductPage) {
+        return createResult(
+          { id: 'ecommerce-product-schema', name: 'Product Schema', category: 'structured-data', severity: 'warning' },
+          'info',
+          'Not a product page',
+          {
+            recommendation: 'Add Product schema if this is a product page',
+          }
+        );
+      }
+
+      if (!ctx.jsonLdTypes) {
+        return createResult(
+          { id: 'ecommerce-product-schema', name: 'Product Schema', category: 'structured-data', severity: 'warning' },
+          'warn',
+          'Product page has no JSON-LD structured data',
+          {
+            recommendation: 'Add Product structured data for rich snippets',
+          }
+        );
+      }
 
       const hasProduct = ctx.jsonLdTypes.includes('Product');
 
@@ -60,7 +78,16 @@ export const ecommerceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Product schema should include price information',
     check: (ctx) => {
-      if (!ctx.productSchema) return null;
+      if (!ctx.productSchema) {
+        return createResult(
+          { id: 'ecommerce-product-price', name: 'Product Price', category: 'structured-data', severity: 'warning' },
+          'info',
+          'Not applicable (no Product schema)',
+          {
+            recommendation: 'Add Product schema first, then include price information',
+          }
+        );
+      }
 
       const hasPrice = ctx.productSchema.offers?.price !== undefined ||
                        ctx.productSchema.offers?.lowPrice !== undefined;
@@ -110,7 +137,16 @@ export const ecommerceRules: SeoRule[] = [
     severity: 'info',
     description: 'Product schema should include availability status',
     check: (ctx) => {
-      if (!ctx.productSchema?.offers) return null;
+      if (!ctx.productSchema?.offers) {
+        return createResult(
+          { id: 'ecommerce-product-availability', name: 'Product Availability', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not applicable (no Product offers schema)',
+          {
+            recommendation: 'Add Product schema with offers to include availability',
+          }
+        );
+      }
 
       const availability = ctx.productSchema.offers.availability;
 
@@ -147,7 +183,16 @@ export const ecommerceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Product schema should include high-quality images',
     check: (ctx) => {
-      if (!ctx.productSchema) return null;
+      if (!ctx.productSchema) {
+        return createResult(
+          { id: 'ecommerce-product-image', name: 'Product Image', category: 'structured-data', severity: 'warning' },
+          'info',
+          'Not applicable (no Product schema)',
+          {
+            recommendation: 'Add Product schema first, then include images',
+          }
+        );
+      }
 
       const hasImage = ctx.productSchema.image !== undefined;
 
@@ -184,7 +229,16 @@ export const ecommerceRules: SeoRule[] = [
     severity: 'info',
     description: 'Product schema can include aggregate ratings for star snippets',
     check: (ctx) => {
-      if (!ctx.productSchema) return null;
+      if (!ctx.productSchema) {
+        return createResult(
+          { id: 'ecommerce-product-reviews', name: 'Product Reviews', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not applicable (no Product schema)',
+          {
+            recommendation: 'Add Product schema first, then include reviews/ratings',
+          }
+        );
+      }
 
       const hasRating = ctx.productSchema.aggregateRating !== undefined;
       const hasReviews = ctx.productSchema.review !== undefined;
@@ -231,7 +285,16 @@ export const ecommerceRules: SeoRule[] = [
     severity: 'info',
     description: 'Product schema should include brand information',
     check: (ctx) => {
-      if (!ctx.productSchema) return null;
+      if (!ctx.productSchema) {
+        return createResult(
+          { id: 'ecommerce-product-brand', name: 'Product Brand', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not applicable (no Product schema)',
+          {
+            recommendation: 'Add Product schema first, then include brand',
+          }
+        );
+      }
 
       const hasBrand = ctx.productSchema.brand !== undefined;
 
@@ -268,7 +331,16 @@ export const ecommerceRules: SeoRule[] = [
     severity: 'info',
     description: 'Product schema should include unique identifiers (SKU, GTIN, MPN)',
     check: (ctx) => {
-      if (!ctx.productSchema) return null;
+      if (!ctx.productSchema) {
+        return createResult(
+          { id: 'ecommerce-product-sku', name: 'Product Identifiers', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not applicable (no Product schema)',
+          {
+            recommendation: 'Add Product schema first, then include identifiers',
+          }
+        );
+      }
 
       const hasSku = ctx.productSchema.sku !== undefined;
       const hasGtin = ctx.productSchema.gtin !== undefined ||
@@ -312,11 +384,19 @@ export const ecommerceRules: SeoRule[] = [
     severity: 'info',
     description: 'Time-sensitive offers should have valid date ranges',
     check: (ctx) => {
-      if (!ctx.productSchema?.offers) return null;
+      if (!ctx.productSchema?.offers) {
+        return createResult(
+          { id: 'ecommerce-offer-valid-dates', name: 'Offer Valid Dates', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not applicable (no Product offers schema)',
+          {
+            recommendation: 'Add Product schema with offers to enable date validation',
+          }
+        );
+      }
 
       const offers = ctx.productSchema.offers;
       const priceValidUntil = offers.priceValidUntil;
-      const validFrom = offers.validFrom;
       const validThrough = offers.validThrough;
 
       if (priceValidUntil) {
@@ -358,7 +438,23 @@ export const ecommerceRules: SeoRule[] = [
         }
       }
 
-      return null; // Only report issues
+      // Check if any dates are set
+      if (priceValidUntil || validThrough) {
+        return createResult(
+          { id: 'ecommerce-offer-valid-dates', name: 'Offer Valid Dates', category: 'structured-data', severity: 'info' },
+          'pass',
+          'Offer dates are valid'
+        );
+      }
+
+      return createResult(
+        { id: 'ecommerce-offer-valid-dates', name: 'Offer Valid Dates', category: 'structured-data', severity: 'info' },
+        'info',
+        'No offer date constraints specified',
+        {
+          recommendation: 'Consider adding priceValidUntil for time-limited offers',
+        }
+      );
     },
   },
 ];

@@ -2,14 +2,10 @@
  * ScrapeDocument - Main wrapper for HTML parsing and extraction
  *
  * Provides a rich API for querying, traversing, and extracting data from HTML documents.
- *
- * Requires: pnpm add cheerio
  */
 
-import type { CheerioAPI, Cheerio } from 'cheerio';
-import type { Element } from 'domhandler';
-import { requireOptional } from '../utils/optional-require.js';
 import { ScrapeElement } from './element.js';
+import { HTMLElement, parse } from './parser/index.js';
 import {
   extractLinks,
   extractImages,
@@ -40,44 +36,35 @@ import type {
   ImageExtractionOptions,
 } from './types.js';
 
-// Cached cheerio module
-let cheerioModule: typeof import('cheerio') | null = null;
-
-/**
- * Dynamically load cheerio
- * @throws MissingDependencyError if cheerio is not installed
- */
-async function loadCheerio(): Promise<typeof import('cheerio')> {
-  if (cheerioModule) {
-    return cheerioModule;
-  }
-
-  cheerioModule = await requireOptional<typeof import('cheerio')>(
-    'cheerio',
-    'recker/scrape'
-  );
-  return cheerioModule;
-}
-
 export class ScrapeDocument {
-  private $: CheerioAPI;
+  private rootElement: HTMLElement;
   private options: ScrapeOptions;
 
   /**
    * @internal Use ScrapeDocument.create() instead
    */
-  constructor($: CheerioAPI, options?: ScrapeOptions) {
-    this.$ = $;
+  constructor(root: HTMLElement, options?: ScrapeOptions) {
+    this.rootElement = root;
     this.options = options || {};
   }
 
   /**
    * Create a new ScrapeDocument from HTML string
-   * Dynamically loads cheerio as a peer dependency
    */
-  static async create(html: string, options?: ScrapeOptions): Promise<ScrapeDocument> {
-    const { load } = await loadCheerio();
-    return new ScrapeDocument(load(html), options);
+  static async create(
+    html: string,
+    options?: ScrapeOptions
+  ): Promise<ScrapeDocument> {
+    const root = parse(html);
+    return new ScrapeDocument(root, options);
+  }
+
+  /**
+   * Create a new ScrapeDocument from HTML string (Sync version)
+   */
+  static createSync(html: string, options?: ScrapeOptions): ScrapeDocument {
+    const root = parse(html);
+    return new ScrapeDocument(root, options);
   }
 
   // === Query Methods ===
@@ -87,25 +74,24 @@ export class ScrapeDocument {
    * Returns a ScrapeElement containing all matching elements that can be iterated
    */
   select(selector: string): ScrapeElement {
-    return new ScrapeElement(this.$(selector) as Cheerio<Element>, this.$);
+    const elements = this.rootElement.querySelectorAll(selector);
+    return new ScrapeElement(elements);
   }
 
   /**
    * Select first element matching CSS selector
    */
   selectFirst(selector: string): ScrapeElement {
-    return new ScrapeElement(this.$(selector).first() as Cheerio<Element>, this.$);
+    const element = this.rootElement.querySelector(selector);
+    return new ScrapeElement(element ? [element] : []);
   }
 
   /**
    * Select all elements matching CSS selector
    */
   selectAll(selector: string): ScrapeElement[] {
-    const elements: ScrapeElement[] = [];
-    this.$(selector).each((_, element) => {
-      elements.push(new ScrapeElement(this.$(element) as Cheerio<Element>, this.$));
-    });
-    return elements;
+    const elements = this.rootElement.querySelectorAll(selector);
+    return elements.map((el) => new ScrapeElement(el));
   }
 
   /**
@@ -128,39 +114,38 @@ export class ScrapeDocument {
    * Get text content from first matching element
    */
   text(selector: string): string {
-    return this.$(selector).first().text().trim();
+    const el = this.rootElement.querySelector(selector);
+    return el ? el.text.trim() : '';
   }
 
   /**
    * Get text content from all matching elements
    */
   texts(selector: string): string[] {
-    const texts: string[] = [];
-    this.$(selector).each((_, element) => {
-      const text = this.$(element).text().trim();
-      if (text) {
-        texts.push(text);
-      }
-    });
-    return texts;
+    const elements = this.rootElement.querySelectorAll(selector);
+    return elements
+      .map((el) => el.text.trim())
+      .filter((text) => text.length > 0);
   }
 
   /**
    * Get attribute value from first matching element
    */
   attr(selector: string, attribute: string): string | undefined {
-    return this.$(selector).first().attr(attribute);
+    const el = this.rootElement.querySelector(selector);
+    return el ? el.getAttribute(attribute) : undefined;
   }
 
   /**
    * Get attribute values from all matching elements
    */
   attrs(selector: string, attribute: string): string[] {
+    const elements = this.rootElement.querySelectorAll(selector);
     const attrs: string[] = [];
-    this.$(selector).each((_, element) => {
-      const value = this.$(element).attr(attribute);
-      if (value !== undefined) {
-        attrs.push(value);
+    elements.forEach((el) => {
+      const val = el.getAttribute(attribute);
+      if (val !== undefined) {
+        attrs.push(val);
       }
     });
     return attrs;
@@ -170,15 +155,16 @@ export class ScrapeDocument {
    * Get HTML content from first matching element
    */
   innerHtml(selector: string): string | null {
-    return this.$(selector).first().html();
+    const el = this.rootElement.querySelector(selector);
+    return el ? el.innerHTML : null;
   }
 
   /**
    * Get outer HTML from first matching element
    */
   outerHtml(selector: string): string {
-    const el = this.$(selector).first();
-    return this.$.html(el) || '';
+    const el = this.rootElement.querySelector(selector);
+    return el ? el.outerHTML : '';
   }
 
   // === Built-in Extractors ===
@@ -187,7 +173,8 @@ export class ScrapeDocument {
    * Extract all links from document
    */
   links(options?: LinkExtractionOptions): ExtractedLink[] {
-    return extractLinks(this.$, {
+
+    return extractLinks(this.rootElement, {
       ...options,
       baseUrl: this.options.baseUrl,
     });
@@ -197,7 +184,8 @@ export class ScrapeDocument {
    * Extract all images from document
    */
   images(options?: ImageExtractionOptions): ExtractedImage[] {
-    return extractImages(this.$, {
+
+    return extractImages(this.rootElement, {
       ...options,
       baseUrl: this.options.baseUrl,
     });
@@ -207,77 +195,87 @@ export class ScrapeDocument {
    * Extract meta tags from document
    */
   meta(): ExtractedMeta {
-    return extractMeta(this.$);
+
+    return extractMeta(this.rootElement);
   }
 
   /**
    * Extract OpenGraph data from document
    */
   openGraph(): OpenGraphData {
-    return extractOpenGraph(this.$);
+
+    return extractOpenGraph(this.rootElement);
   }
 
   /**
    * Extract Twitter Card data from document
    */
   twitterCard(): TwitterCardData {
-    return extractTwitterCard(this.$);
+
+    return extractTwitterCard(this.rootElement);
   }
 
   /**
    * Extract JSON-LD structured data from document
    */
   jsonLd(): JsonLdData[] {
-    return extractJsonLd(this.$);
+
+    return extractJsonLd(this.rootElement);
   }
 
   /**
    * Extract forms from document
    */
   forms(selector?: string): ExtractedForm[] {
-    return extractForms(this.$, selector);
+
+    return extractForms(this.rootElement, selector);
   }
 
   /**
    * Extract tables from document
    */
   tables(selector?: string): ExtractedTable[] {
-    return extractTables(this.$, selector);
+
+    return extractTables(this.rootElement, selector);
   }
 
   /**
    * Extract scripts from document
    */
   scripts(): ExtractedScript[] {
-    return extractScripts(this.$);
+
+    return extractScripts(this.rootElement);
   }
 
   /**
    * Extract stylesheets from document
    */
   styles(): ExtractedStyle[] {
-    return extractStyles(this.$);
+
+    return extractStyles(this.rootElement);
   }
 
   // === Declarative Extraction ===
 
   /**
    * Extract structured data using a schema
-   *
-   * @example
-   * ```typescript
-   * const data = doc.extract({
-   *   title: 'h1',
-   *   price: { selector: '.price', transform: v => parseFloat(v) },
-   *   images: { selector: 'img', attribute: 'src', multiple: true }
-   * });
-   * ```
    */
   extract<T extends Record<string, unknown>>(schema: ExtractionSchema): T {
     const result: Record<string, unknown> = {};
 
     for (const [key, fieldConfig] of Object.entries(schema)) {
-      result[key] = this.extractField(fieldConfig);
+      const value = this.extractField(fieldConfig);
+
+      // Handle optional fields - skip if value is undefined and field is optional
+      if (value === undefined) {
+        const isOptional = typeof fieldConfig === 'object' && fieldConfig.optional === true;
+        if (!isOptional) {
+          result[key] = undefined;
+        }
+        // If optional, don't include the key at all
+      } else {
+        result[key] = value;
+      }
     }
 
     return result as T;
@@ -291,37 +289,51 @@ export class ScrapeDocument {
 
     // Object config
     const { selector, attribute, multiple, transform } = field;
+    const defaultValue = 'default' in field ? field.default : undefined;
 
     if (multiple) {
       // Extract multiple values
+      const elements = this.rootElement.querySelectorAll(selector);
       const values: unknown[] = [];
-      this.$(selector).each((_, element) => {
-        const $el = this.$(element);
-        let value: string;
 
-        if (attribute) {
-          value = $el.attr(attribute) || '';
-        } else {
-          value = $el.text().trim();
-        }
+      elements.forEach(el => {
+          let value: string;
+          if (attribute) {
+              value = el.getAttribute(attribute) || '';
+          } else {
+              value = el.text.trim();
+          }
 
-        if (value) {
-          values.push(transform ? transform(value) : value);
-        }
+          if (value) {
+              values.push(transform ? transform(value) : value);
+          }
       });
+
+      // Return default if no values found
+      if (values.length === 0 && defaultValue !== undefined) {
+        return defaultValue;
+      }
       return values;
     } else {
       // Extract single value
-      const $el = this.$(selector).first();
-      let value: string;
+      const el = this.rootElement.querySelector(selector);
 
-      if (attribute) {
-        value = $el.attr(attribute) || '';
-      } else {
-        value = $el.text().trim();
+      if (!el) {
+        // Return default value if element not found
+        return defaultValue;
       }
 
-      if (!value) return undefined;
+      let value: string;
+      if (attribute) {
+        value = el.getAttribute(attribute) || '';
+      } else {
+        value = el.text.trim();
+      }
+
+      if (!value) {
+        // Return default value if value is empty
+        return defaultValue;
+      }
       return transform ? transform(value) : value;
     }
   }
@@ -332,7 +344,8 @@ export class ScrapeDocument {
    * Get page title
    */
   title(): string | undefined {
-    const title = this.$('title').first().text().trim();
+    const el = this.rootElement.querySelector('title');
+    const title = el ? el.text.trim() : '';
     return title || undefined;
   }
 
@@ -340,42 +353,44 @@ export class ScrapeDocument {
    * Get body element
    */
   body(): ScrapeElement {
-    return new ScrapeElement(this.$('body').first() as Cheerio<Element>, this.$);
+    const el = this.rootElement.querySelector('body');
+    return new ScrapeElement(el ? [el] : []);
   }
 
   /**
    * Get head element
    */
   head(): ScrapeElement {
-    return new ScrapeElement(this.$('head').first() as Cheerio<Element>, this.$);
+    const el = this.rootElement.querySelector('head');
+    return new ScrapeElement(el ? [el] : []);
   }
 
   /**
    * Get the full HTML of the document
    */
   html(): string {
-    return this.$.html() || '';
+    return this.rootElement.outerHTML;
   }
 
   /**
    * Get document root element
    */
   root(): ScrapeElement {
-    return new ScrapeElement(this.$.root() as unknown as Cheerio<Element>, this.$);
+    return new ScrapeElement(this.rootElement);
   }
 
   /**
    * Check if an element exists
    */
   exists(selector: string): boolean {
-    return this.$(selector).length > 0;
+    return this.rootElement.querySelector(selector) !== null;
   }
 
   /**
    * Count elements matching selector
    */
   count(selector: string): number {
-    return this.$(selector).length;
+    return this.rootElement.querySelectorAll(selector).length;
   }
 
   // === Advanced Queries ===
@@ -384,14 +399,14 @@ export class ScrapeDocument {
    * Find elements containing specific text
    */
   findByText(text: string, selector?: string): ScrapeElement[] {
-    const baseSelector = selector || '*';
     const elements: ScrapeElement[] = [];
-
-    this.$(baseSelector).each((_, element) => {
-      const $el = this.$(element);
-      if ($el.text().includes(text)) {
-        elements.push(new ScrapeElement($el as Cheerio<Element>, this.$));
-      }
+    // Traverse all nodes? Or just select *?
+    const candidates = selector ? this.rootElement.querySelectorAll(selector) : this.rootElement.querySelectorAll('*');
+    
+    candidates.forEach(el => {
+        if (el.text.includes(text)) {
+            elements.push(new ScrapeElement(el));
+        }
     });
 
     return elements;
@@ -401,14 +416,13 @@ export class ScrapeDocument {
    * Find elements with exact text match
    */
   findByExactText(text: string, selector?: string): ScrapeElement[] {
-    const baseSelector = selector || '*';
     const elements: ScrapeElement[] = [];
-
-    this.$(baseSelector).each((_, element) => {
-      const $el = this.$(element);
-      if ($el.text().trim() === text) {
-        elements.push(new ScrapeElement($el as Cheerio<Element>, this.$));
-      }
+    const candidates = selector ? this.rootElement.querySelectorAll(selector) : this.rootElement.querySelectorAll('*');
+    
+    candidates.forEach(el => {
+        if (el.text.trim() === text) {
+            elements.push(new ScrapeElement(el));
+        }
     });
 
     return elements;
@@ -428,10 +442,10 @@ export class ScrapeDocument {
   // === Raw Access ===
 
   /**
-   * Get underlying Cheerio instance
+   * Get underlying Parser Root
    */
-  get raw(): CheerioAPI {
-    return this.$;
+  get raw(): HTMLElement {
+    return this.rootElement;
   }
 
   /**

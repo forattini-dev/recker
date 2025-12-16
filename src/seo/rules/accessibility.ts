@@ -16,7 +16,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: 'Buttons must have an accessible name (text content, aria-label, or title)',
     check: (ctx) => {
-      if (ctx.buttonsWithoutAriaLabel === undefined) return null;
+      if (ctx.buttonsWithoutAriaLabel === undefined) {
+        return createResult(
+          { id: 'a11y-buttons-accessible-name', name: 'Buttons Accessible Name', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no button data available)',
+          { recommendation: 'This rule checks that all buttons have accessible names via text content, aria-label, or title attributes' }
+        );
+      }
       const count = ctx.buttonsWithoutAriaLabel;
       if (count > 0) {
         return createResult(
@@ -49,7 +56,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: 'Image elements must have [alt] attributes',
     check: (ctx) => {
-      if (ctx.imagesWithoutAlt === undefined) return null;
+      if (ctx.imagesWithoutAlt === undefined) {
+        return createResult(
+          { id: 'a11y-images-alt', name: 'Image Alt Attributes', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no image data available)',
+          { recommendation: 'This rule checks that all images have alt attributes for screen readers' }
+        );
+      }
       const count = ctx.imagesWithoutAlt;
       if (count > 0) {
         return createResult(
@@ -82,7 +96,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: 'Links must have a discernible name',
     check: (ctx) => {
-      if (ctx.linksWithoutText === undefined && ctx.linksWithoutAriaLabel === undefined) return null;
+      if (ctx.linksWithoutText === undefined && ctx.linksWithoutAriaLabel === undefined) {
+        return createResult(
+          { id: 'a11y-links-discernible-name', name: 'Links Discernible Name', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no link data available)',
+          { recommendation: 'This rule checks that all links have discernible names via text content, aria-label, or title' }
+        );
+      }
       const linksNoText = ctx.linksWithoutText ?? 0;
       const linksNoAria = ctx.linksWithoutAriaLabel ?? 0;
       const count = Math.max(linksNoText, linksNoAria);
@@ -117,7 +138,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: 'Form elements must have associated labels',
     check: (ctx) => {
-      if (ctx.inputsWithoutLabel === undefined) return null;
+      if (ctx.inputsWithoutLabel === undefined) {
+        return createResult(
+          { id: 'a11y-form-labels', name: 'Form Input Labels', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no form input data available)',
+          { recommendation: 'This rule checks that all form inputs have associated labels for accessibility' }
+        );
+      }
       const count = ctx.inputsWithoutLabel;
       if (count > 0) {
         return createResult(
@@ -154,7 +182,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'warning',
     description: 'Heading elements should be in sequentially-descending order',
     check: (ctx) => {
-      if (ctx.headingHierarchyValid === undefined) return null;
+      if (ctx.headingHierarchyValid === undefined) {
+        return createResult(
+          { id: 'a11y-heading-order', name: 'Heading Order', category: 'accessibility', severity: 'warning' },
+          'info',
+          'Not applicable (no heading data available)',
+          { recommendation: 'This rule checks that headings follow a logical order (H1 → H2 → H3) without skipping levels' }
+        );
+      }
       if (!ctx.headingHierarchyValid) {
         return createResult(
           { id: 'a11y-heading-order', name: 'Heading Order', category: 'accessibility', severity: 'warning' },
@@ -185,7 +220,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'warning',
     description: 'No element should have a [tabindex] value greater than 0',
     check: (ctx) => {
-      if (ctx.elementsWithHighTabindex === undefined) return null;
+      if (ctx.elementsWithHighTabindex === undefined) {
+        return createResult(
+          { id: 'a11y-tabindex', name: 'Tabindex Values', category: 'accessibility', severity: 'warning' },
+          'info',
+          'Not applicable (no tabindex data available)',
+          { recommendation: 'This rule checks that no element has a tabindex value greater than 0, which can confuse keyboard users' }
+        );
+      }
       const count = ctx.elementsWithHighTabindex;
       if (count > 0) {
         return createResult(
@@ -222,7 +264,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: '[aria-*] attributes must be valid and not misspelled',
     check: (ctx) => {
-      if (ctx.invalidAriaAttributes === undefined) return null;
+      if (ctx.invalidAriaAttributes === undefined) {
+        return createResult(
+          { id: 'a11y-aria-valid-attrs', name: 'Valid ARIA Attributes', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no ARIA attribute data available)',
+          { recommendation: 'This rule checks that all aria-* attributes are valid and not misspelled' }
+        );
+      }
       const count = ctx.invalidAriaAttributes;
       if (count > 0) {
         return createResult(
@@ -255,7 +304,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: '[aria-*] attributes must have valid values',
     check: (ctx) => {
-      if (ctx.invalidAriaValues === undefined) return null;
+      if (ctx.invalidAriaValues === undefined) {
+        return createResult(
+          { id: 'a11y-aria-valid-values', name: 'ARIA Attribute Values', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no ARIA value data available)',
+          { recommendation: 'This rule checks that all aria-* attributes have valid values' }
+        );
+      }
       const count = ctx.invalidAriaValues;
       if (count > 0) {
         return createResult(
@@ -288,7 +344,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: '[role] values must be valid',
     check: (ctx) => {
-      if (ctx.invalidAriaRoles === undefined) return null;
+      if (ctx.invalidAriaRoles === undefined) {
+        return createResult(
+          { id: 'a11y-aria-roles', name: 'Valid ARIA Roles', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no ARIA role data available)',
+          { recommendation: 'This rule checks that all role values are valid ARIA roles' }
+        );
+      }
       const count = ctx.invalidAriaRoles;
       if (count > 0) {
         return createResult(
@@ -321,7 +384,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: '[role]s must have all required [aria-*] attributes',
     check: (ctx) => {
-      if (ctx.missingRequiredAriaAttrs === undefined) return null;
+      if (ctx.missingRequiredAriaAttrs === undefined) {
+        return createResult(
+          { id: 'a11y-aria-required-attrs', name: 'Required ARIA Attributes', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no required ARIA attribute data available)',
+          { recommendation: 'This rule checks that elements with ARIA roles have all required aria-* attributes' }
+        );
+      }
       const count = ctx.missingRequiredAriaAttrs;
       if (count > 0) {
         return createResult(
@@ -354,7 +424,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: '[aria-hidden="true"] must not be present on the document <body>',
     check: (ctx) => {
-      if (ctx.hasAriaHiddenBody === undefined) return null;
+      if (ctx.hasAriaHiddenBody === undefined) {
+        return createResult(
+          { id: 'a11y-aria-hidden-body', name: 'ARIA Hidden Body', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no body element data available)',
+          { recommendation: 'This rule checks that aria-hidden is not present on the document body' }
+        );
+      }
       if (ctx.hasAriaHiddenBody) {
         return createResult(
           { id: 'a11y-aria-hidden-body', name: 'ARIA Hidden Body', category: 'accessibility', severity: 'error' },
@@ -385,7 +462,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: '[aria-hidden="true"] elements must not contain focusable descendants',
     check: (ctx) => {
-      if (ctx.ariaHiddenFocusableCount === undefined) return null;
+      if (ctx.ariaHiddenFocusableCount === undefined) {
+        return createResult(
+          { id: 'a11y-aria-hidden-focus', name: 'ARIA Hidden Focusable', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no aria-hidden focusable data available)',
+          { recommendation: 'This rule checks that aria-hidden elements do not contain focusable descendants' }
+        );
+      }
       const count = ctx.ariaHiddenFocusableCount;
       if (count > 0) {
         return createResult(
@@ -418,7 +502,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'warning',
     description: 'Deprecated ARIA roles should not be used',
     check: (ctx) => {
-      if (ctx.deprecatedAriaRoles === undefined) return null;
+      if (ctx.deprecatedAriaRoles === undefined) {
+        return createResult(
+          { id: 'a11y-aria-deprecated', name: 'Deprecated ARIA Roles', category: 'accessibility', severity: 'warning' },
+          'info',
+          'Not applicable (no deprecated ARIA role data available)',
+          { recommendation: 'This rule checks that deprecated ARIA roles are not used' }
+        );
+      }
       const count = ctx.deprecatedAriaRoles;
       if (count > 0) {
         return createResult(
@@ -451,7 +542,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: 'ARIA IDs must be unique',
     check: (ctx) => {
-      if (ctx.duplicateAriaIds === undefined) return null;
+      if (ctx.duplicateAriaIds === undefined) {
+        return createResult(
+          { id: 'a11y-aria-ids-unique', name: 'ARIA IDs Unique', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no ARIA ID data available)',
+          { recommendation: 'This rule checks that all IDs referenced by aria-labelledby, aria-describedby, etc. are unique' }
+        );
+      }
       const count = ctx.duplicateAriaIds;
       if (count > 0) {
         return createResult(
@@ -484,7 +582,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: 'Elements with role="dialog" or role="alertdialog" must have accessible names',
     check: (ctx) => {
-      if (ctx.dialogsWithoutName === undefined) return null;
+      if (ctx.dialogsWithoutName === undefined) {
+        return createResult(
+          { id: 'a11y-dialog-name', name: 'Dialog Accessible Name', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no dialog data available)',
+          { recommendation: 'This rule checks that elements with role="dialog" or role="alertdialog" have accessible names' }
+        );
+      }
       const count = ctx.dialogsWithoutName;
       if (count > 0) {
         return createResult(
@@ -521,7 +626,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'warning',
     description: 'Document should have a main landmark',
     check: (ctx) => {
-      if (ctx.hasMain === undefined) return null;
+      if (ctx.hasMain === undefined) {
+        return createResult(
+          { id: 'a11y-main-landmark', name: 'Main Landmark', category: 'accessibility', severity: 'warning' },
+          'info',
+          'Not applicable (no main landmark data available)',
+          { recommendation: 'This rule checks that document has a <main> element or role="main" for screen reader navigation' }
+        );
+      }
       if (!ctx.hasMain) {
         return createResult(
           { id: 'a11y-main-landmark', name: 'Main Landmark', category: 'accessibility', severity: 'warning' },
@@ -551,7 +663,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Page should contain a heading, skip link, or landmark region',
     check: (ctx) => {
-      if (ctx.hasSkipLink === undefined && ctx.hasMain === undefined && ctx.h1Count === undefined) return null;
+      if (ctx.hasSkipLink === undefined && ctx.hasMain === undefined && ctx.h1Count === undefined) {
+        return createResult(
+          { id: 'a11y-skip-link', name: 'Skip Link', category: 'accessibility', severity: 'info' },
+          'info',
+          'Not applicable (no navigation bypass data available)',
+          { recommendation: 'This rule checks that page contains a skip link, main landmark, or heading for keyboard navigation' }
+        );
+      }
       const hasSkip = ctx.hasSkipLink ?? false;
       const hasMain = ctx.hasMain ?? false;
       const hasH1 = (ctx.h1Count ?? 0) > 0;
@@ -588,7 +707,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Data tables should have caption or aria-label',
     check: (ctx) => {
-      if (ctx.tablesWithoutCaption === undefined) return null;
+      if (ctx.tablesWithoutCaption === undefined) {
+        return createResult(
+          { id: 'a11y-table-caption', name: 'Table Caption', category: 'accessibility', severity: 'info' },
+          'info',
+          'Not applicable (no table data available)',
+          { recommendation: 'This rule checks that data tables have captions or aria-labels for screen readers' }
+        );
+      }
       const count = ctx.tablesWithoutCaption;
       if (count > 0) {
         return createResult(
@@ -624,7 +750,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'warning',
     description: '<frame> or <iframe> elements must have a title',
     check: (ctx) => {
-      if (ctx.iframesWithoutTitle === undefined) return null;
+      if (ctx.iframesWithoutTitle === undefined) {
+        return createResult(
+          { id: 'a11y-iframe-title', name: 'Iframe Title', category: 'accessibility', severity: 'warning' },
+          'info',
+          'Not applicable (no iframe data available)',
+          { recommendation: 'This rule checks that iframes have title attributes to describe their content' }
+        );
+      }
       const count = ctx.iframesWithoutTitle;
       if (count > 0) {
         return createResult(
@@ -661,7 +794,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'warning',
     description: 'SVGs should have <title> or aria-label for accessibility',
     check: (ctx) => {
-      if (ctx.svgsWithoutTitle === undefined) return null;
+      if (ctx.svgsWithoutTitle === undefined) {
+        return createResult(
+          { id: 'a11y-svg-title', name: 'SVG Title', category: 'accessibility', severity: 'warning' },
+          'info',
+          'Not applicable (no SVG data available)',
+          { recommendation: 'This rule checks that SVGs have <title> elements or aria-label for accessibility' }
+        );
+      }
       const count = ctx.svgsWithoutTitle;
       if (count > 0) {
         return createResult(
@@ -697,7 +837,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: '[user-scalable="no"] should not be used and maximum-scale should not be less than 5',
     check: (ctx) => {
-      if (ctx.viewportContent === undefined) return null;
+      if (ctx.viewportContent === undefined) {
+        return createResult(
+          { id: 'a11y-viewport-zoom', name: 'Viewport Zoom', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no viewport meta tag data available)',
+          { recommendation: 'This rule checks that viewport meta tag allows zooming for users with low vision' }
+        );
+      }
       const viewport = ctx.viewportContent.toLowerCase();
       const hasUserScalableNo = viewport.includes('user-scalable=no') || viewport.includes('user-scalable=0');
       const maxScaleMatch = viewport.match(/maximum-scale\s*=\s*([\d.]+)/);
@@ -737,7 +884,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: 'Document must have a <title> element',
     check: (ctx) => {
-      if (ctx.title === undefined) return null;
+      if (ctx.title === undefined) {
+        return createResult(
+          { id: 'a11y-document-title', name: 'Document Title', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no title data available)',
+          { recommendation: 'This rule checks that document has a <title> element for screen readers' }
+        );
+      }
       if (!ctx.title || ctx.title.trim().length === 0) {
         return createResult(
           { id: 'a11y-document-title', name: 'Document Title', category: 'accessibility', severity: 'error' },
@@ -767,7 +921,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: '<html> element must have a [lang] attribute',
     check: (ctx) => {
-      if (ctx.hasLang === undefined) return null;
+      if (ctx.hasLang === undefined) {
+        return createResult(
+          { id: 'a11y-html-lang', name: 'HTML Lang Attribute', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no HTML lang attribute data available)',
+          { recommendation: 'This rule checks that HTML element has a lang attribute for screen readers' }
+        );
+      }
       if (!ctx.hasLang) {
         return createResult(
           { id: 'a11y-html-lang', name: 'HTML Lang Attribute', category: 'accessibility', severity: 'error' },
@@ -797,7 +958,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'error',
     description: '<html> element must have a valid value for its [lang] attribute',
     check: (ctx) => {
-      if (!ctx.hasLang || !ctx.langValue) return null;
+      if (!ctx.hasLang || !ctx.langValue) {
+        return createResult(
+          { id: 'a11y-html-lang-valid', name: 'Valid Lang Attribute', category: 'accessibility', severity: 'error' },
+          'info',
+          'Not applicable (no lang attribute present to validate)',
+          { recommendation: 'This rule checks that HTML lang attribute has a valid BCP 47 language tag' }
+        );
+      }
       // Basic ISO 639-1 validation (2 letter codes) or BCP 47 (en-US, pt-BR, etc)
       const validLangPattern = /^[a-z]{2,3}(-[A-Za-z]{2,4})?(-[A-Za-z0-9]{2,})?$/i;
       if (!validLangPattern.test(ctx.langValue)) {
@@ -834,7 +1002,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'warning',
     description: '<video> elements should contain a <track> element with [kind="captions"]',
     check: (ctx) => {
-      if (ctx.videoCount === undefined || ctx.videosWithCaptions === undefined) return null;
+      if (ctx.videoCount === undefined || ctx.videosWithCaptions === undefined) {
+        return createResult(
+          { id: 'a11y-video-captions', name: 'Video Captions', category: 'accessibility', severity: 'warning' },
+          'info',
+          'Not applicable (no video data available)',
+          { recommendation: 'This rule checks that video elements have caption tracks for deaf users' }
+        );
+      }
       const videos = ctx.videoCount;
       const withCaptions = ctx.videosWithCaptions;
       if (videos > 0 && withCaptions < videos) {
@@ -861,7 +1036,12 @@ export const accessibilityRules: SeoRule[] = [
           `All ${videos} video(s) have captions`
         );
       }
-      return null;
+      return createResult(
+        { id: 'a11y-video-captions', name: 'Video Captions', category: 'accessibility', severity: 'warning' },
+        'info',
+        'Not applicable (no video elements detected)',
+        { recommendation: 'This rule checks that video elements have caption tracks for deaf users' }
+      );
     },
   },
 
@@ -875,7 +1055,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'warning',
     description: 'Lists must contain only <li> elements and script supporting elements',
     check: (ctx) => {
-      if (ctx.invalidListStructure === undefined) return null;
+      if (ctx.invalidListStructure === undefined) {
+        return createResult(
+          { id: 'a11y-list-structure', name: 'List Structure', category: 'accessibility', severity: 'warning' },
+          'info',
+          'Not applicable (no list structure data available)',
+          { recommendation: 'This rule checks that lists only contain valid children (li, script, template)' }
+        );
+      }
       const count = ctx.invalidListStructure;
       if (count > 0) {
         return createResult(
@@ -912,7 +1099,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'warning',
     description: 'All heading elements must contain content',
     check: (ctx) => {
-      if (ctx.emptyHeadings === undefined) return null;
+      if (ctx.emptyHeadings === undefined) {
+        return createResult(
+          { id: 'a11y-headings-content', name: 'Heading Content', category: 'accessibility', severity: 'warning' },
+          'info',
+          'Not applicable (no heading content data available)',
+          { recommendation: 'This rule checks that all heading elements contain text content' }
+        );
+      }
       const count = ctx.emptyHeadings;
       if (count > 0) {
         return createResult(
@@ -949,7 +1143,14 @@ export const accessibilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Image alt attributes should not be redundant',
     check: (ctx) => {
-      if (ctx.imagesWithRedundantAlt === undefined) return null;
+      if (ctx.imagesWithRedundantAlt === undefined) {
+        return createResult(
+          { id: 'a11y-images-redundant-alt', name: 'Redundant Alt Text', category: 'accessibility', severity: 'info' },
+          'info',
+          'Not applicable (no image alt text data available)',
+          { recommendation: 'This rule checks that image alt text does not contain redundant phrases like "image of" or "picture of"' }
+        );
+      }
       const count = ctx.imagesWithRedundantAlt;
       if (count > 0) {
         return createResult(

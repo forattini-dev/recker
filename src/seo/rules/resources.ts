@@ -18,7 +18,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Too many JavaScript files increase HTTP requests and slow page load',
     check: (ctx) => {
-      if (ctx.jsFilesCount === undefined) return null;
+      if (ctx.jsFilesCount === undefined) {
+        return createResult(
+          { id: 'resources-js-files-count', name: 'JavaScript File Count', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (JavaScript file count unavailable)',
+          { recommendation: 'This rule checks JavaScript file count when resource information is available' }
+        );
+      }
 
       const max = 15;
       if (ctx.jsFilesCount > max) {
@@ -37,7 +44,12 @@ export const resourceRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'resources-js-files-count', name: 'JavaScript File Count', category: 'resources', severity: 'warning' },
+        'info',
+        'Not applicable (JavaScript file count is within limits or unavailable)',
+        { recommendation: 'This rule checks JavaScript file count when resource information is available' }
+      );
     },
   },
   {
@@ -47,7 +59,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Large JavaScript bundles slow page load and increase bandwidth',
     check: (ctx) => {
-      if (ctx.jsTotalSize === undefined) return null;
+      if (ctx.jsTotalSize === undefined) {
+        return createResult(
+          { id: 'resources-js-total-size', name: 'JavaScript Total Size', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (JavaScript size information unavailable)',
+          { recommendation: 'This rule checks JavaScript total size when resource size information is available' }
+        );
+      }
 
       const maxKB = 500;
       const sizeKB = Math.round(ctx.jsTotalSize / 1024);
@@ -68,7 +87,12 @@ export const resourceRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'resources-js-total-size', name: 'JavaScript Total Size', category: 'resources', severity: 'warning' },
+        'info',
+        'Not applicable (JavaScript size is within limits)',
+        { recommendation: 'This rule checks for large JavaScript bundles that slow page load' }
+      );
     },
   },
   {
@@ -78,7 +102,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Render-blocking JS in <head> delays page rendering',
     check: (ctx) => {
-      if (ctx.renderBlockingJs === undefined) return null;
+      if (ctx.renderBlockingJs === undefined) {
+        return createResult(
+          { id: 'resources-js-render-blocking', name: 'Render-Blocking JavaScript', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (render-blocking JavaScript information unavailable)',
+          { recommendation: 'This rule checks for render-blocking JavaScript when resource information is available' }
+        );
+      }
 
       if (ctx.renderBlockingJs > 0) {
         return createResult(
@@ -115,7 +146,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Too many CSS files increase HTTP requests',
     check: (ctx) => {
-      if (ctx.cssFilesCount === undefined) return null;
+      if (ctx.cssFilesCount === undefined) {
+        return createResult(
+          { id: 'resources-css-files-count', name: 'CSS File Count', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (CSS file count unavailable)',
+          { recommendation: 'This rule checks CSS file count when resource information is available' }
+        );
+      }
 
       const max = 10;
       if (ctx.cssFilesCount > max) {
@@ -133,7 +171,12 @@ export const resourceRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'resources-css-files-count', name: 'CSS File Count', category: 'resources', severity: 'warning' },
+        'info',
+        'Not applicable (CSS file count is within limits or unavailable)',
+        { recommendation: 'This rule checks CSS file count when resource information is available' }
+      );
     },
   },
   {
@@ -143,7 +186,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Large CSS files delay page rendering',
     check: (ctx) => {
-      if (ctx.cssTotalSize === undefined) return null;
+      if (ctx.cssTotalSize === undefined) {
+        return createResult(
+          { id: 'resources-css-total-size', name: 'CSS Total Size', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (CSS size information unavailable)',
+          { recommendation: 'This rule checks CSS total size when resource size information is available' }
+        );
+      }
 
       const maxKB = 200;
       const sizeKB = Math.round(ctx.cssTotalSize / 1024);
@@ -164,7 +214,12 @@ export const resourceRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'resources-css-total-size', name: 'CSS Total Size', category: 'resources', severity: 'warning' },
+        'info',
+        'Not applicable (CSS size is within limits)',
+        { recommendation: 'This rule checks for large CSS files that delay page rendering' }
+      );
     },
   },
   {
@@ -174,7 +229,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'info',
     description: 'Critical CSS should be inlined, non-critical deferred',
     check: (ctx) => {
-      if (ctx.cssFilesCount === undefined) return null;
+      if (ctx.cssFilesCount === undefined) {
+        return createResult(
+          { id: 'resources-css-render-blocking', name: 'Render-Blocking CSS', category: 'resources', severity: 'info' },
+          'info',
+          'Not applicable (CSS file information unavailable)',
+          { recommendation: 'This rule checks for render-blocking CSS when resource information is available' }
+        );
+      }
 
       // All CSS in <link> is render-blocking by default
       // This is normal, but we can suggest optimization
@@ -193,7 +255,12 @@ export const resourceRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'resources-css-render-blocking', name: 'Render-Blocking CSS', category: 'resources', severity: 'info' },
+        'info',
+        'Not applicable (CSS file count is low or critical CSS is present)',
+        { recommendation: 'This rule checks for render-blocking CSS that delays page rendering' }
+      );
     },
   },
 
@@ -207,7 +274,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Images over 200KB should be optimized',
     check: (ctx) => {
-      if (!ctx.largeImages || ctx.largeImages.length === 0) return null;
+      if (!ctx.largeImages || ctx.largeImages.length === 0) {
+        return createResult(
+          { id: 'resources-image-size-large', name: 'Large Image Files', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (no large images detected or image data unavailable)',
+          { recommendation: 'This rule checks for images over 200KB when image information is available' }
+        );
+      }
 
       const maxKB = 200;
       const largeCount = ctx.largeImages.length;
@@ -234,8 +308,22 @@ export const resourceRules: SeoRule[] = [
     severity: 'info',
     description: 'Use WebP or AVIF for better compression',
     check: (ctx) => {
-      if (ctx.imagesTotal === undefined || ctx.imagesTotal === 0) return null;
-      if (ctx.modernFormatImages === undefined) return null;
+      if (ctx.imagesTotal === undefined || ctx.imagesTotal === 0) {
+        return createResult(
+          { id: 'resources-image-format', name: 'Modern Image Formats', category: 'resources', severity: 'info' },
+          'info',
+          'Not applicable (no images present or image data unavailable)',
+          { recommendation: 'This rule checks image format usage when images are present on the page' }
+        );
+      }
+      if (ctx.modernFormatImages === undefined) {
+        return createResult(
+          { id: 'resources-image-format', name: 'Modern Image Formats', category: 'resources', severity: 'info' },
+          'info',
+          'Not applicable (modern format image data unavailable)',
+          { recommendation: 'This rule checks for modern image formats when image format information is available' }
+        );
+      }
 
       const modernPercent = (ctx.modernFormatImages / ctx.imagesTotal) * 100;
 
@@ -270,7 +358,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Images should have width and height attributes',
     check: (ctx) => {
-      if (ctx.imagesMissingDimensions === undefined) return null;
+      if (ctx.imagesMissingDimensions === undefined) {
+        return createResult(
+          { id: 'resources-image-dimensions', name: 'Image Dimensions', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (image dimension information unavailable)',
+          { recommendation: 'This rule checks for image dimensions when image information is available' }
+        );
+      }
 
       if (ctx.imagesMissingDimensions > 0) {
         return createResult(
@@ -306,7 +401,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'info',
     description: 'Too many font files can slow page load',
     check: (ctx) => {
-      if (ctx.fontFilesCount === undefined) return null;
+      if (ctx.fontFilesCount === undefined) {
+        return createResult(
+          { id: 'resources-font-files', name: 'Web Font Files', category: 'resources', severity: 'info' },
+          'info',
+          'Not applicable (font file information unavailable)',
+          { recommendation: 'This rule checks font file count when font information is available' }
+        );
+      }
 
       const max = 4;
       if (ctx.fontFilesCount > max) {
@@ -325,7 +427,12 @@ export const resourceRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'resources-font-files', name: 'Web Font Files', category: 'resources', severity: 'info' },
+        'info',
+        'Not applicable (font file count is within limits)',
+        { recommendation: 'This rule checks for excessive font files that slow page load' }
+      );
     },
   },
   {
@@ -335,7 +442,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'info',
     description: 'Use font-display: swap to prevent invisible text during load',
     check: (ctx) => {
-      if (ctx.hasFontDisplaySwap === undefined) return null;
+      if (ctx.hasFontDisplaySwap === undefined) {
+        return createResult(
+          { id: 'resources-font-display', name: 'Font Display Strategy', category: 'resources', severity: 'info' },
+          'info',
+          'Not applicable (font display strategy information unavailable)',
+          { recommendation: 'This rule checks font display strategy when font information is available' }
+        );
+      }
 
       if (!ctx.hasFontDisplaySwap && ctx.fontFilesCount && ctx.fontFilesCount > 0) {
         return createResult(
@@ -351,7 +465,12 @@ export const resourceRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'resources-font-display', name: 'Font Display Strategy', category: 'resources', severity: 'info' },
+        'info',
+        'Not applicable (no fonts loaded or font-display is configured)',
+        { recommendation: 'This rule checks for font-display strategy when fonts are loaded' }
+      );
     },
   },
 
@@ -365,7 +484,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Too many HTTP requests slow page load',
     check: (ctx) => {
-      if (ctx.totalRequests === undefined) return null;
+      if (ctx.totalRequests === undefined) {
+        return createResult(
+          { id: 'resources-total-requests', name: 'Total HTTP Requests', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (total request count unavailable)',
+          { recommendation: 'This rule checks total HTTP requests when request information is available' }
+        );
+      }
 
       const max = 50;
       if (ctx.totalRequests > max) {
@@ -399,7 +525,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Total page weight affects load time',
     check: (ctx) => {
-      if (ctx.totalPageSize === undefined) return null;
+      if (ctx.totalPageSize === undefined) {
+        return createResult(
+          { id: 'resources-total-size', name: 'Total Page Size', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (total page size information unavailable)',
+          { recommendation: 'This rule checks total page size when page weight information is available' }
+        );
+      }
 
       const maxMB = 3;
       const sizeMB = ctx.totalPageSize / (1024 * 1024);
@@ -439,7 +572,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'Text resources should be compressed with gzip or brotli',
     check: (ctx) => {
-      if (ctx.uncompressedResources === undefined) return null;
+      if (ctx.uncompressedResources === undefined) {
+        return createResult(
+          { id: 'resources-compression', name: 'Resource Compression', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (resource compression information unavailable)',
+          { recommendation: 'This rule checks resource compression when resource information is available' }
+        );
+      }
 
       if (ctx.uncompressedResources > 0) {
         return createResult(
@@ -474,7 +614,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'info',
     description: 'Static resources should have long cache lifetimes',
     check: (ctx) => {
-      if (ctx.resourcesWithoutCaching === undefined) return null;
+      if (ctx.resourcesWithoutCaching === undefined) {
+        return createResult(
+          { id: 'resources-caching', name: 'Browser Caching', category: 'resources', severity: 'info' },
+          'info',
+          'Not applicable (caching information unavailable)',
+          { recommendation: 'This rule checks browser caching when resource caching information is available' }
+        );
+      }
 
       if (ctx.resourcesWithoutCaching > 0) {
         return createResult(
@@ -510,7 +657,14 @@ export const resourceRules: SeoRule[] = [
     severity: 'warning',
     description: 'External JS/CSS files should be accessible',
     check: (ctx) => {
-      if (ctx.brokenExternalResources === undefined) return null;
+      if (ctx.brokenExternalResources === undefined) {
+        return createResult(
+          { id: 'broken-external-resources', name: 'Broken External Resources', category: 'resources', severity: 'warning' },
+          'info',
+          'Not applicable (external resource status information unavailable)',
+          { recommendation: 'This rule checks for broken external resources when resource information is available' }
+        );
+      }
 
       if (ctx.brokenExternalResources > 0) {
         return createResult(
@@ -528,7 +682,12 @@ export const resourceRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'broken-external-resources', name: 'Broken External Resources', category: 'resources', severity: 'warning' },
+        'info',
+        'Not applicable (no broken external resources detected)',
+        { recommendation: 'This rule checks for broken external JS/CSS files' }
+      );
     },
   },
 ];

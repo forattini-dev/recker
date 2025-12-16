@@ -5,7 +5,7 @@
  * @see https://www.sitemaps.org/protocol.html
  */
 
-import * as cheerio from 'cheerio';
+import { parse } from '../../scrape/parser/index.js';
 
 export interface SitemapUrl {
   loc: string;
@@ -13,13 +13,13 @@ export interface SitemapUrl {
   changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
   priority?: number;
   /** Images associated with this URL */
-  images?: Array<{
+  images?: Array <{
     loc: string;
     caption?: string;
     title?: string;
   }>;
   /** Videos associated with this URL */
-  videos?: Array<{
+  videos?: Array <{
     thumbnailLoc: string;
     title: string;
     description: string;
@@ -34,7 +34,7 @@ export interface SitemapUrl {
     title: string;
   };
   /** Alternate language versions */
-  alternates?: Array<{
+  alternates?: Array <{
     hreflang: string;
     href: string;
   }>;
@@ -96,16 +96,17 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
   let type: 'urlset' | 'sitemapindex' | 'unknown' = 'unknown';
 
   try {
-    const $ = cheerio.load(content, { xmlMode: true });
-
+    const root = parse(content, { lowerCaseTagName: false }); // Preserve case for XML tags
+    // sitemap tags are usually lowercase.
+    
     // Determine sitemap type
-    if ($('urlset').length > 0) {
+    if (root.querySelectorAll('urlset').length > 0) {
       type = 'urlset';
 
       // Parse URLs
-      $('url').each((_, elem) => {
-        const $url = $(elem);
-        const loc = $url.find('loc').first().text().trim();
+      root.querySelectorAll('url').forEach((urlElem) => {
+        const locElem = urlElem.querySelector('loc');
+        const loc = locElem ? locElem.text.trim() : '';
 
         if (!loc) {
           errors.push('URL entry missing <loc> element');
@@ -123,7 +124,8 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
         const url: SitemapUrl = { loc };
 
         // Optional fields
-        const lastmod = $url.find('lastmod').first().text().trim();
+        const lastmodElem = urlElem.querySelector('lastmod');
+        const lastmod = lastmodElem ? lastmodElem.text.trim() : '';
         if (lastmod) {
           if (isValidDate(lastmod)) {
             url.lastmod = lastmod;
@@ -132,7 +134,8 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
           }
         }
 
-        const changefreq = $url.find('changefreq').first().text().trim().toLowerCase();
+        const changefreqElem = urlElem.querySelector('changefreq');
+        const changefreq = changefreqElem ? changefreqElem.text.trim().toLowerCase() : '';
         if (changefreq) {
           if (VALID_CHANGEFREQ.includes(changefreq)) {
             url.changefreq = changefreq as SitemapUrl['changefreq'];
@@ -141,7 +144,8 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
           }
         }
 
-        const priority = $url.find('priority').first().text().trim();
+        const priorityElem = urlElem.querySelector('priority');
+        const priority = priorityElem ? priorityElem.text.trim() : '';
         if (priority) {
           const p = parseFloat(priority);
           if (isNaN(p) || p < 0 || p > 1) {
@@ -153,14 +157,23 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
 
         // Parse images
         const images: SitemapUrl['images'] = [];
-        $url.find('image\\:image, image').each((_, imgElem) => {
-          const $img = $(imgElem);
-          const imgLoc = $img.find('image\\:loc, loc').first().text().trim();
+        // Namespaced tags like image:image might be parsed as 'image:image' or 'image' depending on parser
+        // We'll try querySelectorAll with namespaces.
+        // CSS selectors with namespaces usually need escaping: 'image\:image'
+        
+        const imageElems = urlElem.querySelectorAll('image\:image, image');
+        imageElems.forEach((imgElem) => {
+          const locEl = imgElem.querySelector('image\:loc, loc');
+          const imgLoc = locEl ? locEl.text.trim() : '';
+          
           if (imgLoc) {
+            const captionEl = imgElem.querySelector('image\:caption, caption');
+            const titleEl = imgElem.querySelector('image\:title, title');
+            
             images.push({
               loc: imgLoc,
-              caption: $img.find('image\\:caption, caption').first().text().trim() || undefined,
-              title: $img.find('image\\:title, title').first().text().trim() || undefined,
+              caption: captionEl ? captionEl.text.trim() || undefined : undefined,
+              title: titleEl ? titleEl.text.trim() || undefined : undefined,
             });
           }
         });
@@ -170,10 +183,10 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
 
         // Parse xhtml:link alternates
         const alternates: SitemapUrl['alternates'] = [];
-        $url.find('xhtml\\:link[rel="alternate"], link[rel="alternate"]').each((_, linkElem) => {
-          const $link = $(linkElem);
-          const hreflang = $link.attr('hreflang');
-          const href = $link.attr('href');
+        const linkElems = urlElem.querySelectorAll('xhtml\:link[rel="alternate"], link[rel="alternate"]');
+        linkElems.forEach((linkElem) => {
+          const hreflang = linkElem.getAttribute('hreflang');
+          const href = linkElem.getAttribute('href');
           if (hreflang && href) {
             alternates.push({ hreflang, href });
           }
@@ -185,13 +198,13 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
         urls.push(url);
       });
 
-    } else if ($('sitemapindex').length > 0) {
+    } else if (root.querySelectorAll('sitemapindex').length > 0) {
       type = 'sitemapindex';
 
       // Parse sitemap index
-      $('sitemap').each((_, elem) => {
-        const $sitemap = $(elem);
-        const loc = $sitemap.find('loc').first().text().trim();
+      root.querySelectorAll('sitemap').forEach((sitemapElem) => {
+        const locElem = sitemapElem.querySelector('loc');
+        const loc = locElem ? locElem.text.trim() : '';
 
         if (!loc) {
           errors.push('Sitemap entry missing <loc> element');
@@ -200,7 +213,8 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
 
         const sitemap: SitemapIndex = { loc };
 
-        const lastmod = $sitemap.find('lastmod').first().text().trim();
+        const lastmodElem = sitemapElem.querySelector('lastmod');
+        const lastmod = lastmodElem ? lastmodElem.text.trim() : '';
         if (lastmod) {
           if (isValidDate(lastmod)) {
             sitemap.lastmod = lastmod;
@@ -371,7 +385,7 @@ export function validateSitemap(content: string, baseUrl?: string): SitemapValid
   }
 
   // Check priority distribution
-  const priorities = parseResult.urls.filter(u => u.priority !== undefined).map(u => u.priority!);
+  const priorities = parseResult.urls.filter(u => u.priority !== undefined).map(u => u.priority!)
   if (priorities.length > 0) {
     const allSamePriority = priorities.every(p => p === priorities[0]);
     if (allSamePriority && parseResult.urls.length > 10) {
@@ -427,6 +441,12 @@ export async function discoverSitemaps(
         }
       }
     }
+  }
+
+  // Optimization: If sitemaps were found in robots.txt, treat them as the authoritative source
+  // and skip brute-force guessing of common filenames.
+  if (discovered.size > 0) {
+    return Array.from(discovered);
   }
 
   // Check common locations
@@ -558,9 +578,9 @@ export async function fetchAndValidateSitemap(
 function isValidDate(dateString: string): boolean {
   // W3C Datetime format: YYYY-MM-DD or YYYY-MM-DDThh:mm:ssTZD
   const patterns = [
-    /^\d{4}-\d{2}-\d{2}$/, // YYYY-MM-DD
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$/, // Full datetime
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$/, // Without seconds
+    /\d{4}-\d{2}-\d{2}$/, // YYYY-MM-DD
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$/, // Full datetime
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$/, // Without seconds
   ];
 
   if (!patterns.some(p => p.test(dateString))) {

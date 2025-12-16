@@ -2,6 +2,7 @@ import { Plugin, Middleware, ReckerRequest, ReckerResponse } from '../types/inde
 import { readFileSync } from 'node:fs';
 import { HttpResponse } from '../core/response.js';
 import { ParseError, NotFoundError } from '../core/errors.js';
+import type { Client } from '../core/client.js';
 
 export interface HarPlayerOptions {
   path: string; // Path to .har file
@@ -21,6 +22,7 @@ interface HarEntry {
     headers: { name: string; value: string }[];
     content: { mimeType: string; text: string };
   };
+  startedDateTime?: string;
 }
 
 export function harPlayerPlugin(options: HarPlayerOptions): Plugin {
@@ -103,4 +105,62 @@ export function harPlayerPlugin(options: HarPlayerOptions): Plugin {
   return (client) => {
     client.use(middleware);
   };
+}
+
+export async function harInfo(path: string) {
+  const content = readFileSync(path, 'utf-8');
+  const har = JSON.parse(content);
+  const entries: HarEntry[] = har.log.entries;
+  
+  const hosts = new Set<string>();
+  entries.forEach((e) => {
+    try {
+        const url = new URL(e.request.url);
+        hosts.add(url.hostname);
+    } catch {}
+  });
+
+  return {
+    entryCount: entries.length,
+    startedDateTime: entries[0]?.startedDateTime || new Date().toISOString(),
+    topHosts: Array.from(hosts).slice(0, 5)
+  };
+}
+
+export async function harPlayer(
+    client: Client, 
+    path: string, 
+    options: { count?: number; delay?: number; overrideHeaders?: Record<string, string>; onProgress?: (p: { completed: number, total: number }) => void }
+) {
+    const content = readFileSync(path, 'utf-8');
+    const har = JSON.parse(content);
+    const entries: HarEntry[] = har.log.entries;
+    const results = [];
+    
+    const count = options.count || 1;
+    const total = entries.length * count;
+    let completed = 0;
+
+    for (let i = 0; i < count; i++) {
+        for (const entry of entries) {
+            if (options.delay) await new Promise(r => setTimeout(r, options.delay));
+            
+            const req = entry.request;
+            try {
+                const headers = { ...options.overrideHeaders };
+                
+                await client.request(req.url, {
+                    method: req.method as any,
+                    headers,
+                    body: req.postData?.text
+                });
+                results.push({ url: req.url, status: 200 });
+            } catch (e) {
+                results.push({ url: req.url, error: e });
+            }
+            completed++;
+            options.onProgress?.({ completed, total });
+        }
+    }
+    return results;
 }

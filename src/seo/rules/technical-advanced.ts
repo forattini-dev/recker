@@ -16,7 +16,14 @@ export const technicalAdvancedRules: SeoRule[] = [
     severity: 'warning',
     description: 'Pages should not use meta refresh redirects',
     check: (ctx) => {
-      if (!ctx.metaRefresh) return null;
+      if (!ctx.metaRefresh) {
+        return createResult(
+          { id: 'meta-refresh-redirect', name: 'Meta Refresh Redirect', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (no meta refresh detected)',
+          { recommendation: 'This rule checks for meta refresh redirects which can impact SEO' }
+        );
+      }
 
       const { delay, url } = ctx.metaRefresh;
 
@@ -57,7 +64,12 @@ export const technicalAdvancedRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'meta-refresh-redirect', name: 'Meta Refresh Redirect', category: 'technical', severity: 'warning' },
+        'info',
+        'Not applicable (no meta refresh detected)',
+        { recommendation: 'This rule checks for meta refresh redirects which can impact SEO' }
+      );
     },
   },
 
@@ -71,7 +83,14 @@ export const technicalAdvancedRules: SeoRule[] = [
     severity: 'warning',
     description: 'HTML page should not exceed reasonable size limits',
     check: (ctx) => {
-      if (ctx.htmlSize === undefined) return null;
+      if (ctx.htmlSize === undefined) {
+        return createResult(
+          { id: 'html-page-size', name: 'HTML Page Size', category: 'performance', severity: 'warning' },
+          'info',
+          'Not applicable (HTML size data unavailable)',
+          { recommendation: 'This rule checks if HTML size is within recommended limits for optimal performance' }
+        );
+      }
 
       const sizeKb = ctx.htmlSize / 1024;
       const sizeMb = sizeKb / 1024;
@@ -130,7 +149,14 @@ export const technicalAdvancedRules: SeoRule[] = [
     severity: 'warning',
     description: 'Total page weight should be optimized for performance',
     check: (ctx) => {
-      if (ctx.totalPageSize === undefined) return null;
+      if (ctx.totalPageSize === undefined) {
+        return createResult(
+          { id: 'total-page-size', name: 'Total Page Size', category: 'performance', severity: 'warning' },
+          'info',
+          'Not applicable (total page size data unavailable)',
+          { recommendation: 'This rule checks total page weight including all resources for optimal load time' }
+        );
+      }
 
       const sizeMb = ctx.totalPageSize / (1024 * 1024);
 
@@ -189,7 +215,14 @@ export const technicalAdvancedRules: SeoRule[] = [
     description: 'Server should respond within acceptable time limits',
     check: (ctx) => {
       const ttfb = ctx.timings?.ttfb;
-      if (ttfb === undefined) return null;
+      if (ttfb === undefined) {
+        return createResult(
+          { id: 'server-response-time', name: 'Server Response Time', category: 'performance', severity: 'warning' },
+          'info',
+          'Not applicable (TTFB timing data unavailable)',
+          { recommendation: 'This rule checks server response time (TTFB) for performance optimization' }
+        );
+      }
 
       // Critical: >5s
       if (ttfb > 5000) {
@@ -245,7 +278,14 @@ export const technicalAdvancedRules: SeoRule[] = [
     severity: 'warning',
     description: 'URLs should not be excessively long',
     check: (ctx) => {
-      if (!ctx.url) return null;
+      if (!ctx.url) {
+        return createResult(
+          { id: 'url-length', name: 'URL Length', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (URL data unavailable)',
+          { recommendation: 'This rule checks URL length to ensure it is within recommended limits' }
+        );
+      }
 
       const length = ctx.url.length;
 
@@ -300,7 +340,14 @@ export const technicalAdvancedRules: SeoRule[] = [
     severity: 'warning',
     description: 'URLs should not contain problematic special characters',
     check: (ctx) => {
-      if (!ctx.url) return null;
+      if (!ctx.url) {
+        return createResult(
+          { id: 'url-special-chars', name: 'URL Special Characters', category: 'technical', severity: 'warning' },
+          'info',
+          'Not applicable (URL data unavailable)',
+          { recommendation: 'This rule checks for problematic special characters in URLs' }
+        );
+      }
 
       try {
         const urlObj = new URL(ctx.url);
@@ -382,7 +429,14 @@ export const technicalAdvancedRules: SeoRule[] = [
     severity: 'error',
     description: 'Pages with password fields must use HTTPS',
     check: (ctx) => {
-      if (!ctx.hasPasswordField || ctx.isHttps === undefined) return null;
+      if (!ctx.hasPasswordField || ctx.isHttps === undefined) {
+        return createResult(
+          { id: 'password-on-http', name: 'Password Fields on HTTP', category: 'security', severity: 'error' },
+          'info',
+          'Not applicable (no password fields detected)',
+          { recommendation: 'This rule ensures password fields are served over HTTPS for security' }
+        );
+      }
 
       if (ctx.hasPasswordField && !ctx.isHttps) {
         return createResult(
@@ -401,15 +455,11 @@ export const technicalAdvancedRules: SeoRule[] = [
         );
       }
 
-      if (ctx.hasPasswordField && ctx.isHttps) {
-        return createResult(
-          { id: 'password-on-http', name: 'Password Fields on HTTP', category: 'security', severity: 'error' },
-          'pass',
-          'Password field properly served over HTTPS'
-        );
-      }
-
-      return null;
+      return createResult(
+        { id: 'password-on-http', name: 'Password Fields on HTTP', category: 'security', severity: 'error' },
+        'pass',
+        'Password field properly served over HTTPS'
+      );
     },
   },
 
@@ -423,7 +473,14 @@ export const technicalAdvancedRules: SeoRule[] = [
     severity: 'warning',
     description: 'Forms should submit data over HTTPS',
     check: (ctx) => {
-      if (ctx.formsOnHttp === undefined) return null;
+      if (ctx.formsOnHttp === undefined) {
+        return createResult(
+          { id: 'forms-on-http', name: 'Forms on HTTP', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (form data unavailable)',
+          { recommendation: 'This rule checks if forms submit data over secure HTTPS connections' }
+        );
+      }
 
       if (ctx.formsOnHttp > 0) {
         return createResult(
@@ -442,7 +499,11 @@ export const technicalAdvancedRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'forms-on-http', name: 'Forms on HTTP', category: 'security', severity: 'warning' },
+        'pass',
+        'All forms submit over HTTPS or no forms detected'
+      );
     },
   },
 ];

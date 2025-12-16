@@ -365,7 +365,6 @@ export const udp: SimpleUDPAPI = {
         headers: new Headers(),
         body: new Uint8Array(data) as unknown as BodyInit,
         withHeader: () => ({ url: address } as any),
-        withBody: () => ({ url: address } as any),
       });
       return response as UDPResponse;
     } finally {

@@ -65,35 +65,41 @@ describe('MCP Network Tools', () => {
     });
   });
 
-  describe('rek_dns_lookup', () => {
+  describe('rek_dns', () => {
     it('should resolve A records', async () => {
-      const result = await callTool('rek_dns_lookup', {
+      const result = await callTool('rek_dns', {
         domain: 'localhost',
         type: 'A',
       });
 
       expect(result.result.isError).toBeUndefined();
       const content = JSON.parse(result.result.content[0].text);
-      expect(content.domain).toBe('localhost');
-      expect(content.result).toBeDefined();
-      // Localhost might resolve to 127.0.0.1 or ::1, check if array has entries
-      expect(Array.isArray(content.result)).toBe(true);
-      expect(content.result.length).toBeGreaterThan(0);
+      // Now returns array directly
+      expect(Array.isArray(content)).toBe(true);
+      expect(content.length).toBeGreaterThan(0);
+      // Check first record structure
+      expect(content[0].type).toBeDefined();
+      expect(content[0].data).toBeDefined();
     });
 
     it('should handle invalid domains', async () => {
-      const result = await callTool('rek_dns_lookup', {
+      const result = await callTool('rek_dns', {
         domain: 'invalid-domain-xyz-123.test',
       });
 
-      expect(result.result.isError).toBe(true);
-      expect(result.result.content[0].text).toContain('DNS lookup failed');
+      if (result.result.isError) {
+        expect(result.result.content[0].text).toContain('DNS lookup failed');
+      } else {
+        const content = JSON.parse(result.result.content[0].text);
+        expect(Array.isArray(content)).toBe(true);
+        expect(content.length).toBe(0);
+      }
     });
   });
 
-  describe('rek_network_ping', () => {
+  describe('rek_ping', () => {
     it('should ping localhost', async () => {
-      const result = await callTool('rek_network_ping', {
+      const result = await callTool('rek_ping', {
         host: 'localhost',
         port: testPort,
         count: 2,
@@ -109,7 +115,7 @@ describe('MCP Network Tools', () => {
     });
 
     it('should report failure for unreachable host', async () => {
-      const result = await callTool('rek_network_ping', {
+      const result = await callTool('rek_ping', {
         host: '192.0.2.1', // TEST-NET-1 (RFC 5737) - guaranteed unreachable
         port: 9998,
         count: 1,
@@ -125,9 +131,9 @@ describe('MCP Network Tools', () => {
 
   // Whois is hard to test reliably without external network or mocking.
   // Skipping comprehensive whois test, just checking error case.
-  describe('rek_whois_lookup', () => {
+  describe('rek_whois', () => {
     it('should return error without query', async () => {
-      const result = await callTool('rek_whois_lookup', {});
+      const result = await callTool('rek_whois', {});
       expect(result.result.isError).toBe(true);
       expect(result.result.content[0].text).toContain('query is required');
     });

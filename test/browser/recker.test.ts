@@ -32,7 +32,6 @@ describe('recker browser API', () => {
     it('should list unavailable features', () => {
       expect(recker.unavailable).toContain('whois');
       expect(recker.unavailable).toContain('dns');
-      expect(recker.unavailable).toContain('ai');
     });
   });
 

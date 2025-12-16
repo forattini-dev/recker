@@ -13,8 +13,6 @@ export const localRules: SeoRule[] = [
     severity: 'info',
     description: 'Local businesses should have LocalBusiness schema',
     check: (ctx) => {
-      if (!ctx.jsonLdTypes) return null;
-
       // Check for any LocalBusiness type or subtypes
       const localBusinessTypes = [
         'LocalBusiness', 'Restaurant', 'Store', 'MedicalBusiness',
@@ -28,12 +26,21 @@ export const localRules: SeoRule[] = [
         'PlaceOfWorship', 'Plumber', 'RealEstateAgent', 'ShoppingCenter',
       ];
 
-      const hasLocalBusiness = ctx.jsonLdTypes.some(t =>
+      const hasLocalBusiness = ctx.jsonLdTypes?.some(t =>
         localBusinessTypes.includes(t)
       );
 
-      // Only suggest if page looks like a local business
-      if (!hasLocalBusiness && ctx.hasLocalBusinessSignals) {
+      if (hasLocalBusiness) {
+        const foundTypes = ctx.jsonLdTypes!.filter(t => localBusinessTypes.includes(t));
+        return createResult(
+          { id: 'local-business-schema', name: 'LocalBusiness Schema', category: 'structured-data', severity: 'info' },
+          'pass',
+          `LocalBusiness schema found: ${foundTypes.join(', ')}`
+        );
+      }
+
+      // Suggest if page looks like a local business
+      if (ctx.hasLocalBusinessSignals) {
         return createResult(
           { id: 'local-business-schema', name: 'LocalBusiness Schema', category: 'structured-data', severity: 'info' },
           'info',
@@ -60,16 +67,14 @@ export const localRules: SeoRule[] = [
         );
       }
 
-      if (hasLocalBusiness) {
-        const foundTypes = ctx.jsonLdTypes.filter(t => localBusinessTypes.includes(t));
-        return createResult(
-          { id: 'local-business-schema', name: 'LocalBusiness Schema', category: 'structured-data', severity: 'info' },
-          'pass',
-          `LocalBusiness schema found: ${foundTypes.join(', ')}`
-        );
-      }
-
-      return null;
+      return createResult(
+        { id: 'local-business-schema', name: 'LocalBusiness Schema', category: 'structured-data', severity: 'info' },
+        'info',
+        'No LocalBusiness schema detected',
+        {
+          recommendation: 'Add LocalBusiness schema if this is a local business page',
+        }
+      );
     },
   },
   {
@@ -79,7 +84,16 @@ export const localRules: SeoRule[] = [
     severity: 'warning',
     description: 'LocalBusiness schema should include complete address',
     check: (ctx) => {
-      if (!ctx.localBusinessSchema) return null;
+      if (!ctx.localBusinessSchema) {
+        return createResult(
+          { id: 'local-business-address', name: 'Business Address', category: 'structured-data', severity: 'warning' },
+          'info',
+          'Not applicable (no LocalBusiness schema)',
+          {
+            recommendation: 'Add LocalBusiness schema first, then include address',
+          }
+        );
+      }
 
       const address = ctx.localBusinessSchema.address;
 
@@ -133,7 +147,16 @@ export const localRules: SeoRule[] = [
     severity: 'warning',
     description: 'LocalBusiness schema should include phone number',
     check: (ctx) => {
-      if (!ctx.localBusinessSchema) return null;
+      if (!ctx.localBusinessSchema) {
+        return createResult(
+          { id: 'local-business-phone', name: 'Business Phone', category: 'structured-data', severity: 'warning' },
+          'info',
+          'Not applicable (no LocalBusiness schema)',
+          {
+            recommendation: 'Add LocalBusiness schema first, then include phone',
+          }
+        );
+      }
 
       const phone = ctx.localBusinessSchema.telephone;
 
@@ -184,7 +207,16 @@ export const localRules: SeoRule[] = [
     severity: 'info',
     description: 'LocalBusiness schema should include opening hours',
     check: (ctx) => {
-      if (!ctx.localBusinessSchema) return null;
+      if (!ctx.localBusinessSchema) {
+        return createResult(
+          { id: 'local-business-hours', name: 'Business Hours', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not applicable (no LocalBusiness schema)',
+          {
+            recommendation: 'Add LocalBusiness schema first, then include hours',
+          }
+        );
+      }
 
       const hours = ctx.localBusinessSchema.openingHoursSpecification ||
                     ctx.localBusinessSchema.openingHours;
@@ -223,7 +255,16 @@ export const localRules: SeoRule[] = [
     severity: 'info',
     description: 'LocalBusiness schema should include geo coordinates',
     check: (ctx) => {
-      if (!ctx.localBusinessSchema) return null;
+      if (!ctx.localBusinessSchema) {
+        return createResult(
+          { id: 'local-business-geo', name: 'Business Coordinates', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not applicable (no LocalBusiness schema)',
+          {
+            recommendation: 'Add LocalBusiness schema first, then include geo coordinates',
+          }
+        );
+      }
 
       const geo = ctx.localBusinessSchema.geo;
 
@@ -277,7 +318,16 @@ export const localRules: SeoRule[] = [
     severity: 'info',
     description: 'Local business pages should display Name, Address, Phone (NAP)',
     check: (ctx) => {
-      if (!ctx.hasLocalBusinessSignals) return null;
+      if (!ctx.hasLocalBusinessSignals) {
+        return createResult(
+          { id: 'local-nap-presence', name: 'NAP Presence', category: 'content', severity: 'info' },
+          'info',
+          'No local business signals detected',
+          {
+            recommendation: 'Add NAP information if this is a local business page',
+          }
+        );
+      }
 
       const missing: string[] = [];
 
@@ -313,13 +363,31 @@ export const localRules: SeoRule[] = [
     severity: 'info',
     description: 'Service area businesses should specify their coverage',
     check: (ctx) => {
-      if (!ctx.localBusinessSchema) return null;
+      if (!ctx.localBusinessSchema) {
+        return createResult(
+          { id: 'local-service-area', name: 'Service Area', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not applicable (no LocalBusiness schema)',
+          {
+            recommendation: 'Add LocalBusiness schema first, then include service area if applicable',
+          }
+        );
+      }
 
       // Check if it's a service area business
       const isServiceArea = ctx.localBusinessSchema['@type'] === 'ServiceAreaBusiness' ||
                             ctx.localBusinessSchema.areaServed !== undefined;
 
-      if (!isServiceArea) return null;
+      if (!isServiceArea) {
+        return createResult(
+          { id: 'local-service-area', name: 'Service Area', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not a service area business',
+          {
+            recommendation: 'Add areaServed if you serve customers at their location',
+          }
+        );
+      }
 
       const areaServed = ctx.localBusinessSchema.areaServed;
 
@@ -355,7 +423,16 @@ export const localRules: SeoRule[] = [
     severity: 'info',
     description: 'LocalBusiness can include price range for user expectations',
     check: (ctx) => {
-      if (!ctx.localBusinessSchema) return null;
+      if (!ctx.localBusinessSchema) {
+        return createResult(
+          { id: 'local-pricerange', name: 'Price Range', category: 'structured-data', severity: 'info' },
+          'info',
+          'Not applicable (no LocalBusiness schema)',
+          {
+            recommendation: 'Add LocalBusiness schema first, then include price range',
+          }
+        );
+      }
 
       const priceRange = ctx.localBusinessSchema.priceRange;
 

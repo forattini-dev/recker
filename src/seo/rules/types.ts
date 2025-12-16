@@ -29,6 +29,28 @@ export type RuleCategory =
   | 'canonicalization';
 
 export interface RuleContext {
+  // Keywords
+  keywordsInTitle?: boolean;
+  keywordsInDescription?: boolean;
+  keywordsInH1?: boolean;
+  keywordsInUrl?: boolean;
+  keywordsInFirstParagraph?: boolean;
+  keywordsInAltText?: boolean;
+  /** Keyword consistency score (0-6): how many key places contain the main keyword */
+  keywordConsistencyScore?: number;
+  /** Which places contain the main keyword */
+  keywordConsistencyDetails?: {
+    inTitle: boolean;
+    inDescription: boolean;
+    inH1: boolean;
+    inUrl: boolean;
+    inFirstParagraph: boolean;
+    inAltText: boolean;
+  };
+  topKeywords?: string[];
+  /** Primary keyword to check for consistency */
+  mainKeyword?: string;
+
   // Title
   title?: string;
   titleLength?: number;
@@ -71,9 +93,13 @@ export interface RuleContext {
   imagesWithDimensions?: number;
   imagesMissingDimensions?: number;
   imagesWithEmptyAlt?: number;
+  imagesWithSrcset?: number; // Images using srcset or picture
+  largeBase64ImagesCount?: number; // Inline base64 images > 5KB
   imagesDecorativeCount?: number;
   imagesUsingModernFormats?: number;
   altTextLengths?: number[];
+  /** Actual alt text strings for keyword analysis */
+  imageAltTexts?: string[];
   imageFilenames?: string[]; // For image file naming conventions
   imagesWithAsyncDecoding?: number; // Count of images with decoding="async"
   brokenExternalImages?: number;
@@ -113,6 +139,10 @@ export interface RuleContext {
   totalLinks?: number;
   internalLinks?: number;
   externalLinks?: number;
+  /** Internal links using HTTP instead of HTTPS */
+  internalHttpLinks?: number;
+  /** URLs of internal links using HTTP */
+  internalHttpLinkUrls?: string[];
   linksWithoutText?: number;
   nofollowLinks?: number;
   sponsoredLinks?: number;
@@ -136,6 +166,11 @@ export interface RuleContext {
 
   // Content
   wordCount?: number;
+  emailsFound?: string[]; // Emails found in plain text
+  
+  // Social
+  socialLinksFound?: string[]; // Social profiles linked (facebook, twitter, etc.)
+
   characterCount?: number;
   sentenceCount?: number;
   paragraphCount?: number;
@@ -151,7 +186,6 @@ export interface RuleContext {
   avgSentenceLength?: number; // Average words per sentence
   faqCount?: number; // Estimated FAQ items
   imagePerWordRatio?: number; // Images per word
-  mainKeyword?: string; // Main keyword if provided
   keywordDensity?: number; // Keyword density percentage if mainKeyword provided
   fleschReadingEase?: number; // Flesch Reading Ease score
   hasQuestionHeadings?: boolean; // If headings are question-like
@@ -177,6 +211,7 @@ export interface RuleContext {
   // Multimedia
   videoCount?: number;
   audioCount?: number;
+  hasAutoplay?: boolean; // Autoplaying video/audio detected
 
   // Technical
   hasCanonical?: boolean;
@@ -193,7 +228,10 @@ export interface RuleContext {
   textHtmlRatio?: number; // Ratio of plain text to total HTML size
   hasDeprecatedPlugins?: boolean;
   deprecatedPluginTypes?: string[];
+  deprecatedTagsCount?: number;
+  deprecatedTagsFound?: string[];
   hasFrameTags?: boolean;
+  iframeCount?: number;
 
   // Favicon
   hasFavicon?: boolean;
@@ -429,6 +467,23 @@ export interface RuleContext {
   hasPinterestNopin?: boolean;
   fbAppId?: string;
 
+  // Social Links Analysis
+  totalSocialLinks?: number;
+  socialLinksInHeader?: number;
+  socialLinksInFooter?: number;
+  socialLinksWithoutAccessibility?: number;
+  socialLinksWithoutNewTab?: number;
+  socialLinksWithoutNoopener?: number;
+  platformsFound?: string[];
+  socialLinkDetails?: Array<{
+    href: string;
+    platform: string;
+    hasAccessibility: boolean;
+    hasNewTab: boolean;
+    hasNoopener: boolean;
+    location: 'header' | 'footer' | 'body';
+  }>;
+
   // ==========================================================================
   // Internal Linking Context
   // ==========================================================================
@@ -514,6 +569,42 @@ export interface RuleContext {
   tlsVersion?: string;
   hasPasswordField?: boolean;
   formsOnHttp?: number;
+
+  // ==========================================================================
+  // Analytics Context
+  // ==========================================================================
+  /** Whether any analytics script was detected */
+  analyticsDetected?: boolean;
+  /** List of detected analytics providers */
+  analyticsProviders?: string[];
+
+  // ==========================================================================
+  // RSS/Atom Feed Context
+  // ==========================================================================
+  /** Whether RSS feed link tag is present */
+  hasRssFeed?: boolean;
+  /** RSS feed URL */
+  rssFeedUrl?: string;
+  /** Whether Atom feed link tag is present */
+  hasAtomFeed?: boolean;
+  /** Atom feed URL */
+  atomFeedUrl?: string;
+
+  // ==========================================================================
+  // Conversion Context
+  // ==========================================================================
+  /** Number of CTA buttons detected */
+  ctaButtonsCount?: number;
+  /** Number of forms on the page */
+  formCount?: number;
+  /** Whether page has a WhatsApp link */
+  hasWhatsAppLink?: boolean;
+
+  // ==========================================================================
+  // Sitemap Cross-Validation Context
+  // ==========================================================================
+  /** Whether this page URL is in the sitemap */
+  pageInSitemap?: boolean;
 }
 
 export interface RuleEvidence {

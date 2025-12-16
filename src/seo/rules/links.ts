@@ -50,7 +50,14 @@ export const linkRules: SeoRule[] = [
     severity: 'warning',
     description: 'Links should have descriptive anchor text',
     check: (ctx) => {
-      if (ctx.totalLinks === undefined || ctx.totalLinks === 0) return null;
+      if (ctx.totalLinks === undefined || ctx.totalLinks === 0) {
+        return createResult(
+          { id: 'links-descriptive-text', name: 'Link Text', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (no links detected on page)',
+          { recommendation: 'This rule checks for descriptive anchor text on all links when links are present' }
+        );
+      }
       const withoutText = ctx.problematicLinks?.withoutText ?? [];
 
       if (withoutText.length > 0) {
@@ -101,7 +108,11 @@ export const linkRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-generic-text', name: 'Generic Link Text', category: 'links', severity: 'warning' },
+        'pass',
+        'All links have descriptive anchor text'
+      );
     },
   },
   {
@@ -111,7 +122,14 @@ export const linkRules: SeoRule[] = [
     severity: 'info',
     description: 'Page should have at least 3 internal links',
     check: (ctx) => {
-      if (ctx.internalLinks === undefined) return null;
+      if (ctx.internalLinks === undefined) {
+        return createResult(
+          { id: 'links-internal-count', name: 'Internal Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (internal links data unavailable)',
+          { recommendation: 'This rule checks for internal linking structure when link data is available' }
+        );
+      }
       const min = SEO_THRESHOLDS.links.minInternal;
 
       if (ctx.internalLinks < min) {
@@ -137,7 +155,14 @@ export const linkRules: SeoRule[] = [
     severity: 'info',
     description: 'Page should not have too many external links',
     check: (ctx) => {
-      if (ctx.externalLinks === undefined) return null;
+      if (ctx.externalLinks === undefined) {
+        return createResult(
+          { id: 'links-external-count', name: 'External Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (external links data unavailable)',
+          { recommendation: 'This rule checks external link count when link data is available' }
+        );
+      }
       const max = SEO_THRESHOLDS.links.maxExternal;
 
       if (ctx.externalLinks > max) {
@@ -148,7 +173,12 @@ export const linkRules: SeoRule[] = [
           { value: ctx.externalLinks, recommendation: `Reduce external links to under ${max}` }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-external-count', name: 'External Links', category: 'links', severity: 'info' },
+        'pass',
+        `External links count is acceptable (${ctx.externalLinks} links)`,
+        { value: ctx.externalLinks }
+      );
     },
   },
   // Extended Link Security
@@ -177,7 +207,11 @@ export const linkRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-external-noopener', name: 'External Links Noopener', category: 'security', severity: 'warning' },
+        'pass',
+        'All external links with target="_blank" have proper security attributes'
+      );
     },
   },
   {
@@ -204,7 +238,11 @@ export const linkRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-external-noreferrer', name: 'External Links Noreferrer', category: 'security', severity: 'info' },
+        'pass',
+        'External links have appropriate privacy attributes'
+      );
     },
   },
   {
@@ -214,7 +252,14 @@ export const linkRules: SeoRule[] = [
     severity: 'info',
     description: 'Rel attributes `sponsored` and `ugc` should be used for paid or user-generated content links.',
     check: (ctx) => {
-      if (!ctx.totalLinks) return null;
+      if (!ctx.totalLinks) {
+        return createResult(
+          { id: 'links-sponsored-ugc-directives', name: 'Sponsored/UGC Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (no links detected on page)',
+          { recommendation: 'This rule checks for proper rel="sponsored" and rel="ugc" attributes when links are present' }
+        );
+      }
 
       let messages = [];
       if (ctx.sponsoredLinks && ctx.sponsoredLinks > 0) {
@@ -232,7 +277,11 @@ export const linkRules: SeoRule[] = [
           { recommendation: 'Ensure rel="sponsored" is used for paid links and rel="ugc" for user-generated content.' }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-sponsored-ugc-directives', name: 'Sponsored/UGC Links', category: 'links', severity: 'info' },
+        'pass',
+        'No sponsored or UGC links detected'
+      );
     },
   },
 
@@ -246,7 +295,14 @@ export const linkRules: SeoRule[] = [
     severity: 'warning',
     description: 'Anchor text should describe the link destination',
     check: (ctx) => {
-      if (!ctx.allLinks || ctx.allLinks.length === 0) return null;
+      if (!ctx.allLinks || ctx.allLinks.length === 0) {
+        return createResult(
+          { id: 'links-anchor-text-non-descriptive', name: 'Non-Descriptive Anchor Text', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (no links data available)',
+          { recommendation: 'This rule checks for descriptive anchor text on all links when link data is available' }
+        );
+      }
 
       const nonDescriptive = ctx.allLinks.filter(
         (link) => link.text && isGenericAnchorText(link.text)
@@ -268,7 +324,11 @@ export const linkRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-anchor-text-non-descriptive', name: 'Non-Descriptive Anchor Text', category: 'links', severity: 'warning' },
+        'pass',
+        'All links have descriptive anchor text'
+      );
     },
   },
   {
@@ -278,7 +338,14 @@ export const linkRules: SeoRule[] = [
     severity: 'info',
     description: 'Pages should not link to themselves excessively',
     check: (ctx) => {
-      if (!ctx.selfReferencingLinks) return null;
+      if (!ctx.selfReferencingLinks) {
+        return createResult(
+          { id: 'links-self-referencing', name: 'Self-Referencing Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (self-referencing links data unavailable)',
+          { recommendation: 'This rule checks for excessive self-referencing links when link data is available' }
+        );
+      }
 
       if (ctx.selfReferencingLinks > 3) {
         return createResult(
@@ -294,7 +361,12 @@ export const linkRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-self-referencing', name: 'Self-Referencing Links', category: 'links', severity: 'info' },
+        'pass',
+        `Self-referencing links are acceptable (${ctx.selfReferencingLinks} found)`,
+        { value: ctx.selfReferencingLinks }
+      );
     },
   },
   {
@@ -304,7 +376,13 @@ export const linkRules: SeoRule[] = [
     severity: 'error',
     description: 'Internal links should not return 4xx errors',
     check: (ctx) => {
-      if (!ctx.brokenInternalLinks || ctx.brokenInternalLinks.length === 0) return null;
+      if (!ctx.brokenInternalLinks || ctx.brokenInternalLinks.length === 0) {
+        return createResult(
+          { id: 'links-broken-internal', name: 'Broken Internal Links', category: 'links', severity: 'error' },
+          'pass',
+          'No broken internal links detected'
+        );
+      }
 
       return createResult(
         { id: 'links-broken-internal', name: 'Broken Internal Links', category: 'links', severity: 'error' },
@@ -328,7 +406,13 @@ export const linkRules: SeoRule[] = [
     severity: 'warning',
     description: 'External links should not return 4xx errors',
     check: (ctx) => {
-      if (!ctx.brokenExternalLinks || ctx.brokenExternalLinks.length === 0) return null;
+      if (!ctx.brokenExternalLinks || ctx.brokenExternalLinks.length === 0) {
+        return createResult(
+          { id: 'links-broken-external', name: 'Broken External Links', category: 'links', severity: 'warning' },
+          'pass',
+          'No broken external links detected'
+        );
+      }
 
       return createResult(
         { id: 'links-broken-external', name: 'Broken External Links', category: 'links', severity: 'warning' },
@@ -352,7 +436,13 @@ export const linkRules: SeoRule[] = [
     severity: 'warning',
     description: 'Internal links should not point to redirect chains',
     check: (ctx) => {
-      if (!ctx.redirectChainLinks || ctx.redirectChainLinks.length === 0) return null;
+      if (!ctx.redirectChainLinks || ctx.redirectChainLinks.length === 0) {
+        return createResult(
+          { id: 'links-redirect-chains', name: 'Redirect Chain Links', category: 'links', severity: 'warning' },
+          'pass',
+          'No redirect chain links detected'
+        );
+      }
 
       return createResult(
         { id: 'links-redirect-chains', name: 'Redirect Chain Links', category: 'links', severity: 'warning' },
@@ -378,7 +468,14 @@ export const linkRules: SeoRule[] = [
     severity: 'warning',
     description: 'Pages should have at least 3 internal links',
     check: (ctx) => {
-      if (ctx.internalLinks === undefined) return null;
+      if (ctx.internalLinks === undefined) {
+        return createResult(
+          { id: 'links-few-internal', name: 'Pages with Few Internal Links', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (internal links data unavailable)',
+          { recommendation: 'This rule checks for sufficient internal linking when link data is available' }
+        );
+      }
 
       if (ctx.internalLinks < 3) {
         return createResult(
@@ -396,7 +493,12 @@ export const linkRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-few-internal', name: 'Pages with Few Internal Links', category: 'links', severity: 'warning' },
+        'pass',
+        `Good internal linking (${ctx.internalLinks} internal links)`,
+        { value: ctx.internalLinks }
+      );
     },
   },
   {
@@ -406,8 +508,22 @@ export const linkRules: SeoRule[] = [
     severity: 'warning',
     description: 'Pages should have incoming internal links',
     check: (ctx) => {
-      if (ctx.incomingInternalLinks === undefined) return null;
-      if (ctx.isStartPage) return null; // Start page is OK without incoming
+      if (ctx.incomingInternalLinks === undefined) {
+        return createResult(
+          { id: 'links-orphan-page', name: 'Orphan Page Detection', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (incoming links data unavailable)',
+          { recommendation: 'This rule checks for orphan pages when incoming link data is available' }
+        );
+      }
+      if (ctx.isStartPage) {
+        return createResult(
+          { id: 'links-orphan-page', name: 'Orphan Page Detection', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (start page does not require incoming links)',
+          { recommendation: 'This rule checks non-homepage pages for incoming internal links' }
+        );
+      }
 
       if (ctx.incomingInternalLinks === 0) {
         return createResult(
@@ -423,7 +539,12 @@ export const linkRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-orphan-page', name: 'Orphan Page Detection', category: 'links', severity: 'warning' },
+        'pass',
+        `Page has incoming internal links (${ctx.incomingInternalLinks} links)`,
+        { value: ctx.incomingInternalLinks }
+      );
     },
   },
   {
@@ -433,7 +554,14 @@ export const linkRules: SeoRule[] = [
     severity: 'warning',
     description: 'Important pages should be within 3 clicks from homepage',
     check: (ctx) => {
-      if (ctx.clickDepth === undefined) return null;
+      if (ctx.clickDepth === undefined) {
+        return createResult(
+          { id: 'links-click-depth', name: 'Page Click Depth', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (click depth data unavailable)',
+          { recommendation: 'This rule checks page depth from homepage when crawl data is available' }
+        );
+      }
 
       if (ctx.clickDepth > 3) {
         return createResult(
@@ -467,8 +595,22 @@ export const linkRules: SeoRule[] = [
     severity: 'info',
     description: 'Pages should have more internal than external links',
     check: (ctx) => {
-      if (ctx.internalLinks === undefined || ctx.externalLinks === undefined) return null;
-      if (ctx.totalLinks === undefined || ctx.totalLinks === 0) return null;
+      if (ctx.internalLinks === undefined || ctx.externalLinks === undefined) {
+        return createResult(
+          { id: 'links-external-ratio', name: 'External to Internal Link Ratio', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (link ratio data unavailable)',
+          { recommendation: 'This rule checks external to internal link ratio when link data is available' }
+        );
+      }
+      if (ctx.totalLinks === undefined || ctx.totalLinks === 0) {
+        return createResult(
+          { id: 'links-external-ratio', name: 'External to Internal Link Ratio', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (no links detected on page)',
+          { recommendation: 'This rule checks external to internal link ratio when links are present' }
+        );
+      }
 
       const externalRatio = (ctx.externalLinks / ctx.totalLinks) * 100;
 
@@ -488,7 +630,12 @@ export const linkRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'links-external-ratio', name: 'External to Internal Link Ratio', category: 'links', severity: 'info' },
+        'pass',
+        `Good link distribution (${Math.round(externalRatio)}% external)`,
+        { value: Math.round(externalRatio) }
+      );
     },
   },
   {
@@ -498,7 +645,13 @@ export const linkRules: SeoRule[] = [
     severity: 'info',
     description: 'Internal links with nofollow prevent PageRank flow',
     check: (ctx) => {
-      if (!ctx.nofollowInternalLinks || ctx.nofollowInternalLinks === 0) return null;
+      if (!ctx.nofollowInternalLinks || ctx.nofollowInternalLinks === 0) {
+        return createResult(
+          { id: 'links-nofollow-internal', name: 'Internal Nofollow Links', category: 'links', severity: 'info' },
+          'pass',
+          'No internal nofollow links detected'
+        );
+      }
 
       return createResult(
         { id: 'links-nofollow-internal', name: 'Internal Nofollow Links', category: 'links', severity: 'info' },
@@ -525,7 +678,14 @@ export const linkRules: SeoRule[] = [
     severity: 'warning',
     description: 'Pages should not have more than 3,000 links',
     check: (ctx) => {
-      if (ctx.totalLinks === undefined) return null;
+      if (ctx.totalLinks === undefined) {
+        return createResult(
+          { id: 'excessive-links', name: 'Excessive Links on Page', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (total links data unavailable)',
+          { recommendation: 'This rule checks for excessive links (>3,000) when link data is available' }
+        );
+      }
 
       if (ctx.totalLinks > 3000) {
         return createResult(
@@ -561,7 +721,12 @@ export const linkRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'excessive-links', name: 'Excessive Links on Page', category: 'links', severity: 'warning' },
+        'pass',
+        `Links count is acceptable (${ctx.totalLinks} links)`,
+        { value: ctx.totalLinks }
+      );
     },
   },
 
@@ -575,7 +740,14 @@ export const linkRules: SeoRule[] = [
     severity: 'info',
     description: 'Links should point to pages, not raw resources like images',
     check: (ctx) => {
-      if (ctx.linksToResources === undefined) return null;
+      if (ctx.linksToResources === undefined) {
+        return createResult(
+          { id: 'links-to-resources', name: 'Links to Resources', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (resource links data unavailable)',
+          { recommendation: 'This rule checks for links pointing to raw resources (images, PDFs) when link data is available' }
+        );
+      }
 
       if (ctx.linksToResources > 0) {
         return createResult(
@@ -593,7 +765,11 @@ export const linkRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'links-to-resources', name: 'Links to Resources', category: 'links', severity: 'info' },
+        'pass',
+        'No direct links to raw resources detected'
+      );
     },
   },
 
@@ -607,7 +783,14 @@ export const linkRules: SeoRule[] = [
     severity: 'warning',
     description: 'External links should not return 403 Forbidden',
     check: (ctx) => {
-      if (ctx.forbidden403Links === undefined) return null;
+      if (ctx.forbidden403Links === undefined) {
+        return createResult(
+          { id: 'links-403-forbidden', name: '403 Forbidden Links', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (forbidden links data unavailable)',
+          { recommendation: 'This rule checks for external links returning 403 Forbidden when link validation data is available' }
+        );
+      }
 
       if (ctx.forbidden403Links > 0) {
         return createResult(
@@ -625,7 +808,11 @@ export const linkRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'links-403-forbidden', name: '403 Forbidden Links', category: 'links', severity: 'warning' },
+        'pass',
+        'No forbidden (403) links detected'
+      );
     },
   },
 ];

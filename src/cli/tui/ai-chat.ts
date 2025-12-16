@@ -217,7 +217,7 @@ async function getOrCreateClient(provider: string, context: AIMode): Promise<Cli
 
   // Try to resolve preset
   try {
-    const presetConfig = resolvePreset(provider);
+    const presetConfig = await resolvePreset(provider, { throwOnError: true });
 
     if (!presetConfig) {
       console.log(colors.red(`Unknown preset: ${provider}`));

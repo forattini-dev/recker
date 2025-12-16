@@ -1,84 +1,158 @@
 import { Plugin, ReckerRequest, ReckerResponse } from '../types/index.js';
-import { writeFileSync } from 'node:fs';
 
-export interface HarOptions {
-  path?: string; // If provided, writes to disk automatically
-  onEntry?: (entry: any) => void; // Callback for each entry
+interface HarEntry {
+  startedDateTime: string;
+  time: number;
+  request: any;
+  response: any;
+  timings: any;
+  cache: {};
 }
 
-export function harRecorderPlugin(options: HarOptions = {}): Plugin {
-  const entries: any[] = [];
-  const startTime = new Date().toISOString();
+/**
+ * Universal HAR Recorder
+ * Records requests in memory and allows saving (Node) or downloading (Browser).
+ */
+export class HarRecorder {
+  private entries: HarEntry[] = [];
+  private isRecording = false;
+  private onEntry?: (entry: HarEntry) => void;
 
-  return (client: any) => {
-    // We need to store start time per request
-    const requestMap = new WeakMap<ReckerRequest, { start: number, req: ReckerRequest }>();
+  start() {
+    this.isRecording = true;
+    this.entries = [];
+  }
 
-    client.beforeRequest((req: ReckerRequest) => {
-      requestMap.set(req, { start: Date.now(), req });
-    });
+  stop() {
+    this.isRecording = false;
+  }
 
-    client.afterResponse(async (req: ReckerRequest, res: ReckerResponse) => {
-      const meta = requestMap.get(req);
-      if (!meta) return;
+  clear() {
+    this.entries = [];
+  }
 
-      const time = Date.now() - meta.start;
+  getEntries() {
+    return this.entries;
+  }
+
+  setOnEntry(cb: (entry: HarEntry) => void) {
+    this.onEntry = cb;
+  }
+
+  generateHar() {
+    return {
+      log: {
+        version: '1.2',
+        creator: { name: 'Recker', version: '1.0.0' },
+        pages: [],
+        entries: this.entries
+      }
+    };
+  }
+
+  /**
+   * Browser: Download HAR file
+   */
+  download(filename = 'recker-session.har') {
+    if (typeof Blob === 'undefined' || typeof document === 'undefined') {
+      throw new Error('download() is only supported in browser. Use save() in Node.js');
+    }
+
+    const har = this.generateHar();
+    const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Node.js: Save HAR to file
+   */
+  async save(path: string) {
+    if (typeof window !== 'undefined') {
+        throw new Error('save() is only supported in Node.js. Use download() in browser');
+    }
+    
+    try {
+        const fs = await import('node:fs/promises');
+        const har = this.generateHar();
+        await fs.writeFile(path, JSON.stringify(har, null, 2));
+    } catch (e: any) {
+        throw new Error(`Failed to save HAR: ${e.message}`);
+    }
+  }
+
+  /**
+   * Plugin middleware
+   */
+  plugin(): Plugin {
+    return (client: any) => {
+      if (!client.hooks.afterResponse) client.hooks.afterResponse = [];
       
-      // Basic HAR Entry Structure
-      const entry = {
-        startedDateTime: new Date(meta.start).toISOString(),
-        time: time,
-        request: {
-          method: req.method,
-          url: req.url,
-          httpVersion: "HTTP/1.1", // Should detect from connection
-          cookies: [],
-          headers: [...req.headers].map(([name, value]) => ({ name, value })),
-          queryString: [], // TODO: parse from url
-          headersSize: -1,
-          bodySize: -1
-        },
-        response: {
-          status: res.status,
-          statusText: res.statusText,
-          httpVersion: "HTTP/1.1",
-          cookies: [],
-          headers: [...res.headers].map(([name, value]) => ({ name, value })),
-          content: {
-            size: -1,
-            mimeType: res.headers.get('content-type') || '',
-            text: '' // We might need to clone to read without consuming
+      client.hooks.afterResponse.push(async (req: ReckerRequest, res: ReckerResponse) => {
+        if (!this.isRecording) return;
+
+        const entry: HarEntry = {
+          startedDateTime: new Date().toISOString(),
+          time: res.timings?.total || 0,
+          request: {
+            method: req.method,
+            url: req.url,
+            httpVersion: "HTTP/1.1",
+            headers: this.mapHeaders(req.headers),
+            queryString: [], 
+            cookies: [],
+            headersSize: -1,
+            bodySize: -1,
           },
-          redirectURL: "",
-          headersSize: -1,
-          bodySize: -1
-        },
-        cache: {},
-        timings: {
-          send: 0,
-          wait: res.timings?.firstByte || 0,
-          receive: 0
-        }
-      };
+          response: {
+            status: res.status,
+            statusText: res.statusText,
+            httpVersion: "HTTP/1.1",
+            headers: this.mapHeaders(res.headers),
+            cookies: [],
+            content: {
+              size: -1,
+              mimeType: res.headers.get('content-type') || '',
+              text: "[Body capture disabled]"
+            },
+            redirectURL: "",
+            headersSize: -1,
+            bodySize: -1,
+          },
+          cache: {},
+          timings: {
+            send: 0,
+            wait: res.timings?.firstByte || 0,
+            receive: (res.timings?.total || 0) - (res.timings?.firstByte || 0)
+          }
+        };
 
-      entries.push(entry);
-      
-      if (options.onEntry) {
-          options.onEntry(entry);
-      }
+        this.entries.push(entry);
+        this.onEntry?.(entry);
+        return res;
+      });
+    };
+  }
 
-      if (options.path) {
-          // Write entire log (inefficient for huge sessions, but simple)
-          const har = {
-              log: {
-                  version: "1.2",
-                  creator: { name: "Recker", version: "1.0.0" },
-                  pages: [],
-                  entries: entries
-              }
-          };
-          writeFileSync(options.path, JSON.stringify(har, null, 2));
-      }
-    });
-  };
+  private mapHeaders(headers: Headers): { name: string; value: string }[] {
+    const arr: { name: string; value: string }[] = [];
+    headers.forEach((value, key) => arr.push({ name: key, value }));
+    return arr;
+  }
 }
+
+export const harRecorder = new HarRecorder();
+export const harRecorderPlugin = (options?: { path?: string, onEntry?: (entry: any) => void }) => {
+    harRecorder.start();
+    if (options?.onEntry) {
+        harRecorder.setOnEntry(options.onEntry);
+    }
+    return harRecorder.plugin();
+};

@@ -14,6 +14,14 @@ if [ "$STAGED_FILES" = "package.json" ]; then
   fi
 fi
 
+echo "🔍 Running lint..."
+pnpm lint
+
+if [ $? -ne 0 ]; then
+  echo "❌ Lint failed! Fix issues before committing."
+  exit 1
+fi
+
 echo "🧪 Running tests before commit..."
 pnpm test
 

@@ -13,8 +13,6 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Pages should link to a web app manifest for PWA support',
     check: (ctx) => {
-      if (ctx.hasManifest === undefined) return null;
-
       if (!ctx.hasManifest) {
         return createResult(
           { id: 'pwa-manifest-link', name: 'Web App Manifest', category: 'technical', severity: 'info' },
@@ -45,8 +43,6 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Pages should define a theme color for browser UI',
     check: (ctx) => {
-      if (ctx.themeColor === undefined) return null;
-
       if (!ctx.themeColor) {
         return createResult(
           { id: 'pwa-theme-color', name: 'Theme Color', category: 'mobile', severity: 'info' },
@@ -76,8 +72,6 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'iOS devices need apple-touch-icon for home screen',
     check: (ctx) => {
-      if (ctx.hasAppleTouchIcon === undefined) return null;
-
       if (!ctx.hasAppleTouchIcon) {
         return createResult(
           { id: 'pwa-apple-touch-icon', name: 'Apple Touch Icon', category: 'mobile', severity: 'info' },
@@ -108,8 +102,6 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Enable standalone mode on iOS devices',
     check: (ctx) => {
-      if (ctx.hasAppleMobileWebAppCapable === undefined) return null;
-
       if (!ctx.hasAppleMobileWebAppCapable) {
         return createResult(
           { id: 'pwa-apple-mobile-capable', name: 'Apple Mobile Web App', category: 'mobile', severity: 'info' },
@@ -139,8 +131,17 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Configure iOS status bar appearance',
     check: (ctx) => {
-      if (!ctx.hasAppleMobileWebAppCapable) return null;
-      if (ctx.appleStatusBarStyle === undefined) return null;
+      // Only relevant if apple-mobile-web-app-capable is set
+      if (!ctx.hasAppleMobileWebAppCapable) {
+        return createResult(
+          { id: 'pwa-apple-status-bar', name: 'Apple Status Bar Style', category: 'mobile', severity: 'info' },
+          'info',
+          'Not applicable (apple-mobile-web-app-capable not set)',
+          {
+            recommendation: 'First enable apple-mobile-web-app-capable, then configure status bar',
+          }
+        );
+      }
 
       if (!ctx.appleStatusBarStyle) {
         return createResult(
@@ -171,8 +172,6 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Manifest should include maskable icons for Android',
     check: (ctx) => {
-      if (ctx.hasMaskableIcon === undefined) return null;
-
       if (!ctx.hasMaskableIcon) {
         return createResult(
           { id: 'pwa-maskable-icon', name: 'Maskable Icon', category: 'mobile', severity: 'info' },
@@ -210,8 +209,16 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Manifest should define a start_url',
     check: (ctx) => {
-      if (!ctx.hasManifest) return null;
-      if (ctx.manifestStartUrl === undefined) return null;
+      if (!ctx.hasManifest) {
+        return createResult(
+          { id: 'pwa-start-url', name: 'Start URL', category: 'technical', severity: 'info' },
+          'info',
+          'Not applicable (no manifest)',
+          {
+            recommendation: 'First add a web app manifest, then define start_url',
+          }
+        );
+      }
 
       if (!ctx.manifestStartUrl) {
         return createResult(
@@ -242,8 +249,16 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Manifest should define display mode',
     check: (ctx) => {
-      if (!ctx.hasManifest) return null;
-      if (ctx.manifestDisplay === undefined) return null;
+      if (!ctx.hasManifest) {
+        return createResult(
+          { id: 'pwa-display-mode', name: 'Display Mode', category: 'technical', severity: 'info' },
+          'info',
+          'Not applicable (no manifest)',
+          {
+            recommendation: 'First add a web app manifest, then define display mode',
+          }
+        );
+      }
 
       const display = ctx.manifestDisplay;
 
@@ -288,8 +303,16 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Manifest should define navigation scope',
     check: (ctx) => {
-      if (!ctx.hasManifest) return null;
-      if (ctx.manifestScope === undefined) return null;
+      if (!ctx.hasManifest) {
+        return createResult(
+          { id: 'pwa-scope', name: 'Navigation Scope', category: 'technical', severity: 'info' },
+          'info',
+          'Not applicable (no manifest)',
+          {
+            recommendation: 'First add a web app manifest, then define scope',
+          }
+        );
+      }
 
       if (!ctx.manifestScope) {
         return createResult(
@@ -320,10 +343,18 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Manifest should include multiple icon sizes',
     check: (ctx) => {
-      if (!ctx.hasManifest) return null;
-      if (ctx.manifestIconSizes === undefined) return null;
+      if (!ctx.hasManifest) {
+        return createResult(
+          { id: 'pwa-icons-sizes', name: 'Icon Sizes', category: 'mobile', severity: 'info' },
+          'info',
+          'Not applicable (no manifest)',
+          {
+            recommendation: 'First add a web app manifest with icons',
+          }
+        );
+      }
 
-      const sizes = ctx.manifestIconSizes;
+      const sizes = ctx.manifestIconSizes || [];
       const requiredSizes = [192, 512];
       const missingSizes = requiredSizes.filter(s => !sizes.includes(s));
 
@@ -357,8 +388,16 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Manifest should have a short_name for home screen',
     check: (ctx) => {
-      if (!ctx.hasManifest) return null;
-      if (ctx.manifestShortName === undefined && ctx.manifestName === undefined) return null;
+      if (!ctx.hasManifest) {
+        return createResult(
+          { id: 'pwa-short-name', name: 'Short Name', category: 'technical', severity: 'info' },
+          'info',
+          'Not applicable (no manifest)',
+          {
+            recommendation: 'First add a web app manifest with name/short_name',
+          }
+        );
+      }
 
       const shortName = ctx.manifestShortName;
       const name = ctx.manifestName;
@@ -408,8 +447,16 @@ export const pwaRules: SeoRule[] = [
     severity: 'info',
     description: 'Manifest should define background_color for splash screen',
     check: (ctx) => {
-      if (!ctx.hasManifest) return null;
-      if (ctx.manifestBackgroundColor === undefined) return null;
+      if (!ctx.hasManifest) {
+        return createResult(
+          { id: 'pwa-background-color', name: 'Background Color', category: 'mobile', severity: 'info' },
+          'info',
+          'Not applicable (no manifest)',
+          {
+            recommendation: 'First add a web app manifest, then define background_color',
+          }
+        );
+      }
 
       if (!ctx.manifestBackgroundColor) {
         return createResult(

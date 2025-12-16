@@ -1,8 +1,8 @@
 /**
  * Scrape Plugin for Recker
  *
- * Provides HTML scraping and data extraction capabilities using Cheerio.
- * Cheerio is a peer dependency - install it with: pnpm add cheerio
+ * Provides HTML scraping and data extraction capabilities using Recker's internal parser.
+ * No external dependencies required.
  *
  * @example
  * ```typescript
@@ -40,7 +40,7 @@ import type {
   ImageExtractionOptions,
 } from '../scrape/types.js';
 
-// Lazy import ScrapeDocument to avoid loading cheerio unless needed
+// Lazy import ScrapeDocument
 let ScrapeDocumentClass: typeof import('../scrape/document.js').ScrapeDocument | null = null;
 
 async function getScrapeDocumentClass() {

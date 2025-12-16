@@ -18,6 +18,16 @@ export interface ExtractedLink {
   title?: string;
   /** Link type classification */
   type?: 'internal' | 'external' | 'anchor' | 'mailto' | 'tel';
+  /** Contains <img> tag */
+  hasImage?: boolean;
+  /** Contains <img> tag with alt attribute */
+  hasImageWithAlt?: boolean;
+  /** Contains <svg> tag */
+  hasSvg?: boolean;
+  /** Contains <svg> tag with title or aria-label */
+  hasSvgWithTitle?: boolean;
+  /** Aria-label attribute */
+  ariaLabel?: string;
 }
 
 // === Image Extraction ===
@@ -183,6 +193,10 @@ export type ExtractionSchemaField = string | {
   multiple?: boolean;
   /** Transform function */
   transform?: (value: string) => unknown;
+  /** Default value if element not found */
+  default?: unknown;
+  /** Mark field as optional (won't be included if not found) */
+  optional?: boolean;
 };
 
 export interface ExtractionSchema {

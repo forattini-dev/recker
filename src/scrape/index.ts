@@ -4,6 +4,18 @@
  * HTML parsing and data extraction utilities for the Recker HTTP client.
  */
 
+// HTML Parser (standalone, no dependencies beyond css-select)
+export {
+  parse as parseHtmlSync,
+  HTMLElement,
+  TextNode,
+  CommentNode,
+  Node,
+  NodeType,
+  valid,
+} from './parser/index.js';
+export type { Options as ParserOptions } from './parser/index.js';
+
 // Main classes
 export { ScrapeDocument } from './document.js';
 export { ScrapeElement } from './element.js';

@@ -26,10 +26,10 @@
  * ```
  */
 
-import { Command } from 'commander';
+import { RekCommand as Command } from '../cli/router.js';
 import { MCPServer, type MCPTransportMode } from './server.js';
 
-const program = new Command();
+const program = new Command('recker-mcp');
 
 /**
  * Tool categories and their corresponding patterns
@@ -56,7 +56,6 @@ const TOOL_CATEGORIES = {
 } as const;
 
 program
-  .name('recker-mcp')
   .description('Start the Recker MCP server for AI agent integration')
   .version('1.0.0')
   .option('-t, --transport <mode>', 'Transport mode: stdio, http, sse', 'stdio')

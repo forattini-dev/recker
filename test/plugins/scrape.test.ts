@@ -13,7 +13,7 @@ import {
   extractStyles,
 } from '../../src/scrape/extractors.js';
 import { scrape, parseHtml, scrapeResponse } from '../../src/plugins/scrape.js';
-import { load } from 'cheerio';
+import { parse } from '../../src/scrape/parser/index.js';
 
 // Sample HTML for testing
 const sampleHtml = `
@@ -235,8 +235,8 @@ describe('ScrapeElement', () => {
 
     it('should get data attributes', () => {
       const article = doc.select('article');
-      // Cheerio parses data attributes and converts numeric strings to numbers
-      expect(article.data('id')).toBe(123);
+      // Parser extracts attributes as strings
+      expect(article.data('id')).toBe('123');
     });
 
     it('should get form value', () => {
@@ -267,22 +267,15 @@ describe('ScrapeElement', () => {
       expect(article.hasClass('other')).toBe(false);
     });
 
-    it('should return raw Cheerio object', () => {
-      const h1 = doc.select('h1');
-      const raw = h1.raw;
-      expect(raw).toBeDefined();
-      expect(typeof raw.html).toBe('function'); // Cheerio has .html() method
-    });
-
     it('should get underlying DOM element at index', () => {
       const links = doc.select('nav a');
       const first = links.get(0);
       expect(first).toBeDefined();
-      expect(first?.tagName).toBe('a');
+      expect(first?.tagName).toBe('A');
 
       const second = links.get(1);
       expect(second).toBeDefined();
-      expect(second?.tagName).toBe('a');
+      expect(second?.tagName).toBe('A');
     });
 
     it('should return undefined for out of bounds index', () => {
@@ -453,7 +446,7 @@ describe('ScrapeDocument', () => {
 });
 
 describe('Extractors', () => {
-  const $ = load(sampleHtml);
+  const $ = parse(sampleHtml);
 
   describe('extractLinks', () => {
     it('should extract all links', () => {
@@ -646,7 +639,7 @@ describe('Extractors', () => {
           <tr><td>B</td><td>2</td></tr>
         </table>
       `;
-      const $noThead = load(noTheadHtml);
+      const $noThead = parse(noTheadHtml);
       const tables = extractTables($noThead);
 
       expect(tables.length).toBe(1);
@@ -661,7 +654,7 @@ describe('Extractors', () => {
           <tr><td>A</td><td>1</td></tr>
         </table>
       `;
-      const $noTheadNoTh = load(noTheadNoThHtml);
+      const $noTheadNoTh = parse(noTheadNoThHtml);
       const tables = extractTables($noTheadNoTh);
 
       expect(tables.length).toBe(1);
@@ -1043,12 +1036,6 @@ describe('ScrapeDocument additional methods', () => {
     expect(root.exists()).toBe(true);
   });
 
-  it('should get raw cheerio instance', () => {
-    const raw = doc.raw;
-    expect(raw).toBeDefined();
-    expect(typeof raw).toBe('function');
-  });
-
   it('should query as alias for select', () => {
     const element = doc.query('h1');
     expect(element.text()).toBe('Main Title');
@@ -1110,19 +1097,17 @@ describe('ScrapeElement additional methods', () => {
     expect(found.text()).toBe('$99.99');
   });
 
-  it('should get previous sibling without selector', () => {
-    const p = doc.select('section p');
-    const prev = p.prev();
-    expect(prev.tagName()).toBe('h2');
-  });
-
-  it('should get next sibling without selector', () => {
-    const h2 = doc.select('section h2');
-    const next = h2.next();
-    expect(next.tagName()).toBe('p');
-  });
-
-  it('should handle filter with no matches', () => {
+          it('should get previous sibling without selector', () => {
+            const p = doc.select('section p');
+            const prev = p.prev();
+            expect(prev.tagName()).toBe('h2');
+          });
+      
+          it('should get next sibling without selector', () => {
+            const h2 = doc.select('section h2');
+            const next = h2.next();
+            expect(next.tagName()).toBe('p');
+          });  it('should handle filter with no matches', () => {
     const links = doc.select('nav a').filter('.nonexistent');
     expect(links.length).toBe(0);
   });
@@ -1134,7 +1119,7 @@ describe('ScrapeElement additional methods', () => {
 
   it('should get element at negative index (from end)', () => {
     const links = doc.select('nav a');
-    // eq() with negative does work in cheerio - -1 means last element
+    // eq() with negative index: -1 means last element
     const result = links.eq(-1);
     expect(result.exists()).toBe(true);
     expect(result.text()).toBe('Phone');
@@ -1193,12 +1178,544 @@ describe('ScrapeElement additional methods', () => {
     const article = doc.select('article');
     const allData = article.data() as Record<string, unknown>;
     expect(allData).toBeDefined();
-    expect(allData.id).toBe(123);
+    expect(allData.id).toBe('123');
   });
 
   it('should get prop value', () => {
     const input = doc.select('input[name="name"]');
     const tagName = input.prop('tagName');
     expect(tagName).toBe('INPUT');
+  });
+
+  it('should get prop value from element property', () => {
+    const input = doc.select('input[name="name"]');
+    // Test prop with a property that exists on the element
+    const classList = input.prop('classList');
+    expect(classList).toBeDefined();
+  });
+
+  it('should fall back to attribute for unknown prop', () => {
+    const input = doc.select('input[name="name"]');
+    // Test prop with an attribute name
+    const nameAttr = input.prop('name');
+    expect(nameAttr).toBe('name');
+  });
+
+  it('should return undefined for prop on empty selection', () => {
+    const empty = doc.select('.nonexistent');
+    expect(empty.prop('tagName')).toBeUndefined();
+  });
+});
+
+describe('ScrapeElement form elements', () => {
+  it('should get value from textarea', async () => {
+    const html = '<form><textarea name="content">Hello World</textarea></form>';
+    const doc = await ScrapeDocument.create(html);
+    const textarea = doc.select('textarea');
+
+    expect(textarea.val()).toBe('Hello World');
+  });
+
+  it('should get value from select with selected option', async () => {
+    const html = `
+      <form>
+        <select name="choice">
+          <option value="a">Option A</option>
+          <option value="b" selected>Option B</option>
+          <option value="c">Option C</option>
+        </select>
+      </form>
+    `;
+    const doc = await ScrapeDocument.create(html);
+    const select = doc.select('select');
+
+    expect(select.val()).toBe('b');
+  });
+
+  it('should get value from select without selected option (first)', async () => {
+    const html = `
+      <form>
+        <select name="choice">
+          <option value="first">First</option>
+          <option value="second">Second</option>
+        </select>
+      </form>
+    `;
+    const doc = await ScrapeDocument.create(html);
+    const select = doc.select('select');
+
+    // Should return first option's value
+    expect(select.val()).toBe('first');
+  });
+
+  it('should get text from option without value attribute', async () => {
+    const html = `
+      <form>
+        <select name="choice">
+          <option>Text Only</option>
+        </select>
+      </form>
+    `;
+    const doc = await ScrapeDocument.create(html);
+    const select = doc.select('select');
+
+    // Should return option text when no value attribute
+    expect(select.val()).toBe('Text Only');
+  });
+
+  it('should return undefined for val on empty selection', async () => {
+    const html = '<form></form>';
+    const doc = await ScrapeDocument.create(html);
+    const empty = doc.select('input');
+
+    expect(empty.val()).toBeUndefined();
+  });
+
+  it('should get value attribute from other elements', async () => {
+    const html = '<div value="custom">Content</div>';
+    const doc = await ScrapeDocument.create(html);
+    const div = doc.select('div');
+
+    // Fallback to value attribute
+    expect(div.val()).toBe('custom');
+  });
+
+  it('should return undefined for attr on empty selection', async () => {
+    const html = '<div></div>';
+    const doc = await ScrapeDocument.create(html);
+    const empty = doc.select('.nonexistent');
+
+    expect(empty.attr('class')).toBeUndefined();
+  });
+
+  it('should return empty object for attrs on empty selection', async () => {
+    const html = '<div></div>';
+    const doc = await ScrapeDocument.create(html);
+    const empty = doc.select('.nonexistent');
+
+    expect(empty.attrs()).toEqual({});
+  });
+
+  it('should get value from input element', async () => {
+    const html = '<input type="text" value="test input value" />';
+    const doc = await ScrapeDocument.create(html);
+    const input = doc.select('input');
+
+    expect(input.val()).toBe('test input value');
+  });
+
+  it('should return null for html on empty selection', async () => {
+    const html = '<div></div>';
+    const doc = await ScrapeDocument.create(html);
+    const empty = doc.select('.nonexistent');
+
+    expect(empty.html()).toBeNull();
+  });
+
+  it('should return empty string for outerHtml on empty selection', async () => {
+    const html = '<div></div>';
+    const doc = await ScrapeDocument.create(html);
+    const empty = doc.select('.nonexistent');
+
+    expect(empty.outerHtml()).toBe('');
+  });
+});
+
+describe('ScrapeElement parents method', () => {
+  it('should get all parents', async () => {
+    const html = `
+      <div class="root">
+        <div class="level1">
+          <div class="level2">
+            <span class="target">Target</span>
+          </div>
+        </div>
+      </div>
+    `;
+    const doc = await ScrapeDocument.create(html);
+    const target = doc.selectFirst('.target');
+    const parents = target.parents();
+
+    expect(parents.length).toBeGreaterThanOrEqual(3); // level2, level1, root at minimum
+  });
+
+  it('should filter parents with selector', async () => {
+    const html = `
+      <div class="root">
+        <div class="level wrapper">
+          <div class="level">
+            <span class="target">Target</span>
+          </div>
+        </div>
+      </div>
+    `;
+    const doc = await ScrapeDocument.create(html);
+    const target = doc.selectFirst('.target');
+    const levelParents = target.parents('.level');
+
+    expect(levelParents.length).toBe(2);
+  });
+
+  it('should return empty when no parents match selector', async () => {
+    const html = `
+      <div class="root">
+        <span class="target">Target</span>
+      </div>
+    `;
+    const doc = await ScrapeDocument.create(html);
+    const target = doc.selectFirst('.target');
+    const filtered = target.parents('.nonexistent');
+
+    expect(filtered.length).toBe(0);
+  });
+});
+
+describe('ScrapeElement traversal until methods', () => {
+  let doc: ScrapeDocument;
+
+  beforeEach(async () => {
+    const html = `
+      <div class="root">
+        <div class="container">
+          <div class="wrapper">
+            <div class="inner">
+              <span class="target">Target</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul>
+        <li class="start">Start</li>
+        <li class="item">Item 1</li>
+        <li class="item">Item 2</li>
+        <li class="separator">---</li>
+        <li class="item">Item 3</li>
+        <li class="end">End</li>
+      </ul>
+    `;
+    doc = await ScrapeDocument.create(html);
+  });
+
+  it('should get parents until selector', () => {
+    const target = doc.selectFirst('.target');
+    const parents = target.parentsUntil('.container');
+
+    // Should include .inner and .wrapper, but NOT .container
+    expect(parents.length).toBe(2);
+    expect(parents.filter('.inner').exists()).toBe(true);
+    expect(parents.filter('.wrapper').exists()).toBe(true);
+    expect(parents.filter('.container').exists()).toBe(false);
+  });
+
+  it('should get next siblings until selector', () => {
+    const start = doc.selectFirst('.start');
+    const next = start.nextUntil('.separator');
+
+    // Should include Item 1, Item 2 but NOT separator
+    expect(next.length).toBe(2);
+    expect(next.map(el => el.text())).toEqual(['Item 1', 'Item 2']);
+  });
+
+  it('should get previous siblings until selector', () => {
+    const end = doc.selectFirst('.end');
+    const prev = end.prevUntil('.separator');
+
+    // Should include Item 3 but NOT separator
+    expect(prev.length).toBe(1);
+    expect(prev.first().text()).toBe('Item 3');
+  });
+
+  it('should return empty when parentsUntil has no match', () => {
+    const target = doc.selectFirst('.target');
+    const parents = target.parentsUntil('.nonexistent');
+    // Should still traverse all parents since selector never matches
+    expect(parents.length).toBeGreaterThan(0);
+  });
+
+  it('should return empty when nextUntil has no siblings', () => {
+    const end = doc.selectFirst('.end');
+    const next = end.nextUntil('.any');
+    expect(next.length).toBe(0);
+  });
+
+  it('should return empty when prevUntil has no siblings', () => {
+    const start = doc.selectFirst('.start');
+    const prev = start.prevUntil('.any');
+    expect(prev.length).toBe(0);
+  });
+});
+
+describe('ScrapeElement slice method', () => {
+  let doc: ScrapeDocument;
+
+  beforeEach(async () => {
+    const html = `
+      <ul>
+        <li>Item 0</li>
+        <li>Item 1</li>
+        <li>Item 2</li>
+        <li>Item 3</li>
+        <li>Item 4</li>
+      </ul>
+    `;
+    doc = await ScrapeDocument.create(html);
+  });
+
+  it('should slice elements from start to end', () => {
+    const items = doc.select('li');
+    const sliced = items.slice(1, 3);
+
+    expect(sliced.length).toBe(2);
+    expect(sliced.map(el => el.text())).toEqual(['Item 1', 'Item 2']);
+  });
+
+  it('should slice elements from start only', () => {
+    const items = doc.select('li');
+    const sliced = items.slice(3);
+
+    expect(sliced.length).toBe(2);
+    expect(sliced.map(el => el.text())).toEqual(['Item 3', 'Item 4']);
+  });
+
+  it('should handle negative start index', () => {
+    const items = doc.select('li');
+    const sliced = items.slice(-2);
+
+    expect(sliced.length).toBe(2);
+    expect(sliced.map(el => el.text())).toEqual(['Item 3', 'Item 4']);
+  });
+
+  it('should handle first N elements', () => {
+    const items = doc.select('li');
+    const sliced = items.slice(0, 2);
+
+    expect(sliced.length).toBe(2);
+    expect(sliced.map(el => el.text())).toEqual(['Item 0', 'Item 1']);
+  });
+});
+
+describe('ScrapeElement filter with callback', () => {
+  let doc: ScrapeDocument;
+
+  beforeEach(async () => {
+    const html = `
+      <div class="products">
+        <div class="product" data-price="50">Cheap Item</div>
+        <div class="product" data-price="150">Expensive Item</div>
+        <div class="product" data-price="75">Mid Item</div>
+        <div class="product" data-price="200">Very Expensive</div>
+      </div>
+    `;
+    doc = await ScrapeDocument.create(html);
+  });
+
+  it('should filter with callback function', () => {
+    const products = doc.select('.product');
+    const expensive = products.filter((el) => {
+      const price = parseInt(el.data('price') as string, 10);
+      return price > 100;
+    });
+
+    expect(expensive.length).toBe(2);
+    expect(expensive.map(el => el.text())).toEqual(['Expensive Item', 'Very Expensive']);
+  });
+
+  it('should filter with index in callback', () => {
+    const products = doc.select('.product');
+    const evenItems = products.filter((_, index) => index % 2 === 0);
+
+    expect(evenItems.length).toBe(2);
+    expect(evenItems.map(el => el.text())).toEqual(['Cheap Item', 'Mid Item']);
+  });
+
+  it('should return empty when no elements match callback', () => {
+    const products = doc.select('.product');
+    const none = products.filter((el) => {
+      const price = parseInt(el.data('price') as string, 10);
+      return price > 1000;
+    });
+
+    expect(none.length).toBe(0);
+  });
+
+  it('should still work with string selector', () => {
+    const products = doc.select('.product');
+    const withPrice = products.filter('[data-price="150"]');
+
+    expect(withPrice.length).toBe(1);
+    expect(withPrice.text()).toBe('Expensive Item');
+  });
+});
+
+describe('ScrapeElement additional coverage', () => {
+  let doc: ScrapeDocument;
+
+  beforeEach(async () => {
+    const html = `
+      <div class="container">
+        <p class="item">Item 1</p>
+        <p class="item special">Item 2</p>
+        <p class="item">Item 3</p>
+      </div>
+    `;
+    doc = await ScrapeDocument.create(html);
+  });
+
+  it('should return undefined tagName for empty selection', () => {
+    const empty = doc.select('.nonexistent');
+    expect(empty.tagName()).toBeUndefined();
+  });
+
+  it('should get raw elements array', () => {
+    const items = doc.select('.item');
+    expect(items.raw).toBeDefined();
+    expect(Array.isArray(items.raw)).toBe(true);
+    expect(items.raw.length).toBe(3);
+  });
+
+  it('should get element at index with get()', () => {
+    const items = doc.select('.item');
+    const first = items.get(0);
+    expect(first).toBeDefined();
+
+    const second = items.get(1);
+    expect(second).toBeDefined();
+
+    const outOfBounds = items.get(100);
+    expect(outOfBounds).toBeUndefined();
+  });
+
+  it('should check some() with failing predicate', () => {
+    const items = doc.select('.item');
+    const hasNonexistent = items.some((el) => el.hasClass('nonexistent-class'));
+    expect(hasNonexistent).toBe(false);
+  });
+
+  it('should check every() with failing predicate', () => {
+    const items = doc.select('.item');
+    const allSpecial = items.every((el) => el.hasClass('special'));
+    expect(allSpecial).toBe(false);
+  });
+
+  it('should handle reduce on items', () => {
+    const items = doc.select('.item');
+    const count = items.reduce((acc) => acc + 1, 0);
+    expect(count).toBe(3);
+  });
+
+  it('should handle contents() method', () => {
+    const container = doc.selectFirst('.container');
+    const contents = container.contents();
+    expect(contents.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Schema extraction with default and optional', () => {
+  let doc: ScrapeDocument;
+
+  beforeEach(async () => {
+    const html = `
+      <div class="product">
+        <h1 class="title">Product Title</h1>
+        <span class="price">$99.99</span>
+        <!-- no author, no rating -->
+      </div>
+    `;
+    doc = await ScrapeDocument.create(html);
+  });
+
+  it('should use default value when element not found', () => {
+    const data = doc.extract({
+      title: 'h1.title',
+      author: {
+        selector: '.author',
+        default: 'Unknown'
+      }
+    });
+
+    expect(data.title).toBe('Product Title');
+    expect(data.author).toBe('Unknown');
+  });
+
+  it('should use default value with transform', () => {
+    const data = doc.extract({
+      rating: {
+        selector: '.rating',
+        transform: (v) => parseFloat(v),
+        default: 0
+      }
+    });
+
+    expect(data.rating).toBe(0);
+  });
+
+  it('should use default value for empty multiple array', () => {
+    const data = doc.extract({
+      tags: {
+        selector: '.tag',
+        multiple: true,
+        default: ['general']
+      }
+    });
+
+    expect(data.tags).toEqual(['general']);
+  });
+
+  it('should exclude optional field when not found', () => {
+    const data = doc.extract({
+      title: 'h1.title',
+      subtitle: {
+        selector: '.subtitle',
+        optional: true
+      }
+    });
+
+    expect(data.title).toBe('Product Title');
+    expect('subtitle' in data).toBe(false);
+  });
+
+  it('should include optional field when found', async () => {
+    const htmlWithSubtitle = `
+      <div class="product">
+        <h1 class="title">Product Title</h1>
+        <h2 class="subtitle">Great Product</h2>
+      </div>
+    `;
+    const docWithSub = await ScrapeDocument.create(htmlWithSubtitle);
+
+    const data = docWithSub.extract({
+      title: 'h1.title',
+      subtitle: {
+        selector: '.subtitle',
+        optional: true
+      }
+    });
+
+    expect(data.title).toBe('Product Title');
+    expect(data.subtitle).toBe('Great Product');
+  });
+
+  it('should use default for optional field when provided', () => {
+    const data = doc.extract({
+      category: {
+        selector: '.category',
+        optional: true,
+        default: 'General'
+      }
+    });
+
+    // Optional with default should use the default
+    expect(data.category).toBe('General');
+  });
+
+  it('should handle non-optional missing field as undefined', () => {
+    const data = doc.extract({
+      title: 'h1.title',
+      missing: '.nonexistent'
+    });
+
+    expect(data.title).toBe('Product Title');
+    expect('missing' in data).toBe(true);
+    expect(data.missing).toBeUndefined();
   });
 });

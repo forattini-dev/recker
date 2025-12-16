@@ -19,7 +19,14 @@ export const bestPracticesRules: SeoRule[] = [
     severity: 'error',
     description: 'Page must have the HTML doctype',
     check: (ctx) => {
-      if (ctx.hasDoctype === undefined) return null;
+      if (ctx.hasDoctype === undefined) {
+        return createResult(
+          { id: 'bp-doctype', name: 'HTML Doctype', category: 'technical', severity: 'error' },
+          'info',
+          'Unable to check doctype (data unavailable)',
+          { recommendation: 'Ensure HTML content is properly fetched' }
+        );
+      }
       if (!ctx.hasDoctype) {
         return createResult(
           { id: 'bp-doctype', name: 'HTML Doctype', category: 'technical', severity: 'error' },
@@ -49,7 +56,14 @@ export const bestPracticesRules: SeoRule[] = [
     severity: 'error',
     description: 'Page should properly define charset',
     check: (ctx) => {
-      if (ctx.hasCharset === undefined) return null;
+      if (ctx.hasCharset === undefined) {
+        return createResult(
+          { id: 'bp-charset', name: 'Character Encoding', category: 'technical', severity: 'error' },
+          'info',
+          'Unable to check charset (data unavailable)',
+          { recommendation: 'Ensure HTML content is properly fetched' }
+        );
+      }
       if (!ctx.hasCharset) {
         return createResult(
           { id: 'bp-charset', name: 'Character Encoding', category: 'technical', severity: 'error' },
@@ -97,7 +111,14 @@ export const bestPracticesRules: SeoRule[] = [
     severity: 'error',
     description: 'Page should have successful HTTP status code',
     check: (ctx) => {
-      if (ctx.httpStatusCode === undefined) return null;
+      if (ctx.httpStatusCode === undefined) {
+        return createResult(
+          { id: 'bp-http-status', name: 'HTTP Status Code', category: 'technical', severity: 'error' },
+          'info',
+          'Unable to check HTTP status (data unavailable)',
+          { recommendation: 'Ensure the page request completed successfully' }
+        );
+      }
       const status = ctx.httpStatusCode;
       if (status >= 400) {
         return createResult(
@@ -144,7 +165,14 @@ export const bestPracticesRules: SeoRule[] = [
     severity: 'error',
     description: 'Page should not be blocked from indexing',
     check: (ctx) => {
-      if (ctx.metaRobots === undefined) return null;
+      if (ctx.metaRobots === undefined) {
+        return createResult(
+          { id: 'bp-indexable', name: 'Page Indexable', category: 'technical', severity: 'error' },
+          'info',
+          'Unable to check indexability (no robots meta)',
+          { recommendation: 'Check if the page has robots meta tags' }
+        );
+      }
       const robots = Array.isArray(ctx.metaRobots) ? ctx.metaRobots : [ctx.metaRobots];
       const blocked = robots.some(r =>
         r.toLowerCase().includes('noindex') || r.toLowerCase().includes('none')
@@ -178,7 +206,14 @@ export const bestPracticesRules: SeoRule[] = [
     severity: 'warning',
     description: 'Links should be crawlable by search engines',
     check: (ctx) => {
-      if (ctx.uncrawlableLinksCount === undefined) return null;
+      if (ctx.uncrawlableLinksCount === undefined) {
+        return createResult(
+          { id: 'bp-links-crawlable', name: 'Crawlable Links', category: 'links', severity: 'warning' },
+          'info',
+          'Unable to check link crawlability (data unavailable)',
+          { recommendation: 'Ensure link analysis completed' }
+        );
+      }
       const count = ctx.uncrawlableLinksCount;
       if (count > 0) {
         return createResult(
@@ -211,7 +246,14 @@ export const bestPracticesRules: SeoRule[] = [
     severity: 'info',
     description: 'robots.txt should be valid and accessible',
     check: (ctx) => {
-      if (ctx.robotsTxtValid === undefined) return null;
+      if (ctx.robotsTxtValid === undefined) {
+        return createResult(
+          { id: 'bp-robots-txt', name: 'Valid robots.txt', category: 'technical', severity: 'info' },
+          'info',
+          'Unable to check robots.txt (data unavailable)',
+          { recommendation: 'Check if robots.txt is accessible at /robots.txt' }
+        );
+      }
       if (!ctx.robotsTxtValid) {
         return createResult(
           { id: 'bp-robots-txt', name: 'Valid robots.txt', category: 'technical', severity: 'info' },
@@ -242,7 +284,14 @@ export const bestPracticesRules: SeoRule[] = [
     severity: 'info',
     description: 'Page should have valid structured data',
     check: (ctx) => {
-      if (ctx.structuredDataErrors === undefined) return null;
+      if (ctx.structuredDataErrors === undefined) {
+        return createResult(
+          { id: 'bp-structured-data', name: 'Structured Data', category: 'structured-data', severity: 'info' },
+          'info',
+          'Unable to check structured data (data unavailable)',
+          { recommendation: 'Ensure JSON-LD structured data analysis completed' }
+        );
+      }
       const errors = ctx.structuredDataErrors;
       if (errors > 0) {
         return createResult(

@@ -39,7 +39,12 @@ export const securityRules: SeoRule[] = [
           'Page is served over HTTPS'
         );
       }
-      return null;
+      return createResult(
+        { id: 'https-required', name: 'HTTPS', category: 'security', severity: 'error' },
+        'info',
+        'Not applicable (HTTPS status unavailable)',
+        { recommendation: 'This rule checks if the page is served over HTTPS when protocol information is available' }
+      );
     },
   },
   {
@@ -65,7 +70,12 @@ export const securityRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'mixed-content', name: 'Mixed Content', category: 'security', severity: 'error' },
+        'info',
+        'Not applicable (no mixed content detected or HTTPS not used)',
+        { recommendation: 'This rule checks for HTTP resources on HTTPS pages when mixed content is detected' }
+      );
     },
   },
   {
@@ -75,7 +85,14 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'HTTP traffic should redirect to HTTPS',
     check: (ctx) => {
-      if (ctx.httpRedirectsToHttps === undefined) return null;
+      if (ctx.httpRedirectsToHttps === undefined) {
+        return createResult(
+          { id: 'http-redirect', name: 'HTTP to HTTPS Redirect', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (HTTP redirect status unavailable)',
+          { recommendation: 'This rule checks if HTTP traffic redirects to HTTPS when redirect information is available' }
+        );
+      }
       if (!ctx.httpRedirectsToHttps) {
         return createResult(
           { id: 'http-redirect', name: 'HTTP to HTTPS Redirect', category: 'security', severity: 'warning' },
@@ -98,6 +115,48 @@ export const securityRules: SeoRule[] = [
       );
     },
   },
+  {
+    id: 'internal-links-https',
+    name: 'Internal Links Use HTTPS',
+    category: 'security',
+    severity: 'warning',
+    description: 'Internal links should use HTTPS to avoid mixed content and redirect chains',
+    check: (ctx) => {
+      if (ctx.internalHttpLinks === undefined) {
+        return createResult(
+          { id: 'internal-links-https', name: 'Internal Links Use HTTPS', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (internal link data unavailable)',
+          { recommendation: 'This rule checks internal links for HTTPS usage when link analysis is available' }
+        );
+      }
+
+      if (ctx.internalHttpLinks > 0) {
+        const examples = ctx.internalHttpLinkUrls?.slice(0, 3) || [];
+        return createResult(
+          { id: 'internal-links-https', name: 'Internal Links Use HTTPS', category: 'security', severity: 'warning' },
+          'warn',
+          `${ctx.internalHttpLinks} internal link(s) use HTTP instead of HTTPS`,
+          {
+            value: ctx.internalHttpLinks,
+            recommendation: 'Update all internal links to use HTTPS URLs',
+            evidence: {
+              found: `${ctx.internalHttpLinks} HTTP internal links${examples.length > 0 ? `: ${examples.join(', ')}` : ''}`,
+              expected: 'All internal links should use HTTPS',
+              impact: 'HTTP links cause unnecessary redirects, slow page loads, and may trigger mixed content warnings. Search engines prefer sites with consistent HTTPS usage.',
+              learnMore: 'https://web.dev/why-https-matters/',
+            },
+          }
+        );
+      }
+
+      return createResult(
+        { id: 'internal-links-https', name: 'Internal Links Use HTTPS', category: 'security', severity: 'warning' },
+        'pass',
+        'All internal links use HTTPS'
+      );
+    },
+  },
 
   // ==========================================================================
   // Content Security Policy
@@ -109,7 +168,14 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'Content Security Policy header should be present to mitigate XSS attacks.',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-csp-exists', name: 'Content Security Policy', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for CSP headers when HTTP response headers are available' }
+        );
+      }
       const cspHeader = ctx.responseHeaders['content-security-policy'] || ctx.responseHeaders['Content-Security-Policy'];
       if (!cspHeader) {
         return createResult(
@@ -140,9 +206,23 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'CSP should be effective against XSS attacks',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-csp-xss-effective', name: 'CSP XSS Effectiveness', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks CSP effectiveness when HTTP response headers are available' }
+        );
+      }
       const cspHeader = ctx.responseHeaders['content-security-policy'] || ctx.responseHeaders['Content-Security-Policy'];
-      if (!cspHeader) return null;
+      if (!cspHeader) {
+        return createResult(
+          { id: 'security-csp-xss-effective', name: 'CSP XSS Effectiveness', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (CSP header not present)',
+          { recommendation: 'This rule checks CSP effectiveness when a Content-Security-Policy header exists' }
+        );
+      }
 
       const csp = String(cspHeader).toLowerCase();
       const weaknesses: string[] = [];
@@ -198,9 +278,23 @@ export const securityRules: SeoRule[] = [
     severity: 'error',
     description: 'CSP should have script-src and object-src directives to prevent unsafe script execution',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-csp-directives', name: 'CSP Required Directives', category: 'security', severity: 'error' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks CSP directives when HTTP response headers are available' }
+        );
+      }
       const cspHeader = ctx.responseHeaders['content-security-policy'] || ctx.responseHeaders['Content-Security-Policy'];
-      if (!cspHeader) return null;
+      if (!cspHeader) {
+        return createResult(
+          { id: 'security-csp-directives', name: 'CSP Required Directives', category: 'security', severity: 'error' },
+          'info',
+          'Not applicable (CSP header not present)',
+          { recommendation: 'This rule checks CSP directives when a Content-Security-Policy header exists' }
+        );
+      }
 
       const csp = String(cspHeader).toLowerCase();
       const missingDirectives: { directive: string; severity: string; impact: string }[] = [];
@@ -282,7 +376,14 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'HSTS header forces secure connections and improves SEO indirectly.',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-hsts-exists', name: 'HSTS Header', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for HSTS headers when HTTP response headers are available' }
+        );
+      }
       const hstsHeader = ctx.responseHeaders['strict-transport-security'] || ctx.responseHeaders['Strict-Transport-Security'];
       if (!hstsHeader) {
         return createResult(
@@ -313,9 +414,23 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'HSTS should have a strong policy with long max-age and includeSubDomains',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-hsts-strong', name: 'Strong HSTS Policy', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks HSTS policy strength when HTTP response headers are available' }
+        );
+      }
       const hstsHeader = ctx.responseHeaders['strict-transport-security'] || ctx.responseHeaders['Strict-Transport-Security'];
-      if (!hstsHeader) return null;
+      if (!hstsHeader) {
+        return createResult(
+          { id: 'security-hsts-strong', name: 'Strong HSTS Policy', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (HSTS header not present)',
+          { recommendation: 'This rule checks HSTS policy strength when a Strict-Transport-Security header exists' }
+        );
+      }
 
       const hsts = String(hstsHeader).toLowerCase();
       const weaknesses: string[] = [];
@@ -372,7 +487,14 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'COOP ensures proper origin isolation for security',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-coop', name: 'Cross-Origin-Opener-Policy', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for COOP headers when HTTP response headers are available' }
+        );
+      }
       const coopHeader = ctx.responseHeaders['cross-origin-opener-policy'] || ctx.responseHeaders['Cross-Origin-Opener-Policy'];
       if (!coopHeader) {
         return createResult(
@@ -422,7 +544,14 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'COEP prevents loading cross-origin resources without explicit permission',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-coep', name: 'Cross-Origin-Embedder-Policy', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for COEP headers when HTTP response headers are available' }
+        );
+      }
       const coepHeader = ctx.responseHeaders['cross-origin-embedder-policy'] || ctx.responseHeaders['Cross-Origin-Embedder-Policy'];
       if (!coepHeader) {
         return createResult(
@@ -457,9 +586,23 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'Trusted Types help prevent DOM-based XSS attacks',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-trusted-types', name: 'Trusted Types', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for Trusted Types in CSP when HTTP response headers are available' }
+        );
+      }
       const cspHeader = ctx.responseHeaders['content-security-policy'] || ctx.responseHeaders['Content-Security-Policy'];
-      if (!cspHeader) return null;
+      if (!cspHeader) {
+        return createResult(
+          { id: 'security-trusted-types', name: 'Trusted Types', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (CSP header not present)',
+          { recommendation: 'This rule checks for Trusted Types when a Content-Security-Policy header exists' }
+        );
+      }
 
       const csp = String(cspHeader).toLowerCase();
       if (csp.includes('require-trusted-types-for')) {
@@ -496,7 +639,14 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'X-Frame-Options header should be present to prevent clickjacking.',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-xfo-exists', name: 'X-Frame-Options', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for X-Frame-Options headers when HTTP response headers are available' }
+        );
+      }
       const xfoHeader = ctx.responseHeaders['x-frame-options'] || ctx.responseHeaders['X-Frame-Options'];
       if (!xfoHeader) {
         return createResult(
@@ -527,11 +677,25 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'CSP frame-ancestors is the modern replacement for X-Frame-Options',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-frame-ancestors', name: 'CSP frame-ancestors', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for CSP frame-ancestors when HTTP response headers are available' }
+        );
+      }
       const cspHeader = ctx.responseHeaders['content-security-policy'] || ctx.responseHeaders['Content-Security-Policy'];
       const xfoHeader = ctx.responseHeaders['x-frame-options'] || ctx.responseHeaders['X-Frame-Options'];
 
-      if (!cspHeader && !xfoHeader) return null; // Already covered by xfo-exists
+      if (!cspHeader && !xfoHeader) {
+        return createResult(
+          { id: 'security-frame-ancestors', name: 'CSP frame-ancestors', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (neither CSP nor X-Frame-Options present)',
+          { recommendation: 'This rule checks CSP frame-ancestors when clickjacking protection headers are present' }
+        );
+      }
 
       if (cspHeader && String(cspHeader).toLowerCase().includes('frame-ancestors')) {
         return createResult(
@@ -557,7 +721,12 @@ export const securityRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'security-frame-ancestors', name: 'CSP frame-ancestors', category: 'security', severity: 'info' },
+        'info',
+        'Not applicable (clickjacking protection configured without frame-ancestors)',
+        { recommendation: 'This rule checks modern frame-ancestors directive in CSP for enhanced clickjacking protection' }
+      );
     },
   },
 
@@ -571,7 +740,14 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'Review Access-Control-Allow-Origin header for proper CORS configuration.',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-cors-config', name: 'CORS Configuration', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks CORS configuration when HTTP response headers are available' }
+        );
+      }
       const acaoHeader = ctx.responseHeaders['access-control-allow-origin'] || ctx.responseHeaders['Access-Control-Allow-Origin'];
       if (acaoHeader === '*') {
         return createResult(
@@ -610,7 +786,14 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'X-Content-Type-Options header prevents MIME sniffing attacks.',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-xcto-exists', name: 'X-Content-Type-Options', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for X-Content-Type-Options headers when HTTP response headers are available' }
+        );
+      }
       const xctoHeader = ctx.responseHeaders['x-content-type-options'] || ctx.responseHeaders['X-Content-Type-Options'];
       if (!xctoHeader) {
         return createResult(
@@ -640,7 +823,14 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'Referrer-Policy controls how much referrer information is sent with requests.',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-rp-exists', name: 'Referrer-Policy', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for Referrer-Policy headers when HTTP response headers are available' }
+        );
+      }
       const rpHeader = ctx.responseHeaders['referrer-policy'] || ctx.responseHeaders['Referrer-Policy'];
       if (!rpHeader) {
         return createResult(
@@ -670,7 +860,14 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'Permissions-Policy controls browser features available to the page.',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-pp-exists', name: 'Permissions-Policy', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for Permissions-Policy headers when HTTP response headers are available' }
+        );
+      }
       const ppHeader = ctx.responseHeaders['permissions-policy'] || ctx.responseHeaders['Permissions-Policy'];
       if (!ppHeader) {
         return createResult(
@@ -700,7 +897,14 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'X-XSS-Protection is deprecated but may still provide protection in older browsers',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-xxss', name: 'X-XSS-Protection', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for deprecated X-XSS-Protection headers when HTTP response headers are available' }
+        );
+      }
       const xxssHeader = ctx.responseHeaders['x-xss-protection'] || ctx.responseHeaders['X-XSS-Protection'];
       if (xxssHeader && String(xxssHeader).includes('1')) {
         return createResult(
@@ -718,7 +922,12 @@ export const securityRules: SeoRule[] = [
           }
         );
       }
-      return null;
+      return createResult(
+        { id: 'security-xxss', name: 'X-XSS-Protection', category: 'security', severity: 'info' },
+        'info',
+        'Not applicable (X-XSS-Protection not present or disabled)',
+        { recommendation: 'This rule checks for deprecated X-XSS-Protection headers when present' }
+      );
     },
   },
 
@@ -732,7 +941,14 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'CORP restricts which origins can load your resources',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-corp', name: 'Cross-Origin-Resource-Policy', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for CORP headers when HTTP response headers are available' }
+        );
+      }
       const corpHeader = ctx.responseHeaders['cross-origin-resource-policy'] || ctx.responseHeaders['Cross-Origin-Resource-Policy'];
       if (!corpHeader) {
         return createResult(
@@ -767,7 +983,14 @@ export const securityRules: SeoRule[] = [
     severity: 'error',
     description: 'SSL certificate must be valid and not expired',
     check: (ctx) => {
-      if (ctx.sslCertificate === undefined) return null;
+      if (ctx.sslCertificate === undefined) {
+        return createResult(
+          { id: 'security-ssl-valid', name: 'SSL Certificate Valid', category: 'security', severity: 'error' },
+          'info',
+          'Not applicable (SSL certificate information unavailable)',
+          { recommendation: 'This rule checks SSL certificate validity when certificate information is available' }
+        );
+      }
 
       if (!ctx.sslCertificate.valid) {
         return createResult(
@@ -798,7 +1021,14 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'SSL certificate should not expire within 30 days',
     check: (ctx) => {
-      if (!ctx.sslCertificate?.expiryDate) return null;
+      if (!ctx.sslCertificate?.expiryDate) {
+        return createResult(
+          { id: 'security-ssl-expiry', name: 'SSL Certificate Expiry', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (SSL certificate expiry date unavailable)',
+          { recommendation: 'This rule checks SSL certificate expiration when certificate expiry information is available' }
+        );
+      }
 
       const expiryDate = new Date(ctx.sslCertificate.expiryDate);
       const now = new Date();
@@ -862,7 +1092,14 @@ export const securityRules: SeoRule[] = [
     severity: 'error',
     description: 'SSL certificate CN/SAN must match the domain',
     check: (ctx) => {
-      if (ctx.sslCertificate?.nameMismatch === undefined) return null;
+      if (ctx.sslCertificate?.nameMismatch === undefined) {
+        return createResult(
+          { id: 'security-ssl-name-match', name: 'SSL Certificate Name Match', category: 'security', severity: 'error' },
+          'info',
+          'Not applicable (SSL certificate name match information unavailable)',
+          { recommendation: 'This rule checks SSL certificate name matching when certificate domain information is available' }
+        );
+      }
 
       if (ctx.sslCertificate.nameMismatch) {
         return createResult(
@@ -894,7 +1131,14 @@ export const securityRules: SeoRule[] = [
     severity: 'error',
     description: 'Server should use TLS 1.2 or higher',
     check: (ctx) => {
-      if (!ctx.tlsVersion) return null;
+      if (!ctx.tlsVersion) {
+        return createResult(
+          { id: 'security-tls-version', name: 'TLS Version', category: 'security', severity: 'error' },
+          'info',
+          'Not applicable (TLS version information unavailable)',
+          { recommendation: 'This rule checks TLS version when TLS connection information is available' }
+        );
+      }
 
       const version = ctx.tlsVersion;
       const insecureVersions = ['SSLv2', 'SSLv3', 'TLSv1', 'TLSv1.0', 'TLSv1.1'];
@@ -929,7 +1173,14 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'SSL certificate should be from a trusted CA',
     check: (ctx) => {
-      if (!ctx.sslCertificate?.issuer) return null;
+      if (!ctx.sslCertificate?.issuer) {
+        return createResult(
+          { id: 'security-ssl-issuer', name: 'SSL Certificate Issuer', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (SSL certificate issuer information unavailable)',
+          { recommendation: 'This rule checks SSL certificate issuer when certificate issuer information is available' }
+        );
+      }
 
       const issuer = ctx.sslCertificate.issuer;
       const selfSigned = issuer.toLowerCase().includes('self-signed') ||
@@ -968,7 +1219,14 @@ export const securityRules: SeoRule[] = [
     severity: 'error',
     description: 'Password fields must only appear on HTTPS pages',
     check: (ctx) => {
-      if (ctx.hasPasswordField === undefined) return null;
+      if (ctx.hasPasswordField === undefined) {
+        return createResult(
+          { id: 'security-password-on-http', name: 'Password Fields on HTTP', category: 'security', severity: 'error' },
+          'info',
+          'Not applicable (password field information unavailable)',
+          { recommendation: 'This rule checks for password fields on insecure pages when password field data is available' }
+        );
+      }
 
       if (ctx.hasPasswordField && ctx.isHttps === false) {
         return createResult(
@@ -992,7 +1250,12 @@ export const securityRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'security-password-on-http', name: 'Password Fields on HTTP', category: 'security', severity: 'error' },
+        'info',
+        'Not applicable (no password fields detected)',
+        { recommendation: 'This rule checks if password fields are only used on HTTPS pages when password fields are present' }
+      );
     },
   },
   {
@@ -1002,7 +1265,14 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'Forms should only submit to HTTPS endpoints',
     check: (ctx) => {
-      if (ctx.formsOnHttp === undefined) return null;
+      if (ctx.formsOnHttp === undefined) {
+        return createResult(
+          { id: 'security-forms-on-http', name: 'Forms on HTTP', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (form submission data unavailable)',
+          { recommendation: 'This rule checks if forms submit to HTTPS endpoints when form data is available' }
+        );
+      }
 
       if (ctx.formsOnHttp > 0) {
         return createResult(
@@ -1037,10 +1307,24 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'Server header should not reveal detailed version information',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-server-disclosure', name: 'Server Version Disclosure', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for server version disclosure when HTTP response headers are available' }
+        );
+      }
 
       const serverHeader = ctx.responseHeaders['server'] || ctx.responseHeaders['Server'];
-      if (!serverHeader) return null;
+      if (!serverHeader) {
+        return createResult(
+          { id: 'security-server-disclosure', name: 'Server Version Disclosure', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (Server header not present)',
+          { recommendation: 'This rule checks for server version disclosure when Server header is present' }
+        );
+      }
 
       const server = String(serverHeader);
       // Check for version numbers
@@ -1059,7 +1343,12 @@ export const securityRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'security-server-disclosure', name: 'Server Version Disclosure', category: 'security', severity: 'info' },
+        'info',
+        'Not applicable (Server header not present or does not disclose version)',
+        { recommendation: 'This rule checks if the Server header reveals version information' }
+      );
     },
   },
   {
@@ -1069,7 +1358,14 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'X-Powered-By header reveals technology stack',
     check: (ctx) => {
-      if (!ctx.responseHeaders) return null;
+      if (!ctx.responseHeaders) {
+        return createResult(
+          { id: 'security-x-powered-by', name: 'X-Powered-By Header', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (response headers unavailable)',
+          { recommendation: 'This rule checks for X-Powered-By header disclosure when HTTP response headers are available' }
+        );
+      }
 
       const xPoweredBy = ctx.responseHeaders['x-powered-by'] || ctx.responseHeaders['X-Powered-By'];
       if (xPoweredBy) {
@@ -1087,7 +1383,12 @@ export const securityRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'security-x-powered-by', name: 'X-Powered-By Header', category: 'security', severity: 'info' },
+        'info',
+        'Not applicable (X-Powered-By header not present)',
+        { recommendation: 'This rule checks for X-Powered-By header disclosure when the header is present' }
+      );
     },
   },
 
@@ -1101,7 +1402,14 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'Server should support Server Name Indication (SNI)',
     check: (ctx) => {
-      if (ctx.sniSupported === undefined) return null;
+      if (ctx.sniSupported === undefined) {
+        return createResult(
+          { id: 'ssl-sni-support', name: 'SNI Support', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (SNI support information unavailable)',
+          { recommendation: 'This rule checks for SNI support when SNI information is available' }
+        );
+      }
 
       if (!ctx.sniSupported) {
         return createResult(
@@ -1117,7 +1425,12 @@ export const securityRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'ssl-sni-support', name: 'SNI Support', category: 'security', severity: 'info' },
+        'info',
+        'Not applicable (SNI is supported)',
+        { recommendation: 'This rule checks for SNI support issues when SNI is not supported' }
+      );
     },
   },
 
@@ -1131,7 +1444,14 @@ export const securityRules: SeoRule[] = [
     severity: 'warning',
     description: 'Sitemap should only contain HTTPS URLs',
     check: (ctx) => {
-      if (ctx.sitemapHttpUrls === undefined) return null;
+      if (ctx.sitemapHttpUrls === undefined) {
+        return createResult(
+          { id: 'sitemap-https-urls', name: 'HTTPS URLs in Sitemap', category: 'security', severity: 'warning' },
+          'info',
+          'Not applicable (sitemap URL data unavailable)',
+          { recommendation: 'This rule checks sitemap URLs for HTTPS usage when sitemap data is available' }
+        );
+      }
 
       if (ctx.sitemapHttpUrls > 0) {
         return createResult(
@@ -1168,8 +1488,22 @@ export const securityRules: SeoRule[] = [
     severity: 'info',
     description: 'HTTPS sites should implement HSTS for security',
     check: (ctx) => {
-      if (!ctx.isHttps) return null;
-      if (ctx.hasHsts === undefined) return null;
+      if (!ctx.isHttps) {
+        return createResult(
+          { id: 'security-hsts', name: 'HSTS Header', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (page is not served over HTTPS)',
+          { recommendation: 'This rule checks HSTS implementation on HTTPS sites only' }
+        );
+      }
+      if (ctx.hasHsts === undefined) {
+        return createResult(
+          { id: 'security-hsts', name: 'HSTS Header', category: 'security', severity: 'info' },
+          'info',
+          'Not applicable (HSTS status unavailable)',
+          { recommendation: 'This rule checks for HSTS headers when HSTS information is available' }
+        );
+      }
 
       if (!ctx.hasHsts) {
         return createResult(

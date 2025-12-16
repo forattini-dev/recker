@@ -48,6 +48,8 @@ import { whois as whoisLookup, isDomainAvailable, createWhois, type WhoisResult,
 import { createDNS, type DNSClientOptions, type DNSClient } from './dns/index.js';
 import { createAI, UnifiedAIClient } from './ai/index.js';
 import type { AIClientConfig } from './types/ai.js';
+import { harRecorder } from './plugins/har-recorder.js';
+import { uploadFile } from './utils/upload.js'; // Novo import
 
 // ============================================================================
 // Singleton instances (lazy-loaded)
@@ -281,6 +283,18 @@ export const recker = {
 
   /** AI client namespace */
   ai: aiNamespace,
+
+  /** 
+   * HAR Recorder (Universal)
+   * @example recker.har.start(); await recker.get('/api'); recker.har.save('log.har');
+   */
+  har: harRecorder,
+
+  /**
+   * Uploads a file from disk (Node.js only)
+   * @example await recker.upload('./file.txt', 'https://api.example.com/upload');
+   */
+  upload: uploadFile,
 
   // ========== Configuration ==========
 

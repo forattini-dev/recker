@@ -16,7 +16,14 @@ export const redirectRules: SeoRule[] = [
     severity: 'warning',
     description: 'Redirect chains should not exceed 3 hops',
     check: (ctx) => {
-      if (ctx.redirectChain === undefined) return null;
+      if (ctx.redirectChain === undefined) {
+        return createResult(
+          { id: 'redirect-chain-length', name: 'Redirect Chain Length', category: 'technical', severity: 'warning' },
+          'info',
+          'Unable to check redirect chain (data unavailable)',
+          { recommendation: 'Ensure redirect analysis completed' }
+        );
+      }
 
       const chainLength = ctx.redirectChain.length;
 
@@ -89,7 +96,13 @@ export const redirectRules: SeoRule[] = [
     severity: 'error',
     description: 'Pages should not create redirect loops',
     check: (ctx) => {
-      if (!ctx.redirectChain || ctx.redirectChain.length === 0) return null;
+      if (!ctx.redirectChain || ctx.redirectChain.length === 0) {
+        return createResult(
+          { id: 'redirect-loop', name: 'Redirect Loop', category: 'technical', severity: 'error' },
+          'pass',
+          'No redirect chain to check for loops'
+        );
+      }
 
       // Check for loops by looking for repeated URLs
       const urls = ctx.redirectChain.map(r => r.from);
@@ -123,7 +136,11 @@ export const redirectRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'redirect-loop', name: 'Redirect Loop', category: 'technical', severity: 'error' },
+        'pass',
+        'No redirect loop detected'
+      );
     },
   },
 
@@ -137,7 +154,14 @@ export const redirectRules: SeoRule[] = [
     severity: 'info',
     description: 'Permanent content moves should use 301 redirects',
     check: (ctx) => {
-      if (!ctx.redirectChain || ctx.redirectChain.length === 0) return null;
+      if (!ctx.redirectChain || ctx.redirectChain.length === 0) {
+        return createResult(
+          { id: 'redirect-type', name: 'Redirect Type', category: 'technical', severity: 'info' },
+          'info',
+          'No redirects to analyze',
+          { recommendation: 'Page loaded without redirects' }
+        );
+      }
 
       const temporary = ctx.redirectChain.filter(r => r.status === 302 || r.status === 307);
       const permanent = ctx.redirectChain.filter(r => r.status === 301 || r.status === 308);
@@ -166,7 +190,12 @@ export const redirectRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'redirect-type', name: 'Redirect Type', category: 'technical', severity: 'info' },
+        'info',
+        'Unknown redirect type',
+        { recommendation: 'Check redirect status codes' }
+      );
     },
   },
 
@@ -180,7 +209,14 @@ export const redirectRules: SeoRule[] = [
     severity: 'warning',
     description: 'Site should redirect consistently to either WWW or non-WWW version',
     check: (ctx) => {
-      if (ctx.wwwConsistency === undefined) return null;
+      if (ctx.wwwConsistency === undefined) {
+        return createResult(
+          { id: 'www-consistency', name: 'WWW vs Non-WWW', category: 'canonicalization', severity: 'warning' },
+          'info',
+          'Unable to check WWW consistency (data unavailable)',
+          { recommendation: 'Ensure WWW/non-WWW analysis completed' }
+        );
+      }
 
       const { canonicalHasWww, urlHasWww, redirectsToCanonical } = ctx.wwwConsistency;
 
@@ -218,7 +254,14 @@ export const redirectRules: SeoRule[] = [
     severity: 'warning',
     description: 'HTTP version should redirect to HTTPS',
     check: (ctx) => {
-      if (ctx.httpRedirectsToHttps === undefined) return null;
+      if (ctx.httpRedirectsToHttps === undefined) {
+        return createResult(
+          { id: 'http-to-https-redirect', name: 'HTTP to HTTPS Redirect', category: 'security', severity: 'warning' },
+          'info',
+          'Unable to check HTTP to HTTPS redirect (data unavailable)',
+          { recommendation: 'Ensure HTTPS redirect analysis completed' }
+        );
+      }
 
       if (!ctx.httpRedirectsToHttps) {
         return createResult(
@@ -255,7 +298,14 @@ export const redirectRules: SeoRule[] = [
     severity: 'info',
     description: 'Detects redirects to different domains',
     check: (ctx) => {
-      if (!ctx.redirectChain || ctx.redirectChain.length === 0) return null;
+      if (!ctx.redirectChain || ctx.redirectChain.length === 0) {
+        return createResult(
+          { id: 'cross-domain-redirect', name: 'Cross-Domain Redirect', category: 'technical', severity: 'info' },
+          'info',
+          'No redirect chain to check',
+          { recommendation: 'Page loaded without redirects' }
+        );
+      }
 
       const crossDomainRedirects = ctx.redirectChain.filter(r => {
         try {
@@ -282,7 +332,11 @@ export const redirectRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'cross-domain-redirect', name: 'Cross-Domain Redirect', category: 'technical', severity: 'info' },
+        'pass',
+        'No cross-domain redirects'
+      );
     },
   },
 ];

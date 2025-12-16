@@ -16,7 +16,14 @@ export const canonicalRules: SeoRule[] = [
     severity: 'warning',
     description: 'Pages should have a canonical URL defined',
     check: (ctx) => {
-      if (ctx.hasCanonical === undefined) return null;
+      if (ctx.hasCanonical === undefined) {
+        return createResult(
+          { id: 'canonical-present', name: 'Canonical Tag Present', category: 'canonicalization', severity: 'warning' },
+          'info',
+          'Not applicable (canonical data unavailable)',
+          { recommendation: 'This rule checks if a canonical URL is defined to avoid duplicate content issues' }
+        );
+      }
 
       if (!ctx.hasCanonical) {
         return createResult(
@@ -51,7 +58,14 @@ export const canonicalRules: SeoRule[] = [
     severity: 'error',
     description: 'Page should have only one canonical tag',
     check: (ctx) => {
-      if (ctx.canonicalCount === undefined) return null;
+      if (ctx.canonicalCount === undefined) {
+        return createResult(
+          { id: 'canonical-multiple', name: 'Multiple Canonical Tags', category: 'canonicalization', severity: 'error' },
+          'info',
+          'Not applicable (canonical count data unavailable)',
+          { recommendation: 'This rule ensures only one canonical tag exists per page' }
+        );
+      }
 
       if (ctx.canonicalCount > 1) {
         return createResult(
@@ -70,7 +84,11 @@ export const canonicalRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'canonical-multiple', name: 'Multiple Canonical Tags', category: 'canonicalization', severity: 'error' },
+        'pass',
+        'Single canonical tag found'
+      );
     },
   },
 
@@ -84,7 +102,14 @@ export const canonicalRules: SeoRule[] = [
     severity: 'info',
     description: 'Canonical should typically point to the current page URL',
     check: (ctx) => {
-      if (!ctx.canonicalUrl || !ctx.url) return null;
+      if (!ctx.canonicalUrl || !ctx.url) {
+        return createResult(
+          { id: 'canonical-self-referencing', name: 'Canonical Self-Reference', category: 'canonicalization', severity: 'info' },
+          'info',
+          'Not applicable (canonical or URL data unavailable)',
+          { recommendation: 'This rule checks if canonical URL points to the current page' }
+        );
+      }
 
       const isSelfReferencing = normalizeUrl(ctx.canonicalUrl) === normalizeUrl(ctx.url);
 
@@ -122,7 +147,14 @@ export const canonicalRules: SeoRule[] = [
     severity: 'error',
     description: 'Canonical URL should be accessible (not 404)',
     check: (ctx) => {
-      if (ctx.canonicalStatus === undefined) return null;
+      if (ctx.canonicalStatus === undefined) {
+        return createResult(
+          { id: 'canonical-broken', name: 'Broken Canonical URL', category: 'canonicalization', severity: 'error' },
+          'info',
+          'Not applicable (canonical status data unavailable)',
+          { recommendation: 'This rule validates that canonical URL is accessible and returns 200 OK' }
+        );
+      }
 
       if (ctx.canonicalStatus === 404) {
         return createResult(
@@ -194,7 +226,14 @@ export const canonicalRules: SeoRule[] = [
     severity: 'warning',
     description: 'Canonical should use HTTPS protocol',
     check: (ctx) => {
-      if (!ctx.canonicalUrl) return null;
+      if (!ctx.canonicalUrl) {
+        return createResult(
+          { id: 'canonical-protocol', name: 'Canonical Protocol', category: 'canonicalization', severity: 'warning' },
+          'info',
+          'Not applicable (no canonical URL detected)',
+          { recommendation: 'This rule ensures canonical URLs use HTTPS protocol for security' }
+        );
+      }
 
       if (ctx.canonicalUrl.startsWith('http://')) {
         return createResult(
@@ -231,7 +270,14 @@ export const canonicalRules: SeoRule[] = [
     severity: 'warning',
     description: 'Canonical URL should be absolute, not relative',
     check: (ctx) => {
-      if (!ctx.canonicalUrl) return null;
+      if (!ctx.canonicalUrl) {
+        return createResult(
+          { id: 'canonical-absolute', name: 'Canonical Absolute URL', category: 'canonicalization', severity: 'warning' },
+          'info',
+          'Not applicable (no canonical URL detected)',
+          { recommendation: 'This rule checks that canonical URLs are absolute, not relative' }
+        );
+      }
 
       const isRelative = !ctx.canonicalUrl.startsWith('http://') &&
                          !ctx.canonicalUrl.startsWith('https://') &&
@@ -272,7 +318,14 @@ export const canonicalRules: SeoRule[] = [
     severity: 'warning',
     description: 'Canonical should not create chains',
     check: (ctx) => {
-      if (ctx.canonicalChainLength === undefined) return null;
+      if (ctx.canonicalChainLength === undefined) {
+        return createResult(
+          { id: 'canonical-chain', name: 'Canonical Chain', category: 'canonicalization', severity: 'warning' },
+          'info',
+          'Not applicable (canonical chain data unavailable)',
+          { recommendation: 'This rule detects canonical chains where one canonical points to another' }
+        );
+      }
 
       if (ctx.canonicalChainLength > 1) {
         return createResult(
@@ -291,7 +344,11 @@ export const canonicalRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'canonical-chain', name: 'Canonical Chain', category: 'canonicalization', severity: 'warning' },
+        'pass',
+        'No canonical chain detected'
+      );
     },
   },
 
@@ -305,7 +362,14 @@ export const canonicalRules: SeoRule[] = [
     severity: 'info',
     description: 'Canonical URLs with query parameters should be intentional',
     check: (ctx) => {
-      if (!ctx.canonicalUrl) return null;
+      if (!ctx.canonicalUrl) {
+        return createResult(
+          { id: 'canonical-parameters', name: 'Canonical Query Parameters', category: 'canonicalization', severity: 'info' },
+          'info',
+          'Not applicable (no canonical URL detected)',
+          { recommendation: 'This rule checks for query parameters in canonical URLs' }
+        );
+      }
 
       try {
         const url = new URL(ctx.canonicalUrl);
@@ -328,7 +392,11 @@ export const canonicalRules: SeoRule[] = [
         // Invalid URL handled elsewhere
       }
 
-      return null;
+      return createResult(
+        { id: 'canonical-parameters', name: 'Canonical Query Parameters', category: 'canonicalization', severity: 'info' },
+        'pass',
+        'Canonical URL has no query parameters'
+      );
     },
   },
 
@@ -342,7 +410,14 @@ export const canonicalRules: SeoRule[] = [
     severity: 'warning',
     description: 'Pages with noindex should not have canonical to indexed page',
     check: (ctx) => {
-      if (!ctx.hasCanonical || ctx.metaRobots === undefined) return null;
+      if (!ctx.hasCanonical || ctx.metaRobots === undefined) {
+        return createResult(
+          { id: 'canonical-noindex-conflict', name: 'Canonical + Noindex Conflict', category: 'canonicalization', severity: 'warning' },
+          'info',
+          'Not applicable (canonical or robots meta tag data unavailable)',
+          { recommendation: 'This rule detects conflicting noindex and canonical directives' }
+        );
+      }
 
       const robots = Array.isArray(ctx.metaRobots) ? ctx.metaRobots : [ctx.metaRobots];
       const hasNoindex = robots.some(r => r.toLowerCase().includes('noindex'));
@@ -366,7 +441,11 @@ export const canonicalRules: SeoRule[] = [
         }
       }
 
-      return null;
+      return createResult(
+        { id: 'canonical-noindex-conflict', name: 'Canonical + Noindex Conflict', category: 'canonicalization', severity: 'warning' },
+        'pass',
+        'No conflicting noindex and canonical directives'
+      );
     },
   },
 ];

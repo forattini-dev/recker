@@ -16,7 +16,14 @@ export const cwvRules: SeoRule[] = [
     severity: 'warning',
     description: 'Hero images should be optimized for fast LCP',
     check: (ctx) => {
-      if (!ctx.lcpCandidate) return null;
+      if (!ctx.lcpCandidate) {
+        return createResult(
+          { id: 'cwv-lcp-hero-image', name: 'LCP Hero Image', category: 'performance', severity: 'warning' },
+          'info',
+          'No LCP candidate detected',
+          { recommendation: 'Ensure the page has a hero image or prominent content element' }
+        );
+      }
 
       const issues: string[] = [];
 
@@ -68,7 +75,14 @@ export const cwvRules: SeoRule[] = [
     severity: 'warning',
     description: 'Text LCP elements should render immediately without font blocking',
     check: (ctx) => {
-      if (!ctx.webFonts || ctx.webFonts.length === 0) return null;
+      if (!ctx.webFonts || ctx.webFonts.length === 0) {
+        return createResult(
+          { id: 'cwv-lcp-text-visible', name: 'LCP Text Visibility', category: 'performance', severity: 'warning' },
+          'info',
+          'No web fonts detected',
+          { recommendation: 'No custom web fonts to analyze' }
+        );
+      }
 
       const blockingFonts = ctx.webFonts.filter(f => !f.hasSwap && !f.hasOptional);
 
@@ -104,7 +118,14 @@ export const cwvRules: SeoRule[] = [
     severity: 'warning',
     description: 'Minimize render-blocking CSS for faster LCP',
     check: (ctx) => {
-      if (ctx.renderBlockingStylesheets === undefined) return null;
+      if (ctx.renderBlockingStylesheets === undefined) {
+        return createResult(
+          { id: 'cwv-render-blocking-css', name: 'Render-Blocking CSS', category: 'performance', severity: 'warning' },
+          'info',
+          'Unable to check render-blocking CSS (data unavailable)',
+          { recommendation: 'Ensure CSS resource analysis completed' }
+        );
+      }
 
       if (ctx.renderBlockingStylesheets > 3) {
         return createResult(
@@ -137,7 +158,14 @@ export const cwvRules: SeoRule[] = [
     severity: 'warning',
     description: 'Scripts in head should use async or defer',
     check: (ctx) => {
-      if (ctx.renderBlockingScripts === undefined) return null;
+      if (ctx.renderBlockingScripts === undefined) {
+        return createResult(
+          { id: 'cwv-render-blocking-js', name: 'Render-Blocking JavaScript', category: 'performance', severity: 'warning' },
+          'info',
+          'Unable to check render-blocking scripts (data unavailable)',
+          { recommendation: 'Ensure script analysis completed' }
+        );
+      }
 
       if (ctx.renderBlockingScripts > 0) {
         return createResult(
@@ -174,7 +202,14 @@ export const cwvRules: SeoRule[] = [
     severity: 'warning',
     description: 'Images should have explicit width and height to prevent layout shift',
     check: (ctx) => {
-      if (ctx.imagesMissingDimensions === undefined) return null;
+      if (ctx.imagesMissingDimensions === undefined) {
+        return createResult(
+          { id: 'cwv-cls-image-dimensions', name: 'Image Dimensions', category: 'performance', severity: 'warning' },
+          'info',
+          'Unable to check image dimensions (data unavailable)',
+          { recommendation: 'Ensure image analysis completed' }
+        );
+      }
 
       if (ctx.imagesMissingDimensions > 0) {
         const total = ctx.totalImages || 0;
@@ -227,7 +262,11 @@ export const cwvRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'cwv-cls-aspect-ratio', name: 'Aspect Ratio CSS', category: 'performance', severity: 'info' },
+        'pass',
+        'Aspect ratio handling is appropriate'
+      );
     },
   },
   // NOTE: cwv-cls-dynamic-content removed - requires runtime detection
@@ -239,7 +278,14 @@ export const cwvRules: SeoRule[] = [
     severity: 'info',
     description: 'Web fonts should have size-matched fallbacks',
     check: (ctx) => {
-      if (!ctx.webFonts || ctx.webFonts.length === 0) return null;
+      if (!ctx.webFonts || ctx.webFonts.length === 0) {
+        return createResult(
+          { id: 'cwv-cls-font-fallback', name: 'Font Fallback Metrics', category: 'performance', severity: 'info' },
+          'info',
+          'No web fonts to check',
+          { recommendation: 'No custom web fonts detected' }
+        );
+      }
 
       // Check for size-adjust or ascent-override
       const fontsWithoutMetrics = ctx.webFonts.filter(f =>
@@ -267,7 +313,11 @@ export const cwvRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'cwv-cls-font-fallback', name: 'Font Fallback Metrics', category: 'performance', severity: 'info' },
+        'pass',
+        'Font fallback metrics configured'
+      );
     },
   },
 
@@ -358,7 +408,12 @@ export const cwvRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'cwv-critical-css', name: 'Critical CSS', category: 'performance', severity: 'info' },
+        'info',
+        'No render-blocking stylesheets to optimize',
+        { recommendation: 'Page has no render-blocking CSS' }
+      );
     },
   },
 ];

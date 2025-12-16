@@ -1,6 +1,6 @@
-/**
- * SEO Analysis Types
- */
+import { KeywordCloud } from './keywords.js';
+
+export type { KeywordCloud, KeywordItem } from './keywords.js';
 
 export type SeoStatus = 'pass' | 'warn' | 'fail' | 'info';
 
@@ -16,6 +16,7 @@ export interface SeoCheckEvidence {
 
 export interface SeoCheckResult {
   name: string;
+  category: string;
   status: SeoStatus;
   message: string;
   value?: string | number;
@@ -60,6 +61,10 @@ export interface LinkAnalysis {
   withoutText: number;
   sponsoredLinks: number;
   ugcLinks: number;
+  /** Internal links using HTTP instead of HTTPS */
+  internalHttpLinks?: number;
+  /** URLs of internal links using HTTP */
+  internalHttpLinkUrls?: string[];
 }
 
 export interface ImageAnalysis {
@@ -70,6 +75,8 @@ export interface ImageAnalysis {
   missingDimensions: number;
   modernFormats: number;
   altTextLengths: number[];
+  /** Actual alt text strings for keyword analysis */
+  imageAltTexts: string[];
   imageFilenames: string[]; // For image file naming conventions
   imagesWithAsyncDecoding: number; // Count of images with decoding="async"
 }
@@ -234,8 +241,9 @@ export interface SeoReport {
     items: Record<string, unknown>[];
   };
 
-  headings: HeadingAnalysis;
   content: ContentMetrics;
+  headings: HeadingAnalysis;
+  keywords: KeywordCloud;
   links: LinkAnalysis;
   images: ImageAnalysis;
   social: SocialMetaAnalysis;

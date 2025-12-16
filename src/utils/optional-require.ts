@@ -7,7 +7,7 @@
  *
  * @example
  * ```typescript
- * const cheerio = await requireOptional('cheerio', 'recker/scrape');
+ * const cardinal = await requireOptional('cardinal', 'recker/cli');
  * ```
  */
 
@@ -28,39 +28,13 @@ interface DependencyInfo {
 /**
  * Registry of optional dependencies
  */
-export const OPTIONAL_DEPENDENCIES: Record<string, DependencyInfo> = {
-  // CLI (optional enhancement)
+export const OPTIONAL_DEPENDENCIES = {
   'cardinal': {
     package: 'cardinal',
-    submodule: 'recker/cli',
-    version: '^2.0.0',
-    feature: 'syntax highlighting',
+    feature: 'syntax highlighting in CLI',
+    version: '2.x',
   },
-
-  // Protocols
-  'ssh2-sftp-client': {
-    package: 'ssh2-sftp-client',
-    submodule: 'recker/protocols/sftp',
-    version: '^11.0.0',
-    feature: 'SFTP client',
-  },
-
-  // Scraping
-  'cheerio': {
-    package: 'cheerio',
-    submodule: 'recker/scrape',
-    version: '^1.0.0',
-    feature: 'HTML parsing and scraping',
-  },
-
-  // Cache
-  'ioredis': {
-    package: 'ioredis',
-    submodule: 'recker/cache',
-    version: '^5.0.0',
-    feature: 'Redis cache storage',
-  },
-};
+} as const;
 
 /**
  * Error thrown when an optional dependency is not installed
@@ -103,9 +77,9 @@ export function clearModuleCache(): void {
  *
  * @example
  * ```typescript
- * // In src/scrape/index.ts
- * const cheerio = await requireOptional<typeof import('cheerio')>('cheerio', 'recker/scrape');
- * const $ = cheerio.load(html);
+ * // In src/cli/index.ts
+ * const cardinal = await requireOptional<typeof import('cardinal')>('cardinal', 'recker/cli');
+ * const highlighted = cardinal.highlight(code);
  * ```
  */
 export async function requireOptional<T = unknown>(
@@ -130,7 +104,7 @@ export async function requireOptional<T = unknown>(
       (err.message?.includes('Cannot find module'));
 
     if (isModuleNotFound) {
-      const info = OPTIONAL_DEPENDENCIES[packageName];
+      const info = (OPTIONAL_DEPENDENCIES as any)[packageName];
       const sub = submodule || info?.submodule || 'this feature';
       const version = info?.version || '';
       const pkg = version ? `${packageName}@${version.replace('^', '')}` : packageName;
@@ -168,7 +142,7 @@ export function isPackageAvailable(packageName: string): boolean {
  */
 export function getInstallCommand(packages: string[]): string {
   const pkgsWithVersions = packages.map((pkg) => {
-    const info = OPTIONAL_DEPENDENCIES[pkg];
+    const info = (OPTIONAL_DEPENDENCIES as any)[pkg];
     return info?.version ? `${pkg}@${info.version.replace('^', '')}` : pkg;
   });
   return `pnpm add ${pkgsWithVersions.join(' ')}`;

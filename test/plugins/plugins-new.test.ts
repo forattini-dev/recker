@@ -1,18 +1,25 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createClient } from '../../src/core/client.js';
 import { graphql, graphqlPlugin, GraphQLError } from '../../src/plugins/graphql.js';
-import { harRecorderPlugin } from '../../src/plugins/har-recorder.js';
+import { harRecorderPlugin, harRecorder } from '../../src/plugins/har-recorder.js';
 import { harPlayerPlugin } from '../../src/plugins/har-player.js';
 import { serverTimingPlugin } from '../../src/plugins/server-timing.js';
 import { ReckerRequest } from '../../src/types/index.js';
-import { writeFileSync, readFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 
-// Mock fs
+// Mock fs/promises
+vi.mock('node:fs/promises', async () => {
+    return {
+        writeFile: vi.fn(),
+    };
+});
+
+// Mock fs (keep for readFileSync used in HAR Player test)
 vi.mock('node:fs', async () => {
     const actual = await vi.importActual('node:fs');
     return {
         ...actual,
-        writeFileSync: vi.fn(),
         readFileSync: vi.fn()
     };
 });
@@ -60,16 +67,16 @@ describe('New Plugins', () => {
 
     it('GraphQL: should handle success via helper', async () => {
         // Need baseUrl ending in /graphql for mock to match
-        const client = createClient({ 
+        const client = createClient({
             baseUrl: 'http://test/graphql',
-            transport: new MockTransport() 
+            transport: new MockTransport()
         });
         const res = await graphql(client, 'query { user { name } }');
         expect(res).toEqual({ user: { name: 'Alice' } });
     });
 
     it('GraphQL: should throw on errors with plugin', async () => {
-        const client = createClient({ 
+        const client = createClient({
             baseUrl: 'http://test/graphql', // Fix URL matching
             transport: new MockTransport(),
             plugins: [graphqlPlugin()]
@@ -98,13 +105,13 @@ describe('New Plugins', () => {
         });
 
         await client.get('/test');
+        await harRecorder.save('test.har');
         
-        expect(writeFileSync).toHaveBeenCalled();
-        const args = vi.mocked(writeFileSync).mock.calls[0];
+        expect(writeFile).toHaveBeenCalled();
+        const args = vi.mocked(writeFile).mock.calls[0];
         expect(args[0]).toBe('test.har');
         expect(args[1]).toContain('"creator":');
     });
-
     it('HAR Player: should replay response', async () => {
         const harData = {
             log: {

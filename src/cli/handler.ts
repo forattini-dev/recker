@@ -24,12 +24,12 @@ async function initDependencies() {
 interface RequestOptions {
   method: string;
   url: string;
-  headers: Record<string, string>;
+  headers?: Record<string, string>; // Headers might already be part of clientOptions
   body?: any;
   verbose?: boolean;
   quiet?: boolean;
   output?: string;
-  presetConfig?: any;
+  clientOptions?: any; // Now expects full ClientOptions
 }
 
 export async function handleRequest(options: RequestOptions) {
@@ -56,22 +56,27 @@ export async function handleRequest(options: RequestOptions) {
 
   try {
     let client;
+    const finalClientOptions = options.clientOptions || {}; // Start with provided clientOptions
 
-    if (options.presetConfig) {
-      client = createClient(options.presetConfig);
-    } else {
-      // Standard mode: derive base from URL
+    // If no baseUrl explicitly set in finalClientOptions, try to derive from URL
+    if (!finalClientOptions.baseUrl && !finalClientOptions.base) {
       try {
         const urlObj = new URL(options.url);
-        client = createClient({ baseUrl: urlObj.origin });
+        finalClientOptions.baseUrl = urlObj.origin;
       } catch {
-        // Fallback for when URL is actually a relative path (shouldn't happen in standard mode but possible)
-        client = createClient();
+        // Fallback: Use default client if URL is not absolute and no baseUrl is set
+        // createClient will fallback to client with no base URL
       }
     }
+    
+    // Ensure headers are merged: options.headers (from parseMixedArgs) take precedence over clientOptions.headers
+    finalClientOptions.headers = { ...finalClientOptions.headers, ...options.headers };
+
+    client = createClient(finalClientOptions);
 
     // Serialize body if present
     let requestBody = undefined;
+    options.headers = options.headers || {};
     if (options.body) {
       // If body is already a string, use it as-is (e.g., from stdin pipe)
       // Otherwise, serialize as JSON

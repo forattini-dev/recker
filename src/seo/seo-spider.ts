@@ -9,6 +9,8 @@ import { Spider, SpiderOptions, SpiderResult, SpiderPageResult } from '../scrape
 import { analyzeSeo } from './analyzer.js';
 import type { SeoReport, SeoCheckResult } from './types.js';
 import { createClient } from '../core/client.js';
+import { discoverFeeds } from './validators/rss.js';
+import { fetchAndValidateSitemap, type SitemapValidationResult } from './validators/sitemap.js';
 import * as fs from 'fs/promises';
 
 // ============================================================================
@@ -51,6 +53,20 @@ export interface SeoSpiderResult extends Omit<SpiderResult, 'pages'> {
   pages: SeoPageResult[];
   /** Site-wide SEO issues detected across multiple pages */
   siteWideIssues: SiteWideIssue[];
+  /** Discovery of text files (humans.txt, llms.txt) */
+  txtFiles?: {
+    humans: { found: boolean; content?: string; url: string };
+    llms: { found: boolean; content?: string; url: string };
+  };
+  /** Discovered RSS/Atom feeds */
+  rssFeeds?: Array<{
+    url: string;
+    type: 'rss' | 'atom' | 'unknown';
+    title?: string;
+    itemCount: number;
+  }>;
+  /** Sitemap validation results (validated once per crawl) */
+  sitemapValidation?: SitemapValidationResult;
   /** Summary statistics */
   summary: {
     totalPages: number;
@@ -112,10 +128,28 @@ export class SeoSpider {
     // Calculate summary
     const summary = this.calculateSummary(seoPages, siteWideIssues);
 
+    // Check for text files (humans.txt, llms.txt)
+    const txtFiles = await this.checkTextFiles(startUrl);
+
+    // Discover RSS feeds
+    let homeHtml = '';
+    try {
+       const client = createClient({ timeout: 10000 });
+       const res = await client.get(startUrl);
+       homeHtml = await res.text();
+    } catch {}
+    const rssFeeds = await discoverFeeds(new URL(startUrl).origin, homeHtml);
+
+    // Validate sitemap (once per crawl, not per page)
+    const sitemapValidation = await this.validateSitemap(startUrl);
+
     const seoResult: SeoSpiderResult = {
       ...result,
       pages: seoPages,
       siteWideIssues,
+      txtFiles,
+      rssFeeds,
+      sitemapValidation,
       summary,
     };
 
@@ -125,6 +159,70 @@ export class SeoSpider {
     }
 
     return seoResult;
+  }
+
+  /**
+   * Check for humans.txt and llms.txt
+   */
+  private async checkTextFiles(startUrl: string): Promise<SeoSpiderResult['txtFiles']> {
+    try {
+      const baseUrl = new URL(startUrl).origin;
+      const client = createClient({ timeout: 5000 });
+      const results = {
+        humans: { found: false, content: undefined as string | undefined, url: `${baseUrl}/humans.txt` },
+        llms: { found: false, content: undefined as string | undefined, url: `${baseUrl}/llms.txt` },
+      };
+
+      // Check humans.txt
+      try {
+        const res = await client.get(results.humans.url);
+        if (res.status === 200) {
+          results.humans.found = true;
+          results.humans.content = await res.text();
+        }
+      } catch {}
+
+      // Check llms.txt
+      try {
+        const res = await client.get(results.llms.url);
+        if (res.status === 200) {
+          results.llms.found = true;
+          results.llms.content = await res.text();
+        }
+      } catch {}
+
+      return results;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Validate sitemap (runs once per crawl)
+   * Checks /sitemap.xml by default
+   */
+  private async validateSitemap(startUrl: string): Promise<SitemapValidationResult | undefined> {
+    try {
+      const baseUrl = new URL(startUrl).origin;
+      const sitemapUrl = `${baseUrl}/sitemap.xml`;
+
+      // Create a fetcher using our client with timeout
+      const client = createClient({ timeout: this.options.timeout || 15000 });
+      const fetcher = async (url: string) => {
+        const res = await client.get(url);
+        const text = await res.text();
+        return {
+          status: res.status,
+          text,
+          headers: Object.fromEntries([...res.headers.entries()]),
+        };
+      };
+
+      const result = await fetchAndValidateSitemap(sitemapUrl, fetcher);
+      return result;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -199,14 +297,16 @@ export class SeoSpider {
       if (titleLength < 30) {
         checks.push({
           name: 'Title Length',
+          category: 'title',
           status: 'warn',
-          message: `Title is too short (${titleLength} chars)`,
+          message: `Title is ${titleLength} characters`,
           value: titleLength,
           recommendation: 'Title should be 50-60 characters',
         });
       } else if (titleLength > 60) {
         checks.push({
           name: 'Title Length',
+          category: 'title',
           status: 'warn',
           message: `Title is too long (${titleLength} chars)`,
           value: titleLength,
@@ -215,6 +315,7 @@ export class SeoSpider {
       } else {
         checks.push({
           name: 'Title Length',
+          category: 'title',
           status: 'pass',
           message: `Good title length (${titleLength} chars)`,
           value: titleLength,
@@ -223,6 +324,7 @@ export class SeoSpider {
     } else {
       checks.push({
         name: 'Title',
+        category: 'title',
         status: 'fail',
         message: 'Page has no title',
         recommendation: 'Add a descriptive <title> tag',
@@ -236,6 +338,7 @@ export class SeoSpider {
     if (internalLinks === 0) {
       checks.push({
         name: 'Internal Links',
+        category: 'links',
         status: 'warn',
         message: 'No internal links found',
         recommendation: 'Add internal links to improve site structure',
@@ -243,6 +346,7 @@ export class SeoSpider {
     } else {
       checks.push({
         name: 'Internal Links',
+        category: 'links',
         status: 'pass',
         message: `${internalLinks} internal links found`,
         value: internalLinks,
@@ -341,27 +445,19 @@ export class SeoSpider {
         missingDimensions: 0,
         modernFormats: 0,
         altTextLengths: [],
+        imageAltTexts: [],
         imageFilenames: [],
         imagesWithAsyncDecoding: 0,
       },
       social: {
         openGraph: {
-          present: false,
-          hasTitle: false,
-          hasDescription: false,
-          hasImage: false,
-          hasUrl: false,
-          issues: [],
+            present: false, hasTitle: false, hasDescription: false, hasImage: false, hasUrl: false, issues: []
         },
         twitterCard: {
-          present: false,
-          hasCard: false,
-          hasTitle: false,
-          hasDescription: false,
-          hasImage: false,
-          issues: [],
+            present: false, hasCard: false, hasTitle: false, hasDescription: false, hasImage: false, issues: []
         },
       },
+      keywords: { totalWords: 0, uniqueWords: 0, topKeywords: [] },
       technical: {
         hasCanonical: false,
         hasRobotsMeta: false,

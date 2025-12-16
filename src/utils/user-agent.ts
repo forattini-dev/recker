@@ -3,26 +3,15 @@
  * Provides default Recker user agent and browser/device simulation
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
-// Get package version dynamically
-let RECKER_VERSION = '1.0.0';
-try {
-  const pkgPath = join(process.cwd(), 'package.json');
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-  if (pkg.name === 'recker' && pkg.version) {
-    RECKER_VERSION = pkg.version;
-  }
-} catch {
-  // Fallback to default version
-}
+// This constant is automatically updated by scripts/inject-version.js during prepublishOnly
+// For local development or when not published, it defaults to '0.0.0-dev'
+const VERSION = '0.0.0-dev'; // Default value, will be replaced by build script
 
 /**
  * Default Recker User-Agent
  */
 export function getDefaultUserAgent(): string {
-  return `recker/${RECKER_VERSION}`;
+  return `recker/${VERSION}`;
 }
 
 /**

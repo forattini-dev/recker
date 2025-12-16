@@ -18,7 +18,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'llms.txt helps AI systems understand your site (llmstxt.org)',
     check: (ctx) => {
-      if (ctx.llmsTxt === undefined) return null;
+      if (ctx.llmsTxt === undefined) {
+        return createResult(
+          { id: 'ai-llms-txt-exists', name: 'llms.txt File', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (llms.txt data unavailable)',
+          { recommendation: 'This rule checks for llms.txt file to optimize for AI/LLM discovery' }
+        );
+      }
 
       if (!ctx.llmsTxt.exists) {
         return createResult(
@@ -64,7 +71,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'llms.txt should have proper structure with site name and description',
     check: (ctx) => {
-      if (!ctx.llmsTxt?.exists || !ctx.llmsTxt.parseResult) return null;
+      if (!ctx.llmsTxt?.exists || !ctx.llmsTxt.parseResult) {
+        return createResult(
+          { id: 'ai-llms-txt-structure', name: 'llms.txt Structure', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (llms.txt does not exist or parse data unavailable)',
+          { recommendation: 'This rule validates llms.txt structure for AI comprehension' }
+        );
+      }
 
       const { siteName, siteDescription, sections, links } = ctx.llmsTxt.parseResult;
       const issues: string[] = [];
@@ -116,7 +130,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'Content should be well-structured for AI comprehension',
     check: (ctx) => {
-      if (!ctx.headings?.structure) return null;
+      if (!ctx.headings?.structure) {
+        return createResult(
+          { id: 'ai-content-structure', name: 'AI-Friendly Content Structure', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (heading structure data unavailable)',
+          { recommendation: 'This rule checks for well-structured content for AI comprehension' }
+        );
+      }
 
       const issues: string[] = [];
 
@@ -167,7 +188,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'Question headings help with AI search featured snippets',
     check: (ctx) => {
-      if (!ctx.headings?.structure) return null;
+      if (!ctx.headings?.structure) {
+        return createResult(
+          { id: 'ai-question-headings', name: 'Question-Based Headings', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (heading structure data unavailable)',
+          { recommendation: 'This rule checks for question-based headings that trigger featured snippets' }
+        );
+      }
 
       const questionPatterns = [
         /^what\s/i, /^how\s/i, /^why\s/i, /^when\s/i,
@@ -208,7 +236,11 @@ export const aiSearchRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'ai-question-headings', name: 'Question-Based Headings', category: 'ai-search', severity: 'info' },
+        'pass',
+        'Content length does not require question headings'
+      );
     },
   },
 
@@ -222,7 +254,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'Schema.org structured data helps AI understand content',
     check: (ctx) => {
-      if (!ctx.jsonLdTypes) return null;
+      if (!ctx.jsonLdTypes) {
+        return createResult(
+          { id: 'ai-structured-data', name: 'Structured Data for AI', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (structured data unavailable)',
+          { recommendation: 'This rule checks for Schema.org structured data for AI comprehension' }
+        );
+      }
 
       const aiHelpfulTypes = [
         'Article', 'BlogPosting', 'NewsArticle', 'TechArticle',
@@ -287,7 +326,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'FAQPage schema is highly valuable for AI search results',
     check: (ctx) => {
-      if (!ctx.jsonLdTypes) return null;
+      if (!ctx.jsonLdTypes) {
+        return createResult(
+          { id: 'ai-faq-schema', name: 'FAQ Schema for AI', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (structured data unavailable)',
+          { recommendation: 'This rule checks for FAQ/HowTo schema for AI search rich results' }
+        );
+      }
 
       const hasFaqSchema = ctx.jsonLdTypes.some((t: string) => t.includes('FAQPage'));
       const hasHowToSchema = ctx.jsonLdTypes.some((t: string) => t.includes('HowTo'));
@@ -332,7 +378,11 @@ export const aiSearchRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'ai-faq-schema', name: 'FAQ Schema for AI', category: 'ai-search', severity: 'info' },
+        'pass',
+        'No Q&A structure detected requiring FAQ schema'
+      );
     },
   },
 
@@ -346,7 +396,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'AI systems prefer comprehensive, in-depth content',
     check: (ctx) => {
-      if (ctx.wordCount === undefined) return null;
+      if (ctx.wordCount === undefined) {
+        return createResult(
+          { id: 'ai-content-depth', name: 'Content Depth for AI', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (word count data unavailable)',
+          { recommendation: 'This rule checks content depth for AI search visibility' }
+        );
+      }
 
       // Minimum word counts for AI search
       const minWords = 300;
@@ -406,7 +463,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'AI systems value fresh, updated content',
     check: (ctx) => {
-      if (!ctx.jsonLdTypes) return null;
+      if (!ctx.jsonLdTypes) {
+        return createResult(
+          { id: 'ai-content-freshness', name: 'Content Freshness Signals', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (structured data unavailable)',
+          { recommendation: 'This rule checks for content freshness signals in structured data' }
+        );
+      }
 
       // Check for dateModified in Article schema
       const hasDateSignals = ctx.jsonLdTypes.some((t: string) =>
@@ -446,7 +510,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'Check if GPTBot (OpenAI) is allowed or blocked',
     check: (ctx) => {
-      if (!ctx.robotsTxt?.parseResult) return null;
+      if (!ctx.robotsTxt?.parseResult) {
+        return createResult(
+          { id: 'ai-robots-gpt-bot', name: 'GPTBot Access', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (robots.txt data unavailable)',
+          { recommendation: 'This rule checks if GPTBot is allowed to crawl for ChatGPT training' }
+        );
+      }
 
       const { userAgentBlocks } = ctx.robotsTxt.parseResult;
 
@@ -490,7 +561,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'Check if Anthropic/Claude crawlers are allowed or blocked',
     check: (ctx) => {
-      if (!ctx.robotsTxt?.parseResult) return null;
+      if (!ctx.robotsTxt?.parseResult) {
+        return createResult(
+          { id: 'ai-robots-anthropic', name: 'Anthropic Claude Access', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (robots.txt data unavailable)',
+          { recommendation: 'This rule checks if Anthropic/Claude crawlers are allowed' }
+        );
+      }
 
       const { userAgentBlocks } = ctx.robotsTxt.parseResult;
 
@@ -522,7 +600,11 @@ export const aiSearchRules: SeoRule[] = [
         }
       }
 
-      return null;
+      return createResult(
+        { id: 'ai-robots-anthropic', name: 'Anthropic Claude Access', category: 'ai-search', severity: 'info' },
+        'pass',
+        'Anthropic/Claude crawler is allowed (default)'
+      );
     },
   },
 
@@ -536,7 +618,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'Content updated recently may perform better in AI search',
     check: (ctx) => {
-      if (!ctx.lastModified) return null;
+      if (!ctx.lastModified) {
+        return createResult(
+          { id: 'ai-content-last-modified', name: 'Content Last Modified', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (Last-Modified header unavailable)',
+          { recommendation: 'This rule checks content freshness via Last-Modified header' }
+        );
+      }
 
       const lastModifiedDate = new Date(ctx.lastModified);
       const sixMonthsAgo = new Date();
@@ -560,7 +649,11 @@ export const aiSearchRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'ai-content-last-modified', name: 'Content Last Modified', category: 'ai-search', severity: 'info' },
+        'pass',
+        'Content has been updated recently'
+      );
     },
   },
 
@@ -574,7 +667,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'Very long pages may be truncated by AI search engines',
     check: (ctx) => {
-      if (ctx.wordCount === undefined) return null;
+      if (ctx.wordCount === undefined) {
+        return createResult(
+          { id: 'ai-page-too-long', name: 'Page Too Long for AI', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (word count data unavailable)',
+          { recommendation: 'This rule checks if page length may be too long for AI processing' }
+        );
+      }
 
       if (ctx.wordCount > 10000) {
         return createResult(
@@ -609,7 +709,11 @@ export const aiSearchRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'ai-page-too-long', name: 'Page Too Long for AI', category: 'ai-search', severity: 'info' },
+        'pass',
+        `Page length is optimal for AI processing (${ctx.wordCount.toLocaleString()} words)`
+      );
     },
   },
 
@@ -623,7 +727,14 @@ export const aiSearchRules: SeoRule[] = [
     severity: 'info',
     description: 'Pages should use semantic HTML for better AI understanding',
     check: (ctx) => {
-      if (ctx.semanticHtmlRatio === undefined) return null;
+      if (ctx.semanticHtmlRatio === undefined) {
+        return createResult(
+          { id: 'semantic-html-ratio', name: 'Semantic HTML Ratio', category: 'ai-search', severity: 'info' },
+          'info',
+          'Not applicable (semantic HTML data unavailable)',
+          { recommendation: 'This rule checks for semantic HTML usage for better AI understanding' }
+        );
+      }
 
       if (ctx.semanticHtmlRatio < 0.1) {
         return createResult(

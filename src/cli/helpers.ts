@@ -8,6 +8,9 @@
  * - Color utilities
  */
 
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
+
 import {
   classifyError as classifyErrorCore,
   formatErrorForTerminal,
@@ -17,6 +20,80 @@ import {
 
 // Re-export for convenience
 export { classifyErrorCore as classifyError };
+
+import { resolvePreset } from './presets.js';
+import type { ClientOptions } from '../types/index.js';
+import { getGlobalPresets } from './router.js';
+
+/**
+ * Deeply merges two ClientOptions objects.
+ * Handles nested objects (like headers, retry, concurrency) but arrays are replaced.
+ */
+function deepMergeClientOptions(
+  target: Partial<ClientOptions>,
+  source: Partial<ClientOptions>
+): Partial<ClientOptions> {
+  const output: Partial<ClientOptions> = { ...target };
+
+  for (const key in source) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      const targetValue = output[key as keyof ClientOptions];
+      const sourceValue = source[key as keyof ClientOptions];
+
+      if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue) && targetValue && typeof targetValue === 'object' && !Array.isArray(targetValue)) {
+        // Deep merge for nested objects (e.g., headers, retry, concurrency)
+        output[key as keyof ClientOptions] = deepMergeClientOptions(targetValue as any, sourceValue as any) as any;
+      } else {
+        // Overwrite for primitives, arrays, or if target doesn't have the key
+        output[key as keyof ClientOptions] = sourceValue as any;
+      }
+    }
+  }
+
+  return output;
+}
+
+/**
+ * Parse arguments for enhancer presets (starting with +)
+ * Returns merged headers and remaining arguments.
+ */
+export async function parseEnhancerPresets(args: string[]): Promise<{
+  clientOptions: Partial<ClientOptions>;
+  remainingArgs: string[];
+}> {
+  let mergedOptions: Partial<ClientOptions> = {};
+  const remainingArgs: string[] = [];
+  
+  // Start with globally extracted presets (from Turbo Parser)
+  const presetsToResolve = [...getGlobalPresets()];
+
+  // Check args for any +presets that might have slipped through (or passed programmatically)
+  for (const arg of args) {
+    if (arg.startsWith('+')) {
+      presetsToResolve.push(arg.slice(1));
+    } else {
+      remainingArgs.push(arg);
+    }
+  }
+
+  // Resolve and merge all presets
+  for (const presetName of presetsToResolve) {
+      try {
+        const options = await resolvePreset(presetName); // resolvePreset returns ClientOptions
+        if (options) {
+          if (process.env.DEBUG) console.log(`[debug] Merging preset +${presetName}`, options);
+          mergedOptions = deepMergeClientOptions(mergedOptions, options);
+        } else {
+          if (process.env.DEBUG) console.log(`[debug] Preset +${presetName} resolved to null`);
+        }
+      } catch (err: any) {
+        console.warn(colors.yellow(`Warning: Failed to load preset '+${presetName}': ${err.message}`));
+        if (process.env.DEBUG) console.error(err);
+      }
+  }
+
+  return { clientOptions: mergedOptions, remainingArgs };
+}
 
 // Use internal colors utility (picocolors replacement)
 import colors from '../utils/colors.js';
@@ -669,6 +746,22 @@ export const COMMAND_HELP: Record<string, HelpConfig> = {
     seeAlso: ['shell'],
   },
 
+  // Vector Store
+  vector: {
+    name: 'Vector Store',
+    description: 'Manage local vector store for RAG',
+    usage: [
+      { command: 'rek vector add', args: 'content="..."', description: 'Add document' },
+      { command: 'rek vector search', args: 'query="..."', description: 'Search documents' },
+      { command: 'rek vector info', args: '', description: 'Show stats' },
+      { command: 'rek vector clear', args: '', description: 'Clear store' }
+    ],
+    examples: [
+      { command: 'rek vector add content="Deployment guide" file=docs.json', description: 'Add text' },
+      { command: 'rek vector search query="deploy" limit=1', description: 'Search text' }
+    ]
+  },
+
   // Bench
   bench: {
     name: 'Bench',
@@ -704,4 +797,84 @@ export function getCommandHelp(command: string): string | null {
   const help = COMMAND_HELP[command.toLowerCase()];
   if (!help) return null;
   return buildHelpText(help);
+}
+
+/**
+ * Load environment variables from a .env file
+ * @param filePath Path to .env file (default: ./.env)
+ */
+export async function loadEnvFile(filePath?: string | boolean): Promise<Record<string, string>> {
+  const envPath = typeof filePath === 'string' ? filePath : join(process.cwd(), '.env');
+  const envVars: Record<string, string> = {};
+
+  try {
+    const content = await fs.readFile(envPath, 'utf-8');
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // Skip empty lines and comments
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      // Parse KEY=value format
+      const match = trimmed.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        const [, key, value] = match;
+        const cleanKey = key.trim();
+        // Remove surrounding quotes from value
+        let cleanValue = value.trim();
+        if ((cleanValue.startsWith('"') && cleanValue.endsWith('"')) ||
+            (cleanValue.startsWith("'") && cleanValue.endsWith("'"))) {
+          cleanValue = cleanValue.slice(1, -1);
+        }
+
+        envVars[cleanKey] = cleanValue;
+        // Also set in process.env
+        process.env[cleanKey] = cleanValue;
+      }
+    }
+
+    console.log(colors.gray(`Loaded ${Object.keys(envVars).length} variables from ${envPath}`));
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      if (filePath !== undefined && filePath !== true) {
+          // Only warn if a specific path was provided
+          console.log(colors.yellow(`Warning: No .env file found at ${envPath}`));
+      }
+      // If autoloading (default), silence is golden
+    } else {
+      console.log(colors.red(`Error loading .env: ${error.message}`));
+    }
+  }
+
+  return envVars;
+}
+
+/**
+ * Calculate Levenshtein distance between two strings
+ */
+export function levenshtein(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
+  for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          Math.min(
+            matrix[i][j - 1] + 1, // insertion
+            matrix[i - 1][j] + 1  // deletion
+          )
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
 }

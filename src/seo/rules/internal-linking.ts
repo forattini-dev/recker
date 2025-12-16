@@ -13,7 +13,14 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'warning',
     description: 'Pages should have a healthy number of internal links',
     check: (ctx) => {
-      if (ctx.internalLinks === undefined) return null;
+      if (ctx.internalLinks === undefined) {
+        return createResult(
+          { id: 'linking-internal-count', name: 'Internal Link Count', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (internal links data unavailable)',
+          { recommendation: 'This rule checks internal link count to ensure proper site navigation and link equity distribution' }
+        );
+      }
 
       const count = ctx.internalLinks;
 
@@ -62,8 +69,22 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'info',
     description: 'Pages should have more internal than external links',
     check: (ctx) => {
-      if (ctx.internalLinks === undefined || ctx.externalLinks === undefined) return null;
-      if (ctx.totalLinks === undefined || ctx.totalLinks === 0) return null;
+      if (ctx.internalLinks === undefined || ctx.externalLinks === undefined) {
+        return createResult(
+          { id: 'linking-internal-ratio', name: 'Internal/External Link Ratio', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (link data unavailable)',
+          { recommendation: 'This rule checks the balance between internal and external links' }
+        );
+      }
+      if (ctx.totalLinks === undefined || ctx.totalLinks === 0) {
+        return createResult(
+          { id: 'linking-internal-ratio', name: 'Internal/External Link Ratio', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (no links detected)',
+          { recommendation: 'This rule requires at least some links to analyze the internal/external ratio' }
+        );
+      }
 
       const internal = ctx.internalLinks;
       const external = ctx.externalLinks;
@@ -99,10 +120,24 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'info',
     description: 'Internal links should use diverse, descriptive anchor text',
     check: (ctx) => {
-      if (!ctx.allLinks || ctx.allLinks.length === 0) return null;
+      if (!ctx.allLinks || ctx.allLinks.length === 0) {
+        return createResult(
+          { id: 'linking-anchor-diversity', name: 'Anchor Text Diversity', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (no links detected)',
+          { recommendation: 'This rule checks anchor text diversity to prevent over-optimization' }
+        );
+      }
 
       const internalLinks = ctx.allLinks.filter(l => l.type === 'internal');
-      if (internalLinks.length < 3) return null;
+      if (internalLinks.length < 3) {
+        return createResult(
+          { id: 'linking-anchor-diversity', name: 'Anchor Text Diversity', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (insufficient internal links)',
+          { recommendation: 'This rule requires at least 3 internal links to analyze anchor text diversity' }
+        );
+      }
 
       // Count anchor text occurrences
       const anchorCounts: Record<string, number> = {};
@@ -147,10 +182,24 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'info',
     description: 'Pages should link to deep content, not just homepage',
     check: (ctx) => {
-      if (!ctx.allLinks || ctx.allLinks.length === 0) return null;
+      if (!ctx.allLinks || ctx.allLinks.length === 0) {
+        return createResult(
+          { id: 'linking-deep-links', name: 'Deep Linking', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (no links detected)',
+          { recommendation: 'This rule checks for deep linking patterns to ensure inner pages are properly linked' }
+        );
+      }
 
       const internalLinks = ctx.allLinks.filter(l => l.type === 'internal');
-      if (internalLinks.length === 0) return null;
+      if (internalLinks.length === 0) {
+        return createResult(
+          { id: 'linking-deep-links', name: 'Deep Linking', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (no internal links detected)',
+          { recommendation: 'This rule requires internal links to analyze deep linking patterns' }
+        );
+      }
 
       // Count links to root vs deep pages
       let rootLinks = 0;
@@ -201,8 +250,22 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'info',
     description: 'Check for proper navigation link structure',
     check: (ctx) => {
-      if (!ctx.hasNav) return null;
-      if (ctx.navLinkCount === undefined) return null;
+      if (!ctx.hasNav) {
+        return createResult(
+          { id: 'linking-nav-links', name: 'Navigation Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (no navigation element detected)',
+          { recommendation: 'This rule checks navigation link structure when a <nav> element is present' }
+        );
+      }
+      if (ctx.navLinkCount === undefined) {
+        return createResult(
+          { id: 'linking-nav-links', name: 'Navigation Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (navigation link count unavailable)',
+          { recommendation: 'This rule checks the number of links in navigation elements' }
+        );
+      }
 
       if (ctx.navLinkCount === 0) {
         return createResult(
@@ -249,8 +312,22 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'info',
     description: 'Footer should contain important site-wide links',
     check: (ctx) => {
-      if (!ctx.hasFooter) return null;
-      if (ctx.footerLinkCount === undefined) return null;
+      if (!ctx.hasFooter) {
+        return createResult(
+          { id: 'linking-footer-links', name: 'Footer Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (no footer element detected)',
+          { recommendation: 'This rule checks footer link structure when a <footer> element is present' }
+        );
+      }
+      if (ctx.footerLinkCount === undefined) {
+        return createResult(
+          { id: 'linking-footer-links', name: 'Footer Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (footer link count unavailable)',
+          { recommendation: 'This rule checks the number of links in footer elements' }
+        );
+      }
 
       if (ctx.footerLinkCount === 0) {
         return createResult(
@@ -295,8 +372,22 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'info',
     description: 'Check for in-content contextual links',
     check: (ctx) => {
-      if (ctx.contextualLinkCount === undefined) return null;
-      if (!ctx.wordCount || ctx.wordCount < 300) return null;
+      if (ctx.contextualLinkCount === undefined) {
+        return createResult(
+          { id: 'linking-contextual', name: 'Contextual Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (contextual link count unavailable)',
+          { recommendation: 'This rule checks for in-content contextual links that pass more link equity' }
+        );
+      }
+      if (!ctx.wordCount || ctx.wordCount < 300) {
+        return createResult(
+          { id: 'linking-contextual', name: 'Contextual Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (insufficient content for contextual link analysis)',
+          { recommendation: 'This rule requires at least 300 words to analyze contextual link patterns' }
+        );
+      }
 
       const count = ctx.contextualLinkCount;
 
@@ -348,7 +439,14 @@ export const internalLinkingRules: SeoRule[] = [
     check: (ctx) => {
       // This rule checks if the page appears to be an orphan
       // based on whether it receives internal links
-      if (ctx.incomingInternalLinks === undefined) return null;
+      if (ctx.incomingInternalLinks === undefined) {
+        return createResult(
+          { id: 'linking-orphan-page', name: 'Orphan Page Detection', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (incoming internal links data unavailable)',
+          { recommendation: 'This rule checks if pages receive incoming internal links to prevent orphan pages' }
+        );
+      }
 
       if (ctx.incomingInternalLinks === 0) {
         return createResult(
@@ -380,7 +478,14 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'info',
     description: 'Avoid excessive self-referencing links',
     check: (ctx) => {
-      if (ctx.selfReferencingLinks === undefined) return null;
+      if (ctx.selfReferencingLinks === undefined) {
+        return createResult(
+          { id: 'linking-self-referencing', name: 'Self-Referencing Links', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (self-referencing links data unavailable)',
+          { recommendation: 'This rule checks for excessive self-referencing links that waste crawl budget' }
+        );
+      }
 
       if (ctx.selfReferencingLinks > 3) {
         return createResult(
@@ -398,7 +503,12 @@ export const internalLinkingRules: SeoRule[] = [
         );
       }
 
-      return null; // Don't report if acceptable
+      return createResult(
+        { id: 'linking-self-referencing', name: 'Self-Referencing Links', category: 'links', severity: 'info' },
+        'info',
+        'Not applicable (acceptable self-referencing link count)',
+        { recommendation: 'Self-referencing links are acceptable at current level (0-3 links)' }
+      );
     },
   },
   {
@@ -408,7 +518,14 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'error',
     description: 'Internal links should not be broken',
     check: (ctx) => {
-      if (ctx.brokenInternalLinks === undefined) return null;
+      if (ctx.brokenInternalLinks === undefined) {
+        return createResult(
+          { id: 'linking-broken-internal', name: 'Broken Internal Links', category: 'links', severity: 'error' },
+          'info',
+          'Not applicable (broken internal links data unavailable)',
+          { recommendation: 'This rule checks for broken internal links that harm user experience and waste crawl budget' }
+        );
+      }
 
       if (ctx.brokenInternalLinks.length > 0) {
         return createResult(
@@ -440,7 +557,14 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'warning',
     description: 'Internal links should not go through redirect chains',
     check: (ctx) => {
-      if (ctx.redirectChainLinks === undefined) return null;
+      if (ctx.redirectChainLinks === undefined) {
+        return createResult(
+          { id: 'linking-redirect-chains', name: 'Redirect Chains', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (redirect chain data unavailable)',
+          { recommendation: 'This rule checks for redirect chains that slow crawling and lose link equity' }
+        );
+      }
 
       if (ctx.redirectChainLinks.length > 0) {
         return createResult(
@@ -472,7 +596,14 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'warning',
     description: 'Internal links should not use nofollow',
     check: (ctx) => {
-      if (!ctx.allLinks) return null;
+      if (!ctx.allLinks) {
+        return createResult(
+          { id: 'linking-nofollow-internal', name: 'Nofollow Internal Links', category: 'links', severity: 'warning' },
+          'info',
+          'Not applicable (links data unavailable)',
+          { recommendation: 'This rule checks for nofollow attributes on internal links which waste PageRank' }
+        );
+      }
 
       const nofollowInternal = ctx.allLinks.filter(
         l => l.type === 'internal' && l.rel?.includes('nofollow')
@@ -508,7 +639,14 @@ export const internalLinkingRules: SeoRule[] = [
     severity: 'info',
     description: 'Important pages should be reachable in few clicks',
     check: (ctx) => {
-      if (ctx.pageClickDepth === undefined) return null;
+      if (ctx.pageClickDepth === undefined) {
+        return createResult(
+          { id: 'linking-click-depth', name: 'Click Depth', category: 'links', severity: 'info' },
+          'info',
+          'Not applicable (click depth data unavailable)',
+          { recommendation: 'This rule checks how many clicks from homepage, affecting crawl priority and link equity' }
+        );
+      }
 
       const depth = ctx.pageClickDepth;
 

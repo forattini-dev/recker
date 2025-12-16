@@ -64,6 +64,25 @@ export interface SpiderPageResult {
   links: ExtractedLink[];
   duration: number;
   error?: string;
+  meta?: {
+    description?: string;
+    keywords?: string[];
+    author?: string;
+    robots?: string[];
+    canonical?: string;
+    viewport?: string;
+    lang?: string;
+    charset?: string;
+  };
+  metrics?: {
+    htmlSize: number;
+    textLength: number;
+  };
+  social?: {
+    ogTitle?: string;
+    ogDescription?: string;
+    ogImage?: string;
+  };
 }
 
 export interface SpiderProgress {
@@ -666,6 +685,21 @@ export class Spider {
       // Extract links
       const links = doc.links({ absolute: true });
 
+      // Extract basic metadata for light crawler
+      const meta = doc.meta();
+      const og = doc.openGraph();
+      
+      const metrics = {
+        htmlSize: html.length,
+        textLength: doc.text('body').length,
+      };
+
+      const social = {
+        ogTitle: og.title,
+        ogDescription: og.description,
+        ogImage: Array.isArray(og.image) ? og.image[0] : og.image,
+      };
+
       // Create result
       const result: SpiderPageResult = {
         url: item.url,
@@ -674,6 +708,18 @@ export class Spider {
         depth: item.depth,
         links,
         duration: Math.round(performance.now() - startTime),
+        meta: {
+            description: meta.description,
+            keywords: meta.keywords,
+            author: meta.author,
+            robots: meta.robots,
+            canonical: meta.canonical,
+            viewport: meta.viewport,
+            charset: meta.charset,
+            lang: doc.attr('html', 'lang')
+        },
+        metrics,
+        social
       };
 
       this.results.push(result);
@@ -698,18 +744,22 @@ export class Spider {
         });
       }
     } catch (error: any) {
+      // Extract status code from error if available
+      const status = error.status || error.statusCode || (error.response ? error.response.status : 0);
+      const message = error.message || 'Unknown error';
+
       const errorResult: SpiderPageResult = {
         url: item.url,
-        status: 0,
+        status: status,
         title: '',
         depth: item.depth,
         links: [],
         duration: Math.round(performance.now() - startTime),
-        error: error.message,
+        error: message,
       };
 
       this.results.push(errorResult);
-      this.errors.push({ url: item.url, error: error.message });
+      this.errors.push({ url: item.url, error: message });
       this.options.onPage?.(errorResult);
     }
   }

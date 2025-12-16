@@ -4,6 +4,7 @@ import { ClientAIImpl } from '../ai/client-ai.js';
 import { HttpRequest } from './request.js';
 import { HttpResponse } from './response.js';
 import { UndiciTransport } from '../transport/undici.js';
+import { CurlTransport } from '../transport/curl.js';
 import { RequestPromise } from './request-promise.js';
 import { HttpError, MaxSizeExceededError, ConfigurationError, ValidationError, TimeoutError } from '../core/errors.js';
 import { processBody, createFormData, createMultipart, isPlainObject } from '../utils/body.js';
@@ -82,6 +83,7 @@ export class Client {
   private middlewares: Middleware[];
   private hooks: Hooks;
   private transport: Transport;
+  private curlTransport?: Transport;
   private defaultHeaders: HeadersInit;
   private defaultParams: Record<string, string | number>;
   private paginationConfig?: PaginationConfig;
@@ -142,7 +144,11 @@ export class Client {
 
     if (options.transport) {
       this.transport = options.transport;
+    } else if (options.useCurl) {
+      if (this.debugEnabled) console.log('[DEBUG] Using Curl Transport');
+      this.transport = new CurlTransport();
     } else {
+      if (this.debugEnabled) console.log('[DEBUG] Using Undici Transport');
       // Parse HTTP/2 options
       let http2Options: HTTP2Options | undefined;
       if (options.http2) {
@@ -416,9 +422,20 @@ export class Client {
     return header.split(/,(?=\s*[a-zA-Z0-9_-]+=)/g).map(s => s.trim());
   }
 
+  private async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
+    // Check per-request override for Curl
+    if (req.useCurl && !(this.transport instanceof CurlTransport)) {
+        if (!this.curlTransport) {
+            this.curlTransport = new CurlTransport();
+        }
+        return this.curlTransport.dispatch(req);
+    }
+    return this.transport.dispatch(req);
+  }
+
   private composeMiddlewares(): (req: ReckerRequest) => Promise<ReckerResponse> {
     const chain = [...this.middlewares];
-    const transportDispatch = this.transport.dispatch.bind(this.transport);
+    const transportDispatch = this.dispatch.bind(this);
 
     // Optimization: Hooks integration with zero overhead if unused
     if (this.hooks.beforeRequest?.length || this.hooks.afterResponse?.length) {

@@ -39,6 +39,7 @@ export * from './utils/download.js';
 export * from './utils/user-agent.js';
 export * from './plugins/har-recorder.js';
 export * from './plugins/har-player.js';
+export * from './plugins/network-simulation.js';
 export * from './plugins/graphql.js';
 export * from './plugins/xml.js';
 export * from './plugins/yaml.js';

@@ -1216,11 +1216,10 @@ function wrapDownloadResponse(response: any, onProgress: ProgressCallback): any 
     total,
     direction: 'download'
   });
-  return new Response(webBody, {
-    status: response.statusCode,
-    statusText: String(response.statusCode),
-    headers: response.headers as HeadersInit
-  });
+    return new Response(webBody, {
+      status: response.statusCode,
+      headers: response.headers as any,
+    });
 }
 
 function wrapUploadBody(body: any, onProgress?: ProgressCallback, total?: number): any {

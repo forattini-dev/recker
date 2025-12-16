@@ -37,7 +37,7 @@ export interface ResolvePresetOptions {
  * @param options - Options for error handling
  * @returns Preset configuration object, or null if not found (when throwOnError is false)
  */
-export function resolvePreset(name: string, options: ResolvePresetOptions = {}) {
+export async function resolvePreset(name: string, options: ResolvePresetOptions = {}) {
   const { throwOnError = false, silent = false } = options;
   const presetFn = (presets as any)[name];
 

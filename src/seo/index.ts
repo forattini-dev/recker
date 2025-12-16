@@ -25,6 +25,18 @@
 // Main analyzer
 export { SeoAnalyzer, analyzeSeo } from './analyzer.js';
 
+// Formatter (unified output for CLI/Shell)
+export {
+  formatSeoReport,
+  formatSeoReportJson,
+  getScoringExplanation,
+  gradeColor,
+  scoreColor,
+  statusIcon,
+  formatCheck,
+} from './formatter.js';
+export type { SeoFormatOptions } from './formatter.js';
+
 // SEO Spider (site-wide analysis)
 export { SeoSpider, seoSpider } from './seo-spider.js';
 export type {

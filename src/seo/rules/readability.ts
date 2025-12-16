@@ -13,7 +13,14 @@ export const readabilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Content should be easy to read for the target audience',
     check: (ctx) => {
-      if (ctx.fleschReadingEase === undefined) return null;
+      if (ctx.fleschReadingEase === undefined) {
+        return createResult(
+          { id: 'readability-flesch-score', name: 'Flesch Reading Ease', category: 'content', severity: 'info' },
+          'info',
+          'Not applicable (Flesch Reading Ease data unavailable)',
+          { recommendation: 'This rule analyzes content readability using the Flesch Reading Ease formula' }
+        );
+      }
 
       const score = ctx.fleschReadingEase;
       let level: string;
@@ -73,7 +80,14 @@ export const readabilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Sentences should be concise for better readability',
     check: (ctx) => {
-      if (ctx.avgSentenceLength === undefined) return null;
+      if (ctx.avgSentenceLength === undefined) {
+        return createResult(
+          { id: 'readability-sentence-length', name: 'Sentence Length', category: 'content', severity: 'info' },
+          'info',
+          'Not applicable (sentence length data unavailable)',
+          { recommendation: 'This rule checks average sentence length for optimal readability' }
+        );
+      }
 
       const avgLength = ctx.avgSentenceLength;
 
@@ -127,7 +141,14 @@ export const readabilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Paragraphs should be short for web readability',
     check: (ctx) => {
-      if (ctx.avgParagraphLength === undefined) return null;
+      if (ctx.avgParagraphLength === undefined) {
+        return createResult(
+          { id: 'readability-paragraph-length', name: 'Paragraph Length', category: 'content', severity: 'info' },
+          'info',
+          'Not applicable (paragraph length data unavailable)',
+          { recommendation: 'This rule checks average paragraph length for web readability' }
+        );
+      }
 
       const avgLength = ctx.avgParagraphLength;
 
@@ -175,7 +196,14 @@ export const readabilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Limit passive voice for clearer writing',
     check: (ctx) => {
-      if (ctx.passiveVoicePercentage === undefined) return null;
+      if (ctx.passiveVoicePercentage === undefined) {
+        return createResult(
+          { id: 'readability-passive-voice', name: 'Passive Voice', category: 'content', severity: 'info' },
+          'info',
+          'Not applicable (passive voice data unavailable)',
+          { recommendation: 'This rule checks passive voice usage for clearer writing' }
+        );
+      }
 
       const percentage = ctx.passiveVoicePercentage;
 
@@ -210,7 +238,11 @@ export const readabilityRules: SeoRule[] = [
         );
       }
 
-      return null; // Don't report if acceptable
+      return createResult(
+        { id: 'readability-passive-voice', name: 'Passive Voice', category: 'content', severity: 'info' },
+        'pass',
+        `Passive voice usage acceptable (${Math.round(percentage)}%)`
+      );
     },
   },
   {
@@ -220,7 +252,14 @@ export const readabilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Use transition words for better flow',
     check: (ctx) => {
-      if (ctx.transitionWordPercentage === undefined) return null;
+      if (ctx.transitionWordPercentage === undefined) {
+        return createResult(
+          { id: 'readability-transition-words', name: 'Transition Words', category: 'content', severity: 'info' },
+          'info',
+          'Not applicable (transition word data unavailable)',
+          { recommendation: 'This rule checks for transition words that improve content flow' }
+        );
+      }
 
       const percentage = ctx.transitionWordPercentage;
 
@@ -257,7 +296,14 @@ export const readabilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Break content with subheadings every 300 words',
     check: (ctx) => {
-      if (!ctx.wordCount || !ctx.h2Count) return null;
+      if (!ctx.wordCount || !ctx.h2Count) {
+        return createResult(
+          { id: 'readability-subheading-distribution', name: 'Subheading Distribution', category: 'content', severity: 'info' },
+          'info',
+          'Not applicable (word count or heading data unavailable)',
+          { recommendation: 'This rule checks for proper subheading distribution to break up content' }
+        );
+      }
 
       // Best practice: one subheading every 250-350 words
       const wordsPerSubheading = ctx.wordCount / (ctx.h2Count + 1);
@@ -303,7 +349,14 @@ export const readabilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Use varied sentence structures and word choices',
     check: (ctx) => {
-      if (ctx.consecutiveSentenceStarts === undefined) return null;
+      if (ctx.consecutiveSentenceStarts === undefined) {
+        return createResult(
+          { id: 'readability-text-variety', name: 'Text Variety', category: 'content', severity: 'info' },
+          'info',
+          'Not applicable (sentence variety data unavailable)',
+          { recommendation: 'This rule checks for varied sentence structures and beginnings' }
+        );
+      }
 
       // Check for consecutive sentences starting with same word
       if (ctx.consecutiveSentenceStarts > 3) {
@@ -320,7 +373,11 @@ export const readabilityRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'readability-text-variety', name: 'Text Variety', category: 'content', severity: 'info' },
+        'pass',
+        'Good sentence variety'
+      );
     },
   },
   {
@@ -330,7 +387,14 @@ export const readabilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Avoid overly complex vocabulary',
     check: (ctx) => {
-      if (ctx.complexWordPercentage === undefined) return null;
+      if (ctx.complexWordPercentage === undefined) {
+        return createResult(
+          { id: 'readability-word-complexity', name: 'Word Complexity', category: 'content', severity: 'info' },
+          'info',
+          'Not applicable (word complexity data unavailable)',
+          { recommendation: 'This rule checks for complex vocabulary that may reduce readability' }
+        );
+      }
 
       // Complex words: 3+ syllables
       // Best practice: less than 10% complex words
@@ -359,7 +423,11 @@ export const readabilityRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'readability-word-complexity', name: 'Word Complexity', category: 'content', severity: 'info' },
+        'pass',
+        `Word complexity acceptable (${Math.round(ctx.complexWordPercentage)}%)`
+      );
     },
   },
   {
@@ -369,7 +437,14 @@ export const readabilityRules: SeoRule[] = [
     severity: 'info',
     description: 'Use lists to improve scannability',
     check: (ctx) => {
-      if (!ctx.wordCount || ctx.listCount === undefined) return null;
+      if (!ctx.wordCount || ctx.listCount === undefined) {
+        return createResult(
+          { id: 'readability-list-usage', name: 'List Usage', category: 'content', severity: 'info' },
+          'info',
+          'Not applicable (word count or list data unavailable)',
+          { recommendation: 'This rule checks for proper use of lists to improve scannability' }
+        );
+      }
 
       // Suggest lists for longer content without lists
       if (ctx.wordCount > 500 && ctx.listCount === 0) {
@@ -396,7 +471,11 @@ export const readabilityRules: SeoRule[] = [
         );
       }
 
-      return null;
+      return createResult(
+        { id: 'readability-list-usage', name: 'List Usage', category: 'content', severity: 'info' },
+        'pass',
+        'Content length does not require lists'
+      );
     },
   },
 ];

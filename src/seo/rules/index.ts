@@ -31,6 +31,7 @@ import { resourceRules } from './resources.js';
 import { technicalAdvancedRules } from './technical-advanced.js';
 import { redirectRules } from './redirects.js';
 import { canonicalRules } from './canonical.js';
+import { analyticsRules } from './analytics.js';
 
 // Re-export types and thresholds
 export * from './types.js';
@@ -65,6 +66,7 @@ export const ALL_SEO_RULES: SeoRule[] = [
   ...technicalAdvancedRules,
   ...redirectRules,
   ...canonicalRules,
+  ...analyticsRules,
 ];
 
 // =============================================================================
