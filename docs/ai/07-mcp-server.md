@@ -250,7 +250,7 @@ curl -X POST http://localhost:3100 \
 
 ## Available Tools
 
-The MCP Server provides **18 tools** organized in five categories. All tools use the `rek_` prefix for consistency.
+The MCP Server provides **28 tools** organized in five categories. All tools use the `rek_` prefix.
 
 | Tool | Category | Description |
 |------|----------|-------------|
@@ -260,14 +260,20 @@ The MCP Server provides **18 tools** organized in five categories. All tools use
 | `rek_api_schema` | Documentation | Get TypeScript types and interfaces |
 | `rek_suggest` | Documentation | Get implementation suggestions |
 | `rek_http_request` | Network | Perform HTTP requests (GET, POST, PUT, DELETE, etc.) |
-| `rek_dns_lookup` | Network | Resolve DNS records (A, AAAA, MX, TXT, NS, ALL) |
-| `rek_whois_lookup` | Network | WHOIS lookup for domains/IPs |
-| `rek_network_ping` | Network | TCP ping with latency measurement |
-| `rek_tls_inspect` | Security | Inspect SSL/TLS certificates and connections |
-| `rek_rdap_lookup` | Security | Modern WHOIS (RDAP) for domains and IPs |
+| `rek_dns` | Network | Resolve DNS records (A, AAAA, MX, TXT, NS, ALL) |
+| `rek_dns_propagate` | Network | Check DNS propagation globally |
+| `rek_dns_system` | Network | Get system DNS configuration (local resolver status) |
+| `rek_dns_health` | Network | Comprehensive DNS health check |
+| `rek_whois` | Network | WHOIS lookup for domains/IPs |
+| `rek_ping` | Network | TCP ping with latency measurement |
+| `rek_tls` | Security | Inspect SSL/TLS certificates and connections |
+| `rek_rdap` | Security | Modern WHOIS (RDAP) for domains and IPs |
 | `rek_geoip_lookup` | Security | IP geolocation with bogon detection (MaxMind) |
 | `rek_security_headers` | Security | Analyze HTTP security headers (grade A+ to F) |
-| `rek_dns_toolkit` | Security | DNS security analysis (SPF, DMARC, DKIM, CAA) |
+| `rek_dns_spf` | Security | Validate SPF record |
+| `rek_dns_dmarc` | Security | Validate DMARC record |
+| `rek_dns_dkim` | Security | Check DKIM record |
+| `rek_dns_dig` | Network | Advanced DNS lookup (like dig) with custom server |
 | `rek_scrape` | Scraping | Web scraping with CSS selectors |
 | `rek_seo_analyze` | SEO | Analyze page SEO with 250+ rules (21 categories) |
 | `rek_seo_spider` | SEO | Crawl site and detect duplicates, orphan pages |
@@ -399,13 +405,13 @@ Perform an HTTP request to any URL:
 - `timeout` (optional): Timeout in milliseconds (default: 10000)
 - `retries` (optional): Number of retries (default: 0)
 
-#### rek_dns_lookup
+#### rek_dns
 
 Resolve DNS records for a domain:
 
 ```json
 {
-  "name": "rek_dns_lookup",
+  "name": "rek_dns",
   "arguments": {
     "domain": "example.com",
     "type": "MX"
@@ -417,13 +423,13 @@ Resolve DNS records for a domain:
 - `domain` (required): Domain name to resolve
 - `type` (optional): Record type - A, AAAA, MX, TXT, NS, CNAME, SOA, ALL (default: A)
 
-#### rek_whois_lookup
+#### rek_whois
 
 Perform a WHOIS lookup for domain registration info:
 
 ```json
 {
-  "name": "rek_whois_lookup",
+  "name": "rek_whois",
   "arguments": {
     "query": "github.com"
   }
@@ -433,13 +439,13 @@ Perform a WHOIS lookup for domain registration info:
 **Parameters:**
 - `query` (required): Domain name or IP address to lookup
 
-#### rek_network_ping
+#### rek_ping
 
 Check TCP connectivity and measure latency:
 
 ```json
 {
-  "name": "rek_network_ping",
+  "name": "rek_ping",
   "arguments": {
     "host": "google.com",
     "port": 443,
@@ -475,13 +481,13 @@ Check TCP connectivity and measure latency:
 
 Tools for security analysis and network intelligence.
 
-#### rek_tls_inspect
+#### rek_tls
 
 Inspect SSL/TLS certificate and connection details:
 
 ```json
 {
-  "name": "rek_tls_inspect",
+  "name": "rek_tls",
   "arguments": {
     "host": "github.com",
     "port": 443
@@ -501,13 +507,13 @@ Inspect SSL/TLS certificate and connection details:
 - Public key algorithm and size
 - Warnings for expiring certs, weak keys, or trust issues
 
-#### rek_rdap_lookup
+#### rek_rdap
 
 Perform RDAP lookup (modern WHOIS) for a domain or IP:
 
 ```json
 {
-  "name": "rek_rdap_lookup",
+  "name": "rek_rdap",
   "arguments": {
     "query": "google.com"
   }
@@ -517,7 +523,7 @@ Perform RDAP lookup (modern WHOIS) for a domain or IP:
 **Parameters:**
 - `query` (required): Domain name or IP address
 
-**Note:** Some TLDs (.io, .ai, etc.) don't support RDAP yet - use `rek_whois_lookup` for those.
+**Note:** Some TLDs (.io, .ai, etc.) don't support RDAP yet - use `rek_whois` for those.
 
 #### rek_geoip_lookup
 
@@ -568,32 +574,16 @@ Analyze HTTP security headers for a URL:
 - Cross-Origin policies (COOP, COEP, CORP)
 - Information leakage (Server, X-Powered-By)
 
-#### rek_dns_toolkit
+#### rek_dns_spf / rek_dns_dmarc / rek_dns_dkim
 
-Advanced DNS security analysis for email authentication:
+Specific DNS security checks:
 
 ```json
 {
-  "name": "rek_dns_toolkit",
-  "arguments": {
-    "domain": "github.com",
-    "check": "all"
-  }
+  "name": "rek_dns_spf",
+  "arguments": { "domain": "github.com" }
 }
 ```
-
-**Parameters:**
-- `domain` (required): Domain to analyze
-- `check` (optional): Which check to run - all, health, spf, dmarc, dkim, records (default: all)
-- `dkimSelector` (optional): Specific DKIM selector to check
-
-**Checks include:**
-- SPF validation (syntax, lookup count, mechanisms)
-- DMARC validation (policy, reporting, alignment)
-- DKIM discovery (tries common selectors)
-- CAA records (certificate authority authorization)
-- MX records
-- Overall DNS health score
 
 ### Scraping Tools
 
@@ -742,8 +732,8 @@ const client = createClient({
 User: Check if api.github.com is reachable and get its DNS records
 
 AI: Let me check the connectivity and DNS...
-[Uses rek_network_ping with host "api.github.com", port 443]
-[Uses rek_dns_lookup with domain "api.github.com", type "A"]
+[Uses rek_ping with host "api.github.com", port 443]
+[Uses rek_dns with domain "api.github.com", type "A"]
 
 Results:
 - TCP ping to api.github.com:443 - 5/5 successful, avg latency 15.2ms
@@ -802,7 +792,7 @@ Top SEO Quick Wins (High Priority):
 User: Check the security headers for github.com
 
 AI: [Uses rek_security_headers with url "https://github.com"]
-[Uses rek_tls_inspect with host "github.com"]
+[Uses rek_tls with host "github.com"]
 
 Security Analysis:
 - Security Headers Grade: A
@@ -851,7 +841,7 @@ import { createMCPServer } from 'recker/mcp';
 
 // Disable network tools
 const server = createMCPServer({
-  toolsFilter: ['!rek_http_request', '!rek_dns_lookup', '!rek_whois_lookup', '!rek_network_ping']
+  toolsFilter: ['!rek_http_request', '!rek_dns', '!rek_whois', '!rek_ping']
 });
 
 // Only enable documentation tools

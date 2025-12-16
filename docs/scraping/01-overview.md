@@ -1,124 +1,222 @@
 # Web Scraping
 
-HTML scraping with Cheerio, declarative extraction schemas, and built-in extractors for common data types.
+Recker provides powerful web scraping capabilities with a built-in HTML parser and jQuery-like API.
 
-## Installation
+## Features
 
-Cheerio is an **optional peer dependency** loaded dynamically only when needed:
-
-```bash
-pnpm add cheerio
-```
-
-If you try to use scraping without cheerio installed, you'll get a clear error:
-```
-cheerio is required for scraping but not installed. Install it with: pnpm add cheerio
-```
+- **Zero Dependencies**: Custom HTML parser without external dependencies
+- **jQuery-like API**: Familiar selector syntax for DOM traversal
+- **Declarative Extraction**: Define schemas to extract structured data
+- **Built-in Extractors**: Links, images, meta tags, OpenGraph, JSON-LD, forms, tables
+- **Spider/Crawler**: Site-wide crawling with concurrency control
 
 ## Quick Start
 
-### Using `client.scrape()`
-
-```typescript
-import { createClient } from 'recker';
-
-const client = createClient();
-
-// Scrape a URL directly
-const doc = await client.scrape('https://news.ycombinator.com');
-
-// Get page title
-console.log(doc.title()); // "Hacker News"
-
-// Select elements
-const headlines = doc.selectAll('.titleline > a').map(el => el.text());
-console.log(headlines);
-```
-
-### Using the `scrape()` Helper
-
-```typescript
-import { createClient, scrape } from 'recker';
-
-const client = createClient({ baseUrl: 'https://example.com' });
-
-// Wrap any request with scrape()
-const doc = await scrape(client.get('/products'));
-
-// Extract product data
-const products = doc.selectAll('.product').map(el => ({
-  name: el.find('.name').text(),
-  price: el.find('.price').text(),
-  image: el.find('img').attr('src')
-}));
-```
-
-### Direct HTML Parsing
-
-Parse HTML strings without HTTP requests:
+### Parse HTML Directly
 
 ```typescript
 import { ScrapeDocument } from 'recker/scrape';
 
-const html = '<html><body><h1>Hello World</h1></body></html>';
+const html = `
+  <html>
+    <head><title>Example</title></head>
+    <body>
+      <h1>Hello World</h1>
+      <p class="intro">Welcome to our site</p>
+    </body>
+  </html>
+`;
+
 const doc = await ScrapeDocument.create(html);
 
+// Get page title
+console.log(doc.title()); // "Example"
+
+// Select elements
 console.log(doc.select('h1').text()); // "Hello World"
+console.log(doc.selectFirst('.intro').text()); // "Welcome to our site"
 ```
 
-Or use `parseHtml()`:
+### Scrape from HTTP Response
+
+```typescript
+import { createClient, scrape } from 'recker';
+
+const client = createClient();
+
+// Fetch and scrape a URL
+const doc = await scrape(client.get('https://news.ycombinator.com'));
+
+// Extract headlines
+const headlines = doc.selectAll('.titleline > a').map(el => ({
+  title: el.text(),
+  url: el.attr('href')
+}));
+
+console.log(headlines);
+```
+
+### Using the `parseHtml` Helper
 
 ```typescript
 import { parseHtml } from 'recker/plugins/scrape';
 
 const doc = await parseHtml('<html><body><h1>Hello</h1></body></html>');
+console.log(doc.selectFirst('h1').text()); // "Hello"
 ```
 
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| **CSS Selectors** | jQuery-like selection with `select()`, `selectAll()`, `selectFirst()` |
-| **DOM Traversal** | Navigate with `parent()`, `children()`, `siblings()`, `find()` |
-| **Built-in Extractors** | Links, images, meta tags, OpenGraph, Twitter Card, JSON-LD, forms, tables |
-| **Declarative Schemas** | Extract complex data structures with `extract()` |
-| **Rate Limiting** | Built-in concurrency control for respectful scraping |
-| **Caching** | Cache responses to avoid redundant requests |
-
-## Configuration for Scraping
+## Imports
 
 ```typescript
-const client = createClient({
-  baseUrl: 'https://example.com',
-  headers: {
-    'User-Agent': 'MyScraper/1.0 (+https://mysite.com/bot)'
+// Main classes
+import { ScrapeDocument, ScrapeElement } from 'recker/scrape';
+
+// Helper function
+import { scrape, parseHtml } from 'recker/plugins/scrape';
+
+// HTML Parser (for advanced use - synchronous low-level API)
+import { parseHtmlSync, HTMLElement, Node } from 'recker';
+```
+
+## Core API
+
+### ScrapeDocument Methods
+
+| Method | Description |
+|--------|-------------|
+| `select(selector)` | Select all matching elements (returns ScrapeElement) |
+| `selectFirst(selector)` | Select first matching element |
+| `selectAll(selector)` | Select all as array of ScrapeElement |
+| `text(selector)` | Get text from first match |
+| `texts(selector)` | Get text from all matches |
+| `attr(selector, name)` | Get attribute from first match |
+| `attrs(selector, name)` | Get attribute from all matches |
+| `exists(selector)` | Check if element exists |
+| `count(selector)` | Count matching elements |
+| `title()` | Get page title |
+| `html()` | Get full HTML |
+
+### Built-in Extractors
+
+| Method | Description |
+|--------|-------------|
+| `links(options?)` | Extract all links with classification |
+| `images(options?)` | Extract images with metadata |
+| `meta()` | Extract meta tags |
+| `openGraph()` | Extract OpenGraph data |
+| `twitterCard()` | Extract Twitter Card data |
+| `jsonLd()` | Extract JSON-LD structured data |
+| `forms(selector?)` | Extract form structure |
+| `tables(selector?)` | Extract tables as data |
+| `scripts()` | Extract script tags |
+| `styles()` | Extract stylesheets |
+
+### Schema Extraction
+
+```typescript
+const product = doc.extract({
+  name: 'h1.product-title',
+  price: {
+    selector: '.price',
+    transform: (v) => parseFloat(v.replace('$', ''))
   },
-  plugins: [
-    cachePlugin({ ttl: 3600000 })  // Cache for 1 hour
-  ],
-  concurrency: {
-    max: 5,                      // Max 5 concurrent requests
-    requestsPerInterval: 2,      // 2 requests per second
-    interval: 1000
+  images: {
+    selector: '.gallery img',
+    attribute: 'src',
+    multiple: true
   }
 });
 ```
 
-## Batch Scraping
+## Complete Example
 
 ```typescript
-const urls = ['/page1', '/page2', '/page3', '/page4', '/page5'];
+import { createClient, scrape } from 'recker';
 
-const { results } = await client.batch(
-  urls.map(path => ({ path })),
-  {
-    concurrency: 3,
-    mapResponse: async (res) => {
-      const doc = await scrape(res);
-      return doc.selectFirst('h1').text();
-    }
+const client = createClient({
+  headers: {
+    'User-Agent': 'MyScraper/1.0'
   }
-);
+});
+
+async function scrapeProduct(url: string) {
+  const doc = await scrape(client.get(url));
+
+  return {
+    // Schema extraction
+    ...doc.extract({
+      name: 'h1.product-name',
+      price: {
+        selector: '.price',
+        transform: (v) => parseFloat(v.replace(/[$,]/g, ''))
+      },
+      description: '.description',
+      sku: {
+        selector: '[data-sku]',
+        attribute: 'data-sku'
+      }
+    }),
+
+    // Built-in extractors
+    images: doc.images({ selector: '.product-images img' }),
+    meta: doc.meta(),
+    jsonLd: doc.jsonLd(),
+
+    // Manual selection
+    reviews: doc.selectAll('.review').map(el => ({
+      author: el.find('.author').text(),
+      rating: el.find('.rating').text(),
+      text: el.find('.text').text()
+    }))
+  };
+}
+```
+
+## Best Practices
+
+### 1. Use Specific Selectors
+
+```typescript
+// Good: Stable, specific selector
+const title = doc.selectFirst('.product-title').text();
+
+// Fragile: May break if structure changes
+const title = doc.selectFirst('div > div > h1').text();
+```
+
+### 2. Handle Missing Elements
+
+```typescript
+// Check existence
+const author = doc.exists('.author')
+  ? doc.selectFirst('.author').text()
+  : 'Unknown';
+
+// Safe chaining (ScrapeElement returns empty, not null)
+const price = doc.selectFirst('.price').text() || '0';
+```
+
+### 3. Set Base URL for Relative Links
+
+```typescript
+const doc = await ScrapeDocument.create(html, {
+  baseUrl: 'https://example.com'
+});
+
+// Now links() and images() resolve relative URLs
+const links = doc.links({ absolute: true });
+```
+
+### 4. Use Rate Limiting for Respectful Scraping
+
+```typescript
+import { createClient, rateLimit } from 'recker';
+
+const client = createClient();
+client.use(rateLimit({
+  limit: 10,
+  window: 60000  // 10 requests per minute
+}));
 ```
 
 ## TypeScript Support
@@ -141,46 +239,10 @@ import type {
 } from 'recker';
 ```
 
-## Best Practices
-
-### 1. Use Specific Selectors
-
-```typescript
-// Good: Stable, specific selector
-const title = doc.selectFirst('.product-title').text();
-
-// Bad: May break if structure changes
-const title = doc.selectFirst('div > div > h1').text();
-```
-
-### 2. Handle Missing Elements
-
-```typescript
-// Check existence
-const author = doc.exists('.author')
-  ? doc.selectFirst('.author').text()
-  : 'Unknown';
-
-// Optional chaining
-const price = doc.selectFirst('.price')?.text() || '0';
-```
-
-### 3. Respect Rate Limits
-
-```typescript
-const client = createClient({
-  baseUrl: 'https://example.com',
-  concurrency: {
-    max: 5,
-    requestsPerInterval: 2,
-    interval: 1000
-  }
-});
-```
-
 ## Next Steps
 
 - **[Selectors](02-selectors.md)** - CSS selectors and DOM traversal
 - **[Extractors](03-extractors.md)** - Built-in data extractors
 - **[Schemas](04-schemas.md)** - Declarative extraction schemas
-- **[SEO Spider](/seo/03-spider.md)** - Site-wide crawling with SEO analysis
+- **[Spider](05-spider.md)** - Site-wide crawling
+- **[Anti-Blocking](06-anti-blocking.md)** - Bypass detection techniques

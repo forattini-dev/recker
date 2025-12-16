@@ -338,8 +338,6 @@ Table 1:
 › scrap https://other-site.com/data
 ```
 
-> **Note:** Web scraping requires the `cheerio` package. Install with: `pnpm add cheerio`
-
 #### Source Code Analysis
 
 Extract and de-minify JavaScript/CSS from websites:

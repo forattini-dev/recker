@@ -101,6 +101,64 @@ rek shell
 
 # Load testing
 rek bench load api.com/endpoint users=50 duration=30
+
+# Stackable Presets (Enhancers)
+rek +local +retry get /users
+# -> Base: http://localhost:3000
+# -> Retry: 3 attempts
+# Note: Content-Type is often automatically inferred (e.g., from 'key=value' for form data, or JSON body detection).
+
+# Network Tools
+rek ping google.com
+rek dns google.com
+rek whois github.com
+rek tls api.stripe.com
+
+# Vector Store (RAG)
+rek vector search query="database" file=docs.json
+```
+
+## Advanced Features
+
+### 🚀 Flexible Syntax
+
+Recker's CLI parser is smart. You can mix and match arguments in almost any order.
+
+```bash
+# Standard
+rek get https://api.com --verbose
+
+# Shorthand (no double dash for common flags)
+rek get https://api.com verbose
+
+# Flexible Order (presets anywhere)
+rek +local +json get /users verbose
+```
+
+### 🧩 Stackable Presets (Enhancers)
+
+Combine multiple presets to build your request environment on the fly.
+
+**Environment:** `+local` (localhost:3000), `+local8080`
+**Identity:** `+chrome`, `+mobile`, `+bot`
+**Behavior:** `+retry` (3 attempts), `+failfast`
+**Response Format:** `+json`, `+xml`, `+csv` (Sets `Accept` header)
+
+```bash
+# Test local API as a mobile user with retry logic
+rek +local +mobile +retry get /feed
+```
+
+### 🕵️ Anti-Blocking (JA3 Bypass)
+
+Some sites block Node.js clients. Recker can use `curl-impersonate` if installed.
+
+```bash
+# Setup dependencies
+rek setup
+
+# Use curl transport (bypasses TLS fingerprinting)
+rek +chrome +curl get https://protected-site.com
 ```
 
 ## CLI Options

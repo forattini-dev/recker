@@ -162,6 +162,53 @@ const siteReport = await seoSpider('https://example.com', { seo: true });
 console.log(`Duplicate titles: ${siteReport.summary.duplicateTitles}`);
 ```
 
+### Vector Store (RAG)
+
+In-memory vector database for semantic search and RAG applications. Uses your configured AI provider for embeddings.
+
+```typescript
+import { MemoryVectorStore } from 'recker/ai/vector';
+
+const store = new MemoryVectorStore({ client: recker.ai });
+await store.add([{ content: 'Recker handles HTTP and DNS...' }]);
+
+const results = await store.search('What protocols are supported?');
+console.log(results[0].content);
+```
+
+Also available via CLI for local knowledge management:
+```bash
+rek vector add content="Server IP is 10.0.0.1" file=knowledge.json
+rek vector search query="server ip" file=knowledge.json
+```
+
+### Enhanced Spider
+
+The crawler automatically discovers:
+- **Sitemaps** (prioritizes robots.txt)
+- **RSS/Atom Feeds** (finds in HTML header)
+- **Metadata files** (robots.txt, humans.txt, llms.txt)
+
+```bash
+# Crawl site (ignores robots.txt by default)
+rek spider example.com
+
+# Respect robots.txt
+rek spider example.com --robots
+
+# Generate JSON report with all metadata
+rek spider example.com format=json
+```
+
+### System DNS
+
+Inspect your local system's DNS resolver configuration (without sudo):
+
+```bash
+rek dns system
+# Shows current DNS servers (resolvectl/scutil/ipconfig)
+```
+
 ### Circuit Breaker
 
 ```typescript

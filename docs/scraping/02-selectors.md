@@ -85,7 +85,7 @@ doc.select('tr:nth-child(odd)');
 doc.select('li:first-child');
 doc.select('p:last-of-type');
 
-// Contains text (Cheerio extension)
+// Contains text
 doc.select('a:contains("Download")');
 ```
 
@@ -101,14 +101,20 @@ const item = doc.selectFirst('.item');
 // Direct parent
 item.parent();
 
+// Filtered parent (only if matches selector)
+item.parent('div.container');
+
 // Closest ancestor matching selector
 item.closest('div.container');
 
 // All ancestors
 item.parents();
 
-// Ancestors up to selector
-item.parentsUntil('.wrapper');
+// Filtered ancestors
+item.parents('.wrapper');
+
+// Ancestors until selector (not including)
+item.parentsUntil('.container');
 ```
 
 ### Child Navigation
@@ -135,8 +141,13 @@ item.siblings();
 // Filtered siblings
 item.siblings('.related');
 
-// Adjacent siblings
+// Next sibling (immediate)
 item.next();
+
+// Next sibling matching selector
+item.next('.special');
+
+// Previous sibling (immediate)
 item.prev();
 
 // All following siblings
@@ -145,10 +156,11 @@ item.nextAll('.item');
 
 // All preceding siblings
 item.prevAll();
+item.prevAll('.item');
 
-// Until a selector
-item.nextUntil('.separator');
-item.prevUntil('.header');
+// Until methods (not including the matched selector)
+item.nextUntil('.separator');  // All next siblings until .separator
+item.prevUntil('.header');     // All previous siblings until .header
 ```
 
 ## Filtering
@@ -158,20 +170,20 @@ item.prevUntil('.header');
 ```typescript
 const items = doc.selectAll('.item');
 
-// Keep matching elements
+// Keep matching elements (by selector)
 const active = items.filter('.active');
+
+// Filter with callback function
+const expensive = items.filter((el, index) => {
+  const price = parseFloat(el.find('.price').text());
+  return price > 100;
+});
 
 // Exclude matching elements
 const enabled = items.not('.disabled');
 
 // Elements containing selector
 const withImages = items.has('img');
-
-// By callback
-const expensive = items.filter(el => {
-  const price = parseFloat(el.find('.price').text());
-  return price > 100;
-});
 ```
 
 ### Position-Based
@@ -190,8 +202,9 @@ items.eq(2);  // Third element (0-indexed)
 items.eq(-1); // Last element
 
 // Slice of elements
-items.slice(0, 5);   // First 5
-items.slice(-3);     // Last 3
+items.slice(0, 5);   // First 5 elements
+items.slice(-3);     // Last 3 elements
+items.slice(2, 5);   // Elements 2-4 (0-indexed)
 ```
 
 ## Content Extraction
@@ -237,13 +250,9 @@ const value = input.val();
 const select = doc.selectFirst('select');
 const selected = select.val();
 
-// Multi-select (returns array)
-const multiSelect = doc.selectFirst('select[multiple]');
-const values = multiSelect.val(); // ['option1', 'option2']
-
-// Checkbox/radio
-const checkbox = doc.selectFirst('input[type="checkbox"]');
-const isChecked = checkbox.is(':checked');
+// Textarea
+const textarea = doc.selectFirst('textarea');
+const content = textarea.val();
 ```
 
 ## State Checking
@@ -259,7 +268,6 @@ el.is('[href]');
 
 // Has specific class
 el.hasClass('active');
-el.hasClass('btn primary'); // Has all classes
 
 // Position among siblings
 el.index();
@@ -322,12 +330,6 @@ const hasDiscount = items.some(el => el.hasClass('discounted'));
 
 // Every - check if all match
 const allInStock = items.every(el => el.find('.stock').text() !== 'Out');
-
-// Find - get first matching
-const first100 = items.find(el => {
-  const price = parseFloat(el.find('.price').text());
-  return price < 100;
-});
 ```
 
 ## Utility Methods
@@ -336,8 +338,8 @@ const first100 = items.find(el => {
 // Clone element (deep copy)
 const cloned = el.clone();
 
-// Get raw Cheerio object (for advanced usage)
-const $el = el.raw;
+// Get root element
+const root = doc.root();
 
 // Get underlying DOM element at index
 const domEl = el.get(0);
@@ -383,6 +385,63 @@ if (doc.exists('.author')) {
   const author = doc.selectFirst('.author').text();
 }
 ```
+
+## Method Reference
+
+### Traversal Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `find(selector)` | ScrapeElement | Find descendants matching selector |
+| `parent(selector?)` | ScrapeElement | Get parent element |
+| `parents(selector?)` | ScrapeElement | Get all ancestors |
+| `parentsUntil(selector)` | ScrapeElement | Get ancestors until (not including) selector |
+| `children(selector?)` | ScrapeElement | Get direct children |
+| `siblings(selector?)` | ScrapeElement | Get all siblings |
+| `next(selector?)` | ScrapeElement | Get next sibling |
+| `prev(selector?)` | ScrapeElement | Get previous sibling |
+| `nextAll(selector?)` | ScrapeElement | Get all next siblings |
+| `prevAll(selector?)` | ScrapeElement | Get all previous siblings |
+| `nextUntil(selector)` | ScrapeElement | Get next siblings until (not including) selector |
+| `prevUntil(selector)` | ScrapeElement | Get previous siblings until (not including) selector |
+| `closest(selector)` | ScrapeElement | Find closest ancestor matching selector |
+| `contents()` | ScrapeElement | Get all child elements |
+
+### Filtering Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `filter(selector\|callback)` | ScrapeElement | Keep elements matching selector or callback |
+| `not(selector)` | ScrapeElement | Exclude elements matching selector |
+| `has(selector)` | ScrapeElement | Keep elements containing selector |
+| `first()` | ScrapeElement | Get first element |
+| `last()` | ScrapeElement | Get last element |
+| `eq(index)` | ScrapeElement | Get element at index |
+| `slice(start, end?)` | ScrapeElement | Get slice of elements |
+
+### Extraction Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `text()` | string | Get combined text content |
+| `html()` | string \| null | Get inner HTML |
+| `outerHtml()` | string | Get outer HTML |
+| `attr(name)` | string \| undefined | Get attribute value |
+| `attrs()` | object | Get all attributes |
+| `data(name?)` | unknown | Get data attribute(s) |
+| `val()` | string \| string[] \| undefined | Get form element value |
+| `prop(name)` | unknown | Get property value |
+
+### State Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `exists()` | boolean | Check if selection has elements |
+| `is(selector)` | boolean | Check if any element matches selector |
+| `hasClass(className)` | boolean | Check if any element has class |
+| `index()` | number | Get position among siblings |
+| `tagName()` | string \| undefined | Get tag name of first element |
+| `length` | number | Number of elements in selection |
 
 ## TypeScript Support
 

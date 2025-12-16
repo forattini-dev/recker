@@ -14,7 +14,7 @@ docs/
 ├── getting-started/    # Installation, quickstart
 ├── guides/             # All guides (flat structure)
 ├── api/                # API reference
-└── *.md                # Top-level pages (benchmarks, changelog, etc.)
+└── *.md                # Top-level pages (benchmarks, contributing, etc.)
 ```
 
 ## Page Template

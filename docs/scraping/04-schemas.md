@@ -1,13 +1,13 @@
 # Declarative Extraction Schemas
 
-Extract complex data structures with type-safe, declarative schemas using `extract()`.
+Extract structured data with type-safe, declarative schemas using `extract()`.
 
 ## Basic Usage
 
 ```typescript
 interface Product {
   name: string;
-  price: number;
+  price: string;
   description: string;
 }
 
@@ -25,7 +25,7 @@ console.log(product);
 
 Each field can be defined as:
 - **String**: CSS selector (extracts text content)
-- **Object**: Advanced configuration with transformations
+- **Object**: Advanced configuration with attribute extraction and transformations
 
 ### Simple Selectors
 
@@ -37,17 +37,16 @@ const data = doc.extract({
 });
 ```
 
-### Advanced Field Configuration
+### Field Configuration Object
 
 ```typescript
 interface FieldConfig {
-  selector: string;
+  selector: string;       // CSS selector
   attribute?: string;     // Extract attribute instead of text
   multiple?: boolean;     // Return array of values
   transform?: (value: string) => any;  // Transform the value
-  default?: any;          // Default if not found
-  optional?: boolean;     // Don't error if missing
-  nested?: Schema;        // Nested schema for child elements
+  default?: any;          // Default value if not found
+  optional?: boolean;     // Exclude key if not found (default: false)
 }
 ```
 
@@ -148,17 +147,19 @@ const product = doc.extract({
 
 ## Default Values
 
+Provide fallback values when elements are not found:
+
 ```typescript
 const data = doc.extract({
   title: 'h1',
 
-  // Default if element not found
+  // Default string
   author: {
     selector: '.author',
     default: 'Unknown'
   },
 
-  // Default with type transformation
+  // Default number
   rating: {
     selector: '.rating',
     transform: (v) => parseFloat(v),
@@ -172,235 +173,55 @@ const data = doc.extract({
     default: []
   }
 });
+
+// If .author doesn't exist: { title: 'Hello', author: 'Unknown', ... }
 ```
 
 ## Optional Fields
 
-Mark fields as optional to skip them if not found:
+Mark fields as optional to exclude them from the result when not found:
 
 ```typescript
 const data = doc.extract({
   title: 'h1',
 
-  // Optional - won't error if missing
+  // Optional - key won't exist in result if not found
   subtitle: {
     selector: '.subtitle',
     optional: true
   },
 
-  // Optional with default
+  // Optional with default - uses default if not found
   author: {
     selector: '.author',
     optional: true,
-    default: 'Anonymous'
-  }
-});
-```
-
-## Nested Schemas
-
-Extract nested structures from child elements:
-
-```typescript
-interface Article {
-  title: string;
-  author: {
-    name: string;
-    avatar: string;
-    bio: string;
-  };
-  metadata: {
-    published: Date;
-    updated: Date;
-    readTime: number;
-  };
-}
-
-const article = doc.extract<Article>({
-  title: 'h1',
-
-  author: {
-    selector: '.author-card',
-    nested: {
-      name: '.name',
-      avatar: {
-        selector: 'img',
-        attribute: 'src'
-      },
-      bio: '.bio'
-    }
-  },
-
-  metadata: {
-    selector: '.article-meta',
-    nested: {
-      published: {
-        selector: 'time.published',
-        attribute: 'datetime',
-        transform: (v) => new Date(v)
-      },
-      updated: {
-        selector: 'time.updated',
-        attribute: 'datetime',
-        transform: (v) => new Date(v)
-      },
-      readTime: {
-        selector: '.read-time',
-        transform: (v) => parseInt(v)
-      }
-    }
-  }
-});
-```
-
-## Extracting Lists
-
-Extract arrays of objects from repeated elements:
-
-```typescript
-interface ProductListing {
-  products: Array<{
-    name: string;
-    price: number;
-    image: string;
-    url: string;
-  }>;
-  pagination: {
-    current: number;
-    total: number;
-    hasNext: boolean;
-  };
-}
-
-const listing = doc.extract<ProductListing>({
-  products: {
-    selector: '.product-card',
-    multiple: true,
-    nested: {
-      name: '.product-name',
-      price: {
-        selector: '.price',
-        transform: (v) => parseFloat(v.replace('$', ''))
-      },
-      image: {
-        selector: 'img',
-        attribute: 'src'
-      },
-      url: {
-        selector: 'a',
-        attribute: 'href'
-      }
-    }
-  },
-
-  pagination: {
-    selector: '.pagination',
-    nested: {
-      current: {
-        selector: '.current',
-        transform: (v) => parseInt(v)
-      },
-      total: {
-        selector: '.total',
-        transform: (v) => parseInt(v)
-      },
-      hasNext: {
-        selector: '.next',
-        transform: (_, el) => el.exists()
-      }
-    }
+    default: 'Anonymous'  // Still uses default if not found
   }
 });
 
-// {
-//   products: [
-//     { name: 'Widget A', price: 99.99, image: '/a.jpg', url: '/products/a' },
-//     { name: 'Widget B', price: 149.99, image: '/b.jpg', url: '/products/b' }
-//   ],
-//   pagination: { current: 1, total: 10, hasNext: true }
-// }
+// If .subtitle doesn't exist: { title: 'Hello' }
+// (no 'subtitle' key in result)
 ```
 
-## Element Access in Transform
+### Difference Between Default and Optional
 
-Access the element itself in transformations:
+- **default**: Field is always included in result; uses default value if not found
+- **optional**: Field is excluded from result if not found (unless default is provided)
 
 ```typescript
 const data = doc.extract({
-  items: {
-    selector: '.item',
-    multiple: true,
-    nested: {
-      name: '.name',
+  // Always in result (undefined if not found)
+  author: '.author',
 
-      // Access element for complex logic
-      status: {
-        selector: '',  // Empty = use parent element
-        transform: (_, el) => {
-          if (el.hasClass('sold-out')) return 'sold-out';
-          if (el.hasClass('low-stock')) return 'low-stock';
-          return 'available';
-        }
-      },
+  // Always in result (default value if not found)
+  rating: { selector: '.rating', default: 0 },
 
-      // Check existence
-      featured: {
-        selector: '.featured-badge',
-        transform: (_, el) => el.exists()
-      }
-    }
-  }
+  // NOT in result if not found
+  subtitle: { selector: '.subtitle', optional: true },
+
+  // In result with default if not found (optional + default = uses default)
+  category: { selector: '.category', optional: true, default: 'General' }
 });
-```
-
-## Conditional Extraction
-
-```typescript
-const data = doc.extract({
-  // Extract based on page type
-  content: {
-    selector: 'body',
-    transform: (_, el) => {
-      // Article page
-      if (el.find('article').exists()) {
-        return {
-          type: 'article',
-          body: el.find('article').text(),
-          author: el.find('.author').text()
-        };
-      }
-      // Product page
-      if (el.find('.product').exists()) {
-        return {
-          type: 'product',
-          price: el.find('.price').text(),
-          sku: el.find('.sku').text()
-        };
-      }
-      return { type: 'unknown' };
-    }
-  }
-});
-```
-
-## Combining with Extractors
-
-Mix schemas with built-in extractors:
-
-```typescript
-const pageData = {
-  // Schema extraction
-  ...doc.extract({
-    title: 'h1',
-    description: '.description'
-  }),
-
-  // Built-in extractors
-  meta: doc.meta(),
-  openGraph: doc.openGraph(),
-  links: doc.links({ selector: 'article a' }),
-  images: doc.images({ selector: 'article img' })
-};
 ```
 
 ## Real-World Examples
@@ -411,20 +232,9 @@ const pageData = {
 interface ProductPage {
   name: string;
   price: number;
-  originalPrice?: number;
-  discount?: number;
   sku: string;
   description: string;
   images: string[];
-  variants: Array<{
-    name: string;
-    value: string;
-    available: boolean;
-  }>;
-  reviews: {
-    average: number;
-    count: number;
-  };
   inStock: boolean;
 }
 
@@ -434,18 +244,6 @@ const product = doc.extract<ProductPage>({
   price: {
     selector: '.price-current',
     transform: (v) => parseFloat(v.replace(/[$,]/g, ''))
-  },
-
-  originalPrice: {
-    selector: '.price-original',
-    optional: true,
-    transform: (v) => parseFloat(v.replace(/[$,]/g, ''))
-  },
-
-  discount: {
-    selector: '.discount-badge',
-    optional: true,
-    transform: (v) => parseInt(v)
   },
 
   sku: {
@@ -461,36 +259,6 @@ const product = doc.extract<ProductPage>({
     multiple: true
   },
 
-  variants: {
-    selector: '.variant-option',
-    multiple: true,
-    nested: {
-      name: {
-        selector: '',
-        attribute: 'data-variant-name'
-      },
-      value: '.variant-value',
-      available: {
-        selector: '',
-        transform: (_, el) => !el.hasClass('out-of-stock')
-      }
-    }
-  },
-
-  reviews: {
-    selector: '.reviews-summary',
-    nested: {
-      average: {
-        selector: '.rating-value',
-        transform: (v) => parseFloat(v)
-      },
-      count: {
-        selector: '.review-count',
-        transform: (v) => parseInt(v.replace(/[^\d]/g, ''))
-      }
-    }
-  },
-
   inStock: {
     selector: '.stock-status',
     transform: (v) => v.toLowerCase() !== 'out of stock'
@@ -501,60 +269,23 @@ const product = doc.extract<ProductPage>({
 ### News Article
 
 ```typescript
-interface NewsArticle {
+interface Article {
   headline: string;
-  subheadline?: string;
-  author: {
-    name: string;
-    url: string;
-    avatar?: string;
-  };
+  author: string;
   published: Date;
-  updated?: Date;
   category: string;
   tags: string[];
   content: string;
-  relatedArticles: Array<{
-    title: string;
-    url: string;
-    thumbnail: string;
-  }>;
 }
 
-const article = doc.extract<NewsArticle>({
+const article = doc.extract<Article>({
   headline: 'h1.article-headline',
 
-  subheadline: {
-    selector: '.article-subheadline',
-    optional: true
-  },
-
-  author: {
-    selector: '.author-info',
-    nested: {
-      name: '.author-name',
-      url: {
-        selector: 'a',
-        attribute: 'href'
-      },
-      avatar: {
-        selector: 'img',
-        attribute: 'src',
-        optional: true
-      }
-    }
-  },
+  author: '.author-name',
 
   published: {
     selector: 'time[itemprop="datePublished"]',
     attribute: 'datetime',
-    transform: (v) => new Date(v)
-  },
-
-  updated: {
-    selector: 'time[itemprop="dateModified"]',
-    attribute: 'datetime',
-    optional: true,
     transform: (v) => new Date(v)
   },
 
@@ -565,23 +296,7 @@ const article = doc.extract<NewsArticle>({
     multiple: true
   },
 
-  content: '.article-body',
-
-  relatedArticles: {
-    selector: '.related-article',
-    multiple: true,
-    nested: {
-      title: '.related-title',
-      url: {
-        selector: 'a',
-        attribute: 'href'
-      },
-      thumbnail: {
-        selector: 'img',
-        attribute: 'src'
-      }
-    }
-  }
+  content: '.article-body'
 });
 ```
 
@@ -590,63 +305,22 @@ const article = doc.extract<NewsArticle>({
 ```typescript
 interface JobListing {
   title: string;
-  company: {
-    name: string;
-    logo: string;
-    url: string;
-  };
+  company: string;
   location: string;
-  remote: boolean;
-  salary?: {
-    min: number;
-    max: number;
-    currency: string;
-  };
+  salary: string;
   type: string;
   posted: Date;
-  description: string;
   requirements: string[];
-  benefits: string[];
 }
 
 const job = doc.extract<JobListing>({
   title: 'h1.job-title',
 
-  company: {
-    selector: '.company-info',
-    nested: {
-      name: '.company-name',
-      logo: {
-        selector: 'img.company-logo',
-        attribute: 'src'
-      },
-      url: {
-        selector: 'a',
-        attribute: 'href'
-      }
-    }
-  },
+  company: '.company-name',
 
   location: '.job-location',
 
-  remote: {
-    selector: '.job-tags',
-    transform: (v) => v.toLowerCase().includes('remote')
-  },
-
-  salary: {
-    selector: '.salary-range',
-    optional: true,
-    transform: (v) => {
-      const match = v.match(/\$?([\d,]+)\s*-\s*\$?([\d,]+)\s*(\w+)?/);
-      if (!match) return undefined;
-      return {
-        min: parseInt(match[1].replace(',', '')),
-        max: parseInt(match[2].replace(',', '')),
-        currency: 'USD'
-      };
-    }
-  },
+  salary: '.salary-range',
 
   type: '.job-type',
 
@@ -656,18 +330,81 @@ const job = doc.extract<JobListing>({
     transform: (v) => new Date(v)
   },
 
-  description: '.job-description',
-
   requirements: {
     selector: '.requirements li',
     multiple: true
-  },
-
-  benefits: {
-    selector: '.benefits li',
-    multiple: true
   }
 });
+```
+
+## Combining with Manual Extraction
+
+For complex nested structures, combine schema extraction with manual selection:
+
+```typescript
+const pageData = {
+  // Schema extraction for simple fields
+  ...doc.extract({
+    title: 'h1',
+    description: '.description'
+  }),
+
+  // Manual extraction for nested data
+  reviews: doc.selectAll('.review').map(el => ({
+    author: el.find('.author').text(),
+    rating: parseFloat(el.find('.rating').text()),
+    text: el.find('.text').text(),
+    date: el.find('time').attr('datetime')
+  })),
+
+  // Built-in extractors
+  meta: doc.meta(),
+  links: doc.links({ selector: 'article a' }),
+  images: doc.images({ selector: 'article img' })
+};
+```
+
+## Extracting Lists with Items
+
+For repeated items, use manual extraction:
+
+```typescript
+interface ProductListing {
+  products: Array<{
+    name: string;
+    price: number;
+    image: string;
+    url: string;
+  }>;
+  currentPage: number;
+  totalPages: number;
+}
+
+// Extract products manually
+const products = doc.selectAll('.product-card').map(el => ({
+  name: el.find('.product-name').text(),
+  price: parseFloat(el.find('.price').text().replace('$', '')),
+  image: el.find('img').attr('src') || '',
+  url: el.find('a').attr('href') || ''
+}));
+
+// Extract pagination with schema
+const pagination = doc.extract({
+  currentPage: {
+    selector: '.pagination .current',
+    transform: (v) => parseInt(v)
+  },
+  totalPages: {
+    selector: '.pagination .total',
+    transform: (v) => parseInt(v)
+  }
+});
+
+const listing: ProductListing = {
+  products,
+  currentPage: pagination.currentPage || 1,
+  totalPages: pagination.totalPages || 1
+};
 ```
 
 ## TypeScript Support
@@ -675,17 +412,78 @@ const job = doc.extract<JobListing>({
 ```typescript
 import type { ExtractionSchema } from 'recker';
 
-// Type-safe schema definition
-const schema: ExtractionSchema<Product> = {
+interface Product {
+  name: string;
+  price: number;
+}
+
+// The schema type is inferred
+const schema = {
   name: 'h1',
   price: {
     selector: '.price',
-    transform: (v) => parseFloat(v)
+    transform: (v: string) => parseFloat(v)
   }
 };
 
-// Generic extraction with type inference
+// Generic extraction with type assertion
 const product = doc.extract<Product>(schema);
+```
+
+## Best Practices
+
+### 1. Use Specific Selectors
+
+```typescript
+// Good: Specific, stable selectors
+const data = doc.extract({
+  title: 'h1.product-title',
+  price: '.product-info .price-current'
+});
+
+// Fragile: Position-dependent selectors
+const data = doc.extract({
+  title: 'div > div > h1',
+  price: 'span:nth-child(3)'
+});
+```
+
+### 2. Always Transform Numeric Values
+
+```typescript
+// Good: Transform to number
+price: {
+  selector: '.price',
+  transform: (v) => parseFloat(v.replace(/[$,]/g, ''))
+}
+
+// Bad: Returns string
+price: '.price'  // "$99.99" as string
+```
+
+### 3. Handle Empty Values in Transform
+
+```typescript
+rating: {
+  selector: '.rating',
+  transform: (v) => v ? parseFloat(v) : 0
+}
+```
+
+### 4. Use Attribute Extraction for Data Attributes
+
+```typescript
+// Good: Clean data from attributes
+productId: {
+  selector: '.product',
+  attribute: 'data-product-id'
+}
+
+// Avoid: Parsing from visible text
+productId: {
+  selector: '.product-id',
+  transform: (v) => v.replace('ID: ', '')
+}
 ```
 
 ## Next Steps
@@ -693,4 +491,4 @@ const product = doc.extract<Product>(schema);
 - **[Overview](01-overview.md)** - Getting started with scraping
 - **[Selectors](02-selectors.md)** - CSS selectors and traversal
 - **[Extractors](03-extractors.md)** - Built-in data extractors
-- **[SEO Spider](/seo/03-spider.md)** - Site-wide crawling
+- **[Spider](05-spider.md)** - Site-wide crawling

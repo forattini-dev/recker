@@ -10,7 +10,7 @@ import { readFileSync } from 'fs';
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 const banner = `/**
- * Recker Browser v${pkg.version}
+ * Recker Browser
  * AI & DevX focused HTTP client
  * https://github.com/forattini-dev/recker
  * @license MIT
@@ -46,6 +46,9 @@ const nodeModules = [
   'util',
   'net',
   'tls',
+  'child_process',
+  'node:child_process',
+  'undici'
 ];
 
 // Plugin to stub Node.js built-in modules
@@ -57,12 +60,19 @@ const nodeStubPlugin = {
       path: args.path,
       namespace: 'node-stub',
     }));
+    
+    // Stub external node-only packages
+    build.onResolve({ filter: /^undici$/ }, args => ({
+      path: args.path,
+      namespace: 'node-stub',
+    }));
 
     // Stub non-prefixed Node.js modules
     const builtinModules = new Set([
       'events', 'fs', 'path', 'os', 'stream', 'zlib',
       'crypto', 'buffer', 'util', 'net', 'tls', 'http', 'https',
       'perf_hooks', 'async_hooks', 'diagnostics_channel', 'assert',
+      'child_process'
     ]);
     build.onResolve({ filter: /^[a-z_]+$/ }, args => {
       if (builtinModules.has(args.path)) {
@@ -202,6 +212,40 @@ const nodeStubPlugin = {
         export const deepStrictEqual = noop;
         export const throws = noop;
         export const rejects = noopPromise;
+
+        // child_process module
+        export const spawn = () => ({
+            on: noop,
+            stdout: { on: noop },
+            stderr: { on: noop },
+            kill: noop
+        });
+        export const spawnSync = () => ({ status: 0, stdout: '', stderr: '' });
+        export const exec = noop;
+        export const execSync = () => '';
+
+        // undici module
+        export const request = noopPromise;
+        export const errors = { 
+            ConnectTimeoutError: noopClass,
+            HeadersTimeoutError: noopClass,
+            BodyTimeoutError: noopClass
+        };
+        export const ProxyAgent = noopClass;
+        export const Agent = noopClass;
+        export const Client = noopClass;
+        export const WebSocket = noopClass;
+
+        // fs module extras
+        export const promises = {
+            readFile: noopPromise,
+            writeFile: noopPromise,
+            access: noopPromise,
+            stat: noopPromise,
+            mkdir: noopPromise,
+            unlink: noopPromise,
+            readdir: noopPromise
+        };
       `,
       loader: 'js',
     }));

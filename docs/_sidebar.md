@@ -1,6 +1,7 @@
 <!-- docs/_sidebar.md -->
 
 - **Getting Started**
+  - [**Interactive Playground**](/getting-started/playground.md)
   - [Installation](/getting-started/installation.md)
   - [Quick Start](/http/01-quickstart.md)
   - [CLI Overview](/getting-started/cli.md)
@@ -31,6 +32,8 @@
   - [Selectors](/scraping/02-selectors.md)
   - [Extractors](/scraping/03-extractors.md)
   - [Schemas](/scraping/04-schemas.md)
+  - [Spider](/scraping/05-spider.md)
+  - [Anti-Blocking & TLS](/scraping/06-anti-blocking.md)
 
 - **SEO Analysis**
   - [Overview](/seo/01-overview.md)

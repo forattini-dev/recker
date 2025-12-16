@@ -2,7 +2,7 @@
 
 <div class="cover-main">
 
-# Recker <small>v1.0</small>
+# Recker
 
 > The HTTP SDK for the AI Era
 

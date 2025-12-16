@@ -126,6 +126,41 @@ rek geoip 8.8.8.8
 
 [Learn more →](cli/06-protocols.md#geoip)
 
+### Vector Store (RAG)
+- **In-memory**: Local vector database for small datasets
+- **Semantic search**: Cosine similarity search
+- **Embeddings**: Auto-generate via AI provider
+- **CLI Management**: Add/search docs from terminal
+
+```typescript
+const store = new MemoryVectorStore({ client: ai });
+await store.add([{ content: 'Docs...' }]);
+const results = await store.search('query');
+```
+
+[Learn more →](ai/05-vector-store.md)
+
+### Enhanced Spider
+- **Intelligent Discovery**: RSS/Atom, sitemap.xml, robots.txt, humans.txt
+- **Metadata Extraction**: JSON-LD, OpenGraph, Twitter Cards
+- **SEO Analysis**: Integrated auditing
+- **Smart Queue**: Concurrency and depth control
+
+```bash
+rek spider example.com --robots format=json
+```
+
+[Learn more →](http/14-scraping.md)
+
+### System DNS
+- **Cross-platform**: Linux (resolvectl), macOS (scutil), Windows (ipconfig)
+- **Non-root**: Inspect configuration without sudo
+- **Diagnostic**: Verify local resolver status
+
+```bash
+rek dns system
+```
+
 ## 🛠️ Advanced Configuration
 
 ### Custom DNS

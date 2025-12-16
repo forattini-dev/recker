@@ -50,6 +50,40 @@ console.log(results[0].score);
 // 0.89...
 ```
 
+## CLI Usage
+
+You can manage a local vector store directly from the terminal. This is great for managing local knowledge bases for your agents.
+
+### Add Documents
+
+```bash
+# Add a simple text (uses default vectors.json)
+rek vector add content="The production database IP is 10.0.0.5"
+
+# Add with metadata to specific file
+rek vector add content="Deploy instructions" metadata:='{"env":"prod"}' file=docs.json
+```
+
+### Search
+
+```bash
+# Search for related content
+rek vector search query="database ip" file=docs.json
+
+# Limit results
+rek vector search query="deploy" limit=1
+```
+
+### Manage
+
+```bash
+# Show store stats
+rek vector info file=docs.json
+
+# Clear store
+rek vector clear file=docs.json
+```
+
 ## Features
 
 ### Automatic Embeddings

@@ -118,16 +118,12 @@ ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('$ rek hls download https://example.com/stream.m3u8 Referer:https://site.com User-Agent:"My Browser"')} ${colors.gray('With custom headers')}
 `)
     .action(async (...args: any[]) => {
-      // Commander passes (arg1, arg2, ..., options, command)
-      // Since we have <url> and [args...] (variadic), we expect:
-      // args[0] = url
-      // args[1] = rawArgs (array)
-      // args[2] = cmdObj (Command)
-      
+      // Router passes (arg1, arg2, ..., options, command)
+      // args[0] = url, args[1] = rawArgs (array), args[2] = cmdObj
       const url = args[0];
       const rawArgs = args[1] || [];
-      const cmdObj = args[args.length - 1]; // Command object is always last
-      
+      const cmdObj = args[args.length - 1];
+
       const options = cmdObj.opts ? cmdObj.opts() : {};
       const verbose = options.verbose;
 
@@ -135,27 +131,22 @@ ${colors.bold(colors.yellow('Examples:'))}
       const { Client } = await import('../../core/client.js');
 
       // 1. Process Presets (+chaturbate, +chrome, etc.)
-      const { clientOptions, remainingArgs } = await parseEnhancerPresets([]); // <--- Sem rawArgs aqui, usamos os globais
-
-
+      const { clientOptions, remainingArgs } = await parseEnhancerPresets([]);
 
       let output = 'stream.ts';
       let quality: string | undefined;
-      let live = options.live; // 'live' deve ser uma opção Commander
+      let live = options.live;
       let duration: number | undefined;
       let concurrency = 4;
       const headers: Record<string, string> = { ...(clientOptions.headers as Record<string, string>) };
       let outputHandled = false;
 
-      // remainingArgs agora contém os argumentos do Commander (URL, --verbose)
-      // O primeiro argumento deve ser a URL (que já vem separada)
-      // O segundo argumento, se existir, é o nome do arquivo de saída
-      // Flags como --verbose já foram consumidas por options
+      // remainingArgs contains the parsed arguments
+      // Flags like --verbose are already in options
 
-      // 2. Process remaining args (que deveriam ser SÓ o output file)
+      // 2. Process remaining args
       for (const arg of remainingArgs) {
         if (arg.startsWith('--')) {
-            // Ignorar flags Commander, já estão em options
             continue;
         } else if (arg.includes('=')) {
           const [key, value] = arg.split('=');

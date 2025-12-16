@@ -220,6 +220,119 @@ rek @firebase/users.json
 rek @firebase/users/123.json name="John"
 ```
 
+#### Pinecone (Vector Database)
+
+```bash
+# Requires: PINECONE_API_KEY, PINECONE_HOST
+
+# Upsert vectors
+rek @pinecone/vectors/upsert \
+  vectors:='[{"id":"vec1","values":[0.1,0.2,0.3]}]'
+
+# Query similar vectors
+rek @pinecone/query \
+  vector:='[0.1,0.2,0.3]' \
+  topK:=10
+
+# Delete vectors
+rek @pinecone/vectors/delete ids:='["vec1","vec2"]'
+```
+
+### CRM & Business
+
+#### HubSpot
+
+```bash
+# Requires: HUBSPOT_ACCESS_TOKEN
+
+# Get contacts
+rek @hubspot/crm/v3/objects/contacts
+
+# Search deals
+rek @hubspot/crm/v3/objects/deals/search \
+  filterGroups:='[{"filters":[{"propertyName":"amount","operator":"GTE","value":"1000"}]}]'
+
+# Create contact
+rek @hubspot/crm/v3/objects/contacts \
+  properties:='{"email":"john@example.com","firstname":"John"}'
+```
+
+#### Square (Payments)
+
+```bash
+# Requires: SQUARE_ACCESS_TOKEN
+
+# List customers
+rek @square/customers
+
+# Create payment (with idempotency)
+rek @square/payments \
+  idempotency_key="$(uuidgen)" \
+  source_id="card_nonce" \
+  amount_money:='{"amount":1000,"currency":"USD"}' \
+  location_id="location_xxx"
+
+# Use sandbox
+rek @square-sandbox/customers
+```
+
+### Email Services
+
+#### SendGrid
+
+```bash
+# Requires: SENDGRID_API_KEY
+
+# Send email
+rek @sendgrid/mail/send \
+  personalizations:='[{"to":[{"email":"recipient@example.com"}]}]' \
+  from:='{"email":"sender@example.com"}' \
+  subject="Hello!" \
+  content:='[{"type":"text/plain","value":"Email body"}]'
+
+# List contacts
+rek @sendgrid/marketing/contacts
+```
+
+### Monitoring & Error Tracking
+
+#### Sentry
+
+```bash
+# Requires: SENTRY_AUTH_TOKEN
+
+# List projects
+rek @sentry/projects/
+
+# Get issues for organization
+rek @sentry/organizations/my-org/issues/
+
+# Get issue details
+rek @sentry/issues/123456789/
+```
+
+### AI & Audio
+
+#### ElevenLabs (Text-to-Speech)
+
+```bash
+# Requires: ELEVENLABS_API_KEY
+
+# List voices
+rek @elevenlabs/voices
+
+# Generate speech (outputs audio)
+rek @elevenlabs/text-to-speech/voice_id \
+  text="Hello, world!" \
+  model_id="eleven_monolingual_v1" \
+  -o audio.mp3
+
+# Stream audio
+rek @elevenlabs/text-to-speech/voice_id/stream \
+  text="Streaming audio..." \
+  model_id="eleven_turbo_v2"
+```
+
 ### Utilities
 
 #### JSONPlaceholder (Testing)
@@ -278,6 +391,12 @@ Each preset looks for specific environment variables for authentication:
 | `@youtube` | `YOUTUBE_API_KEY` |
 | `@meta` | `META_ACCESS_TOKEN` |
 | `@tiktok` | `TIKTOK_ACCESS_TOKEN` |
+| `@hubspot` | `HUBSPOT_ACCESS_TOKEN` |
+| `@sendgrid` | `SENDGRID_API_KEY` |
+| `@pinecone` | `PINECONE_API_KEY`, `PINECONE_HOST` |
+| `@elevenlabs` | `ELEVENLABS_API_KEY` |
+| `@sentry` | `SENTRY_AUTH_TOKEN` |
+| `@square` | `SQUARE_ACCESS_TOKEN` |
 
 ### Setting Environment Variables
 

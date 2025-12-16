@@ -641,6 +641,222 @@ await client.post('/channels/{channel_id}/messages', {
 });
 ```
 
+### HubSpot
+
+```typescript
+import { hubspot, hubspotContacts, hubspotDeals, hubspotCompanies } from 'recker/presets';
+
+const client = createClient(hubspot({
+  accessToken: process.env.HUBSPOT_ACCESS_TOKEN
+}));
+
+// Get contacts
+const contacts = await client.get('/crm/v3/objects/contacts').json();
+
+// Search deals
+const deals = await client.post('/crm/v3/objects/deals/search', {
+  json: {
+    filterGroups: [{
+      filters: [{ propertyName: 'amount', operator: 'GTE', value: '1000' }]
+    }]
+  }
+}).json();
+
+// Scoped presets (convenience)
+const contactsClient = createClient(hubspotContacts({
+  accessToken: process.env.HUBSPOT_ACCESS_TOKEN
+}));
+const dealsClient = createClient(hubspotDeals({
+  accessToken: process.env.HUBSPOT_ACCESS_TOKEN
+}));
+const companiesClient = createClient(hubspotCompanies({
+  accessToken: process.env.HUBSPOT_ACCESS_TOKEN
+}));
+```
+
+### SendGrid
+
+```typescript
+import { sendgrid, sendgridMail } from 'recker/presets';
+
+const client = createClient(sendgrid({
+  apiKey: process.env.SENDGRID_API_KEY
+}));
+
+// Send email
+await client.post('/mail/send', {
+  json: {
+    personalizations: [{ to: [{ email: 'recipient@example.com' }] }],
+    from: { email: 'sender@example.com' },
+    subject: 'Hello from Recker!',
+    content: [{ type: 'text/plain', value: 'Email body' }]
+  }
+});
+
+// List contacts
+const contacts = await client.get('/marketing/contacts').json();
+
+// Mail-scoped preset
+const mailClient = createClient(sendgridMail({
+  apiKey: process.env.SENDGRID_API_KEY
+}));
+```
+
+### Sentry
+
+```typescript
+import { sentry, sentryIngest, createSentryEnvelope } from 'recker/presets';
+
+// API Access (for management)
+const client = createClient(sentry({
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  organization: 'my-org'
+}));
+
+// List projects
+const projects = await client.get('/projects/').json();
+
+// Get issues
+const issues = await client.get('/organizations/my-org/issues/').json();
+
+// Event Ingestion (for sending errors)
+const ingest = createClient(sentryIngest({
+  dsn: process.env.SENTRY_DSN  // Format: https://key@org.ingest.sentry.io/project_id
+}));
+
+// Send error event
+await ingest.post('/envelope/', {
+  body: createSentryEnvelope({
+    event_id: crypto.randomUUID().replace(/-/g, ''),
+    timestamp: Date.now() / 1000,
+    platform: 'node',
+    exception: {
+      values: [{
+        type: 'Error',
+        value: 'Something went wrong',
+        stacktrace: { frames: [] }
+      }]
+    }
+  })
+});
+```
+
+### Square
+
+```typescript
+import { square, squarePayments, squareCatalog, squareSandbox } from 'recker/presets';
+
+const client = createClient(square({
+  accessToken: process.env.SQUARE_ACCESS_TOKEN,
+  sandbox: false,         // Use production
+  version: '2024-01-18'   // API version
+}));
+
+// Create payment (with idempotency key)
+await client.post('/payments', {
+  json: {
+    idempotency_key: crypto.randomUUID(),
+    source_id: 'card_nonce',
+    amount_money: { amount: 1000, currency: 'USD' },
+    location_id: 'location_xxx'
+  }
+});
+
+// List customers
+const customers = await client.get('/customers').json();
+
+// Scoped presets
+const payments = createClient(squarePayments({ accessToken: '...', sandbox: true }));
+const catalog = createClient(squareCatalog({ accessToken: '...', sandbox: true }));
+
+// Sandbox convenience preset
+const sandbox = createClient(squareSandbox({ accessToken: '...' }));
+```
+
+## AI & ML Services
+
+### ElevenLabs
+
+```typescript
+import { elevenlabs, elevenlabsVoices } from 'recker/presets';
+
+const client = createClient(elevenlabs({
+  apiKey: process.env.ELEVENLABS_API_KEY
+}));
+
+// Generate speech (returns audio stream)
+const response = await client.post('/text-to-speech/voice_id', {
+  json: {
+    text: 'Hello, world!',
+    model_id: 'eleven_monolingual_v1',
+    voice_settings: { stability: 0.5, similarity_boost: 0.5 }
+  }
+});
+
+// Save audio
+const audio = await response.blob();
+
+// List voices
+const voices = await client.get('/voices').json();
+
+// Streaming TTS
+const stream = await client.post('/text-to-speech/voice_id/stream', {
+  json: { text: 'Streaming audio...', model_id: 'eleven_turbo_v2' }
+});
+for await (const chunk of stream) {
+  // Process audio chunk
+}
+```
+
+### Pinecone
+
+```typescript
+import { pinecone, pineconeControlPlane } from 'recker/presets';
+
+// Data plane (vector operations)
+const client = createClient(pinecone({
+  apiKey: process.env.PINECONE_API_KEY,
+  host: 'my-index-abc123.svc.us-east-1.pinecone.io'
+}));
+
+// Upsert vectors
+await client.post('/vectors/upsert', {
+  json: {
+    vectors: [
+      { id: 'vec1', values: [0.1, 0.2, 0.3], metadata: { title: 'Doc 1' } },
+      { id: 'vec2', values: [0.4, 0.5, 0.6], metadata: { title: 'Doc 2' } }
+    ]
+  }
+});
+
+// Query similar vectors
+const results = await client.post('/query', {
+  json: {
+    vector: [0.1, 0.2, 0.3],
+    topK: 10,
+    includeMetadata: true
+  }
+}).json();
+
+// Control plane (index management)
+const controlPlane = createClient(pineconeControlPlane({
+  apiKey: process.env.PINECONE_API_KEY
+}));
+
+// List indexes
+const indexes = await controlPlane.get('/indexes').json();
+
+// Create index
+await controlPlane.post('/indexes', {
+  json: {
+    name: 'my-index',
+    dimension: 1536,
+    metric: 'cosine',
+    spec: { serverless: { cloud: 'aws', region: 'us-east-1' } }
+  }
+});
+```
+
 ## Media & Content
 
 ### YouTube
@@ -820,6 +1036,12 @@ if (preset) {
 | `googleapis.com/youtube` | `youtube` |
 | `graph.facebook.com` | `meta` |
 | `open.tiktokapis.com` | `tiktok` |
+| `api.hubapi.com` | `hubspot` |
+| `api.sendgrid.com` | `sendgrid` |
+| `*.pinecone.io` | `pinecone` |
+| `api.elevenlabs.io` | `elevenlabs` |
+| `sentry.io` | `sentry` |
+| `connect.squareup.com` | `square` |
 
 ## Combining Presets
 

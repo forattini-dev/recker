@@ -2,7 +2,7 @@
 
 Comprehensive performance analysis comparing Recker against 16 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
 
-> **Generated**: 2025-12-10 | **Node.js**: v23.8.0 | **Platform**: linux x64
+> Benchmarks are automatically generated during release
 
 ## Executive Summary
 
@@ -31,7 +31,7 @@ Comprehensive performance analysis comparing Recker against 16 industry-standard
 ```
 CPU:          Intel Core i7-1065G7 @ 1.30GHz
 Memory:       16GB DDR4
-Runtime:      Node.js 23.8.0 (x64-linux)
+Runtime:      Node.js (x64-linux)
 Benchmark:    mitata (high-precision timing)
 Iterations:   Multiple samples until statistically significant
 Network:      localhost (eliminates network variance)

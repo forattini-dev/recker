@@ -6,7 +6,9 @@ Recker stands on the shoulders of giants. We would like to extend our deepest gr
 
 *   **[Apollo Client](https://github.com/apollographql/apollo-client)**
 *   **[Axios](https://github.com/axios/axios)**
-*   **[Cheerio](https://github.com/cheeriojs/cheerio)**
+*   **[cross-fetch](https://github.com/lquixada/cross-fetch)**
+*   **[he](https://github.com/mathiasbynens/he)** - HTML entity encoder/decoder.
+*   **[css-select](https://github.com/fb55/css-select)** - CSS selector engine.
 *   **[Cookie](https://github.com/jshttp/cookie)**
 *   **[Got](https://github.com/sindresorhus/got)**
 *   **[GraphQL.js](https://github.com/graphql/graphql-js)**

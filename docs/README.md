@@ -1,4 +1,4 @@
-# Recker
+# <span class="lightning-anim">⚡</span> Recker
 
 <div align="center">
 

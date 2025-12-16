@@ -14,12 +14,14 @@ Recker provides a browser-compatible build with ~70% of features. This guide cov
 - ✅ 15/16 auth methods (all except mTLS)
 - ✅ Memory & IndexedDB cache
 - ✅ All response types (JSON, text, blob, stream)
+- ✅ **AI Chat** (OpenAI, Anthropic, etc.)
+- ✅ **SEO Analysis** (Page grading)
+- ✅ **HAR Recording** (Network debug)
+- ✅ **Network Simulation** (Latency/Throttling)
 
 **What doesn't work in browser:**
 - ❌ DNS/WHOIS (requires raw sockets)
 - ❌ FTP/SFTP/Telnet (requires raw sockets)
-- ❌ AI Layer (Node.js dependencies)
-- ❌ HAR Recording (file system)
 - ❌ mTLS Auth (client certificates)
 - ❌ File/Redis Cache (server-side only)
 - ❌ CLI (terminal)
@@ -174,6 +176,82 @@ for await (const event of response.sse()) {
   console.log('Event:', event.event);
   console.log('Data:', event.data);
 }
+```
+
+## AI Chat (Client-Side)
+
+Use LLMs directly from the browser (requires API Key):
+
+```typescript
+import { recker } from 'recker/browser';
+
+// Configure AI client
+const ai = recker.ai({
+  defaultProvider: 'openai',
+  providers: {
+    openai: { apiKey: 'sk-...' } // User provides key
+  }
+});
+
+// Stream response
+const stream = await ai.stream({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'Hello browser!' }]
+});
+
+for await (const chunk of stream) {
+  if (chunk.type === 'text') console.log(chunk.content);
+}
+```
+
+## SEO Analysis
+
+Analyze HTML content for SEO best practices:
+
+```typescript
+import { recker } from 'recker/browser';
+
+const html = document.documentElement.outerHTML;
+const report = await recker.seo(html, { baseUrl: window.location.href });
+
+console.log(`Grade: ${report.grade} (${report.score}/100)`);
+console.log('Issues:', report.checks.filter(c => c.status === 'fail'));
+```
+
+## Network Debugging
+
+### HAR Recorder
+
+Record network activity and download as `.har` file (compatible with Chrome DevTools):
+
+```typescript
+import { recker } from 'recker/browser';
+
+// Start recording
+recker.har.start();
+
+await recker.get('https://api.example.com/users');
+await recker.get('https://api.example.com/posts');
+
+// Stop and download
+recker.har.stop();
+recker.har.download('my-session.har');
+```
+
+### Network Simulation
+
+Simulate slow connections for UI testing:
+
+```typescript
+import { recker } from 'recker/browser';
+
+// Add 2 seconds latency
+const client = recker.client();
+client.use(recker.simulateNetwork({ latency: 2000 }));
+
+console.time('req');
+await client.get('https://httpbin.org/get');
+console.timeEnd('req'); // ~2000ms + network time
 ```
 
 ## Using Plugins

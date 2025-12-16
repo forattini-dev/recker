@@ -2,7 +2,7 @@
 
 ## Goal: Make recker as fast as undici while keeping all features
 
-## Current State (v1.0.21)
+## Current State
 
 ```
 undici (raw):  0.45ms avg

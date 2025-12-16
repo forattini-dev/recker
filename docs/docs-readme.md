@@ -57,7 +57,6 @@ docs/
 ├── examples.md            # Examples
 ├── migration.md           # Migration guide
 ├── contributing.md        # Contributing guide
-├── changelog.md           # Changelog
 └── benchmarks.md          # Performance benchmarks
 ```
 
