@@ -4,7 +4,7 @@ Recker provides three HTTP clients for different use cases, all with consistent 
 
 ## Comparison Table
 
-| Feature | Standard Client | Mini Client | Browser Client |
+| Feature | [Standard](/http/02-fundamentals.md) | [Mini](/mini/01-overview.md) | [Browser](/browser/01-quickstart.md) |
 |---------|-----------------|-------------|----------------|
 | **Transport** | undici | undici | fetch |
 | **Environment** | Node.js | Node.js | Browser |
