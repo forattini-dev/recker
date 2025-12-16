@@ -1,4 +1,4 @@
-# Interactive Playground
+# Playground
 
 Test Recker right here in your browser! See how CLI arguments are parsed, what gets sent to the server, and analyze the response.
 
@@ -109,7 +109,13 @@ Test Recker right here in your browser! See how CLI arguments are parsed, what g
       <div style="background: var(--code-background-color); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; display: flex; flex-direction: column;">
         <div style="background: rgba(74, 222, 128, 0.1); padding: 8px 12px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #4ade80; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
           <span>3. Response</span>
-          <span id="response-status" style="font-size: 11px; opacity: 0.7;"></span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div id="response-view-toggle" style="display: none; gap: 4px;">
+              <button onclick="window.showResponseView('raw')" id="btn-raw" style="padding: 2px 8px; font-size: 10px; border: 1px solid var(--border-color); background: rgba(74, 222, 128, 0.2); color: #4ade80; border-radius: 3px; cursor: pointer;">Raw</button>
+              <button onclick="window.showResponseView('preview')" id="btn-preview" style="padding: 2px 8px; font-size: 10px; border: 1px solid var(--border-color); background: transparent; color: var(--text-color); border-radius: 3px; cursor: pointer; opacity: 0.7;">Preview</button>
+            </div>
+            <span id="response-status" style="font-size: 11px; opacity: 0.7;"></span>
+          </div>
         </div>
 
         <!-- Timings Bar -->
@@ -119,6 +125,7 @@ Test Recker right here in your browser! See how CLI arguments are parsed, what g
         </div>
 
         <pre id="response-body" style="padding: 12px; margin: 0; overflow: auto; flex: 1; max-height: 350px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--code-text-color);">Waiting for response...</pre>
+        <iframe id="response-preview" style="display: none; border: none; flex: 1; max-height: 350px; background: white;" sandbox="allow-same-origin"></iframe>
       </div>
 
     </div>

@@ -1,9 +1,9 @@
 <!-- docs/_sidebar.md -->
 
 - **Getting Started**
-  - [**Interactive Playground**](/getting-started/playground.md)
   - [Installation](/getting-started/installation.md)
   - [Quick Start](/http/01-quickstart.md)
+  - [**Playground**](/getting-started/playground.md)
   - [CLI Overview](/getting-started/cli.md)
   - [MCP Server](/getting-started/mcp.md)
 

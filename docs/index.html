@@ -859,9 +859,52 @@
         const formatted = typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData, null, 2);
         responseBody.textContent = formatted;
 
+        // Handle HTML preview toggle
+        const viewToggle = document.getElementById('response-view-toggle');
+        const previewFrame = document.getElementById('response-preview');
+        const isHtml = contentType.includes('text/html');
+
+        if (viewToggle && previewFrame) {
+          if (isHtml && typeof bodyData === 'string') {
+            viewToggle.style.display = 'flex';
+            window._currentHtmlResponse = bodyData;
+            // Show preview by default for HTML
+            window.showResponseView('preview');
+          } else {
+            viewToggle.style.display = 'none';
+            previewFrame.style.display = 'none';
+            responseBody.style.display = 'block';
+            window._currentHtmlResponse = null;
+          }
+        }
+
       } catch (err) {
         responseBody.textContent = `Error: ${err.message}\n\n(If CORS error, make sure "CORS Proxy" is checked)`;
         console.error(err);
+      }
+    };
+
+    // ===== Response View Toggle =====
+    window._currentHtmlResponse = null;
+    window.showResponseView = function(view) {
+      const responseBody = document.getElementById('response-body');
+      const previewFrame = document.getElementById('response-preview');
+      const btnRaw = document.getElementById('btn-raw');
+      const btnPreview = document.getElementById('btn-preview');
+
+      if (!responseBody || !previewFrame) return;
+
+      if (view === 'preview' && window._currentHtmlResponse) {
+        responseBody.style.display = 'none';
+        previewFrame.style.display = 'block';
+        previewFrame.srcdoc = window._currentHtmlResponse;
+        if (btnRaw) { btnRaw.style.background = 'transparent'; btnRaw.style.color = 'var(--text-color)'; btnRaw.style.opacity = '0.7'; }
+        if (btnPreview) { btnPreview.style.background = 'rgba(74, 222, 128, 0.2)'; btnPreview.style.color = '#4ade80'; btnPreview.style.opacity = '1'; }
+      } else {
+        responseBody.style.display = 'block';
+        previewFrame.style.display = 'none';
+        if (btnRaw) { btnRaw.style.background = 'rgba(74, 222, 128, 0.2)'; btnRaw.style.color = '#4ade80'; btnRaw.style.opacity = '1'; }
+        if (btnPreview) { btnPreview.style.background = 'transparent'; btnPreview.style.color = 'var(--text-color)'; btnPreview.style.opacity = '0.7'; }
       }
     };
 
