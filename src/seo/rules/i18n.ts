@@ -9,7 +9,7 @@ export const i18nRules: SeoRule[] = [
   {
     id: 'i18n-hreflang-exists',
     name: 'Hreflang Tags',
-    category: 'technical',
+    category: 'i18n',
     severity: 'warning',
     description: 'Multi-language sites should have hreflang tags for proper language targeting',
     check: (ctx) => {
@@ -17,7 +17,7 @@ export const i18nRules: SeoRule[] = [
         // Warn more strongly if the page appears to be multi-language (has non-english lang attribute)
         if (ctx.hasLang && ctx.langValue && ctx.langValue !== 'en') {
           return createResult(
-            { id: 'i18n-hreflang-exists', name: 'Hreflang Tags', category: 'technical', severity: 'warning' },
+            { id: 'i18n-hreflang-exists', name: 'Hreflang Tags', category: 'i18n', severity: 'warning' },
             'info',
             'No hreflang tags found (recommended for multi-language sites)',
             {
@@ -34,7 +34,7 @@ export const i18nRules: SeoRule[] = [
           );
         }
         return createResult(
-          { id: 'i18n-hreflang-exists', name: 'Hreflang Tags', category: 'technical', severity: 'warning' },
+          { id: 'i18n-hreflang-exists', name: 'Hreflang Tags', category: 'i18n', severity: 'warning' },
           'info',
           'No hreflang tags found',
           {
@@ -43,7 +43,7 @@ export const i18nRules: SeoRule[] = [
         );
       }
       return createResult(
-        { id: 'i18n-hreflang-exists', name: 'Hreflang Tags', category: 'technical', severity: 'warning' },
+        { id: 'i18n-hreflang-exists', name: 'Hreflang Tags', category: 'i18n', severity: 'warning' },
         'pass',
         `${ctx.hreflangTags.length} hreflang tag(s) found`,
         { value: ctx.hreflangTags.length }
@@ -53,13 +53,13 @@ export const i18nRules: SeoRule[] = [
   {
     id: 'i18n-hreflang-self',
     name: 'Hreflang Self-Reference',
-    category: 'technical',
+    category: 'i18n',
     severity: 'warning',
     description: 'Hreflang tags should include a self-referencing tag for the current page',
     check: (ctx) => {
       if (!ctx.hreflangTags || ctx.hreflangTags.length === 0) {
         return createResult(
-          { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'technical', severity: 'warning' },
+          { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'i18n', severity: 'warning' },
           'info',
           'Not applicable (no hreflang tags)',
           {
@@ -70,7 +70,7 @@ export const i18nRules: SeoRule[] = [
 
       if (!ctx.url) {
         return createResult(
-          { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'technical', severity: 'warning' },
+          { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'i18n', severity: 'warning' },
           'info',
           'Cannot verify (URL not available)',
         );
@@ -84,7 +84,7 @@ export const i18nRules: SeoRule[] = [
 
       if (!hasSelfRef) {
         return createResult(
-          { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'technical', severity: 'warning' },
+          { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'i18n', severity: 'warning' },
           'warn',
           'Missing self-referencing hreflang tag',
           {
@@ -100,7 +100,7 @@ export const i18nRules: SeoRule[] = [
       }
 
       return createResult(
-        { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'technical', severity: 'warning' },
+        { id: 'i18n-hreflang-self', name: 'Hreflang Self-Reference', category: 'i18n', severity: 'warning' },
         'pass',
         'Self-referencing hreflang tag present'
       );
@@ -109,13 +109,13 @@ export const i18nRules: SeoRule[] = [
   {
     id: 'i18n-hreflang-x-default',
     name: 'Hreflang X-Default',
-    category: 'technical',
+    category: 'i18n',
     severity: 'info',
     description: 'Include x-default hreflang for users outside defined regions',
     check: (ctx) => {
       if (!ctx.hreflangTags || ctx.hreflangTags.length < 2) {
         return createResult(
-          { id: 'i18n-hreflang-x-default', name: 'Hreflang X-Default', category: 'technical', severity: 'info' },
+          { id: 'i18n-hreflang-x-default', name: 'Hreflang X-Default', category: 'i18n', severity: 'info' },
           'info',
           'Not applicable (need 2+ hreflang tags for x-default)',
           {
@@ -128,7 +128,7 @@ export const i18nRules: SeoRule[] = [
 
       if (!hasXDefault) {
         return createResult(
-          { id: 'i18n-hreflang-x-default', name: 'Hreflang X-Default', category: 'technical', severity: 'info' },
+          { id: 'i18n-hreflang-x-default', name: 'Hreflang X-Default', category: 'i18n', severity: 'info' },
           'info',
           'No x-default hreflang tag found',
           {
@@ -141,7 +141,7 @@ export const i18nRules: SeoRule[] = [
         );
       }
       return createResult(
-        { id: 'i18n-hreflang-x-default', name: 'Hreflang X-Default', category: 'technical', severity: 'info' },
+        { id: 'i18n-hreflang-x-default', name: 'Hreflang X-Default', category: 'i18n', severity: 'info' },
         'pass',
         'x-default hreflang tag present'
       );
@@ -150,13 +150,13 @@ export const i18nRules: SeoRule[] = [
   {
     id: 'i18n-hreflang-valid-codes',
     name: 'Hreflang Valid Codes',
-    category: 'technical',
+    category: 'i18n',
     severity: 'warning',
     description: 'Hreflang language codes must be valid ISO 639-1 codes',
     check: (ctx) => {
       if (!ctx.hreflangTags || ctx.hreflangTags.length === 0) {
         return createResult(
-          { id: 'i18n-hreflang-valid-codes', name: 'Hreflang Valid Codes', category: 'technical', severity: 'warning' },
+          { id: 'i18n-hreflang-valid-codes', name: 'Hreflang Valid Codes', category: 'i18n', severity: 'warning' },
           'info',
           'Not applicable (no hreflang tags)',
         );
@@ -190,7 +190,7 @@ export const i18nRules: SeoRule[] = [
 
       if (invalidTags.length > 0) {
         return createResult(
-          { id: 'i18n-hreflang-valid-codes', name: 'Hreflang Valid Codes', category: 'technical', severity: 'warning' },
+          { id: 'i18n-hreflang-valid-codes', name: 'Hreflang Valid Codes', category: 'i18n', severity: 'warning' },
           'warn',
           `Invalid hreflang codes: ${invalidTags.join(', ')}`,
           {
@@ -207,7 +207,7 @@ export const i18nRules: SeoRule[] = [
       }
 
       return createResult(
-        { id: 'i18n-hreflang-valid-codes', name: 'Hreflang Valid Codes', category: 'technical', severity: 'warning' },
+        { id: 'i18n-hreflang-valid-codes', name: 'Hreflang Valid Codes', category: 'i18n', severity: 'warning' },
         'pass',
         'All hreflang codes are valid ISO 639-1'
       );
@@ -216,14 +216,14 @@ export const i18nRules: SeoRule[] = [
   {
     id: 'i18n-hreflang-return-links',
     name: 'Hreflang Return Links',
-    category: 'technical',
+    category: 'i18n',
     severity: 'warning',
     description: 'All hreflang URLs should return links back to this page (bidirectional)',
     check: (ctx) => {
       // This is a hint-only check since we can't verify remote pages
       if (!ctx.hreflangTags || ctx.hreflangTags.length < 2) {
         return createResult(
-          { id: 'i18n-hreflang-return-links', name: 'Hreflang Return Links', category: 'technical', severity: 'warning' },
+          { id: 'i18n-hreflang-return-links', name: 'Hreflang Return Links', category: 'i18n', severity: 'warning' },
           'info',
           'Not applicable (need 2+ hreflang tags)',
           {
@@ -233,7 +233,7 @@ export const i18nRules: SeoRule[] = [
       }
 
       return createResult(
-        { id: 'i18n-hreflang-return-links', name: 'Hreflang Return Links', category: 'technical', severity: 'warning' },
+        { id: 'i18n-hreflang-return-links', name: 'Hreflang Return Links', category: 'i18n', severity: 'warning' },
         'info',
         'Hreflang return links cannot be verified from HTML alone',
         {
@@ -249,13 +249,13 @@ export const i18nRules: SeoRule[] = [
   {
     id: 'i18n-content-language',
     name: 'Content-Language Header',
-    category: 'technical',
+    category: 'i18n',
     severity: 'info',
     description: 'Content-Language header can indicate the language of the document',
     check: (ctx) => {
       if (!ctx.responseHeaders) {
         return createResult(
-          { id: 'i18n-content-language', name: 'Content-Language Header', category: 'technical', severity: 'info' },
+          { id: 'i18n-content-language', name: 'Content-Language Header', category: 'i18n', severity: 'info' },
           'info',
           'Cannot verify (response headers not available)',
         );
@@ -266,7 +266,7 @@ export const i18nRules: SeoRule[] = [
 
       if (!contentLang) {
         return createResult(
-          { id: 'i18n-content-language', name: 'Content-Language Header', category: 'technical', severity: 'info' },
+          { id: 'i18n-content-language', name: 'Content-Language Header', category: 'i18n', severity: 'info' },
           'info',
           'Content-Language header not set',
           {
@@ -286,7 +286,7 @@ export const i18nRules: SeoRule[] = [
 
         if (headerLangPrimary !== htmlLangPrimary) {
           return createResult(
-            { id: 'i18n-content-language', name: 'Content-Language Header', category: 'technical', severity: 'info' },
+            { id: 'i18n-content-language', name: 'Content-Language Header', category: 'i18n', severity: 'info' },
             'warn',
             `Content-Language (${headerLang}) doesn't match html lang (${ctx.langValue})`,
             {
@@ -302,7 +302,7 @@ export const i18nRules: SeoRule[] = [
       }
 
       return createResult(
-        { id: 'i18n-content-language', name: 'Content-Language Header', category: 'technical', severity: 'info' },
+        { id: 'i18n-content-language', name: 'Content-Language Header', category: 'i18n', severity: 'info' },
         'pass',
         `Content-Language: ${contentLang}`
       );
@@ -311,13 +311,13 @@ export const i18nRules: SeoRule[] = [
   {
     id: 'i18n-lang-consistency',
     name: 'Language Consistency',
-    category: 'technical',
+    category: 'i18n',
     severity: 'warning',
     description: 'HTML lang attribute should match the og:locale if present',
     check: (ctx) => {
       if (!ctx.hasLang && !ctx.ogLocale) {
         return createResult(
-          { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'technical', severity: 'warning' },
+          { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'i18n', severity: 'warning' },
           'info',
           'No lang attribute or og:locale to compare',
           {
@@ -328,7 +328,7 @@ export const i18nRules: SeoRule[] = [
 
       if (!ctx.hasLang || !ctx.ogLocale) {
         return createResult(
-          { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'technical', severity: 'warning' },
+          { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'i18n', severity: 'warning' },
           'info',
           ctx.hasLang ? 'No og:locale to compare with html lang' : 'No html lang to compare with og:locale',
           {
@@ -344,7 +344,7 @@ export const i18nRules: SeoRule[] = [
 
       if (htmlLang !== ogLocaleLang) {
         return createResult(
-          { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'technical', severity: 'warning' },
+          { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'i18n', severity: 'warning' },
           'warn',
           `Language mismatch: html lang="${ctx.langValue}" vs og:locale="${ctx.ogLocale}"`,
           {
@@ -360,7 +360,7 @@ export const i18nRules: SeoRule[] = [
       }
 
       return createResult(
-        { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'technical', severity: 'warning' },
+        { id: 'i18n-lang-consistency', name: 'Language Consistency', category: 'i18n', severity: 'warning' },
         'pass',
         `Language consistent: html lang="${ctx.langValue}", og:locale="${ctx.ogLocale}"`
       );
@@ -369,13 +369,13 @@ export const i18nRules: SeoRule[] = [
   {
     id: 'i18n-lang-region',
     name: 'Language Region Specificity',
-    category: 'technical',
+    category: 'i18n',
     severity: 'info',
     description: 'Consider using region-specific language codes for better targeting',
     check: (ctx) => {
       if (!ctx.hasLang || !ctx.langValue) {
         return createResult(
-          { id: 'i18n-lang-region', name: 'Language Region Specificity', category: 'technical', severity: 'info' },
+          { id: 'i18n-lang-region', name: 'Language Region Specificity', category: 'i18n', severity: 'info' },
           'info',
           'No lang attribute to analyze',
           {
@@ -390,7 +390,7 @@ export const i18nRules: SeoRule[] = [
 
       if (multiRegionalLangs.includes(langPrimary) && !ctx.langValue.includes('-')) {
         return createResult(
-          { id: 'i18n-lang-region', name: 'Language Region Specificity', category: 'technical', severity: 'info' },
+          { id: 'i18n-lang-region', name: 'Language Region Specificity', category: 'i18n', severity: 'info' },
           'info',
           `Consider using region-specific lang code (e.g., ${langPrimary}-US, ${langPrimary}-GB)`,
           {
@@ -405,7 +405,7 @@ export const i18nRules: SeoRule[] = [
       }
 
       return createResult(
-        { id: 'i18n-lang-region', name: 'Language Region Specificity', category: 'technical', severity: 'info' },
+        { id: 'i18n-lang-region', name: 'Language Region Specificity', category: 'i18n', severity: 'info' },
         'pass',
         `Lang attribute: ${ctx.langValue}`
       );
@@ -418,13 +418,13 @@ export const i18nRules: SeoRule[] = [
   {
     id: 'hreflang-language-mismatch',
     name: 'Hreflang Language Mismatch',
-    category: 'technical',
+    category: 'i18n',
     severity: 'warning',
     description: 'Hreflang language should match page content language',
     check: (ctx) => {
       if (!ctx.hreflangTags || ctx.hreflangTags.length === 0) {
         return createResult(
-          { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'technical', severity: 'warning' },
+          { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'i18n', severity: 'warning' },
           'info',
           'Not applicable (no hreflang tags)',
         );
@@ -432,7 +432,7 @@ export const i18nRules: SeoRule[] = [
 
       if (!ctx.detectedLanguage) {
         return createResult(
-          { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'technical', severity: 'warning' },
+          { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'i18n', severity: 'warning' },
           'info',
           'Cannot verify (language detection not available)',
         );
@@ -448,7 +448,7 @@ export const i18nRules: SeoRule[] = [
 
         if (hreflangLang !== detectedLang && hreflangLang !== 'x-default') {
           return createResult(
-            { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'technical', severity: 'warning' },
+            { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'i18n', severity: 'warning' },
             'warn',
             `Hreflang declares "${selfHreflang.lang}" but content appears to be "${ctx.detectedLanguage}"`,
             {
@@ -465,7 +465,7 @@ export const i18nRules: SeoRule[] = [
       }
 
       return createResult(
-        { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'technical', severity: 'warning' },
+        { id: 'hreflang-language-mismatch', name: 'Hreflang Language Mismatch', category: 'i18n', severity: 'warning' },
         'pass',
         'Hreflang language matches detected content language'
       );
