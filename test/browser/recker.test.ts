@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { recker, get, post, put, patch, del, head, options, ws } from '../../src/browser/recker.js';
+import { recker, get, post, put, patch, del, head, options, purge, ws } from '../../src/browser/recker.js';
 
 describe('recker browser API', () => {
   describe('recker namespace', () => {
@@ -11,6 +11,7 @@ describe('recker browser API', () => {
       expect(typeof recker.delete).toBe('function');
       expect(typeof recker.head).toBe('function');
       expect(typeof recker.options).toBe('function');
+      expect(typeof recker.purge).toBe('function');
     });
 
     it('should have WebSocket function', () => {
@@ -44,6 +45,7 @@ describe('recker browser API', () => {
       expect(typeof del).toBe('function');
       expect(typeof head).toBe('function');
       expect(typeof options).toBe('function');
+      expect(typeof purge).toBe('function');
     });
 
     it('should export ws function', () => {

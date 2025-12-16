@@ -113,10 +113,19 @@ export function options(url: string, options?: RequestOptions): RequestPromise {
   return getDefaultClient().options(url, options);
 }
 
-// NOTE: TRACE and CONNECT are NOT supported in browsers
-// - TRACE: Blocked for security (XST attacks)
-// - CONNECT: Blocked for security (HTTP tunneling)
-// - PURGE: Non-standard CDN method, may be rejected
+/**
+ * PURGE request (CDN cache invalidation)
+ * Note: Works in browsers - it's just a custom HTTP method
+ */
+export function purge(url: string, options?: RequestOptions): RequestPromise {
+  return getDefaultClient().purge(url, options);
+}
+
+// NOTE: TRACE and CONNECT are blocked by the Fetch specification (forbidden methods)
+// - TRACE: Security risk (XST attacks)
+// - CONNECT: Used for HTTP tunneling/proxying
+// If you need these, use the full Client: recker.client().trace() / .connect()
+// They may throw errors depending on the browser
 
 // ============================================================================
 // WebSocket (use native browser WebSocket API)
@@ -181,7 +190,9 @@ export const recker = {
   head,
   /** OPTIONS request */
   options,
-  // NOTE: TRACE and CONNECT are NOT available in browsers (security restrictions)
+  /** PURGE request (CDN cache invalidation) */
+  purge,
+  // NOTE: TRACE and CONNECT are blocked by fetch spec (use recker.client().trace() if needed)
 
   // ========== WebSocket ==========
 

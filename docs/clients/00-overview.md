@@ -8,13 +8,13 @@ Recker provides three HTTP clients for different use cases, all with consistent 
 |---------|-----------------|-------------|----------------|
 | **Transport** | undici | undici (direct) | fetch |
 | **Environment** | Node.js | Node.js | Browser |
-| **HTTP Methods** | All (9) | All (10+) | 7 (browser limits) |
-| **Middleware/Plugins** | Yes | No | No |
-| **Hooks (before/after)** | Yes | No | No |
-| **Retry** | Yes | No | No |
-| **Cache** | Yes | No | No |
-| **Rate Limiting** | Yes | No | No |
-| **Auth Plugins** | Yes | No | No |
+| **HTTP Methods** | All (10) | All (10) | 8 shortcuts* |
+| **Middleware/Plugins** | Yes | No | Yes |
+| **Hooks (before/after)** | Yes | No | Yes |
+| **Retry** | Yes | No | Yes |
+| **Cache** | Yes | No | Yes (IndexedDB) |
+| **Rate Limiting** | Yes | No | Yes |
+| **Auth Plugins** | Yes | No | Yes (15/16) |
 | **Timeout Handling** | Yes | Manual | Yes |
 | **Chainable Response** | Yes | No | Yes |
 | **JSON Auto-parse** | Yes | Yes | Yes |
@@ -23,6 +23,8 @@ Recker provides three HTTP clients for different use cases, all with consistent 
 | **SEO Analysis** | Yes | No | Yes |
 | **AI Integration** | Yes | No | Yes |
 | **Overhead** | ~86µs | ~2µs | ~50µs |
+
+> *Browser shortcuts expose 8 methods. Full Client via `recker.client()` has all 10, but TRACE/CONNECT are blocked by fetch spec.
 
 ## HTTP Methods Support
 
@@ -35,12 +37,11 @@ Recker provides three HTTP clients for different use cases, all with consistent 
 | `DELETE` | Yes | Yes | Yes | Remove resource |
 | `HEAD` | Yes | Yes | Yes | Headers only |
 | `OPTIONS` | Yes | Yes | Yes | CORS preflight |
-| `TRACE` | Yes | Yes | **No** | Blocked by browsers (XST security) |
-| `CONNECT` | Yes | Yes | **No** | Blocked by browsers (tunneling) |
-| `PURGE` | No | Yes | **No** | CDN-specific, browsers reject |
-| Custom | via `request()` | via `request()` | via `fetch()` | Any method* |
+| `TRACE` | Yes | Yes | Blocked* | Debug (XST risk) |
+| `CONNECT` | Yes | Yes | Blocked* | Proxy tunnel |
+| `PURGE` | Yes | Yes | Yes | CDN cache invalidation |
 
-> **Note:** Browsers block TRACE (Cross-Site Tracing attacks), CONNECT (HTTP tunneling), and may reject non-standard methods like PURGE.
+> *TRACE and CONNECT are forbidden by the [Fetch specification](https://fetch.spec.whatwg.org/#methods) for security reasons.
 
 ## When to Use Each Client
 
@@ -97,8 +98,20 @@ Best for **browser applications** with the same API as Node.js.
 ```typescript
 import { recker } from 'recker/browser';
 
-// Same API as Node.js, uses fetch internally
+// Simple requests via shortcuts
 const users = await recker.get('/api/users').json();
+
+// Full client with hooks and plugins
+const client = recker.client({
+  baseUrl: 'https://api.example.com',
+  retry: { maxAttempts: 3 },
+  plugins: [/* your plugins */]
+});
+
+// Hooks work exactly like Node.js
+client.beforeRequest((req) => {
+  return req.withHeader('X-Request-ID', crypto.randomUUID());
+});
 
 // Native WebSocket
 const ws = recker.ws('wss://api.example.com/ws');
@@ -107,8 +120,70 @@ const ws = recker.ws('wss://api.example.com/ws');
 **Use when:**
 - Building browser applications
 - Want consistent API with Node.js
+- Need hooks and plugins in browser
 - Need HAR recording in browser
 - Using AI features in browser
+
+## Browser Client Features
+
+The browser client has **full feature parity** with the Standard Client:
+
+### Hooks
+
+```typescript
+import { recker } from 'recker/browser';
+
+const client = recker.client({ baseUrl: 'https://api.example.com' });
+
+// Before request hook
+client.beforeRequest((req) => {
+  console.log('Sending:', req.method, req.url);
+  return req;
+});
+
+// After response hook
+client.afterResponse((req, res) => {
+  console.log('Received:', res.status);
+  return res;
+});
+
+// Error hook
+client.onError((error, req) => {
+  console.error('Failed:', error.message);
+  throw error;
+});
+```
+
+### Plugins
+
+```typescript
+import { recker, retry, rateLimit, cache } from 'recker/browser';
+import { IndexedDBStorage } from 'recker/browser';
+
+const client = recker.client({
+  baseUrl: 'https://api.example.com',
+  plugins: [
+    retry({ maxAttempts: 3 }),
+    rateLimit({ limit: 100, window: 60000 }),
+    cache({ storage: new IndexedDBStorage('my-cache'), ttl: 300000 })
+  ]
+});
+```
+
+### Cache Storage Options
+
+```typescript
+import { MemoryStorage, IndexedDBStorage, ServiceWorkerCache } from 'recker/browser';
+
+// Memory (lost on page reload)
+const memoryCache = new MemoryStorage();
+
+// IndexedDB (persistent across sessions)
+const idbCache = new IndexedDBStorage('my-app-cache');
+
+// Service Worker Cache (modern, fast, persistent)
+const swCache = new ServiceWorkerCache({ cacheName: 'api-cache-v1' });
+```
 
 ## Performance Comparison
 
@@ -139,6 +214,12 @@ const data = await mini.get('/users').then(r => r.json());
 // Browser Client - same API, uses fetch
 import { recker } from 'recker/browser';
 const data = await recker.get('https://api.example.com/users').json();
+
+// Browser Client with full features
+const client = recker.client({
+  baseUrl: 'https://api.example.com',
+  retry: { maxAttempts: 3 }
+});
 ```
 
 ## Feature Matrix
@@ -148,10 +229,10 @@ const data = await recker.get('https://api.example.com/users').json();
 | Production API client | Standard |
 | Maximum throughput | Mini |
 | Browser application | Browser |
-| Retry on failure | Standard |
-| Cache responses | Standard |
-| Complex auth flows | Standard |
-| CDN cache purge | Mini (has PURGE) |
+| Retry on failure | Standard or Browser |
+| Cache responses | Standard or Browser |
+| Complex auth flows | Standard or Browser |
+| CDN cache purge | All three |
 | WebSocket in browser | Browser (native) |
 | One-off scripts | Mini |
 | Isomorphic code | Standard + Browser |
@@ -164,14 +245,16 @@ const data = await recker.get('https://api.example.com/users').json();
 
 | Aspect | Node.js | Browser |
 |--------|---------|---------|
-| **Features** | 100% | ~85% |
+| **Features** | 100% | ~90% |
 | **Bundle Size** | N/A | 800KB minified |
 | **Transport** | Undici (high-performance) | Fetch API |
 | **Crypto** | Node.js crypto (sync) | SubtleCrypto (async) |
-| **Cache** | Memory, File, Redis | Memory, IndexedDB, Service Worker |
+| **Cache** | Memory, File, Redis | Memory, IndexedDB, ServiceWorker |
 | **Protocols** | HTTP, WS, FTP, SFTP, DNS, WHOIS | HTTP, WS only |
 | **AI** | Full | Full |
 | **Presets** | 38 APIs | 38 APIs |
+| **Hooks** | Full | Full |
+| **Plugins** | All | Most (18 portable) |
 
 ## Complete Feature Matrix
 
@@ -180,18 +263,16 @@ const data = await recker.get('https://api.example.com/users').json();
 | Feature | Node.js | Browser | Notes |
 |---------|:-------:|:-------:|-------|
 | GET, POST, PUT, PATCH, DELETE | Yes | Yes | Full support |
-| HEAD, OPTIONS | Yes | Yes | Full support |
-| TRACE, CONNECT | Yes | **No** | Blocked by browsers |
+| HEAD, OPTIONS, PURGE | Yes | Yes | Full support |
+| TRACE, CONNECT | Yes | **Blocked** | Fetch spec restriction |
+| Hooks (before/after) | Yes | Yes | Full support |
+| Plugins | Yes | Yes | 18 portable plugins |
 | Request timeout | Yes | Yes | AbortController |
 | Streaming response | Yes | Yes | ReadableStream |
 | Upload progress | Yes | Limited | Limited in browser |
 | Download progress | Yes | Yes | Via ReadableStream |
-| Response types (JSON, text, blob) | Yes | Yes | Full support |
-| Custom headers | Yes | Yes | Full support |
-| Query parameters | Yes | Yes | Full support |
-| Request body (JSON, form, raw) | Yes | Yes | Full support |
 
-### Plugins (Resilience)
+### Plugins
 
 | Plugin | Node.js | Browser | Notes |
 |--------|:-------:|:-------:|-------|
@@ -199,18 +280,13 @@ const data = await recker.get('https://api.example.com/users').json();
 | rate-limit | Yes | Yes | Token bucket algorithm |
 | circuit-breaker | Yes | Yes | Fail-fast pattern |
 | dedup | Yes | Yes | Request deduplication |
-| timeout | Yes | Yes | Per-phase or total |
-
-### Plugins (Protocols)
-
-| Plugin | Node.js | Browser | Notes |
-|--------|:-------:|:-------:|-------|
-| graphql | Yes | Yes | Queries, mutations, subscriptions |
+| cache | Yes | Yes | IndexedDB/ServiceWorker in browser |
+| logger | Yes | Yes | Uses console in browser |
+| graphql | Yes | Yes | Full support |
 | soap | Yes | Yes | SOAP 1.1/1.2 |
-| xml | Yes | Yes | XML parsing/building |
 | jsonrpc | Yes | Yes | JSON-RPC 2.0 |
 | odata | Yes | Yes | OData v4 |
-| grpc-web | Yes | Yes | gRPC-Web protocol |
+| har-recorder | Yes | Yes | Blob + download in browser |
 
 ### Authentication
 
@@ -230,6 +306,7 @@ const data = await recker.get('https://api.example.com/users').json();
 |---------|:-------:|:-------:|-------|
 | Memory | Yes | Yes | In-memory, lost on reload |
 | IndexedDB | No | Yes | Persistent, browser-only |
+| ServiceWorker | No | Yes | Modern, fast, persistent |
 | File | Yes | No | Requires file system |
 | Redis | Yes | No | Requires Redis server |
 
@@ -237,29 +314,12 @@ const data = await recker.get('https://api.example.com/users').json();
 
 | Protocol | Node.js | Browser | Notes |
 |----------|:-------:|:-------:|-------|
-| HTTP/1.1 | Yes | Yes | Full support |
-| HTTP/2 | Yes | Yes | Browser auto-negotiates |
-| HTTP/3 | Yes | Yes | Browser auto-negotiates |
+| HTTP/1.1, HTTP/2, HTTP/3 | Yes | Yes | Browser auto-negotiates |
 | WebSocket | Yes | Yes | Native browser WebSocket |
 | SSE | Yes | Yes | Full parsing support |
 | DNS | Yes | **No** | Requires dns module |
 | WHOIS | Yes | **No** | Requires raw sockets |
-| FTP | Yes | **No** | Requires raw sockets |
-| SFTP | Yes | **No** | Requires SSH |
-| Telnet | Yes | **No** | Requires raw sockets |
-
-### Other Features
-
-| Feature | Node.js | Browser | Notes |
-|---------|:-------:|:-------:|-------|
-| AI Layer | Yes | Yes | Full support via Fetch |
-| 38 API Presets | Yes | Yes | All presets available |
-| CLI (`rek`) | Yes | No | Terminal-only |
-| MCP Server | Yes | No | Node.js process |
-| GeoIP | Yes | No | MaxMind database |
-| Proxy rotation | Yes | No | Network access |
-| Service Worker Cache | No | Yes | Persistent cache via Cache API |
-| Network Simulation | Yes | Yes | Simulate latency/offline |
+| FTP/SFTP | Yes | **No** | Requires raw sockets |
 
 ## Why Features Are Missing in Browser
 
@@ -268,18 +328,11 @@ Browsers don't provide raw TCP/UDP socket access for security reasons:
 - **DNS**: Uses Node.js `dns` module
 - **WHOIS**: Requires TCP port 43
 - **FTP/SFTP**: Requires FTP protocol
-- **Telnet**: Requires raw TCP
 
 ### HTTP Methods
-Browsers block certain HTTP methods for security:
+Browsers block certain HTTP methods per [Fetch specification](https://fetch.spec.whatwg.org/#methods):
 - **TRACE**: Blocked to prevent XST (Cross-Site Tracing) attacks
 - **CONNECT**: Blocked to prevent HTTP tunneling/proxying
-
-### File System Access
-Browsers have limited file system access:
-- **HAR Recording**: Works! Uses Blob + download for export
-- **File Cache**: Use IndexedDB or Service Worker Cache instead
-- **GeoIP**: Needs to read MaxMind database files (Node.js only)
 
 ### Client Certificates (mTLS)
 Browsers don't expose APIs for programmatic client certificates
@@ -293,39 +346,23 @@ import { createClient, UndiciTransport } from 'recker';
 
 const client = createClient({
   transport: new UndiciTransport({
-    connections: 100,      // Connection pool size
-    pipelining: 10,        // HTTP pipelining
+    connections: 100,
+    pipelining: 10,
     keepAliveTimeout: 30000
   })
 });
 ```
 
-**Benefits:**
-- HTTP/2 multiplexing
-- Connection pooling
-- Request pipelining
-- Low-level timing hooks
-
 ### Browser: FetchTransport (Default)
 
 ```typescript
-import { createClient, FetchTransport } from 'recker/browser';
+import { recker } from 'recker/browser';
 
-const client = createClient({
-  transport: new FetchTransport({
-    credentials: 'include',  // Cookie handling
-    cache: 'no-store',       // Cache control
-    keepalive: true          // Keep connections alive
-  })
+const client = recker.client({
+  // FetchTransport is automatic
+  // Same hooks and plugins as Node.js!
 });
 ```
-
-**Benefits:**
-- Native browser integration
-- Automatic HTTP/2 and HTTP/3
-- Built-in CORS handling
-- Service Worker compatible
-- Streaming support (SSE, chunked responses)
 
 ## Migration Guide: Node.js → Browser
 
@@ -333,10 +370,11 @@ const client = createClient({
 
 ```typescript
 // Node.js
-import { recker, createClient } from 'recker';
+import { createClient } from 'recker';
 
 // Browser
-import { recker, createClient } from 'recker/browser';
+import { recker } from 'recker/browser';
+const client = recker.client({ /* same options */ });
 ```
 
 ### 2. Replace File Cache with IndexedDB
@@ -348,26 +386,18 @@ const storage = new FileStorage('./cache');
 
 // Browser
 import { IndexedDBStorage } from 'recker/browser';
-const storage = new IndexedDBStorage({ dbName: 'cache' });
-await storage.init();
+const storage = new IndexedDBStorage('cache');
 ```
 
-### 3. Handle Missing Features
+### 3. Hooks and Plugins Work the Same
 
 ```typescript
-// Check before using
-if (!recker.unavailable.includes('dns')) {
-  await recker.dns('example.com');
-}
-```
-
-### 4. Consider CORS
-
-```typescript
-// May need proxy for cross-origin requests
-const client = recker.client({
-  baseUrl: '/api',  // Use relative path for same-origin
+// This code works in BOTH Node.js and Browser!
+client.beforeRequest((req) => {
+  return req.withHeader('X-Custom', 'value');
 });
+
+client.use(retry({ maxAttempts: 3 }));
 ```
 
 ## Next Steps
