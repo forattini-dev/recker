@@ -657,10 +657,10 @@ segment.ts`;  // No ENDLIST = live
     });
 
     describe('Encrypted segments', () => {
-        it('should throw for encrypted segments without ffmpeg', async () => {
+        it('should throw for SAMPLE-AES encryption (DRM)', async () => {
             const playlist = `#EXTM3U
 #EXT-X-TARGETDURATION:10
-#EXT-X-KEY:METHOD=AES-128,URI="https://example.com/key.bin",IV=0x12345678
+#EXT-X-KEY:METHOD=SAMPLE-AES,URI="https://example.com/key.bin",IV=0x12345678
 #EXTINF:10.0,
 segment.ts
 #EXT-X-ENDLIST`;
@@ -674,7 +674,27 @@ segment.ts
 
             const outputPath = join(testDir, 'video.ts');
             await expect(client.hls('http://test.com/playlist.m3u8').download(outputPath))
-                .rejects.toThrow('Encrypted HLS');
+                .rejects.toThrow('SAMPLE-AES encryption is not supported');
+        });
+
+        it('should throw for AES-128 without key URI', async () => {
+            const playlist = `#EXTM3U
+#EXT-X-TARGETDURATION:10
+#EXT-X-KEY:METHOD=AES-128,IV=0x00000000000000000000000000000001
+#EXTINF:10.0,
+segment.ts
+#EXT-X-ENDLIST`;
+
+            const client = createClient({
+                transport: createMockTransport({
+                    'playlist.m3u8': { status: 200, body: playlist },
+                    'segment.ts': { status: 200, body: 'encrypted' }
+                })
+            });
+
+            const outputPath = join(testDir, 'video-nokey.ts');
+            await expect(client.hls('http://test.com/playlist.m3u8').download(outputPath))
+                .rejects.toThrow('AES-128 encryption specified but no key URI provided');
         });
     });
 

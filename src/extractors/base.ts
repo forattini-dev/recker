@@ -1,0 +1,618 @@
+/**
+ * Base Extractor for video sites
+ *
+ * Provides common utilities for extracting video URLs from websites.
+ * Inspired by yt-dlp's extractor architecture.
+ *
+ * @example
+ * ```typescript
+ * class MyExtractor extends BaseExtractor {
+ *   readonly VALID_URL = /https?:\/\/example\.com\/video\/(?<id>\w+)/;
+ *   readonly IE_NAME = 'example';
+ *
+ *   async extract(url: string): Promise<ExtractorResult> {
+ *     const videoId = this.matchId(url);
+ *     const webpage = await this.downloadWebpage(url);
+ *     const title = this.searchRegex(/<title>(.+?)<\/title>/, webpage, 'title');
+ *     // ...
+ *   }
+ * }
+ * ```
+ */
+
+import type { Client } from '../core/client.js';
+
+// ============================================
+// Types
+// ============================================
+
+export interface Format {
+  url: string;
+  formatId: string;
+  ext: string;
+  quality?: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+  vcodec?: string;
+  acodec?: string;
+  tbr?: number; // Total bitrate in kbps
+  bandwidth?: number; // Bandwidth in bps
+  protocol: 'http' | 'https' | 'm3u8' | 'm3u8_native' | 'mpd' | 'rtmp' | 'dash' | 'websocket' | 'niconico_dmc';
+  httpHeaders?: Record<string, string>;
+  formatNote?: string; // Human-readable format description
+}
+
+export interface ExtractorResult {
+  id: string;
+  title: string;
+  url?: string; // Direct URL (mp4, etc)
+  formats?: Format[]; // Multiple formats
+  thumbnail?: string;
+  thumbnails?: Array<{ url: string; width?: number; height?: number }>;
+  description?: string;
+  duration?: number; // Duration in seconds
+  viewCount?: number;
+  likeCount?: number;
+  dislikeCount?: number;
+  commentCount?: number;
+  uploadDate?: string; // YYYYMMDD format
+  timestamp?: number; // Unix timestamp
+  uploader?: string;
+  uploaderId?: string;
+  ageLimit?: number;
+  tags?: string[];
+  categories?: string[];
+  isLive?: boolean;
+  liveStatus?: 'is_live' | 'was_live' | 'not_live';
+}
+
+export interface SearchRegexOptions {
+  required?: boolean;
+  default?: string | null;
+  group?: number | string;
+  flags?: string;
+}
+
+export class ExtractorError extends Error {
+  readonly expected: boolean;
+
+  constructor(message: string, expected = false) {
+    super(message);
+    this.name = 'ExtractorError';
+    this.expected = expected;
+  }
+}
+
+export class GeoRestrictedError extends ExtractorError {
+  readonly countries?: string[];
+
+  constructor(message = 'Content not available in your country', countries?: string[]) {
+    super(message, true);
+    this.name = 'GeoRestrictedError';
+    this.countries = countries;
+  }
+}
+
+export class UserNotLiveError extends ExtractorError {
+  constructor(username: string) {
+    super(`${username} is not currently live`, true);
+    this.name = 'UserNotLiveError';
+  }
+}
+
+export class AgeRestrictedError extends ExtractorError {
+  constructor(message = 'Age restricted content requires login') {
+    super(message, true);
+    this.name = 'AgeRestrictedError';
+  }
+}
+
+// ============================================
+// Base Extractor
+// ============================================
+
+export abstract class BaseExtractor {
+  protected client: Client;
+
+  /** Regex pattern(s) to match valid URLs for this extractor */
+  abstract readonly VALID_URL: RegExp | RegExp[];
+
+  /** Extractor name (for logging/identification) */
+  abstract readonly IE_NAME: string;
+
+  /** Age limit for content (default 0) */
+  readonly AGE_LIMIT: number = 0;
+
+  constructor(client: Client) {
+    this.client = client;
+  }
+
+  // ============================================
+  // Main Methods
+  // ============================================
+
+  /**
+   * Check if this extractor can handle the given URL
+   */
+  canHandle(url: string): boolean {
+    const patterns = Array.isArray(this.VALID_URL) ? this.VALID_URL : [this.VALID_URL];
+    return patterns.some((p) => p.test(url));
+  }
+
+  /**
+   * Extract video information from URL
+   */
+  abstract extract(url: string): Promise<ExtractorResult>;
+
+  // ============================================
+  // URL Matching Helpers
+  // ============================================
+
+  /**
+   * Extract video ID from URL using VALID_URL pattern
+   */
+  protected matchId(url: string): string {
+    const patterns = Array.isArray(this.VALID_URL) ? this.VALID_URL : [this.VALID_URL];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) {
+        return match.groups?.id ?? match[1] ?? '';
+      }
+    }
+
+    throw new ExtractorError(`Could not extract ID from URL: ${url}`);
+  }
+
+  /**
+   * Get full match object from URL
+   */
+  protected matchUrl(url: string): RegExpMatchArray | null {
+    const patterns = Array.isArray(this.VALID_URL) ? this.VALID_URL : [this.VALID_URL];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match;
+    }
+
+    return null;
+  }
+
+  // ============================================
+  // HTTP Helpers
+  // ============================================
+
+  /**
+   * Download webpage as text
+   */
+  protected async downloadWebpage(
+    url: string,
+    headers?: Record<string, string>
+  ): Promise<string> {
+    const response = await this.client.get(url, { headers });
+    return response.text();
+  }
+
+  /**
+   * Download and parse JSON
+   */
+  protected async downloadJson<T = unknown>(
+    url: string,
+    headers?: Record<string, string>
+  ): Promise<T> {
+    const response = await this.client.get(url, { headers });
+    return response.json() as Promise<T>;
+  }
+
+  /**
+   * POST request and parse JSON
+   */
+  protected async postJson<T = unknown>(
+    url: string,
+    data: unknown,
+    headers?: Record<string, string>
+  ): Promise<T> {
+    const response = await this.client.post(url, data, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+    });
+    return response.json() as Promise<T>;
+  }
+
+  /**
+   * POST form data and parse JSON
+   */
+  protected async postForm<T = unknown>(
+    url: string,
+    data: Record<string, string>,
+    headers?: Record<string, string>
+  ): Promise<T> {
+    const formBody = new URLSearchParams(data).toString();
+    const response = await this.client.post(url, formBody, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...headers,
+      },
+    });
+    return response.json() as Promise<T>;
+  }
+
+  // ============================================
+  // Regex Helpers
+  // ============================================
+
+  /**
+   * Search for pattern in text and return match
+   *
+   * @param pattern - Regex pattern (should have capture group)
+   * @param text - Text to search in
+   * @param name - Name of what we're searching for (for error messages)
+   * @param options - Search options
+   */
+  protected searchRegex(
+    pattern: RegExp | string,
+    text: string,
+    name: string,
+    options: SearchRegexOptions = {}
+  ): string | null {
+    const { required = true, default: defaultValue = null, group = 1, flags } = options;
+
+    const regex = typeof pattern === 'string' ? new RegExp(pattern, flags) : pattern;
+    const match = text.match(regex);
+
+    if (!match) {
+      if (required && defaultValue === null) {
+        throw new ExtractorError(`Could not find ${name}`);
+      }
+      return defaultValue;
+    }
+
+    if (typeof group === 'string') {
+      return match.groups?.[group] ?? defaultValue;
+    }
+
+    return match[group] ?? defaultValue;
+  }
+
+  /**
+   * Search for all matches of pattern
+   */
+  protected searchRegexAll(
+    pattern: RegExp,
+    text: string,
+    group: number | string = 1
+  ): string[] {
+    const results: string[] = [];
+    const globalPattern = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
+
+    for (const match of text.matchAll(globalPattern)) {
+      if (typeof group === 'string') {
+        if (match.groups?.[group]) results.push(match.groups[group]);
+      } else {
+        if (match[group]) results.push(match[group]);
+      }
+    }
+
+    return results;
+  }
+
+  // ============================================
+  // HTML Helpers
+  // ============================================
+
+  /**
+   * Extract OpenGraph property from HTML
+   */
+  protected ogSearchProperty(html: string, property: string): string | null {
+    return this.searchRegex(
+      new RegExp(`<meta[^>]+property=["']og:${property}["'][^>]+content=["']([^"']+)["']`, 'i'),
+      html,
+      `og:${property}`,
+      { required: false }
+    ) ?? this.searchRegex(
+      new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:${property}["']`, 'i'),
+      html,
+      `og:${property}`,
+      { required: false }
+    );
+  }
+
+  /**
+   * Extract meta tag content from HTML
+   */
+  protected htmlSearchMeta(html: string, name: string): string | null {
+    return this.searchRegex(
+      new RegExp(`<meta[^>]+name=["']${name}["'][^>]+content=["']([^"']+)["']`, 'i'),
+      html,
+      `meta:${name}`,
+      { required: false }
+    ) ?? this.searchRegex(
+      new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+name=["']${name}["']`, 'i'),
+      html,
+      `meta:${name}`,
+      { required: false }
+    );
+  }
+
+  /**
+   * Extract hidden form inputs from HTML
+   */
+  protected extractHiddenInputs(html: string): Record<string, string> {
+    const inputs: Record<string, string> = {};
+    const pattern = /<input[^>]+type=["']hidden["'][^>]*>/gi;
+
+    for (const match of html.matchAll(pattern)) {
+      const inputHtml = match[0];
+      const name = this.searchRegex(/name=["']([^"']+)["']/, inputHtml, 'name', { required: false });
+      const value = this.searchRegex(/value=["']([^"']*)["']/, inputHtml, 'value', { required: false });
+
+      if (name) {
+        inputs[name] = value ?? '';
+      }
+    }
+
+    return inputs;
+  }
+
+  // ============================================
+  // JSON Helpers
+  // ============================================
+
+  /**
+   * Search for JSON object in HTML/text starting with a pattern
+   */
+  protected searchJson<T = unknown>(
+    startPattern: RegExp | string,
+    text: string,
+    name: string,
+    options: { required?: boolean; default?: T | null } = {}
+  ): T | null {
+    const { required = true, default: defaultValue = null } = options;
+
+    const regex = typeof startPattern === 'string' ? new RegExp(startPattern) : startPattern;
+    const match = text.match(regex);
+
+    if (!match) {
+      if (required && defaultValue === null) {
+        throw new ExtractorError(`Could not find ${name}`);
+      }
+      return defaultValue;
+    }
+
+    // Find the start of JSON after the pattern
+    const startIndex = match.index! + match[0].length;
+
+    // Try to parse JSON starting from different positions
+    for (let i = startIndex; i < Math.min(startIndex + 100, text.length); i++) {
+      const char = text[i];
+      if (char === '{' || char === '[') {
+        try {
+          const jsonStr = this.extractJsonObject(text, i);
+          return JSON.parse(jsonStr) as T;
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    if (required && defaultValue === null) {
+      throw new ExtractorError(`Could not parse JSON for ${name}`);
+    }
+    return defaultValue;
+  }
+
+  /**
+   * Extract balanced JSON object/array from string
+   */
+  private extractJsonObject(text: string, startIndex: number): string {
+    const startChar = text[startIndex];
+    const endChar = startChar === '{' ? '}' : ']';
+
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\' && inString) {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === startChar) depth++;
+      if (char === endChar) depth--;
+
+      if (depth === 0) {
+        return text.substring(startIndex, i + 1);
+      }
+    }
+
+    throw new Error('Unbalanced JSON');
+  }
+
+  // ============================================
+  // Format Helpers
+  // ============================================
+
+  /**
+   * Extract M3U8 formats from URL
+   */
+  protected async extractM3U8Formats(
+    m3u8Url: string,
+    videoId: string,
+    options: { live?: boolean; httpHeaders?: Record<string, string> } = {}
+  ): Promise<Format[]> {
+    const content = await this.downloadWebpage(m3u8Url, options.httpHeaders);
+    const formats: Format[] = [];
+
+    // Check if master playlist
+    if (content.includes('#EXT-X-STREAM-INF')) {
+      // Parse master playlist
+      const lines = content.split('\n');
+      let pendingFormat: Partial<Format> = {};
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith('#EXT-X-STREAM-INF:')) {
+          const attrs = this.parseM3U8Attributes(trimmed.substring(18));
+          pendingFormat = {
+            tbr: attrs.BANDWIDTH ? Math.round(parseInt(attrs.BANDWIDTH) / 1000) : undefined,
+            width: attrs.RESOLUTION ? parseInt(attrs.RESOLUTION.split('x')[0]) : undefined,
+            height: attrs.RESOLUTION ? parseInt(attrs.RESOLUTION.split('x')[1]) : undefined,
+            vcodec: attrs.CODECS?.split(',')[0],
+            acodec: attrs.CODECS?.split(',')[1],
+          };
+        } else if (!trimmed.startsWith('#') && trimmed && pendingFormat.tbr !== undefined) {
+          const url = this.resolveUrl(trimmed, m3u8Url);
+          formats.push({
+            url,
+            formatId: `hls-${pendingFormat.height || pendingFormat.tbr}`,
+            ext: 'mp4',
+            protocol: 'm3u8_native',
+            quality: pendingFormat.height ?? pendingFormat.tbr,
+            httpHeaders: options.httpHeaders,
+            ...pendingFormat,
+          });
+          pendingFormat = {};
+        }
+      }
+    } else {
+      // Single quality stream
+      formats.push({
+        url: m3u8Url,
+        formatId: 'hls',
+        ext: 'mp4',
+        protocol: 'm3u8_native',
+        httpHeaders: options.httpHeaders,
+      });
+    }
+
+    return formats;
+  }
+
+  /**
+   * Parse M3U8 attribute string
+   */
+  private parseM3U8Attributes(attrString: string): Record<string, string> {
+    const attrs: Record<string, string> = {};
+    const regex = /([A-Z0-9-]+)=(?:"([^"]*)"|([^,]*))/g;
+
+    let match;
+    while ((match = regex.exec(attrString)) !== null) {
+      attrs[match[1]] = match[2] ?? match[3];
+    }
+
+    return attrs;
+  }
+
+  // ============================================
+  // URL Helpers
+  // ============================================
+
+  /**
+   * Resolve relative URL against base
+   */
+  protected resolveUrl(url: string, baseUrl: string): string {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    try {
+      const base = new URL(baseUrl);
+      return new URL(url, base).toString();
+    } catch {
+      return url;
+    }
+  }
+
+  // ============================================
+  // Utility Helpers
+  // ============================================
+
+  /**
+   * Parse duration string to seconds
+   */
+  protected parseDuration(durationStr: string | null | undefined): number | undefined {
+    if (!durationStr) return undefined;
+
+    // Try HH:MM:SS or MM:SS format
+    const parts = durationStr.split(':').map(Number);
+    if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    }
+
+    // Try seconds
+    const seconds = parseInt(durationStr, 10);
+    return isNaN(seconds) ? undefined : seconds;
+  }
+
+  /**
+   * Parse view count string (e.g., "1.2M", "1,234")
+   */
+  protected parseCount(countStr: string | null | undefined): number | undefined {
+    if (!countStr) return undefined;
+
+    const cleaned = countStr.replace(/[,\s]/g, '').toLowerCase();
+
+    const multipliers: Record<string, number> = {
+      k: 1_000,
+      m: 1_000_000,
+      b: 1_000_000_000,
+    };
+
+    for (const [suffix, multiplier] of Object.entries(multipliers)) {
+      if (cleaned.endsWith(suffix)) {
+        const num = parseFloat(cleaned.slice(0, -1));
+        return isNaN(num) ? undefined : Math.round(num * multiplier);
+      }
+    }
+
+    const num = parseInt(cleaned, 10);
+    return isNaN(num) ? undefined : num;
+  }
+
+  /**
+   * Clean HTML from string
+   */
+  protected cleanHtml(html: string): string {
+    return html
+      .replace(/<[^>]+>/g, '') // Remove tags
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
+   * Decode unicode escape sequences
+   */
+  protected decodeUnicode(str: string): string {
+    return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+      String.fromCharCode(parseInt(hex, 16))
+    );
+  }
+}

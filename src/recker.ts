@@ -49,7 +49,10 @@ import { createDNS, type DNSClientOptions, type DNSClient } from './dns/index.js
 import { createAI, UnifiedAIClient } from './ai/index.js';
 import type { AIClientConfig } from './types/ai.js';
 import { harRecorder } from './plugins/har-recorder.js';
-import { uploadFile } from './utils/upload.js'; // Novo import
+import { uploadFile } from './utils/upload.js';
+import { createVideoBuilder, VideoBuilder } from './video/builder.js';
+import { extract, extractors, isSupported, getExtractorName, listExtractors } from './extractors/index.js';
+import type { ExtractorResult } from './extractors/base.js';
 
 // ============================================================================
 // Singleton instances (lazy-loaded)
@@ -182,6 +185,30 @@ export function ws(url: string, options?: WebSocketOptions): ReckerWebSocket {
   return createWebSocket(url, options);
 }
 
+/**
+ * Video extraction and download
+ * @example await video('https://chaturbate.com/user/').download('./video.ts')
+ */
+export function video(url: string): VideoBuilder {
+  return createVideoBuilder(url, getDefaultClient());
+}
+
+/**
+ * Check if URL is supported by video extractors
+ * @example await isVideoSupported('https://chaturbate.com/user/') // true
+ */
+export async function isVideoSupported(url: string): Promise<boolean> {
+  return isSupported(url);
+}
+
+/**
+ * Extract video information without downloading
+ * @example const info = await extractVideo('https://chaturbate.com/user/')
+ */
+export async function extractVideo(url: string): Promise<ExtractorResult> {
+  return extract(url, getDefaultClient());
+}
+
 // ============================================================================
 // Unified 'recker' namespace
 // ============================================================================
@@ -278,6 +305,40 @@ export const recker = {
 
   /** WebSocket connection */
   ws,
+
+  // ========== Video ==========
+
+  /**
+   * Video extraction and download
+   * @example await recker.video('https://chaturbate.com/user/').download('./video.ts')
+   */
+  video,
+
+  /**
+   * Check if URL is supported by video extractors
+   */
+  isVideoSupported,
+
+  /**
+   * Extract video information without downloading
+   */
+  extractVideo,
+
+  /**
+   * Named extractors for direct access
+   * @example new recker.extractors.Chaturbate(client).extract(url)
+   */
+  extractors,
+
+  /**
+   * List all available extractor names
+   */
+  listExtractors,
+
+  /**
+   * Get extractor name for a URL
+   */
+  getExtractorName,
 
   // ========== AI ==========
 

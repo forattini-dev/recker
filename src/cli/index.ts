@@ -20,6 +20,8 @@ import { registerUtilsCommands } from './commands/utils.js';
 import { registerHarCommand } from './commands/har.js';
 import { registerVectorCommand } from './commands/vector.js';
 import { registerSeoCommand } from './commands/seo.js';
+import { registerVideoCommand } from './commands/video.js';
+import { registerLiveCommand } from './commands/live.js';
 import { parseEnhancerPresets, loadEnvFile, levenshtein } from './helpers.js';
 
 async function readStdin(): Promise<string | null> {
@@ -332,6 +334,8 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
   registerHarCommand(program as any);
   registerVectorCommand(program as any);
   registerHlsCommand(program as any);
+  registerVideoCommand(program as any);
+  registerLiveCommand(program as any);
   registerAiCommand(program as any);
   registerBenchCommand(program as any);
   registerServeCommand(program as any);

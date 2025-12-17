@@ -30,9 +30,10 @@
 
 import type { Client } from '../core/client.js';
 import { createWriteStream, type WriteStream } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Writable } from 'node:stream';
+import { createDecipheriv } from 'node:crypto';
 
 // ============================================
 // Types
@@ -46,6 +47,16 @@ export interface HlsVariant {
   name?: string;
 }
 
+export interface HlsByteRange {
+  length: number;
+  offset: number;
+}
+
+export interface HlsInitSegment {
+  url: string;
+  byteRange?: HlsByteRange;
+}
+
 export interface HlsSegment {
   url: string;
   duration: number;
@@ -53,6 +64,8 @@ export interface HlsSegment {
   key?: HlsKeyInfo;
   discontinuity?: boolean;
   programDateTime?: Date;
+  byteRange?: HlsByteRange;
+  initSegment?: HlsInitSegment;
 }
 
 export interface HlsKeyInfo {
@@ -185,6 +198,13 @@ function parseMasterPlaylist(content: string, baseUrl: string): HlsMasterPlaylis
   return { variants, isMaster: true };
 }
 
+function parseByteRange(value: string, lastEnd = 0): HlsByteRange {
+  const parts = value.split('@');
+  const length = parseInt(parts[0], 10);
+  const offset = parts[1] ? parseInt(parts[1], 10) : lastEnd;
+  return { length, offset };
+}
+
 function parseMediaPlaylist(content: string, baseUrl: string): HlsPlaylist {
   const lines = content.split('\n');
   const segments: HlsSegment[] = [];
@@ -199,6 +219,9 @@ function parseMediaPlaylist(content: string, baseUrl: string): HlsPlaylist {
   let currentKey: HlsKeyInfo | undefined;
   let currentDiscontinuity = false;
   let currentProgramDateTime: Date | undefined;
+  let currentByteRange: HlsByteRange | undefined;
+  let currentInitSegment: HlsInitSegment | undefined;
+  let lastByteEnd = 0;
   let segmentIndex = 0;
 
   for (const rawLine of lines) {
@@ -230,6 +253,18 @@ function parseMediaPlaylist(content: string, baseUrl: string): HlsPlaylist {
           iv: attrs.IV,
         };
       }
+    } else if (line.startsWith('#EXT-X-BYTERANGE:')) {
+      // #EXT-X-BYTERANGE:length[@offset]
+      const value = line.substring(17);
+      currentByteRange = parseByteRange(value, lastByteEnd);
+      lastByteEnd = currentByteRange.offset + currentByteRange.length;
+    } else if (line.startsWith('#EXT-X-MAP:')) {
+      // #EXT-X-MAP:URI="init.mp4"[,BYTERANGE="length@offset"]
+      const attrs = parseAttributes(line, '#EXT-X-MAP:');
+      currentInitSegment = {
+        url: resolveUrl(attrs.URI, baseUrl),
+        byteRange: attrs.BYTERANGE ? parseByteRange(attrs.BYTERANGE) : undefined,
+      };
     } else if (line.startsWith('#EXTINF:')) {
       const durationStr = line.substring(8).split(',')[0];
       currentDuration = parseFloat(durationStr);
@@ -241,11 +276,20 @@ function parseMediaPlaylist(content: string, baseUrl: string): HlsPlaylist {
         key: currentKey,
         discontinuity: currentDiscontinuity,
         programDateTime: currentProgramDateTime,
+        byteRange: currentByteRange,
+        initSegment: currentInitSegment,
       });
+
+      // Update lastByteEnd for next segment if using byte ranges
+      if (currentByteRange) {
+        lastByteEnd = currentByteRange.offset + currentByteRange.length;
+      }
 
       segmentIndex++;
       currentDiscontinuity = false;
       currentProgramDateTime = undefined;
+      currentByteRange = undefined;
+      // Note: initSegment persists until changed or discontinuity
     }
   }
 
@@ -318,6 +362,13 @@ export class HlsPromise implements Promise<void> {
   private startTime = 0;
   private aborted = false;
   private abortController = new AbortController();
+
+  // AES-128 key cache (avoid re-fetching)
+  private keyCache = new Map<string, Buffer>();
+
+  // Init segment cache (fMP4 initialization data)
+  private initSegmentCache = new Map<string, Buffer>();
+  private initSegmentPrepended = new Set<string>();
 
   constructor(client: Client, manifestUrl: string, options: HlsOptions = {}) {
     this.client = client;
@@ -435,6 +486,7 @@ export class HlsPromise implements Promise<void> {
     const mediaPlaylistUrl = await this.resolveMediaPlaylist();
     const isLive = this.isLiveMode();
     const maxDuration = this.getMaxDuration();
+    const concurrency = this.options.concurrency ?? 5;
 
     while (!this.aborted) {
       const playlist = await this.fetchMediaPlaylist(mediaPlaylistUrl);
@@ -442,33 +494,14 @@ export class HlsPromise implements Promise<void> {
         (s) => !this.seenSequences.has(s.sequence)
       );
 
+      // Mark all as seen immediately to avoid re-downloading on next poll
       for (const segment of newSegments) {
-        if (this.aborted) break;
-        if (maxDuration && Date.now() - this.startTime > maxDuration) {
-          return;
-        }
-
         this.seenSequences.add(segment.sequence);
+      }
 
-        const data = await this.downloadSegment(segment);
-        const segmentData: SegmentData = {
-          sequence: segment.sequence,
-          duration: segment.duration,
-          data,
-          url: segment.url,
-          downloadedAt: new Date(),
-        };
-
-        this.downloadedSegments++;
-        this.downloadedBytes += data.byteLength;
-
-        this.emitProgress(playlist, isLive);
-
-        if (this.options.onSegment) {
-          await this.options.onSegment(segmentData);
-        }
-
-        yield segmentData;
+      // Download segments with concurrency, yielding in order
+      if (newSegments.length > 0) {
+        yield* this.downloadSegmentsConcurrent(newSegments, concurrency, playlist, isLive, maxDuration);
       }
 
       // Check stop conditions
@@ -483,6 +516,82 @@ export class HlsPromise implements Promise<void> {
       // Poll interval for live streams
       const pollInterval = Math.max(1000, (playlist.targetDuration * 1000) / 2);
       await this.sleep(pollInterval);
+    }
+  }
+
+  /**
+   * Download segments concurrently while maintaining order
+   */
+  private async *downloadSegmentsConcurrent(
+    segments: HlsSegment[],
+    concurrency: number,
+    playlist: HlsPlaylist,
+    isLive: boolean,
+    maxDuration?: number
+  ): AsyncGenerator<SegmentData> {
+    // Results buffer: index -> data (filled out of order, yielded in order)
+    const results = new Map<number, SegmentData>();
+    const pending = new Map<number, Promise<{ index: number; data: SegmentData }>>();
+    let nextToYield = 0;
+    let nextToStart = 0;
+
+    // Helper to start a download
+    const startDownload = (index: number) => {
+      const segment = segments[index];
+      const promise = this.downloadSegment(segment).then((data) => ({
+        index,
+        data: {
+          sequence: segment.sequence,
+          duration: segment.duration,
+          data,
+          url: segment.url,
+          downloadedAt: new Date(),
+        } as SegmentData,
+      }));
+      pending.set(index, promise);
+    };
+
+    // Fill initial pool
+    while (nextToStart < segments.length && pending.size < concurrency) {
+      startDownload(nextToStart++);
+    }
+
+    // Process until all segments are yielded
+    while (nextToYield < segments.length) {
+      if (this.aborted) break;
+      if (maxDuration && Date.now() - this.startTime > maxDuration) {
+        break;
+      }
+
+      // Wait for any download to complete
+      if (pending.size > 0) {
+        const completed = await Promise.race(pending.values());
+        pending.delete(completed.index);
+        results.set(completed.index, completed.data);
+
+        // Start next download if available
+        if (nextToStart < segments.length && pending.size < concurrency) {
+          startDownload(nextToStart++);
+        }
+      }
+
+      // Yield results in order
+      while (results.has(nextToYield)) {
+        const segmentData = results.get(nextToYield)!;
+        results.delete(nextToYield);
+        nextToYield++;
+
+        this.downloadedSegments++;
+        this.downloadedBytes += segmentData.data.byteLength;
+
+        this.emitProgress(playlist, isLive);
+
+        if (this.options.onSegment) {
+          await this.options.onSegment(segmentData);
+        }
+
+        yield segmentData;
+      }
     }
   }
 
@@ -593,20 +702,147 @@ export class HlsPromise implements Promise<void> {
     return parseMediaPlaylist(content, url);
   }
 
-  private async downloadSegment(segment: HlsSegment): Promise<Uint8Array> {
-    if (segment.key && segment.key.method !== 'NONE') {
-      throw new Error(
-        `Encrypted HLS (${segment.key.method}) requires ffmpeg. Use unencrypted streams or install ffmpeg.`
-      );
+  // ============================================
+  // AES-128 Decryption
+  // ============================================
+
+  /**
+   * Fetch and cache encryption key
+   */
+  private async getKey(uri: string): Promise<Buffer> {
+    if (this.keyCache.has(uri)) {
+      return this.keyCache.get(uri)!;
     }
 
-    const response = await this.client.get(segment.url, {
+    const response = await this.client.get(uri, {
       headers: this.options.headers,
       signal: this.abortController.signal,
     });
 
     const blob = await response.blob();
-    return new Uint8Array(await blob.arrayBuffer());
+    const arrayBuffer = await blob.arrayBuffer();
+    const key = Buffer.from(arrayBuffer);
+
+    if (key.length !== 16) {
+      throw new Error(`Invalid AES-128 key length: ${key.length} bytes (expected 16)`);
+    }
+
+    this.keyCache.set(uri, key);
+    return key;
+  }
+
+  /**
+   * Generate IV from media sequence number (HLS default)
+   * IV = 8 bytes zeros + 8 bytes sequence number (big-endian)
+   */
+  private generateIV(mediaSequence: number): Buffer {
+    const iv = Buffer.alloc(16);
+    iv.writeBigUInt64BE(BigInt(mediaSequence), 8);
+    return iv;
+  }
+
+  /**
+   * Parse IV from hex string (0x prefix optional)
+   */
+  private parseIV(ivString: string): Buffer {
+    const hex = ivString.startsWith('0x') || ivString.startsWith('0X')
+      ? ivString.slice(2)
+      : ivString;
+    return Buffer.from(hex.padStart(32, '0'), 'hex');
+  }
+
+  /**
+   * Decrypt segment data using AES-128-CBC
+   */
+  private decryptSegment(data: Buffer, key: Buffer, iv: Buffer): Buffer {
+    const decipher = createDecipheriv('aes-128-cbc', key, iv);
+    decipher.setAutoPadding(true); // PKCS#7 padding
+    return Buffer.concat([decipher.update(data), decipher.final()]);
+  }
+
+  // ============================================
+  // Segment Download
+  // ============================================
+
+  /**
+   * Fetch init segment (fMP4 initialization)
+   */
+  private async getInitSegment(init: HlsInitSegment): Promise<Buffer> {
+    const cacheKey = `${init.url}:${init.byteRange?.offset ?? 0}:${init.byteRange?.length ?? 0}`;
+
+    if (this.initSegmentCache.has(cacheKey)) {
+      return this.initSegmentCache.get(cacheKey)!;
+    }
+
+    const headers: Record<string, string> = { ...this.options.headers };
+
+    // Add Range header if byte range specified
+    if (init.byteRange) {
+      const { offset, length } = init.byteRange;
+      headers['Range'] = `bytes=${offset}-${offset + length - 1}`;
+    }
+
+    const response = await this.client.get(init.url, {
+      headers,
+      signal: this.abortController.signal,
+    });
+
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const data = Buffer.from(arrayBuffer);
+
+    this.initSegmentCache.set(cacheKey, data);
+    return data;
+  }
+
+  private async downloadSegment(segment: HlsSegment): Promise<Uint8Array> {
+    const headers: Record<string, string> = { ...this.options.headers };
+
+    // Add Range header if byte range specified
+    if (segment.byteRange) {
+      const { offset, length } = segment.byteRange;
+      headers['Range'] = `bytes=${offset}-${offset + length - 1}`;
+    }
+
+    const response = await this.client.get(segment.url, {
+      headers,
+      signal: this.abortController.signal,
+    });
+
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    let data: Buffer = Buffer.from(arrayBuffer);
+
+    // Handle AES-128 decryption
+    if (segment.key && segment.key.method === 'AES-128') {
+      if (!segment.key.uri) {
+        throw new Error('AES-128 encryption specified but no key URI provided');
+      }
+
+      const key = await this.getKey(segment.key.uri);
+      const iv = segment.key.iv
+        ? this.parseIV(segment.key.iv)
+        : this.generateIV(segment.sequence);
+
+      data = this.decryptSegment(data, key, iv);
+    } else if (segment.key && segment.key.method === 'SAMPLE-AES') {
+      throw new Error(
+        'SAMPLE-AES encryption is not supported. This typically requires DRM handling.'
+      );
+    }
+
+    // Prepend init segment for fMP4 (only once per init segment)
+    if (segment.initSegment) {
+      const initKey = `${segment.initSegment.url}:${segment.initSegment.byteRange?.offset ?? 0}`;
+
+      if (!this.initSegmentPrepended.has(initKey)) {
+        const initData = await this.getInitSegment(segment.initSegment);
+        data = Buffer.concat([initData, data]);
+        this.initSegmentPrepended.add(initKey);
+      }
+    }
+
+    return new Uint8Array(data);
   }
 
   private async downloadMerged(playlistUrl: string, outputPath: string): Promise<void> {

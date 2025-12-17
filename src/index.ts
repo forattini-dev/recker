@@ -59,6 +59,10 @@ export * from './plugins/odata.js';
 export * from './plugins/http2-push.js';
 export * from './plugins/http3.js';
 export * from './cache/redis-storage.js';
+
+// Video extractors
+export * from './extractors/index.js';
+export * from './video/index.js';
 export * from './events/request-events.js';
 export * from './constants/http-status.js';
 export * from './utils/env-proxy.js';
@@ -101,6 +105,9 @@ export {
   dns,
   dnsSecurity,
   ws,
+  video,
+  isVideoSupported,
+  extractVideo,
   recker,
 } from './recker.js';
 

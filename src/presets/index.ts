@@ -51,7 +51,11 @@ export * from './sentry.js';
 // Device & Browser Presets
 export { default as android } from './android.js';
 export { default as ios } from './ios.js';
+
+// Video Site Presets
 export { default as chaturbate } from './chaturbate.js';
+export { default as pornhub } from './pornhub.js';
+export { default as xvideos } from './xvideos.js';
 
 // Enhancers (Stackable Presets)
 export * from './enhancers.js';
