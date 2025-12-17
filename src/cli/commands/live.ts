@@ -33,9 +33,7 @@ export function registerLiveCommand(program: Command) {
     .addHelpText(
       'after',
       `
-${colors.bold(colors.yellow('Arguments:'))}
   ${colors.cyan('quality=<q>'.padEnd(18))} ${colors.gray('Quality: highest, lowest, or resolution (720p)')}
-  ${colors.cyan('duration=<s>'.padEnd(18))} ${colors.gray('Recording duration in seconds')}
   ${colors.cyan('concurrency=<n>'.padEnd(18))} ${colors.gray('Concurrent segment downloads (default: 4)')}
   ${colors.cyan('Header:Value'.padEnd(18))} ${colors.gray('Add custom HTTP header')}
 
