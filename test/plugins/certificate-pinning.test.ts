@@ -436,9 +436,11 @@ describe('CertificatePinning Plugin', () => {
       expect(pins.sha256).toBeDefined();
     }, 15000);
 
-    it('should reject for invalid host', async () => {
+    it('should reject for truly unreachable host', async () => {
+      // Use localhost on a port that's definitely not listening
+      // This avoids issues with .invalid TLD being caught by ingress controllers
       await expect(
-        generatePinsFromHost('this-host-does-not-exist-xyz123.invalid', 443)
+        generatePinsFromHost('127.0.0.1', 59999)
       ).rejects.toThrow();
     }, 10000);
 
@@ -461,14 +463,16 @@ describe('CertificatePinning Plugin', () => {
     }, 20000);
 
     it('should skip hosts that fail', async () => {
+      // Use localhost on unreachable port to ensure failure
+      // .invalid TLD may be caught by network infrastructure (ingress controllers)
       const results = await preloadPins([
         'google.com',
-        'invalid-host-xyz123.invalid'
+        '127.0.0.1:59998'
       ]);
 
       expect(results.size).toBeGreaterThanOrEqual(1);
       expect(results.get('google.com')).toBeDefined();
-      expect(results.has('invalid-host-xyz123.invalid')).toBe(false);
+      expect(results.has('127.0.0.1:59998')).toBe(false);
     }, 20000);
 
     it('should handle custom port in host string', async () => {
@@ -479,9 +483,10 @@ describe('CertificatePinning Plugin', () => {
     }, 15000);
 
     it('should return empty map for all failed hosts', async () => {
+      // Use localhost on unreachable ports to ensure failure
       const results = await preloadPins([
-        'invalid1.invalid',
-        'invalid2.invalid'
+        '127.0.0.1:59996',
+        '127.0.0.1:59997'
       ]);
 
       expect(results.size).toBe(0);
