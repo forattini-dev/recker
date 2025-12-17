@@ -60,6 +60,12 @@ ${colors.bold(colors.yellow('Examples:'))}
       const rawArgs = args[1] || [];
       const cmdObj = args[args.length - 1];
 
+      // Handle `rek live help` - show help instead of treating 'help' as URL
+      if (url === 'help' || url === '--help' || url === '-h') {
+        cmdObj.help();
+        return;
+      }
+
       const options = cmdObj.opts ? cmdObj.opts() : {};
       const verbose = options.verbose;
 

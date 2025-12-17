@@ -37,7 +37,13 @@ export function registerVideoCommand(program: Command) {
     .description('Get information about a video')
     .argument('<url>', 'Video URL')
     .option('-j, --json', 'Output as JSON')
-    .action(async (url: string, options: { json?: boolean }) => {
+    .action(async (url: string, options: { json?: boolean }, cmdObj: any) => {
+      // Handle `rek video info help`
+      if (url === 'help' || url === '--help' || url === '-h') {
+        cmdObj.help();
+        return;
+      }
+
       const { Client } = await import('../../core/client.js');
       const { extract } = await import('../../extractors/index.js');
 
@@ -140,6 +146,12 @@ ${colors.bold(colors.yellow('Examples:'))}
       const url = args[0];
       const rawArgs = args[1] || [];
       const cmdObj = args[args.length - 1];
+
+      // Handle `rek video download help`
+      if (url === 'help' || url === '--help' || url === '-h') {
+        cmdObj.help();
+        return;
+      }
 
       const options = cmdObj.opts ? cmdObj.opts() : {};
       const verbose = options.verbose;

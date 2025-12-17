@@ -16,7 +16,7 @@ const KEYWORD_MAP: Record<string, string> = {
   version: '--version',
   secure: '--secure',
   implicit: '--implicit',
-  live: '--live'
+  // Note: 'live' removed - it's a subcommand name, not a keyword
 };
 
 /**
@@ -162,19 +162,20 @@ export class RekCommand {
   async dispatch(args: string[]) {
     this.currentArgs = args;
 
-    // Handle Help
-    if (args.includes('--help') || args.includes('-h')) {
-      this.showHelp();
+    const firstArg = args[0];
+
+    // Check subcommands FIRST before handling help
+    // This allows `rek live --help` to show live's help instead of root help
+    const sub = this.subcommands.find(c => c.name === firstArg || c.aliases.includes(firstArg));
+
+    if (sub) {
+      await sub.dispatch(args.slice(1));
       return;
     }
 
-    const firstArg = args[0];
-    
-    // Check subcommands
-    const sub = this.subcommands.find(c => c.name === firstArg || c.aliases.includes(firstArg));
-    
-    if (sub) {
-      await sub.dispatch(args.slice(1));
+    // Handle Help (only if no subcommand matched)
+    if (args.includes('--help') || args.includes('-h') || firstArg === 'help') {
+      this.showHelp();
       return;
     }
 
