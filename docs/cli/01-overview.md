@@ -114,6 +114,10 @@ rek dns google.com
 rek whois github.com
 rek tls api.stripe.com
 
+# Video Download & Live Recording
+rek video download https://youtube.com/watch?v=xxx
+rek live https://twitch.tv/shroud duration=3600
+
 # Vector Store (RAG)
 rek vector search query="database" file=docs.json
 ```
@@ -182,3 +186,4 @@ rek +chrome +curl get https://protected-site.com
 - **[Protocols](06-protocols.md)** - WebSocket, UDP support
 - **[Presets](07-presets.md)** - Quick access to popular APIs
 - **[Mock Servers](08-mock-servers.md)** - Built-in test servers for all protocols
+- **[Video & Live](09-video-live.md)** - Download videos and record live streams

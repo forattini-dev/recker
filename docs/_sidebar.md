@@ -29,10 +29,14 @@
   - [Mini Client](/mini/01-overview.md)
   - [Browser](/browser/01-quickstart.md)
 
+- **Media Download**
+  - [Video Extractors](/media/01-video-extractors.md)
+  - [Live Streams](/media/02-live-streams.md)
+
 - **Scraping**
   - [Overview](/scraping/01-overview.md)
   - [Selectors](/scraping/02-selectors.md)
-  - [Extractors](/scraping/03-extractors.md)
+  - [HTML Extractors](/scraping/03-extractors.md)
   - [Schemas](/scraping/04-schemas.md)
   - [Spider](/scraping/05-spider.md)
   - [Anti-Blocking & TLS](/scraping/06-anti-blocking.md)
@@ -79,6 +83,7 @@
   - [Protocols](/cli/06-protocols.md)
   - [Presets](/cli/07-presets.md)
   - [Mock Servers](/cli/08-mock-servers.md)
+  - [Video & Live](/cli/09-video-live.md)
 
 - **Protocols**
   - [WebSocket](/protocols/01-websocket.md)

@@ -140,6 +140,72 @@ const results = await store.search('query');
 
 [Learn more →](ai/05-vector-store.md)
 
+### HLS Streaming
+- **VOD downloads**: Download complete streams
+- **Live recording**: Capture live broadcasts with duration limits
+- **Quality selection**: Auto-select or specify resolution
+- **Segment streaming**: Process segments as they download
+
+```typescript
+// Download VOD
+await client.hls('https://example.com/video.m3u8')
+  .download('./video.ts');
+
+// Record live for 1 hour
+await client.hls('https://example.com/live.m3u8', {
+  live: { duration: 3600_000 }
+}).download('./recording.ts');
+```
+
+[Learn more →](protocols/08-hls.md)
+
+## 📹 Media Download
+
+### Video Extractors (38+ Sites)
+- **Social Media**: YouTube, TikTok, Instagram, Facebook, Twitter/X, Reddit
+- **Streaming**: Twitch, Kick, Vimeo, Dailymotion, Bilibili
+- **Audio**: SoundCloud, Bandcamp, Mixcloud, Audiomack
+- **Generic**: Auto-detect m3u8/mp4 on any site
+
+```typescript
+import { extract, createClient } from 'recker';
+
+const client = createClient();
+const info = await extract('https://youtube.com/watch?v=xxx', client);
+
+console.log(info.title);    // Video title
+console.log(info.formats);  // Available qualities
+console.log(info.isLive);   // Live stream detection
+```
+
+[Learn more →](media/01-video-extractors.md)
+
+### Live Stream Recording
+- **9+ platforms**: Twitch, Kick, YouTube, TikTok, Facebook, Chaturbate, VK, Twitter Spaces, PeerTube
+- **Quality selection**: Choose resolution or auto-select
+- **Duration limits**: Record for specific time or until cancelled
+- **Progress tracking**: Monitor recording in real-time
+
+```bash
+# CLI - Record Twitch stream for 1 hour
+rek live https://twitch.tv/shroud duration=3600
+
+# CLI - Download YouTube video
+rek video download https://youtube.com/watch?v=xxx
+```
+
+```typescript
+// Programmatic
+const info = await extract('https://twitch.tv/shroud', client);
+if (info.isLive) {
+  const format = info.formats.find(f => f.live);
+  await client.hls(format.url, { live: { duration: 3600_000 } })
+    .download('./stream.ts');
+}
+```
+
+[Learn more →](media/02-live-streams.md)
+
 ### Enhanced Spider
 - **Intelligent Discovery**: RSS/Atom, sitemap.xml, robots.txt, humans.txt
 - **Metadata Extraction**: JSON-LD, OpenGraph, Twitter Cards
