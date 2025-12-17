@@ -38,12 +38,9 @@ export function registerLiveCommand(program: Command) {
   ${colors.cyan('Header:Value'.padEnd(18))} ${colors.gray('Add custom HTTP header')}
 
 ${colors.bold(colors.yellow('Supported Platforms:'))}
-  ${colors.cyan('twitch'.padEnd(18))} ${colors.gray('Twitch.tv live streams')}
-  ${colors.cyan('kick'.padEnd(18))} ${colors.gray('Kick.com live streams')}
-  ${colors.cyan('youtube'.padEnd(18))} ${colors.gray('YouTube Live')}
-  ${colors.cyan('tiktok'.padEnd(18))} ${colors.gray('TikTok Live')}
-  ${colors.cyan('chaturbate'.padEnd(18))} ${colors.gray('Chaturbate.com')}
-  ${colors.cyan('generic'.padEnd(18))} ${colors.gray('Any HLS live stream')}
+  ${colors.cyan('twitch'.padEnd(14))} ${colors.cyan('kick'.padEnd(14))} ${colors.cyan('youtube'.padEnd(14))} ${colors.cyan('tiktok')}
+  ${colors.cyan('facebook'.padEnd(14))} ${colors.cyan('instagram'.padEnd(14))} ${colors.cyan('chaturbate'.padEnd(14))} ${colors.cyan('generic')}
+  ${colors.gray('...and 30+ more sites. Run')} ${colors.green('rek video sites')} ${colors.gray('for full list')}
 
 ${colors.bold(colors.yellow('Examples:'))}
   ${colors.green('rek live https://twitch.tv/shroud')}
