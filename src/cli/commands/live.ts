@@ -33,26 +33,24 @@ export function registerLiveCommand(program: Command) {
     .addHelpText(
       'after',
       `
-${colors.bold(colors.yellow('Options:'))}
-  ${colors.cyan('[output]')}             Output file path (default: live.ts)
-  ${colors.cyan('quality=<quality>')}    Quality: highest, lowest, or resolution (e.g., 720p)
-  ${colors.cyan('duration=<seconds>')}   Recording duration in seconds
-  ${colors.cyan('concurrency=<n>')}      Concurrent segment downloads (default: 4)
-  ${colors.cyan('Header:Value')}         Add custom HTTP header
+${colors.bold(colors.yellow('Arguments:'))}
+  ${colors.cyan('quality=<q>'.padEnd(18))} ${colors.gray('Quality: highest, lowest, or resolution (720p)')}
+  ${colors.cyan('duration=<s>'.padEnd(18))} ${colors.gray('Recording duration in seconds')}
+  ${colors.cyan('concurrency=<n>'.padEnd(18))} ${colors.gray('Concurrent segment downloads (default: 4)')}
+  ${colors.cyan('Header:Value'.padEnd(18))} ${colors.gray('Add custom HTTP header')}
 
-${colors.bold(colors.yellow('Supported Live Platforms:'))}
-  ${colors.cyan('twitch')}               Twitch.tv live streams
-  ${colors.cyan('kick')}                 Kick.com live streams
-  ${colors.cyan('youtube')}              YouTube Live
-  ${colors.cyan('tiktok')}               TikTok Live
-  ${colors.cyan('chaturbate')}           Chaturbate.com
-  ${colors.cyan('generic')}              Any HLS live stream
+${colors.bold(colors.yellow('Supported Platforms:'))}
+  ${colors.cyan('twitch'.padEnd(18))} ${colors.gray('Twitch.tv live streams')}
+  ${colors.cyan('kick'.padEnd(18))} ${colors.gray('Kick.com live streams')}
+  ${colors.cyan('youtube'.padEnd(18))} ${colors.gray('YouTube Live')}
+  ${colors.cyan('tiktok'.padEnd(18))} ${colors.gray('TikTok Live')}
+  ${colors.cyan('chaturbate'.padEnd(18))} ${colors.gray('Chaturbate.com')}
+  ${colors.cyan('generic'.padEnd(18))} ${colors.gray('Any HLS live stream')}
 
 ${colors.bold(colors.yellow('Examples:'))}
-  ${colors.green('$ rek live https://twitch.tv/shroud')}                              ${colors.gray('Record Twitch')}
-  ${colors.green('$ rek live https://kick.com/xqc -o xqc.ts')}                        ${colors.gray('Record to file')}
-  ${colors.green('$ rek live https://youtube.com/live/xxxxx duration=3600')}          ${colors.gray('Record 1 hour')}
-  ${colors.green('$ rek live https://chaturbate.com/user/ quality=highest')}          ${colors.gray('Best quality')}
+  ${colors.green('rek live https://twitch.tv/shroud')}
+  ${colors.green('rek live https://kick.com/xqc -o xqc.ts')}
+  ${colors.green('rek live https://youtube.com/live/xxxxx duration=3600')}
 `
     )
     .action(async (...args: any[]) => {

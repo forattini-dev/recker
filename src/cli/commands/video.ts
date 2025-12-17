@@ -121,25 +121,22 @@ export function registerVideoCommand(program: Command) {
     .addHelpText(
       'after',
       `
-${colors.bold(colors.yellow('Options:'))}
-  ${colors.cyan('[output]')}             Output file path (default: video.ts)
-  ${colors.cyan('quality=<quality>')}    Quality: highest, lowest, or resolution (e.g., 720p)
-  ${colors.cyan('live')}                 Enable live stream mode
-  ${colors.cyan('duration=<seconds>')}   Duration for live recording in seconds
-  ${colors.cyan('concurrency=<n>')}      Concurrent segment downloads (default: 4)
-  ${colors.cyan('Header:Value')}         Add custom HTTP header
+${colors.bold(colors.yellow('Arguments:'))}
+  ${colors.cyan('quality=<q>'.padEnd(18))} ${colors.gray('Quality: highest, lowest, or resolution (720p)')}
+  ${colors.cyan('duration=<s>'.padEnd(18))} ${colors.gray('Duration for live recording in seconds')}
+  ${colors.cyan('concurrency=<n>'.padEnd(18))} ${colors.gray('Concurrent segment downloads (default: 4)')}
+  ${colors.cyan('Header:Value'.padEnd(18))} ${colors.gray('Add custom HTTP header')}
 
 ${colors.bold(colors.yellow('Supported Sites:'))}
-  ${colors.cyan('chaturbate')}           Chaturbate.com live streams
-  ${colors.cyan('pornhub')}              PornHub.com videos
-  ${colors.cyan('xvideos')}              XVideos.com videos
-  ${colors.cyan('generic')}              Any site with m3u8/mp4 (auto-detect)
+  ${colors.cyan('chaturbate'.padEnd(18))} ${colors.gray('Chaturbate.com live streams')}
+  ${colors.cyan('pornhub'.padEnd(18))} ${colors.gray('PornHub.com videos')}
+  ${colors.cyan('xvideos'.padEnd(18))} ${colors.gray('XVideos.com videos')}
+  ${colors.cyan('generic'.padEnd(18))} ${colors.gray('Any site with m3u8/mp4 (auto-detect)')}
 
 ${colors.bold(colors.yellow('Examples:'))}
-  ${colors.green('$ rek video download https://chaturbate.com/username/')}                        ${colors.gray('Download live')}
-  ${colors.green('$ rek video download https://chaturbate.com/username/ -o live.ts --live')}      ${colors.gray('Record live')}
-  ${colors.green('$ rek video download https://pornhub.com/view_video.php?viewkey=xxx video.mp4')} ${colors.gray('Download to file')}
-  ${colors.green('$ rek video download https://xvideos.com/video123/title quality=720p')}         ${colors.gray('Select quality')}
+  ${colors.green('rek video download https://chaturbate.com/username/')}
+  ${colors.green('rek video download https://pornhub.com/view_video.php?viewkey=xxx -o video.mp4')}
+  ${colors.green('rek video download https://xvideos.com/video123/title quality=720p')}
 `
     )
     .action(async (...args: any[]) => {
