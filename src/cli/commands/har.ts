@@ -1,38 +1,32 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
-import { CommandSchema, generateHelp } from '../parser/index.js';
 import { promises as fs } from 'node:fs';
-
-const harSchema: CommandSchema = {
-  name: 'har',
-  description: 'HAR recording and playback',
-  flags: {
-    append: { description: 'Append to existing HAR file', alias: 'a' },
-    strict: { description: 'Fail if request not found in HAR', alias: 's' },
-    verbose: { description: 'Show detailed output', alias: 'v' },
-    json: { description: 'Output as JSON' }
-  },
-  params: {
-    delay: { type: 'number', default: 0, description: 'Delay between requests' }
-  },
-  examples: [
-    { cmd: 'rek har record session.har', desc: 'Record requests' },
-    { cmd: 'rek har play session.har', desc: 'Replay requests' },
-    { cmd: 'rek har info session.har', desc: 'Inspect HAR' }
-  ]
-};
 
 export function registerHarCommand(program: Command) {
   const har = program.command('har')
-    .description(harSchema.description)
-    .addHelpText('after', generateHelp(harSchema));
+    .description('HAR recording and playback')
+    .example('rek har record session.har', 'Record HTTP requests to HAR')
+    .example('rek har play session.har', 'Replay requests from HAR')
+    .example('rek har info session.har', 'Inspect HAR file');
 
   har.command('record')
     .description('Record HTTP requests to HAR file')
-    .argument('<file>', 'Output HAR file path')
-    .argument('[url]', 'Optional URL to start recording with')
-    .option('-a, --append', 'Append to existing HAR file')
-    .action(async (file: string, url: string | undefined, options: { append?: boolean }) => {
+    .argument('<file>', {
+      type: 'string',
+      description: 'Output HAR file path',
+      example: 'session.har',
+    })
+    .argument('[url]', {
+      type: 'url',
+      description: 'Optional URL to start recording with',
+      example: 'httpbin.org/get',
+    })
+    .option('append', { short: 'a', description: 'Append to existing HAR file' })
+    .example('rek har record session.har', 'Start interactive recording')
+    .example('rek har record session.har httpbin.org/get', 'Record single request')
+    .example('rek har record session.har -a', 'Append to existing file')
+    .action(async (file: string, url: string | undefined, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { createClient } = await import('../../core/client.js');
       const { harRecorderPlugin } = await import('../../plugins/har-recorder.js');
 
@@ -108,11 +102,19 @@ export function registerHarCommand(program: Command) {
 
   har.command('play')
     .description('Replay requests from a HAR file')
-    .argument('<file>', 'HAR file to replay')
-    .option('-s, --strict', 'Fail if request not found in HAR')
-    .option('-d, --delay <ms>', 'Delay between requests (milliseconds)', '0')
-    .option('-v, --verbose', 'Show detailed output')
-    .action(async (file: string, options: { strict?: boolean; delay: string; verbose?: boolean }) => {
+    .argument('<file>', {
+      type: 'string',
+      description: 'HAR file to replay',
+      example: 'session.har',
+    })
+    .option('strict', { short: 's', description: 'Fail if request not found in HAR' })
+    .option('delay', { type: 'number', short: 'd', description: 'Delay between requests (ms)', default: 0, example: '100' })
+    .option('verbose', { short: 'v', description: 'Show detailed output' })
+    .example('rek har play session.har', 'Replay all requests')
+    .example('rek har play session.har -d 100', 'Replay with 100ms delay')
+    .example('rek har play session.har -v', 'Replay with verbose output')
+    .action(async (file: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : { delay: 0 };
       try {
         const content = await fs.readFile(file, 'utf-8');
         const har = JSON.parse(content);
@@ -126,7 +128,7 @@ export function registerHarCommand(program: Command) {
         console.log(colors.cyan(`Replaying ${entries.length} requests from ${file}`));
         console.log('');
 
-        const delay = parseInt(options.delay);
+        const delay = options.delay || 0;
         let success = 0;
         let failed = 0;
 
@@ -158,10 +160,16 @@ export function registerHarCommand(program: Command) {
 
   har.command('info')
     .description('Show information about a HAR file')
-    .argument('<file>', 'HAR file to inspect')
-    .argument('[args...]', 'Options: json')
-    .action(async (file: string, args: string[]) => {
-      const jsonOutput = args.includes('json');
+    .argument('<file>', {
+      type: 'string',
+      description: 'HAR file to inspect',
+      example: 'session.har',
+    })
+    .example('rek har info session.har', 'Show HAR file info')
+    .example('rek har info session.har --json', 'Output as JSON')
+    .action(async (file: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      const jsonOutput = !!options.json;
       try {
         const content = await fs.readFile(file, 'utf-8');
         const har = JSON.parse(content);

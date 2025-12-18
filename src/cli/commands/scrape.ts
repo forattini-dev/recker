@@ -1,42 +1,59 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
-import { CommandSchema, RekArgs, generateHelp } from '../parser/index.js';
-
-const schema: CommandSchema = {
-  name: 'scrape',
-  description: 'Extract data from web pages with CSS selectors.\nFetches a web page and extracts data using CSS selectors or built-in extractors.',
-  params: {
-    select: { type: 'string', description: 'CSS selector to extract elements' },
-    attr:   { type: 'string', description: 'Extract specific attribute (use with select)' },
-  },
-  keywords: {
-    links:   { description: 'Extract all links with text and href' },
-    images:  { description: 'Extract all images with src and alt' },
-    meta:    { description: 'Extract all meta tags' },
-    tables:  { description: 'Extract tables as structured JSON' },
-    scripts: { description: 'Extract all script sources' },
-    jsonld:  { description: 'Extract JSON-LD structured data' },
-  },
-  examples: [
-    { cmd: 'rek scrape example.com', desc: 'Basic page info' },
-    { cmd: 'rek scrape example.com select="h1"', desc: 'Extract h1 text' },
-    { cmd: 'rek scrape example.com select="a" attr=href', desc: 'Extract link hrefs' },
-    { cmd: 'rek scrape example.com links', desc: 'All links' },
-    { cmd: 'rek scrape example.com tables', desc: 'All tables as JSON' }
-  ]
-};
 
 export function registerScrapeCommand(program: Command) {
   program
     .command('scrape')
     .alias('extract')
-    .description('Extract data from web pages with CSS selectors')
-    .argument('<url>', 'URL to scrape')
-    .argument('[args...]', 'Options: select=SELECTOR, attr=NAME, links, images...')
-    .addHelpText('after', generateHelp(schema))
-    .action(async (url, rawArgs: string[]) => {
-      // 1. Parse Args
-      const { data } = RekArgs.parse(rawArgs, schema);
+    .description('Extract data from web pages using CSS selectors or built-in extractors')
+    .argument('<url>', {
+      type: 'url',
+      description: 'URL to scrape',
+      example: 'example.com',
+    })
+    .option('select', {
+      type: 'string',
+      short: 's',
+      description: 'CSS selector to extract elements',
+      example: 'h1',
+    })
+    .option('attr', {
+      type: 'string',
+      short: 'a',
+      description: 'Extract specific attribute (use with --select)',
+      example: 'href',
+    })
+    .option('links', {
+      short: 'L',
+      description: 'Extract all links with text and href',
+    })
+    .option('images', {
+      short: 'I',
+      description: 'Extract all images with src and alt',
+    })
+    .option('meta', {
+      short: 'M',
+      description: 'Extract all meta tags',
+    })
+    .option('tables', {
+      short: 'T',
+      description: 'Extract tables as structured JSON',
+    })
+    .option('scripts', {
+      short: 'S',
+      description: 'Extract all external script sources',
+    })
+    .option('jsonld', {
+      description: 'Extract JSON-LD structured data',
+    })
+    .example('rek scrape example.com', 'Show basic page info')
+    .example('rek scrape example.com -s "h1"', 'Extract all h1 text')
+    .example('rek scrape example.com -s "a" -a href', 'Extract link hrefs')
+    .example('rek scrape example.com --links', 'Get all links with text')
+    .example('rek scrape example.com --tables', 'Extract tables as JSON')
+    .example('rek scrape example.com --jsonld', 'Get structured data')
+    .action(async (url: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
 
       // 2. Dynamic Imports
       const { ScrapeDocument } = await import('../../scrape/document.js');
@@ -56,7 +73,7 @@ export function registerScrapeCommand(program: Command) {
         const doc = await ScrapeDocument.create(html, { baseUrl: url });
 
         // Check if any extraction flag is set
-        const hasExtraction = data.select || data.links || data.images || data.meta || data.tables || data.scripts || data.jsonld;
+        const hasExtraction = options.select || options.links || options.images || options.meta || options.tables || options.scripts || options.jsonld;
 
         // Default: show basic page info
         if (!hasExtraction) {
@@ -79,11 +96,11 @@ ${colors.bold('Images:')}      ${imageCount}
         }
 
         // CSS Selector extraction
-        if (data.select) {
-          if (data.attr) {
+        if (options.select) {
+          if (options.attr) {
             // Extract attribute
-            const values = doc.attrs(data.select, data.attr);
-            console.log(`\n${colors.bold(`Found ${values.length} values for "${data.attr}" in "${data.select}"`)}\n`);
+            const values = doc.attrs(options.select, options.attr);
+            console.log(`\n${colors.bold(`Found ${values.length} values for "${options.attr}" in "${options.select}"`)}\n`);
             values.slice(0, 50).forEach((value, i) => {
               if (value) {
                 console.log(`${colors.gray(`${i + 1}.`)} ${value}`);
@@ -94,8 +111,8 @@ ${colors.bold('Images:')}      ${imageCount}
             }
           } else {
             // Extract text
-            const texts = doc.texts(data.select);
-            console.log(`\n${colors.bold(`Found ${texts.length} elements matching "${data.select}"`)}\n`);
+            const texts = doc.texts(options.select);
+            console.log(`\n${colors.bold(`Found ${texts.length} elements matching "${options.select}"`)}\n`);
             texts.slice(0, 50).forEach((text, i) => {
               const trimmed = text.trim();
               if (trimmed) {
@@ -110,7 +127,7 @@ ${colors.bold('Images:')}      ${imageCount}
         }
 
         // Extract links
-        if (data.links) {
+        if (options.links) {
           const links = doc.links();
           console.log(`\n${colors.bold(`Found ${links.length} links`)}\n`);
 
@@ -127,7 +144,7 @@ ${colors.bold('Images:')}      ${imageCount}
         }
 
         // Extract images
-        if (data.images) {
+        if (options.images) {
           const images = doc.images();
           console.log(`\n${colors.bold(`Found ${images.length} images`)}\n`);
 
@@ -144,7 +161,7 @@ ${colors.bold('Images:')}      ${imageCount}
         }
 
         // Extract meta tags
-        if (data.meta) {
+        if (options.meta) {
           const meta = doc.meta();
           const entries = Object.entries(meta);
           console.log(`\n${colors.bold(`Found ${entries.length} meta entries`)}\n`);
@@ -159,7 +176,7 @@ ${colors.bold('Images:')}      ${imageCount}
         }
 
         // Extract tables
-        if (data.tables) {
+        if (options.tables) {
           const tables = doc.tables();
           console.log(`\n${colors.bold(`Found ${tables.length} tables`)}\n`);
 
@@ -175,7 +192,7 @@ ${colors.bold('Images:')}      ${imageCount}
         }
 
         // Extract scripts
-        if (data.scripts) {
+        if (options.scripts) {
           const scripts = doc.scripts();
           const external = scripts.filter(s => s.src);
           const inline = scripts.filter(s => !s.src);
@@ -195,7 +212,7 @@ ${colors.bold('Images:')}      ${imageCount}
         }
 
         // Extract JSON-LD
-        if (data.jsonld) {
+        if (options.jsonld) {
           const jsonld = doc.jsonLd();
           console.log(`\n${colors.bold(`Found ${jsonld.length} JSON-LD blocks`)}\n`);
 

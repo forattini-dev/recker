@@ -1,33 +1,14 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
-import { CommandSchema, RekArgs, generateHelp } from '../parser/index.js';
 import { MemoryVectorStore, VectorDocument } from '../../ai/vector/store.js';
 import { promises as fs } from 'node:fs';
-import pathMod from 'node:path';
 
-const vectorSchema: CommandSchema = {
-  name: 'vector',
-  description: 'Manage a local vector store for RAG (Retrieval-Augmented Generation).\nStores embeddings in a local JSON file.',
-  params: {
-    file: { type: 'string', default: 'vectors.json', description: 'Vector store file path' },
-    content: { type: 'string', description: 'Text content to add' },
-    query: { type: 'string', description: 'Search query' },
-    limit: { type: 'number', default: 3, description: 'Search limit' },
-    threshold: { type: 'number', default: 0.0, description: 'Similarity threshold (0-1)' },
-    metadata: { type: 'json', description: 'Metadata JSON for added content' },
-    model: { type: 'string', description: 'Embedding model' },
-    provider: { type: 'string', description: 'AI Provider (openai, google, ollama)' }
-  },
-  flags: {
-    json: { description: 'Output JSON', alias: 'j' },
-    clear: { description: 'Clear store before operation' }
-  },
-  examples: [
-    { cmd: 'rek vector add content="Recker is a network tool" file=data.json', desc: 'Add document' },
-    { cmd: 'rek vector search query="network tool" file=data.json limit:=1', desc: 'Search' },
-    { cmd: 'rek vector info file=data.json', desc: 'Show stats' }
-  ]
-};
+export interface VectorOptions {
+  file: string;
+  provider?: string;
+  model?: string;
+  json?: boolean;
+}
 
 // Helper to load/save store
 async function loadStore(filePath: string): Promise<VectorDocument[]> {
@@ -43,168 +24,228 @@ async function saveStore(filePath: string, docs: VectorDocument[]) {
   await fs.writeFile(filePath, JSON.stringify(docs, null, 2), 'utf-8');
 }
 
-export function registerVectorCommand(program: Command) {
-  const vector = program.command('vector')
-    .description(vectorSchema.description)
-    .addHelpText('after', generateHelp(vectorSchema));
+// Initialize AI client for embedding operations
+async function initAI(provider?: string, model?: string) {
+  const { createAI } = await import('../../ai/index.js');
 
-  // Common handler for subcommands
-  const handleVector = async (command: 'add' | 'search' | 'info' | 'clear', rawArgs: string[]) => {
-    const { data, options, args } = RekArgs.parse(rawArgs, vectorSchema);
-    const filePath = data.file;
-
-    // Load existing data
-    const existingDocs = await loadStore(filePath);
-    
-    // Initialize AI Client
-    const { createClient } = await import('../../core/client.js');
-    const { createAI } = await import('../../ai/index.js');
-    
-    // Check for API keys if we need to generate embeddings
-    const needsAI = command === 'add' || command === 'search';
-    let aiClient;
-    
-    if (needsAI) {
-       // We can use createAI directly or via createClient if we want unified config
-       // Let's use createAI for simplicity as we just need the AI interface
-       // But we need to handle potential missing keys gracefully
-       try {
-         // Pass explicit provider if requested
-         aiClient = createAI({
-            defaultProvider: data.provider,
-         });
-       } catch (e: any) {
-         console.error(colors.red(`AI Initialization Failed: ${e.message}`));
-         console.log(colors.gray('Ensure you have OPENAI_API_KEY or other provider keys set.'));
-         process.exit(1);
-       }
-    }
-
-    const store = new MemoryVectorStore({
-        client: aiClient,
-        model: data.model
+  try {
+    const aiClient = createAI({
+      defaultProvider: provider as any,
     });
 
-    // Hydrate store (hacky: MemoryVectorStore doesn't have bulk load with existing embeddings public API?)
-    // Actually add() takes docs with embeddings and skips generation.
-    if (existingDocs.length > 0) {
-        // We cast because add expects partial docs but we have full ones
-        await store.add(existingDocs as any);
-    }
+    return new MemoryVectorStore({
+      client: aiClient,
+      model: model
+    });
+  } catch (e: any) {
+    console.error(colors.red(`AI Initialization Failed: ${e.message}`));
+    console.log(colors.gray('Ensure you have OPENAI_API_KEY or other provider keys set.'));
+    process.exit(1);
+  }
+}
 
-    if (command === 'info') {
-        console.log(colors.cyan(`Vector Store: ${filePath}`));
-        console.log(`Documents: ${store.count}`);
-        if (options.json) {
-            console.log(JSON.stringify(existingDocs, null, 2));
-        }
-        return;
-    }
-
-    if (command === 'clear') {
-        store.clear();
-        await saveStore(filePath, []);
-        console.log(colors.green(`Cleared vector store at ${filePath}`));
-        return;
-    }
-
-    if (command === 'add') {
-        if (!data.content && args.length === 0) {
-            console.error(colors.red('Error: content=... is required'));
-            process.exit(1);
-        }
-        
-        const content = data.content || args.join(' ');
-        const metadata = data.metadata || {};
-
-        console.log(colors.gray(`Generating embedding for: "${content.slice(0, 50)}"...`));
-        
-        await store.add([
-            {
-                content,
-                metadata
-            }
-        ]);
-
-        // Extract docs using private property access workaround or we need a getDocs method on store
-        // Since store.documents is private, we can't access it easily without modifying the class.
-        // BUT, since this is CLI and we control the code, let's modify the Store class to expose export/import
-        // OR just use the fact that we know we just added one doc to the existing list?
-        // No, embeddings are generated inside.
-        
-        // Proper fix: Update MemoryVectorStore to have toJSON/fromJSON or expose documents.
-        // For now, I'll use "any" to access private map
-        const allDocs = Array.from((store as any).documents.values()) as VectorDocument[];
-        
-        await saveStore(filePath, allDocs);
-        console.log(colors.green(`✔ Added document. Total: ${store.count}`));
-    }
-
-    if (command === 'search') {
-        if (!data.query && args.length === 0) {
-            console.error(colors.red('Error: query=... is required'));
-            process.exit(1);
-        }
-
-        const query = data.query || args.join(' ');
-        console.log(colors.gray(`Searching for: "${query}"...`));
-
-        const results = await store.search(query, data.limit, data.threshold);
-
-        if (options.json) {
-            console.log(JSON.stringify(results, null, 2));
-            return;
-        }
-
-        console.log(`
-${colors.bold(colors.cyan('Search Results'))} (${results.length})
-`);
-        
-        results.forEach((res, i) => {
-            const score = (res.score * 100).toFixed(1) + '%';
-            const color = res.score > 0.8 ? colors.green : res.score > 0.5 ? colors.yellow : colors.gray;
-            
-            console.log(`${i+1}. ${color(score)} - ${res.id}`);
-            console.log(`   ${res.content.slice(0, 100).replace(/\n/g, ' ')}...`);
-            if (res.metadata && Object.keys(res.metadata).length > 0) {
-                console.log(`   ${colors.gray(JSON.stringify(res.metadata))}`);
-            }
-            console.log('');
-        });
-    }
-  };
+export function registerVectorCommand(program: Command) {
+  const vector = program.command('vector')
+    .description('Manage a local vector store for RAG (Retrieval-Augmented Generation)')
+    .example('rek vector add "Recker is a network tool" -f data.json', 'Add document')
+    .example('rek vector search "network tool" -f data.json -l 3', 'Search')
+    .example('rek vector info -f data.json', 'Show stats');
 
   vector.command('add')
     .description('Add a document to the store')
-    .argument('[content]', 'Text content')
-    .argument('[args...]', 'Options: file=x metadata:=json')
-    .action(async (content, rawArgs) => {
-        // content might be in rawArgs if not positional, RekArgs handles it
-        // We pass combined args
-        const args = content ? [content, ...rawArgs] : rawArgs;
-        await handleVector('add', args);
+    .argument('<content>', {
+      type: 'string',
+      description: 'Text content to add',
+      example: 'Recker is a network tool',
+    })
+    .option('file', {
+      type: 'string',
+      short: 'f',
+      default: 'vectors.json',
+      description: 'Vector store file path',
+      example: 'data.json',
+    })
+    .option('metadata', {
+      type: 'string',
+      short: 'm',
+      description: 'Metadata JSON for the document',
+      example: '{"source":"docs"}',
+    })
+    .option('provider', {
+      type: 'string',
+      short: 'p',
+      description: 'AI Provider (openai, google, ollama)',
+      example: 'openai',
+    })
+    .option('model', {
+      type: 'string',
+      description: 'Embedding model',
+      example: 'text-embedding-3-small',
+    })
+    .example('rek vector add "Recker is a network SDK"', 'Add simple document')
+    .example('rek vector add "API docs" -f docs.json -m \'{"type":"docs"}\'', 'Add with metadata')
+    .action(async (content: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      const filePath = options.file || 'vectors.json';
+
+      // Load existing data and initialize store
+      const existingDocs = await loadStore(filePath);
+      const store = await initAI(options.provider, options.model);
+
+      if (existingDocs.length > 0) {
+        await store.add(existingDocs as any);
+      }
+
+      let metadata = {};
+      if (options.metadata) {
+        try {
+          metadata = JSON.parse(options.metadata);
+        } catch {
+          console.error(colors.red('Invalid metadata JSON'));
+          process.exit(1);
+        }
+      }
+
+      console.log(colors.gray(`Generating embedding for: "${content.slice(0, 50)}${content.length > 50 ? '...' : ''}"...`));
+
+      await store.add([{ content, metadata }]);
+
+      const allDocs = Array.from((store as any).documents.values()) as VectorDocument[];
+      await saveStore(filePath, allDocs);
+      console.log(colors.green(`✔ Added document. Total: ${store.count}`));
     });
 
   vector.command('search')
     .description('Search the vector store')
-    .argument('[query]', 'Search query')
-    .argument('[args...]', 'Options: file=x limit=3')
-    .action(async (query, rawArgs) => {
-        const args = query ? [query, ...rawArgs] : rawArgs;
-        await handleVector('search', args);
+    .argument('<query>', {
+      type: 'string',
+      description: 'Search query',
+      example: 'network tool',
+    })
+    .option('file', {
+      type: 'string',
+      short: 'f',
+      default: 'vectors.json',
+      description: 'Vector store file path',
+      example: 'data.json',
+    })
+    .option('limit', {
+      type: 'number',
+      short: 'l',
+      default: 3,
+      description: 'Maximum results to return',
+      example: '5',
+    })
+    .option('threshold', {
+      type: 'number',
+      short: 't',
+      default: 0.0,
+      description: 'Similarity threshold (0-1)',
+      example: '0.5',
+    })
+    .option('provider', {
+      type: 'string',
+      short: 'p',
+      description: 'AI Provider (openai, google, ollama)',
+      example: 'openai',
+    })
+    .option('model', {
+      type: 'string',
+      description: 'Embedding model',
+      example: 'text-embedding-3-small',
+    })
+    .option('json', {
+      short: 'j',
+      description: 'Output as JSON',
+    })
+    .example('rek vector search "how to make requests"', 'Basic search')
+    .example('rek vector search "api" -f docs.json -l 5 -t 0.5', 'Search with options')
+    .action(async (query: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      const filePath = options.file || 'vectors.json';
+      const limit = options.limit || 3;
+      const threshold = options.threshold || 0.0;
+      const jsonOutput = !!options.json;
+
+      // Load existing data and initialize store
+      const existingDocs = await loadStore(filePath);
+      const store = await initAI(options.provider, options.model);
+
+      if (existingDocs.length > 0) {
+        await store.add(existingDocs as any);
+      }
+
+      console.log(colors.gray(`Searching for: "${query}"...`));
+
+      const results = await store.search(query, limit, threshold);
+
+      if (jsonOutput) {
+        console.log(JSON.stringify(results, null, 2));
+        return;
+      }
+
+      console.log(`\n${colors.bold(colors.cyan('Search Results'))} (${results.length})\n`);
+
+      results.forEach((res, i) => {
+        const score = (res.score * 100).toFixed(1) + '%';
+        const color = res.score > 0.8 ? colors.green : res.score > 0.5 ? colors.yellow : colors.gray;
+
+        console.log(`${i + 1}. ${color(score)} - ${res.id}`);
+        console.log(`   ${res.content.slice(0, 100).replace(/\n/g, ' ')}${res.content.length > 100 ? '...' : ''}`);
+        if (res.metadata && Object.keys(res.metadata).length > 0) {
+          console.log(`   ${colors.gray(JSON.stringify(res.metadata))}`);
+        }
+        console.log('');
+      });
     });
 
   vector.command('info')
     .description('Show store statistics')
-    .argument('[args...]', 'Options: file=x')
-    .action(async (rawArgs) => {
-        await handleVector('info', rawArgs);
+    .option('file', {
+      type: 'string',
+      short: 'f',
+      default: 'vectors.json',
+      description: 'Vector store file path',
+      example: 'data.json',
+    })
+    .option('json', {
+      short: 'j',
+      description: 'Output as JSON',
+    })
+    .example('rek vector info', 'Show default store info')
+    .example('rek vector info -f docs.json -j', 'Show as JSON')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      const filePath = options.file || 'vectors.json';
+      const jsonOutput = !!options.json;
+
+      const existingDocs = await loadStore(filePath);
+
+      if (jsonOutput) {
+        console.log(JSON.stringify({ file: filePath, count: existingDocs.length, documents: existingDocs }, null, 2));
+        return;
+      }
+
+      console.log(colors.cyan(`Vector Store: ${filePath}`));
+      console.log(`Documents: ${existingDocs.length}`);
     });
 
   vector.command('clear')
     .description('Clear the vector store')
-    .argument('[args...]', 'Options: file=x')
-    .action(async (rawArgs) => {
-        await handleVector('clear', rawArgs);
+    .option('file', {
+      type: 'string',
+      short: 'f',
+      default: 'vectors.json',
+      description: 'Vector store file path',
+      example: 'data.json',
+    })
+    .example('rek vector clear', 'Clear default store')
+    .example('rek vector clear -f docs.json', 'Clear specific store')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      const filePath = options.file || 'vectors.json';
+
+      await saveStore(filePath, []);
+      console.log(colors.green(`✔ Cleared vector store at ${filePath}`));
     });
 }

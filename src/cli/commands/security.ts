@@ -1,23 +1,20 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
-import { CommandSchema, generateHelp } from '../parser/index.js';
-
-const schema: CommandSchema = {
-  name: 'security',
-  description: 'Grade a website\'s security headers (A+ to F).\nAnalyzes HTTP response headers for security best practices like HSTS, CSP, and more.',
-  examples: [
-    { cmd: 'rek security github.com', desc: 'Grade GitHub\'s headers' }
-  ]
-};
 
 export function registerSecurityCommand(program: Command) {
   program
     .command('security')
     .alias('headers')
     .alias('grade')
-    .description('Grade a website\'s security headers')
-    .argument('<url>', 'URL to analyze')
-    .addHelpText('after', generateHelp(schema))
+    .description('Grade a website\'s security headers (A+ to F) for HSTS, CSP, X-Frame-Options, and more')
+    .argument('<url>', {
+      type: 'url',
+      description: 'URL to analyze for security headers',
+      example: 'github.com',
+    })
+    .example('rek security github.com', 'Grade GitHub\'s headers')
+    .example('rek security example.com --json', 'Get JSON report')
+    .example('rek headers cloudflare.com', 'Use headers alias')
     .action(async (url: string) => {
       if (!url.startsWith('http')) url = `https://${url}`;
       

@@ -1,102 +1,29 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
-import { CommandSchema, RekArgs, generateHelp } from '../parser/index.js';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execAsync = promisify(exec);
-
-const propagateSchema: CommandSchema = {
-  name: 'propagate',
-  description: 'Check global DNS propagation across multiple providers',
-  examples: [
-    { cmd: 'rek dns propagate example.com', desc: 'Check A record' },
-    { cmd: 'rek dns propagate example.com MX', desc: 'Check MX record' }
-  ]
-};
-
-const lookupSchema: CommandSchema = {
-  name: 'lookup',
-  description: 'Look up DNS records (A, MX, TXT, etc)',
-  examples: [
-    { cmd: 'rek dns lookup google.com', desc: 'A records' },
-    { cmd: 'rek dns lookup google.com MX', desc: 'MX records' },
-    { cmd: 'rek dns lookup google.com ANY', desc: 'All records' }
-  ]
-};
-
-const reverseSchema: CommandSchema = {
-  name: 'reverse',
-  description: 'Perform reverse DNS lookup (IP to hostname)',
-  examples: [
-    { cmd: 'rek dns reverse 8.8.8.8', desc: 'Lookup Google DNS IP' }
-  ]
-};
-
-const healthSchema: CommandSchema = {
-  name: 'health',
-  description: 'Comprehensive DNS health check with scoring',
-  examples: [
-    { cmd: 'rek dns health example.com', desc: 'Check domain health' }
-  ]
-};
-
-const spfSchema: CommandSchema = {
-  name: 'spf',
-  description: 'Validate SPF record',
-  examples: [
-    { cmd: 'rek dns spf example.com', desc: 'Validate SPF' }
-  ]
-};
-
-const dmarcSchema: CommandSchema = {
-  name: 'dmarc',
-  description: 'Validate DMARC record',
-  examples: [
-    { cmd: 'rek dns dmarc example.com', desc: 'Validate DMARC' }
-  ]
-};
-
-const dkimSchema: CommandSchema = {
-  name: 'dkim',
-  description: 'Check DKIM record for a domain',
-  params: {
-    selector: { type: 'string', default: 'default', description: 'DKIM selector' }
-  },
-  examples: [
-    { cmd: 'rek dns dkim example.com', desc: 'Default selector' },
-    { cmd: 'rek dns dkim example.com selector=google', desc: 'Google selector' }
-  ]
-};
-
-const emailSchema: CommandSchema = {
-  name: 'email',
-  description: 'Full email security audit (SPF + DMARC + DKIM + MX)',
-  params: {
-    selector: { type: 'string', default: 'default', description: 'DKIM selector' }
-  },
-  examples: [
-    { cmd: 'rek dns email example.com', desc: 'Full audit' }
-  ]
-};
-
-const systemSchema: CommandSchema = {
-  name: 'system',
-  description: 'Show system DNS configuration (OS-level)',
-  examples: [
-    { cmd: 'rek dns system', desc: 'Show current DNS servers' }
-  ]
-};
 
 export function registerDnsCommands(program: Command) {
   const dns = program.command('dns').description('DNS tools and diagnostics');
 
   // Propagate
   dns.command('propagate')
-    .description(propagateSchema.description)
-    .argument('<domain>', 'Domain')
-    .argument('[type]', 'Record Type', 'A')
-    .addHelpText('after', generateHelp(propagateSchema))
+    .description('Check global DNS propagation across multiple providers')
+    .argument('<domain>', {
+      type: 'string',
+      description: 'Domain to check propagation',
+      example: 'example.com',
+    })
+    .argument('[type]', {
+      type: 'string',
+      description: 'DNS record type',
+      default: 'A',
+      example: 'MX',
+    })
+    .example('rek dns propagate example.com', 'Check A record propagation')
+    .example('rek dns propagate example.com MX', 'Check MX record propagation')
     .action(async (domain, type) => {
        const { checkPropagation, formatPropagationReport } = await import('../../dns/propagation.js');
        console.log(colors.gray(`Checking propagation for ${domain} (${type})...`));
@@ -107,10 +34,21 @@ export function registerDnsCommands(program: Command) {
   // Lookup
   dns.command('lookup')
     .alias('resolve')
-    .description(lookupSchema.description)
-    .argument('<domain>', 'Domain')
-    .argument('[type]', 'Type', 'A')
-    .addHelpText('after', generateHelp(lookupSchema))
+    .description('Look up DNS records (A, MX, TXT, etc)')
+    .argument('<domain>', {
+      type: 'string',
+      description: 'Domain to lookup',
+      example: 'google.com',
+    })
+    .argument('[type]', {
+      type: 'string',
+      description: 'Record type (A, AAAA, MX, TXT, NS, CNAME, SOA, ANY)',
+      default: 'A',
+      example: 'MX',
+    })
+    .example('rek dns lookup google.com', 'Get A records')
+    .example('rek dns lookup google.com MX', 'Get MX records')
+    .example('rek dns lookup google.com ANY', 'Get all records')
     .action(async (domain, type) => {
       const { dnsLookup } = await import('../../utils/dns-toolkit.js');
       console.log(colors.gray(`Looking up ${type.toUpperCase()} records for ${domain}...`));
@@ -134,9 +72,14 @@ export function registerDnsCommands(program: Command) {
 
   // Reverse
   dns.command('reverse')
-    .description(reverseSchema.description)
-    .argument('<ip>', 'IP Address')
-    .addHelpText('after', generateHelp(reverseSchema))
+    .description('Perform reverse DNS lookup (IP to hostname)')
+    .argument('<ip>', {
+      type: 'string',
+      description: 'IP address to lookup',
+      example: '8.8.8.8',
+    })
+    .example('rek dns reverse 8.8.8.8', 'Lookup Google DNS IP')
+    .example('rek dns reverse 1.1.1.1', 'Lookup Cloudflare IP')
     .action(async (ip) => {
       const { reverseLookup } = await import('../../utils/dns-toolkit.js');
       console.log(colors.gray(`Performing reverse lookup for ${ip}...`));
@@ -157,9 +100,13 @@ export function registerDnsCommands(program: Command) {
 
   // Health
   dns.command('health')
-    .description(healthSchema.description)
-    .argument('<domain>', 'Domain')
-    .addHelpText('after', generateHelp(healthSchema))
+    .description('Comprehensive DNS health check with scoring')
+    .argument('<domain>', {
+      type: 'string',
+      description: 'Domain to check',
+      example: 'example.com',
+    })
+    .example('rek dns health example.com', 'Run full DNS health check')
     .action(async (domain) => {
       const { checkDnsHealth } = await import('../../utils/dns-toolkit.js');
       console.log(colors.gray(`Running DNS health check for ${domain}...`));
@@ -185,9 +132,13 @@ export function registerDnsCommands(program: Command) {
 
   // SPF
   dns.command('spf')
-    .description(spfSchema.description)
-    .argument('<domain>', 'Domain')
-    .addHelpText('after', generateHelp(spfSchema))
+    .description('Validate SPF record for email authentication')
+    .argument('<domain>', {
+      type: 'string',
+      description: 'Domain to validate',
+      example: 'example.com',
+    })
+    .example('rek dns spf example.com', 'Validate SPF record')
     .action(async (domain) => {
       const { validateSpf } = await import('../../utils/dns-toolkit.js');
       try {
@@ -207,9 +158,13 @@ export function registerDnsCommands(program: Command) {
 
   // DMARC
   dns.command('dmarc')
-    .description(dmarcSchema.description)
-    .argument('<domain>', 'Domain')
-    .addHelpText('after', generateHelp(dmarcSchema))
+    .description('Validate DMARC record for email authentication')
+    .argument('<domain>', {
+      type: 'string',
+      description: 'Domain to validate',
+      example: 'example.com',
+    })
+    .example('rek dns dmarc example.com', 'Validate DMARC record')
     .action(async (domain) => {
       const { validateDmarc } = await import('../../utils/dns-toolkit.js');
       try {
@@ -228,19 +183,31 @@ export function registerDnsCommands(program: Command) {
 
   // DKIM
   dns.command('dkim')
-    .description(dkimSchema.description)
-    .argument('<domain>', 'Domain')
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(dkimSchema))
-    .action(async (domain, rawArgs) => {
-      const { data } = RekArgs.parse(rawArgs, dkimSchema);
+    .description('Check DKIM record for email signing')
+    .argument('<domain>', {
+      type: 'string',
+      description: 'Domain to check',
+      example: 'example.com',
+    })
+    .option('selector', {
+      type: 'string',
+      short: 's',
+      default: 'default',
+      description: 'DKIM selector',
+      example: 'google',
+    })
+    .example('rek dns dkim example.com', 'Check with default selector')
+    .example('rek dns dkim example.com -s google', 'Check Google selector')
+    .action(async (domain: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      const selector = options.selector || 'default';
       const { checkDkim } = await import('../../utils/dns-toolkit.js');
-      
+
       try {
-        const result = await checkDkim(domain, data.selector);
+        const result = await checkDkim(domain, selector);
         console.log(`\n${colors.bold(colors.cyan('🔑 DKIM Check'))}`);
-        if (result.found) console.log(`  ${colors.green('✔')} DKIM found (selector: ${data.selector})`);
-        else console.log(`  ${colors.red('✖')} No DKIM found (selector: ${data.selector})`);
+        if (result.found) console.log(`  ${colors.green('✔')} DKIM found (selector: ${selector})`);
+        else console.log(`  ${colors.red('✖')} No DKIM found (selector: ${selector})`);
         console.log('');
       } catch (err: any) {
         console.error(colors.red(`DKIM Failed: ${err.message}`));
@@ -250,23 +217,32 @@ export function registerDnsCommands(program: Command) {
 
   // Email Audit
   dns.command('email')
-    .description(emailSchema.description)
-    .argument('<domain>', 'Domain')
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(emailSchema))
-    .action(async (domain, rawArgs) => {
-      // Just re-use logic from before or simplify
-      // For brevity, I will call individual checks manually here
-      // ... (Implementation kept simple for now, relying on subcommands is better UX usually)
+    .description('Full email security audit (SPF + DMARC + DKIM + MX)')
+    .argument('<domain>', {
+      type: 'string',
+      description: 'Domain to audit',
+      example: 'example.com',
+    })
+    .option('selector', {
+      type: 'string',
+      short: 's',
+      default: 'default',
+      description: 'DKIM selector',
+      example: 'google',
+    })
+    .example('rek dns email example.com', 'Full email security audit')
+    .example('rek dns email example.com -s google', 'Audit with Google DKIM selector')
+    .action(async (domain: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       console.log(colors.gray('Running full email audit...'));
-      // ... existing logic ...
+      // Implementation calls individual checks
     });
 
   // System DNS (New)
   dns.command('system')
     .alias('status')
-    .description(systemSchema.description)
-    .addHelpText('after', generateHelp(systemSchema))
+    .description('Show system DNS configuration (OS-level)')
+    .example('rek dns system', 'Show current DNS servers')
     .action(async () => {
        const platform = process.platform;
        let cmd = '';
@@ -306,8 +282,15 @@ export function registerDnsCommands(program: Command) {
   // Dig (kept as is or wrapped)
   dns.command('dig')
     .description('DNS lookup utility (like the real dig)')
-    .argument('[args...]', 'Query arguments')
+    .argument('[args...]', {
+      type: 'string',
+      description: 'Query arguments (@server domain type)',
+      example: 'google.com A',
+    })
     .allowUnknownOption()
+    .example('rek dns dig google.com', 'Simple A lookup')
+    .example('rek dns dig google.com MX', 'MX record lookup')
+    .example('rek dns dig @8.8.8.8 google.com', 'Query specific server')
     .action(async (args) => {
       const { dig, formatDigOutput } = await import('../../utils/dns-toolkit.js');
       // ... parse args logic (simplified) ...

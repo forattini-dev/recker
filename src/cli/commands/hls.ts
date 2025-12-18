@@ -3,12 +3,22 @@ import colors from '../../utils/colors.js';
 import { parseEnhancerPresets } from '../helpers.js';
 
 export function registerHlsCommand(program: Command) {
-  const hlsCmd = program.command('hls').description('HLS streaming operations');
+  const hlsCmd = program
+    .command('hls')
+    .description('Download and analyze HLS (HTTP Live Streaming) playlists and segments')
+    .example('rek hls info https://example.com/stream.m3u8', 'Analyze HLS playlist')
+    .example('rek hls download https://example.com/stream.m3u8 -o video.ts', 'Download stream');
 
   hlsCmd
     .command('info')
-    .description('Get information about an HLS stream')
-    .argument('<url>', 'HLS playlist URL')
+    .description('Analyze an HLS playlist showing qualities, segments, and duration')
+    .argument('<url>', {
+      type: 'url',
+      description: 'HLS master or media playlist URL (.m3u8)',
+      example: 'https://example.com/stream.m3u8',
+    })
+    .example('rek hls info https://example.com/master.m3u8', 'Show available qualities')
+    .example('rek hls info https://example.com/live.m3u8', 'Check if stream is live or VOD')
     .action(async (url) => {
       const { Client } = await import('../../core/client.js');
       const client = new Client();
@@ -96,69 +106,95 @@ export function registerHlsCommand(program: Command) {
 
   hlsCmd
     .command('download')
-    .description('Download an HLS stream')
-    .argument('<url>', 'HLS playlist URL')
-    .argument('[args...]', 'Output, options, and headers')
-    .option('-v, --verbose', 'Show detailed error information')
-    .option('-l, --live', 'Enable live stream mode') // <-- Adicionado aqui
-    .addHelpText('after', `
-${colors.bold(colors.yellow('Options:'))}
-  ${colors.cyan('[output]')}             Output file path (default: output.ts)
-  ${colors.cyan('quality=<quality>')}    Quality: highest, lowest, or resolution (e.g., 720p)
-  ${colors.cyan('live')}                 Enable live stream mode
-  ${colors.cyan('duration=<seconds>')}   Duration for live recording in seconds
-  ${colors.cyan('concurrency=<n>')}      Concurrent segment downloads (default: 4)
-  ${colors.cyan('Header:Value')}         Add custom HTTP header (e.g., Referer:https://example.com)
-
-${colors.bold(colors.yellow('Examples:'))}
-  ${colors.green('$ rek hls download https://example.com/stream.m3u8')}                     ${colors.gray('Download stream')}
-  ${colors.green('$ rek hls download https://example.com/stream.m3u8 video.ts')}            ${colors.gray('Custom output')}
-  ${colors.green('$ rek hls download https://example.com/stream.m3u8 quality=720p')}        ${colors.gray('Select quality')}
-  ${colors.green('$ rek hls download https://example.com/live.m3u8 live duration=60')}      ${colors.gray('Record live stream')}
-  ${colors.green('$ rek hls download https://example.com/stream.m3u8 Referer:https://site.com User-Agent:"My Browser"')} ${colors.gray('With custom headers')}
-`)
+    .description('Download an HLS stream to a local file, with quality selection and live support')
+    .argument('<url>', {
+      type: 'url',
+      description: 'HLS playlist URL (.m3u8)',
+      example: 'https://example.com/stream.m3u8',
+    })
+    .argument('[args...]', {
+      description: 'Additional headers (Header:Value format)',
+      variadic: true,
+    })
+    .example('rek hls download https://example.com/stream.m3u8', 'Download to stream.ts')
+    .example('rek hls download https://example.com/stream.m3u8 -o video.ts', 'Custom output file')
+    .example('rek hls download https://example.com/stream.m3u8 -Q 720p', 'Select 720p quality')
+    .example('rek hls download https://example.com/live.m3u8 --live -d 60', 'Record 60s of live')
+    .example('rek hls download URL Referer:https://site.com', 'With custom header')
+    .option('output', {
+      type: 'string',
+      short: 'o',
+      default: 'stream.ts',
+      description: 'Output file path',
+      example: 'video.ts',
+    })
+    .option('quality', {
+      type: 'string',
+      short: 'Q',
+      enum: ['highest', 'lowest'],
+      description: 'Quality preset (or use resolution like 720p, 1080p)',
+      example: '720p',
+    })
+    .option('live', {
+      short: 'l',
+      description: 'Enable live stream mode (keeps downloading new segments)',
+    })
+    .option('duration', {
+      type: 'number',
+      short: 'd',
+      description: 'Stop recording after N seconds (live mode)',
+      example: '3600',
+    })
+    .option('concurrency', {
+      type: 'number',
+      short: 'c',
+      default: 4,
+      description: 'Concurrent segment downloads',
+    })
+    .option('verbose', {
+      short: 'v',
+      description: 'Show detailed progress and error information',
+    })
     .action(async (...args: any[]) => {
-      // Router passes (arg1, arg2, ..., options, command)
-      // args[0] = url, args[1] = rawArgs (array), args[2] = cmdObj
       const url = args[0];
       const rawArgs = args[1] || [];
       const cmdObj = args[args.length - 1];
 
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const verbose = options.verbose;
 
       const { hls } = await import('../../plugins/hls.js');
       const { Client } = await import('../../core/client.js');
 
-      // 1. Process Presets (+chaturbate, +chrome, etc.)
-      const { clientOptions, remainingArgs } = await parseEnhancerPresets([]);
+      // Process presets (+chaturbate, +chrome, etc.)
+      const { clientOptions, remainingArgs } = await parseEnhancerPresets(rawArgs);
 
-      let output = 'stream.ts';
-      let quality: string | undefined;
-      let live = options.live;
-      let duration: number | undefined;
-      let concurrency = 4;
-      const headers: Record<string, string> = { ...(clientOptions.headers as Record<string, string>) };
-      let outputHandled = false;
+      // Get options from SmartOption parser
+      const output = options.output || 'stream.ts';
+      const verbose = options.verbose;
+      const concurrency = options.concurrency || 4;
+      const live = options.live;
+      const duration: number | undefined = options.duration;
 
-      // remainingArgs contains the parsed arguments
-      // Flags like --verbose are already in options
+      // Quality can come from --quality or key=value
+      let quality: string | undefined = options.quality;
 
-      // 2. Process remaining args
+      // Parse headers (Header:Value) and legacy key=value from remaining args
+      const headers: Record<string, string> = {
+        ...(clientOptions.headers as Record<string, string>),
+      };
+
       for (const arg of remainingArgs) {
-        if (arg.startsWith('--')) {
-            continue;
-        } else if (arg.includes('=')) {
+        if (arg.startsWith('--') || arg.startsWith('-')) continue;
+
+        if (arg.includes('=')) {
           const [key, value] = arg.split('=');
-          if (key === 'quality') quality = value;
-          else if (key === 'duration') duration = parseInt(value, 10);
-          else if (key === 'concurrency') concurrency = parseInt(value, 10);
+          if (key === 'quality' && !quality) quality = value;
+          // duration and concurrency now handled by SmartOption
         } else if (arg.includes(':') && !arg.startsWith('http')) {
-          const [key, ...valueParts] = arg.split(':');
-          headers[key.trim()] = valueParts.join(':').trim();
-        } else if (!outputHandled) { 
-          output = arg;
-          outputHandled = true;
+          const colonIndex = arg.indexOf(':');
+          const headerName = arg.slice(0, colonIndex).trim();
+          const headerValue = arg.slice(colonIndex + 1).trim();
+          headers[headerName] = headerValue;
         }
       }
 

@@ -701,7 +701,9 @@ export class RekShell {
         await this.runScrap(parts[1]);
         return;
       case 'spider':
-        await runSpider(parts.slice(1), this.baseUrl);
+        // Parse spider command: spider [url] [options]
+        const spiderUrl = parts[1] || this.baseUrl || '';
+        await runSpider({ url: spiderUrl });
         return;
       case '$':
         await this.runSelect(parts.slice(1).join(' '));

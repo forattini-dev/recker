@@ -2,49 +2,31 @@ import { RekCommand as Command } from '../router.js';
 import { promises as fs } from 'node:fs';
 import colors from '../../utils/colors.js';
 import { summarizeErrors, formatErrorSummary } from '../helpers.js';
-import { CommandSchema, RekArgs, generateHelp } from '../parser/index.js';
 
-const schema: CommandSchema = {
-  name: 'spider',
-  description: 'Crawl a website and analyze all pages.\nThe crawler respects robots.txt, handles JavaScript-rendered content, and provides detailed reports on site structure, broken links, and SEO issues.',
-  params: {
-    depth: { type: 'number', default: 5, description: 'Max link depth to follow' },
-    limit: { type: 'number', default: 100, description: 'Max pages to crawl' },
-    concurrency: { type: 'number', default: 5, description: 'Parallel requests' },
-    output: { type: 'string', description: 'Save JSON report to file' },
-    focus: { type: 'string', default: 'all', choices: ['all', 'links', 'duplicates', 'security', 'ai', 'resources'], description: 'Focus analysis on specific area (requires seo)' }
-  },
-  keywords: {
-    seo: { description: 'Enable SEO analysis mode' }
-  },
-  flags: {
-    json: { description: 'Output JSON to stdout', alias: 'j' },
-    robots: { description: 'Respect robots.txt rules', default: false }
-  },
-  examples: [
-    { cmd: 'rek spider example.com', desc: 'Crawl (ignores robots.txt)' },
-    { cmd: 'rek spider example.com --robots', desc: 'Crawl respecting robots.txt' },
-    { cmd: 'rek spider example.com depth=3 limit=50', desc: 'Depth 3, max 50 pages' },
-    { cmd: 'rek spider example.com seo focus=security', desc: 'Focus on security issues' },
-    { cmd: 'rek spider example.com seo output=report.json', desc: 'SEO with JSON export' }
-  ]
-};
+export interface SpiderOptions {
+  url: string;
+  depth?: number;
+  limit?: number;
+  concurrency?: number;
+  output?: string;
+  focus?: string;
+  seo?: boolean;
+  robots?: boolean;
+  json?: boolean;
+}
 
-export async function runSpider(rawArgs: string[], defaultUrl?: string) {
-  // 1. Parse Args
-  const { data, options, args } = RekArgs.parse(rawArgs, schema);
-  let url = args[0] as string;
+export async function runSpider(opts: SpiderOptions) {
+  const url = opts.url;
+  const formatJson = !!opts.json;
+  const outputFile = opts.output;
+  const seoEnabled = !!opts.seo;
+  const focusMode = opts.focus || 'all';
+  const respectRobotsTxt = !!opts.robots;
 
-  if (!url && defaultUrl) {
-    url = defaultUrl;
-  }
-
-  // Map format=json (param) or --json (flag) to formatJson boolean
-  const formatJson = options.json || (data as any).format === 'json';
-  const outputFile = data.output;
-  const seoEnabled = data.seo;
-  const focusMode = data.focus;
-  const respectRobotsTxt = !!options.robots;
+  // Apply defaults
+  const depth = opts.depth || 5;
+  const limit = opts.limit || 100;
+  const concurrency = opts.concurrency || 5;
 
   // Focus mode categories
   const focusCategories: Record<string, string[]> = {
@@ -56,23 +38,16 @@ export async function runSpider(rawArgs: string[], defaultUrl?: string) {
     all: [], 
   };
 
-  if (!url) {
-    if (!formatJson) {
-        console.log(colors.yellow('Usage: spider <url> [options]'));
-        console.log(generateHelp(schema));
-    }
-    return;
-  }
-
-  if (!url.startsWith('http')) url = `https://${url}`;
+  let startUrl = url;
+  if (!startUrl.startsWith('http')) startUrl = `https://${startUrl}`;
 
   // Don't print visual output in JSON mode
   if (!formatJson) {
     const modeLabel = seoEnabled ? colors.magenta(' + SEO') : '';
     const focusLabel = focusMode !== 'all' ? colors.cyan(` [focus: ${focusMode}]`) : '';
     console.log(colors.cyan(`
-Spider starting: ${url}`));
-    console.log(colors.gray(`  Depth: ${data.depth} | Limit: ${data.limit} | Concurrency: ${data.concurrency}${modeLabel}${focusLabel}`));
+Spider starting: ${startUrl}`));
+    console.log(colors.gray(`  Depth: ${depth} | Limit: ${limit} | Concurrency: ${concurrency}${modeLabel}${focusLabel}`));
     if (outputFile) {
       console.log(colors.gray(`  Output: ${outputFile}`));
     }
@@ -85,9 +60,9 @@ Spider starting: ${url}`));
       const { SeoSpider } = await import('../../seo/index.js');
 
       const seoSpider = new SeoSpider({
-        maxDepth: data.depth,
-        maxPages: data.limit,
-        concurrency: data.concurrency,
+        maxDepth: depth,
+        maxPages: limit,
+        concurrency: concurrency,
         sameDomain: true,
         delay: 100,
         seo: true,
@@ -100,7 +75,7 @@ Spider starting: ${url}`));
         },
       });
 
-      const result = await seoSpider.crawl(url);
+      const result = await seoSpider.crawl(startUrl);
 
       // JSON output mode - print structured data and exit
       if (formatJson) {
@@ -133,13 +108,13 @@ Spider starting: ${url}`));
         }
 
         const jsonOutput = {
-          startUrl: url,
+          startUrl: startUrl,
           crawledAt: new Date().toISOString(),
           duration: result.duration,
           config: {
-            maxDepth: data.depth,
-            maxPages: data.limit,
-            concurrency: data.concurrency,
+            maxDepth: depth,
+            maxPages: limit,
+            concurrency: concurrency,
             focusMode,
           },
           summary: {
@@ -404,9 +379,9 @@ Spider starting: ${url}`));
       const { Spider } = await import('../../scrape/spider.js');
 
       const spider = new Spider({
-        maxDepth: data.depth,
-        maxPages: data.limit,
-        concurrency: data.concurrency,
+        maxDepth: depth,
+        maxPages: limit,
+        concurrency: concurrency,
         sameDomain: true,
         delay: 100,
         respectRobotsTxt,
@@ -415,7 +390,7 @@ Spider starting: ${url}`));
         },
       });
 
-      const result = await spider.crawl(url);
+      const result = await spider.crawl(startUrl);
 
       // JSON output mode
       if (formatJson) {
@@ -424,9 +399,9 @@ Spider starting: ${url}`));
           crawledAt: new Date().toISOString(),
           duration: result.duration,
           config: {
-            maxDepth: data.depth,
-            maxPages: data.limit,
-            concurrency: data.concurrency,
+            maxDepth: depth,
+            maxPages: limit,
+            concurrency: concurrency,
           },
           summary: {
             totalPages: result.pages.length,
@@ -538,12 +513,71 @@ export function registerSpiderCommand(program: Command) {
   program
     .command('spider')
     .alias('crawl')
-    .description('Crawl a website and analyze all pages')
-    .argument('<url>', 'Starting URL to crawl')
-    .argument('[args...]', 'Options: depth=N limit=N concurrency=N seo focus=MODE...')
-    .addHelpText('after', generateHelp(schema))
-    .action(async (url: string, rawArgs: string[]) => {
-      // Recombine for the unified runner
-      await runSpider([url, ...rawArgs]);
+    .description('Crawl a website and analyze all pages with optional SEO analysis')
+    .argument('<url>', {
+      type: 'url',
+      description: 'Starting URL to crawl',
+      example: 'example.com',
+    })
+    .option('depth', {
+      type: 'number',
+      short: 'd',
+      default: 5,
+      description: 'Max link depth to follow',
+      example: '3',
+    })
+    .option('limit', {
+      type: 'number',
+      short: 'l',
+      default: 100,
+      description: 'Max pages to crawl',
+      example: '50',
+    })
+    .option('concurrency', {
+      type: 'number',
+      short: 'c',
+      default: 5,
+      description: 'Number of parallel requests',
+      example: '10',
+    })
+    .option('output', {
+      type: 'string',
+      short: 'o',
+      description: 'Save JSON report to file',
+      example: 'report.json',
+    })
+    .option('focus', {
+      type: 'string',
+      short: 'f',
+      default: 'all',
+      enum: ['all', 'links', 'duplicates', 'security', 'ai', 'resources'],
+      description: 'Focus SEO analysis on specific area',
+    })
+    .option('seo', {
+      short: 'S',
+      description: 'Enable SEO analysis mode',
+    })
+    .option('robots', {
+      short: 'r',
+      description: 'Respect robots.txt rules',
+    })
+    .example('rek spider example.com', 'Basic crawl')
+    .example('rek spider example.com -d 3 -l 50', 'Depth 3, max 50 pages')
+    .example('rek spider example.com --seo', 'Enable SEO analysis')
+    .example('rek spider example.com --seo -f security', 'Focus on security issues')
+    .example('rek spider example.com --seo -o report.json', 'Save SEO report')
+    .action(async (url: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      await runSpider({
+        url,
+        depth: options.depth,
+        limit: options.limit,
+        concurrency: options.concurrency,
+        output: options.output,
+        focus: options.focus,
+        seo: options.seo,
+        robots: options.robots,
+        json: options.json,
+      });
     });
 }

@@ -1,65 +1,21 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
-import { CommandSchema, RekArgs, generateHelp } from '../parser/index.js';
-
-const ipSchema: CommandSchema = {
-  name: 'ip',
-  description: 'Look up geolocation and ISP info for an IP address.\nUses local MaxMind GeoLite2 database (downloaded automatically).',
-  examples: [
-    { cmd: 'rek ip 8.8.8.8', desc: 'Google DNS' },
-    { cmd: 'rek ip 1.1.1.1', desc: 'Cloudflare DNS' }
-  ]
-};
-
-const tlsSchema: CommandSchema = {
-  name: 'tls',
-  description: 'Inspect TLS/SSL certificate of a host.\nShows issuer, validity, fingerprints, and subject alternative names.',
-  examples: [
-    { cmd: 'rek tls google.com', desc: 'Inspect Google cert' },
-    { cmd: 'rek tls example.com 8443', desc: 'Custom port' },
-    { cmd: 'rek tls 192.168.1.1', desc: 'Check IP directly' }
-  ]
-};
-
-const whoisSchema: CommandSchema = {
-  name: 'whois',
-  description: 'Look up domain registration and ownership info.\nQueries WHOIS servers for registrar, dates, and nameservers.',
-  flags: {
-    raw: { description: 'Show raw WHOIS response', default: false }
-  },
-  examples: [
-    { cmd: 'rek whois github.com', desc: 'Domain info' },
-    { cmd: 'rek whois google.com --raw', desc: 'Raw response' }
-  ]
-};
-
-const rdapSchema: CommandSchema = {
-  name: 'rdap',
-  description: 'RDAP lookup (modern WHOIS with JSON).\nStandardized replacement for WHOIS with structured data.',
-  examples: [
-    { cmd: 'rek rdap github.com', desc: 'Domain info' }
-  ]
-};
-
-const pingSchema: CommandSchema = {
-  name: 'ping',
-  description: 'Test TCP connectivity to host:port.\nMeasures connection latency (not ICMP).',
-  params: {
-    count: { type: 'number', default: 4, description: 'Number of pings' }
-  },
-  examples: [
-    { cmd: 'rek ping google.com', desc: 'Test HTTPS (443)' },
-    { cmd: 'rek ping google.com 80', desc: 'Test HTTP (80)' },
-    { cmd: 'rek ping redis.local 6379 count=10', desc: '10 pings to Redis' }
-  ]
-};
 
 export function registerNetworkCommands(program: Command) {
-  // IP
-  program.command('ip').alias('geo').alias('geoip')
-    .description('Look up geolocation and ISP info for an IP address')
-    .argument('<address>', 'IP address to lookup')
-    .addHelpText('after', generateHelp(ipSchema))
+  // IP Geolocation
+  program
+    .command('ip')
+    .alias('geo')
+    .alias('geoip')
+    .description('Look up geolocation and ISP info for an IP address using local MaxMind GeoLite2 database')
+    .argument('<address>', {
+      type: 'string',
+      description: 'IPv4 or IPv6 address to lookup',
+      example: '8.8.8.8',
+    })
+    .example('rek ip 8.8.8.8', 'Google DNS geolocation')
+    .example('rek ip 1.1.1.1', 'Cloudflare DNS geolocation')
+    .example('rek ip 2001:4860:4860::8888', 'IPv6 lookup')
     .action(async (address) => {
         const { getIpInfo, isGeoIPAvailable } = await import('../../mcp/ip-intel.js');
 
@@ -99,12 +55,26 @@ ${colors.bold('Network:')}
         }
     });
 
-  // TLS
-  program.command('tls').alias('ssl').alias('cert')
-    .description('Inspect TLS/SSL certificate of a host')
-    .argument('<host>', 'Hostname or IP address')
-    .argument('[port]', 'Port number (default: 443)', '443')
-    .addHelpText('after', generateHelp(tlsSchema))
+  // TLS Certificate Inspection
+  program
+    .command('tls')
+    .alias('ssl')
+    .alias('cert')
+    .description('Inspect TLS/SSL certificate of a host showing issuer, validity, fingerprints, and SANs')
+    .argument('<host>', {
+      type: 'string',
+      description: 'Hostname or IP address to inspect',
+      example: 'google.com',
+    })
+    .argument('[port]', {
+      type: 'number',
+      description: 'Port number (default: 443)',
+      default: 443,
+      example: '8443',
+    })
+    .example('rek tls google.com', 'Inspect Google certificate')
+    .example('rek tls example.com 8443', 'Custom port')
+    .example('rek tls 192.168.1.1', 'Check IP directly')
     .action(async (host, port) => {
       const { inspectTLS } = await import('../../utils/tls-inspector.js');
 
@@ -157,14 +127,24 @@ ${colors.bold('Fingerprints:')}
       }
     });
 
-  // WHOIS
-  program.command('whois')
-    .description('Look up domain registration and ownership info')
-    .argument('<query>', 'Domain name or IP address')
-    .argument('[args...]', 'Options: raw')
-    .addHelpText('after', generateHelp(whoisSchema))
-    .action(async (query, rawArgs) => {
-      const { options } = RekArgs.parse(rawArgs, whoisSchema);
+  // WHOIS Lookup
+  program
+    .command('whois')
+    .description('Look up domain registration and ownership info from WHOIS servers')
+    .argument('<query>', {
+      type: 'string',
+      description: 'Domain name or IP address to lookup',
+      example: 'github.com',
+    })
+    .option('raw', {
+      short: 'r',
+      description: 'Show raw WHOIS response instead of parsed data',
+    })
+    .example('rek whois github.com', 'Get domain registration info')
+    .example('rek whois google.com --raw', 'Show raw WHOIS response')
+    .example('rek whois 8.8.8.8', 'Lookup IP address owner')
+    .action(async (query: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { whois } = await import('../../utils/whois.js');
 
       console.log(colors.gray(`Looking up WHOIS for ${query}...`));
@@ -207,11 +187,17 @@ ${colors.bold('Server:')} ${result.server}
       }
     });
 
-  // RDAP
-  program.command('rdap')
-    .description('RDAP lookup (modern WHOIS with JSON)')
-    .argument('<domain>', 'Domain name to lookup')
-    .addHelpText('after', generateHelp(rdapSchema))
+  // RDAP (Modern WHOIS)
+  program
+    .command('rdap')
+    .description('RDAP lookup - modern WHOIS replacement with structured JSON data')
+    .argument('<domain>', {
+      type: 'string',
+      description: 'Domain name to lookup',
+      example: 'github.com',
+    })
+    .example('rek rdap github.com', 'Get structured domain info')
+    .example('rek rdap google.com --json', 'Get full JSON response')
     .action(async (domain) => {
       const { rdap } = await import('../../utils/rdap.js');
       const { Client } = await import('../../core/client.js');
@@ -253,25 +239,47 @@ ${colors.bold('Status:')} ${result.status?.join(', ') || 'N/A'}
       }
     });
 
-  // Ping
-  program.command('ping')
-    .description('Test TCP connectivity to host:port')
-    .argument('<host>', 'Hostname or IP address')
-    .argument('[args...]', 'Port and options: [port] count=4')
-    .addHelpText('after', generateHelp(pingSchema))
-    .action(async (host: string, rawArgs: string[]) => {
-      const { data, args: posArgs } = RekArgs.parse(rawArgs, pingSchema);
+  // TCP Ping
+  program
+    .command('ping')
+    .description('Test TCP connectivity to host:port and measure connection latency (not ICMP)')
+    .argument('<host>', {
+      type: 'string',
+      description: 'Hostname or IP address to ping',
+      example: 'google.com',
+    })
+    .argument('[port]', {
+      type: 'number',
+      description: 'Port number to connect to',
+      default: 443,
+      example: '80',
+    })
+    .option('count', {
+      type: 'number',
+      short: 'c',
+      default: 4,
+      description: 'Number of pings to send',
+      example: '10',
+    })
+    .option('timeout', {
+      type: 'number',
+      short: 't',
+      default: 5000,
+      description: 'Connection timeout in milliseconds',
+      example: '3000',
+    })
+    .example('rek ping google.com', 'Test HTTPS connectivity (port 443)')
+    .example('rek ping google.com 80', 'Test HTTP port')
+    .example('rek ping redis.local 6379 -c 10', '10 pings to Redis')
+    .action(async (host: string, portArg: number | string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const net = await import('node:net');
 
-      // Check if port is in positional args
-      let port = 443;
-      if (posArgs.length > 0 && typeof posArgs[0] === 'number') {
-        port = posArgs[0];
-      } else if (posArgs.length > 0 && /^\d+$/.test(String(posArgs[0]))) {
-        port = parseInt(String(posArgs[0]));
-      }
+      // Port comes from argument (already parsed)
+      const port = typeof portArg === 'number' ? portArg : parseInt(String(portArg)) || 443;
 
-      const count = data.count || 4;
+      const count = options.count || 4;
+      const timeout = options.timeout || 5000;
       const results: number[] = [];
 
       console.log(colors.gray(`Pinging ${host}:${port}...`));
@@ -286,7 +294,7 @@ ${colors.bold('Status:')} ${result.status?.join(', ') || 'N/A'}
               socket.destroy();
               resolve();
             });
-            socket.setTimeout(5000);
+            socket.setTimeout(timeout);
             socket.on('timeout', () => {
               socket.destroy();
               reject(new Error('Timeout'));

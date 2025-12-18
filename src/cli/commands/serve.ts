@@ -1,194 +1,62 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
-import { CommandSchema, RekArgs, generateHelp } from '../parser/index.js';
-
-// Schemas for each subcommand
-const httpSchema: CommandSchema = {
-  name: 'http',
-  description: 'Start a mock HTTP server for testing',
-  params: {
-    port: { type: 'number', default: 3000, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-    delay: { type: 'number', default: 0, description: 'Add delay to responses in ms' },
-  },
-  flags: {
-    echo: { description: 'Echo request body back in response', default: false },
-    cors: { description: 'Enable CORS', default: true },
-    nocors: { description: 'Disable CORS' }
-  },
-  examples: [
-    { cmd: 'rek serve http', desc: 'Start on port 3000' },
-    { cmd: 'rek serve http port=8080', desc: 'Start on port 8080' },
-    { cmd: 'rek serve http echo', desc: 'Echo mode' }
-  ]
-};
-
-const webhookSchema: CommandSchema = {
-  name: 'webhook',
-  description: 'Start a webhook receiver server',
-  params: {
-    port: { type: 'number', default: 3000, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-    status: { type: 'number', default: 204, description: 'Response status code (200 or 204)' },
-  },
-  flags: {
-    quiet: { description: 'Disable logging', default: false }
-  },
-  examples: [
-    { cmd: 'rek serve webhook', desc: 'Start on port 3000' },
-    { cmd: 'rek serve webhook status=200', desc: 'Return 200 OK' }
-  ]
-};
-
-const websocketSchema: CommandSchema = {
-  name: 'websocket',
-  description: 'Start a mock WebSocket server',
-  params: {
-    port: { type: 'number', default: 8080, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-    delay: { type: 'number', default: 0, description: 'Add delay to responses in ms' },
-  },
-  flags: {
-    echo: { description: 'Echo messages back', default: true },
-    noecho: { description: 'Disable echo mode' }
-  },
-  examples: [
-    { cmd: 'rek serve websocket', desc: 'Start on port 8080' },
-    { cmd: 'rek serve ws noecho', desc: 'Disable echo' }
-  ]
-};
-
-const sseSchema: CommandSchema = {
-  name: 'sse',
-  description: 'Start a mock SSE (Server-Sent Events) server',
-  params: {
-    port: { type: 'number', default: 8081, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-    path: { type: 'string', default: '/events', description: 'SSE endpoint path' },
-    heartbeat: { type: 'number', default: 0, description: 'Send heartbeat every N ms (0 = disabled)' },
-  },
-  examples: [
-    { cmd: 'rek serve sse', desc: 'Start on port 8081' },
-    { cmd: 'rek serve sse heartbeat=5000', desc: 'Heartbeat every 5s' }
-  ]
-};
-
-const hlsSchema: CommandSchema = {
-  name: 'hls',
-  description: 'Start a mock HLS streaming server',
-  params: {
-    port: { type: 'number', default: 8082, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-    mode: { type: 'string', default: 'vod', choices: ['vod', 'live', 'event'], description: 'Stream mode' },
-    segments: { type: 'number', default: 10, description: 'Number of segments' },
-    duration: { type: 'number', default: 6, description: 'Segment duration in seconds' },
-    qualities: { type: 'string', default: '720p,480p,360p', description: 'Comma-separated quality variants' },
-  },
-  examples: [
-    { cmd: 'rek serve hls', desc: 'Start VOD server' },
-    { cmd: 'rek serve hls mode=live', desc: 'Start live stream' }
-  ]
-};
-
-const udpSchema: CommandSchema = {
-  name: 'udp',
-  description: 'Start a mock UDP server',
-  params: {
-    port: { type: 'number', default: 9000, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-  },
-  flags: {
-    echo: { description: 'Echo messages back', default: true },
-    noecho: { description: 'Disable echo mode' }
-  },
-  examples: [
-    { cmd: 'rek serve udp', desc: 'Start on port 9000' }
-  ]
-};
-
-const dnsSchema: CommandSchema = {
-  name: 'dns',
-  description: 'Start a mock DNS server',
-  params: {
-    port: { type: 'number', default: 5353, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-    delay: { type: 'number', default: 0, description: 'Add delay to responses in ms' },
-  },
-  examples: [
-    { cmd: 'rek serve dns', desc: 'Start on port 5353' }
-  ]
-};
-
-const whoisSchema: CommandSchema = {
-  name: 'whois',
-  description: 'Start a mock WHOIS server',
-  params: {
-    port: { type: 'number', default: 4343, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-    delay: { type: 'number', default: 0, description: 'Add delay to responses in ms' },
-  },
-  examples: [
-    { cmd: 'rek serve whois', desc: 'Start on port 4343' }
-  ]
-};
-
-const telnetSchema: CommandSchema = {
-  name: 'telnet',
-  description: 'Start a mock Telnet server',
-  params: {
-    port: { type: 'number', default: 2323, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-    delay: { type: 'number', default: 0, description: 'Add delay to responses in ms' },
-  },
-  flags: {
-    echo: { description: 'Echo input back', default: true },
-    noecho: { description: 'Disable echo mode' }
-  },
-  examples: [
-    { cmd: 'rek serve telnet', desc: 'Start on port 2323' }
-  ]
-};
-
-const ftpSchema: CommandSchema = {
-  name: 'ftp',
-  description: 'Start a mock FTP server',
-  params: {
-    port: { type: 'number', default: 2121, description: 'Port to listen on' },
-    host: { type: 'string', default: '127.0.0.1', description: 'Host to bind to' },
-    username: { type: 'string', default: 'user', description: 'Username for auth' },
-    password: { type: 'string', default: 'pass', description: 'Password for auth' },
-    delay: { type: 'number', default: 0, description: 'Add delay to responses' },
-  },
-  flags: {
-    anonymous: { description: 'Allow anonymous login', default: true },
-    noanonymous: { description: 'Disable anonymous login' }
-  },
-  examples: [
-    { cmd: 'rek serve ftp', desc: 'Start on port 2121' }
-  ]
-};
 
 export function registerServeCommand(program: Command) {
-  const serve = program.command('serve').description('Start mock servers for testing protocols');
+  const serve = program
+    .command('serve')
+    .description('Start mock servers for testing various protocols (HTTP, WebSocket, DNS, etc)')
+    .example('rek serve http', 'Start HTTP server on port 3000')
+    .example('rek serve websocket', 'Start WebSocket server on port 8080')
+    .example('rek serve hls --mode=live', 'Start live HLS streaming server');
 
-  // HTTP
-  serve.command('http')
-    .description(httpSchema.description)
-    .argument('[args...]', 'Options: port=3000 host=127.0.0.1 echo delay=0 cors')
-    .addHelpText('after', generateHelp(httpSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data, options } = RekArgs.parse(rawArgs, httpSchema);
+  // HTTP Mock Server
+  serve
+    .command('http')
+    .description('Start a mock HTTP server for testing requests and responses')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 3000,
+      description: 'Port to listen on',
+      example: '8080',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+      example: '0.0.0.0',
+    })
+    .option('delay', {
+      type: 'number',
+      short: 'd',
+      default: 0,
+      description: 'Add delay to responses in milliseconds',
+      example: '100',
+    })
+    .option('echo', {
+      short: 'e',
+      description: 'Echo request body back in response',
+    })
+    .option('no-cors', {
+      description: 'Disable CORS headers',
+    })
+    .example('rek serve http', 'Start on port 3000')
+    .example('rek serve http -p 8080', 'Start on port 8080')
+    .example('rek serve http --echo', 'Echo mode')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { MockHttpServer } = await import('../../testing/mock-http-server.js');
-      
-      const cors = options.nocors ? false : (options.cors || data.cors); // default true in schema logic handled by parser? parser handles boolean defaults. 
-      // Actually schema default is just for 'data'. 'options' are flags.
-      // Re-eval logic:
-      const useCors = options.nocors ? false : true;
+
+      const port = options.port || 3000;
+      const host = options.host || '127.0.0.1';
+      const delay = options.delay || 0;
+      const useCors = !options['no-cors'];
 
       const server = await MockHttpServer.create({
-        port: data.port,
-        host: data.host,
-        delay: data.delay,
+        port,
+        host,
+        delay,
         cors: useCors,
       });
 
@@ -205,7 +73,7 @@ export function registerServeCommand(program: Command) {
 ├─────────────────────────────────────────────┤
 │  URL: ${colors.cyan(server.url.padEnd(37))}│
 │  Mode: ${colors.yellow((options.echo ? 'Echo' : 'Default').padEnd(36))}│
-│  Delay: ${colors.gray((data.delay + 'ms').padEnd(35))}
+│  Delay: ${colors.gray((delay + 'ms').padEnd(35))}
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
@@ -221,24 +89,49 @@ export function registerServeCommand(program: Command) {
       });
     });
 
-  // Webhook
-  serve.command('webhook').alias('wh')
-    .description(webhookSchema.description)
-    .argument('[args...]', 'Options: port=3000 host=127.0.0.1 status=204 quiet')
-    .addHelpText('after', generateHelp(webhookSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data, options } = RekArgs.parse(rawArgs, webhookSchema);
+  // Webhook Receiver
+  serve
+    .command('webhook')
+    .alias('wh')
+    .description('Start a webhook receiver server that logs incoming requests')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 3000,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('status', {
+      type: 'number',
+      short: 's',
+      default: 204,
+      enum: ['200', '204'],
+      description: 'Response status code',
+    })
+    .example('rek serve webhook', 'Start on port 3000')
+    .example('rek serve webhook --status=200', 'Return 200 OK')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { createWebhookServer } = await import('../../testing/mock-http-server.js');
 
-      if (data.status !== 200 && data.status !== 204) {
+      const port = options.port || 3000;
+      const host = options.host || '127.0.0.1';
+      const status = options.status || 204;
+
+      if (status !== 200 && status !== 204) {
         console.error(colors.red('Status must be 200 or 204'));
         process.exit(1);
       }
 
       const server = await createWebhookServer({
-        port: data.port,
-        host: data.host,
-        status: data.status as 200 | 204,
+        port,
+        host,
+        status: status as 200 | 204,
         log: !options.quiet,
       });
 
@@ -247,7 +140,7 @@ export function registerServeCommand(program: Command) {
 │  ${colors.bold('Recker Webhook Receiver')}                   │
 ├─────────────────────────────────────────────┤
 │  URL: ${colors.cyan(server.url.padEnd(37))}│
-│  Status: ${colors.yellow(String(data.status).padEnd(34))}│
+│  Status: ${colors.yellow(String(status).padEnd(34))}│
 ├─────────────────────────────────────────────┤
 │  ${colors.cyan('*')} ${colors.cyan('/')}            ${colors.gray('Webhook without ID')}        │
 │  ${colors.cyan('*')} ${colors.cyan('/:id')}         ${colors.gray('Webhook with custom ID')}    │
@@ -263,22 +156,48 @@ export function registerServeCommand(program: Command) {
       });
     });
 
-  // WebSocket
-  serve.command('websocket').alias('ws')
-    .description(websocketSchema.description)
-    .argument('[args...]', 'Options: port=8080 host=127.0.0.1 echo noecho delay=0')
-    .addHelpText('after', generateHelp(websocketSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data, options } = RekArgs.parse(rawArgs, websocketSchema);
+  // WebSocket Mock Server
+  serve
+    .command('websocket')
+    .alias('ws')
+    .description('Start a mock WebSocket server for testing real-time connections')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 8080,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('delay', {
+      type: 'number',
+      short: 'd',
+      default: 0,
+      description: 'Add delay to responses in milliseconds',
+    })
+    .option('no-echo', {
+      description: 'Disable echo mode (messages not sent back)',
+    })
+    .example('rek serve websocket', 'Start on port 8080')
+    .example('rek serve ws --no-echo', 'Disable echo mode')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { MockWebSocketServer } = await import('../../testing/mock-websocket-server.js');
 
-      const echo = options.noecho ? false : (options.echo !== undefined ? Boolean(options.echo) : true);
+      const port = options.port || 8080;
+      const host = options.host || '127.0.0.1';
+      const delay = options.delay || 0;
+      const echo = !options['no-echo'];
 
       const server = await MockWebSocketServer.create({
-        port: data.port,
-        host: data.host,
+        port,
+        host,
         echo,
-        delay: data.delay,
+        delay,
       });
 
       console.log(colors.green(`
@@ -287,7 +206,7 @@ export function registerServeCommand(program: Command) {
 ├─────────────────────────────────────────────┤
 │  URL: ${colors.cyan(server.url.padEnd(37))}│
 │  Echo: ${colors.yellow((echo ? 'Enabled' : 'Disabled').padEnd(36))}│
-│  Delay: ${colors.gray((data.delay + 'ms').padEnd(35))}
+│  Delay: ${colors.gray((delay + 'ms').padEnd(35))}
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
@@ -306,30 +225,60 @@ export function registerServeCommand(program: Command) {
       });
     });
 
-  // SSE
-  serve.command('sse')
-    .description(sseSchema.description)
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(sseSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data } = RekArgs.parse(rawArgs, sseSchema);
+  // SSE Mock Server
+  serve
+    .command('sse')
+    .description('Start a mock SSE (Server-Sent Events) server for real-time streaming')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 8081,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('path', {
+      type: 'string',
+      default: '/events',
+      description: 'SSE endpoint path',
+    })
+    .option('heartbeat', {
+      type: 'number',
+      short: 'b',
+      default: 0,
+      description: 'Send heartbeat every N milliseconds (0=disabled)',
+      example: '5000',
+    })
+    .example('rek serve sse', 'Start on port 8081')
+    .example('rek serve sse --heartbeat=5000', 'Heartbeat every 5s')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { MockSSEServer } = await import('../../testing/mock-sse-server.js');
       const readline = await import('node:readline');
 
+      const port = options.port || 8081;
+      const host = options.host || '127.0.0.1';
+      const path = options.path || '/events';
+      const heartbeat = options.heartbeat || 0;
+
       const server = await MockSSEServer.create({
-        port: data.port,
-        host: data.host,
-        path: data.path,
+        port,
+        host,
+        path,
       });
 
-      if (data.heartbeat > 0) server.startPeriodicEvents('heartbeat', data.heartbeat);
+      if (heartbeat > 0) server.startPeriodicEvents('heartbeat', heartbeat);
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock SSE Server')}                    │
 ├─────────────────────────────────────────────┤
 │  URL: ${colors.cyan(server.url.padEnd(37))}│
-│  Heartbeat: ${colors.yellow((data.heartbeat === 0 ? 'Disabled' : data.heartbeat + 'ms').padEnd(31))}
+│  Heartbeat: ${colors.yellow((heartbeat === 0 ? 'Disabled' : heartbeat + 'ms').padEnd(31))}
 ├─────────────────────────────────────────────┤
 │  Type message + Enter to broadcast          │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
@@ -354,29 +303,75 @@ export function registerServeCommand(program: Command) {
       });
     });
 
-  // HLS
-  serve.command('hls')
-    .description(hlsSchema.description)
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(hlsSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data } = RekArgs.parse(rawArgs, hlsSchema);
+  // HLS Mock Server
+  serve
+    .command('hls')
+    .description('Start a mock HLS streaming server with configurable qualities and modes')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 8082,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('mode', {
+      type: 'string',
+      short: 'm',
+      default: 'vod',
+      enum: ['vod', 'live', 'event'],
+      description: 'Stream mode',
+    })
+    .option('segments', {
+      type: 'number',
+      short: 's',
+      default: 10,
+      description: 'Number of segments',
+    })
+    .option('duration', {
+      type: 'number',
+      short: 'd',
+      default: 6,
+      description: 'Segment duration in seconds',
+    })
+    .option('qualities', {
+      type: 'string',
+      short: 'Q',
+      default: '720p,480p,360p',
+      description: 'Comma-separated quality variants',
+    })
+    .example('rek serve hls', 'Start VOD server')
+    .example('rek serve hls --mode=live', 'Start live stream')
+    .example('rek serve hls -Q 1080p,720p', 'Custom qualities')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { MockHlsServer } = await import('../../testing/mock-hls-server.js');
       const http = await import('node:http');
 
-      const qualities = (data.qualities as string).split(',').map(q => q.trim());
-      const variants = qualities.map((name, i) => ({
+      const port = options.port || 8082;
+      const host = options.host || '127.0.0.1';
+      const mode = options.mode || 'vod';
+      const segments = options.segments || 10;
+      const duration = options.duration || 6;
+      const qualitiesStr = options.qualities || '720p,480p,360p';
+
+      const qualities = qualitiesStr.split(',').map((q: string) => q.trim());
+      const variants = qualities.map((name: string, i: number) => ({
         name,
         bandwidth: [5000000, 2500000, 1400000][i] || 500000,
         resolution: ['1920x1080', '1280x720', '854x480'][i] || '640x360',
       }));
 
-      const baseUrl = `http://${data.host}:${data.port}`;
+      const baseUrl = `http://${host}:${port}`;
       const hlsServer = await MockHlsServer.create({
         baseUrl,
-        mode: data.mode as any,
-        segmentCount: data.segments,
-        segmentDuration: data.duration,
+        mode: mode as any,
+        segmentCount: segments,
+        segmentDuration: duration,
         multiQuality: variants.length > 1,
         variants: variants.length > 1 ? variants : undefined,
       });
@@ -395,13 +390,13 @@ export function registerServeCommand(program: Command) {
         }
       });
 
-      httpServer.listen(data.port, data.host, () => {
+      httpServer.listen(port, host, () => {
         console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock HLS Server')}                    │
 ├─────────────────────────────────────────────┤
 │  Master: ${colors.cyan((hlsServer.manifestUrl).padEnd(34))}│
-│  Mode: ${colors.yellow(data.mode.padEnd(36))}│
+│  Mode: ${colors.yellow(mode.padEnd(36))}│
 │  Qualities: ${colors.cyan(qualities.join(', ').padEnd(31))}
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
@@ -416,20 +411,37 @@ export function registerServeCommand(program: Command) {
       });
     });
 
-  // UDP
-  serve.command('udp')
-    .description(udpSchema.description)
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(udpSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data, options } = RekArgs.parse(rawArgs, udpSchema);
+  // UDP Mock Server
+  serve
+    .command('udp')
+    .description('Start a mock UDP server for datagram testing')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 9000,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('no-echo', {
+      description: 'Disable echo mode',
+    })
+    .example('rek serve udp', 'Start on port 9000')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { MockUDPServer } = await import('../../testing/mock-udp-server.js');
 
-      const echo = options.noecho ? false : (options.echo !== undefined ? Boolean(options.echo) : true);
+      const port = options.port || 9000;
+      const host = options.host || '127.0.0.1';
+      const echo = !options['no-echo'];
 
       const server = new MockUDPServer({
-        port: data.port,
-        host: data.host,
+        port,
+        host,
         echo,
       });
 
@@ -439,7 +451,7 @@ export function registerServeCommand(program: Command) {
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock UDP Server')}                    │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${data.host}:${data.port}`.padEnd(33))}
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}
 │  Echo: ${colors.yellow((echo ? 'Enabled' : 'Disabled').padEnd(36))}
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
@@ -457,29 +469,51 @@ export function registerServeCommand(program: Command) {
       });
     });
 
-  // DNS
-  serve.command('dns')
-    .description(dnsSchema.description)
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(dnsSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data } = RekArgs.parse(rawArgs, dnsSchema);
+  // DNS Mock Server
+  serve
+    .command('dns')
+    .description('Start a mock DNS server for domain resolution testing')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 5353,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('delay', {
+      type: 'number',
+      short: 'd',
+      default: 0,
+      description: 'Add delay to responses in milliseconds',
+    })
+    .example('rek serve dns', 'Start on port 5353')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { MockDnsServer } = await import('../../testing/mock-dns-server.js');
 
+      const port = options.port || 5353;
+      const host = options.host || '127.0.0.1';
+      const delay = options.delay || 0;
+
       const server = await MockDnsServer.create({
-        port: data.port,
-        host: data.host,
-        delay: data.delay,
+        port,
+        host,
+        delay,
       });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock DNS Server')}                    │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${data.host}:${data.port}`.padEnd(33))}
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}
 │  Protocol: ${colors.yellow('UDP'.padEnd(32))}
 ├─────────────────────────────────────────────┤
-│  Test: dig @${data.host} -p ${data.port} example.com        │
+│  Test: dig @${host} -p ${port} example.com        │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
 
@@ -494,29 +528,51 @@ export function registerServeCommand(program: Command) {
       });
     });
 
-  // WHOIS
-  serve.command('whois')
-    .description(whoisSchema.description)
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(whoisSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data } = RekArgs.parse(rawArgs, whoisSchema);
+  // WHOIS Mock Server
+  serve
+    .command('whois')
+    .description('Start a mock WHOIS server for domain registration testing')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 4343,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('delay', {
+      type: 'number',
+      short: 'd',
+      default: 0,
+      description: 'Add delay to responses in milliseconds',
+    })
+    .example('rek serve whois', 'Start on port 4343')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { MockWhoisServer } = await import('../../testing/mock-whois-server.js');
 
+      const port = options.port || 4343;
+      const host = options.host || '127.0.0.1';
+      const delay = options.delay || 0;
+
       const server = await MockWhoisServer.create({
-        port: data.port,
-        host: data.host,
-        delay: data.delay,
+        port,
+        host,
+        delay,
       });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock WHOIS Server')}                  │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${data.host}:${data.port}`.padEnd(33))}
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}
 │  Protocol: ${colors.yellow('TCP'.padEnd(32))}
 ├─────────────────────────────────────────────┤
-│  Test: whois -h ${data.host} -p ${data.port} example.com │
+│  Test: whois -h ${host} -p ${port} example.com │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
 
@@ -529,32 +585,56 @@ export function registerServeCommand(program: Command) {
       });
     });
 
-  // Telnet
-  serve.command('telnet')
-    .description(telnetSchema.description)
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(telnetSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data, options } = RekArgs.parse(rawArgs, telnetSchema);
+  // Telnet Mock Server
+  serve
+    .command('telnet')
+    .description('Start a mock Telnet server for terminal testing')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 2323,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('delay', {
+      type: 'number',
+      short: 'd',
+      default: 0,
+      description: 'Add delay to responses in milliseconds',
+    })
+    .option('no-echo', {
+      description: 'Disable echo mode',
+    })
+    .example('rek serve telnet', 'Start on port 2323')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { MockTelnetServer } = await import('../../testing/mock-telnet-server.js');
 
-      const echo = options.noecho ? false : (options.echo !== undefined ? Boolean(options.echo) : true);
+      const port = options.port || 2323;
+      const host = options.host || '127.0.0.1';
+      const delay = options.delay || 0;
+      const echo = !options['no-echo'];
 
       const server = await MockTelnetServer.create({
-        port: data.port,
-        host: data.host,
+        port,
+        host,
         echo,
-        delay: data.delay,
+        delay,
       });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock Telnet Server')}                 │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${data.host}:${data.port}`.padEnd(33))}
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}
 │  Echo: ${colors.yellow((echo ? 'Enabled' : 'Disabled').padEnd(36))}
 ├─────────────────────────────────────────────┤
-│  Connect: telnet ${data.host} ${data.port}               │
+│  Connect: telnet ${host} ${port}               │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
 
@@ -569,35 +649,74 @@ export function registerServeCommand(program: Command) {
       });
     });
 
-  // FTP
-  serve.command('ftp')
-    .description(ftpSchema.description)
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(ftpSchema))
-    .action(async (rawArgs: string[]) => {
-      const { data, options } = RekArgs.parse(rawArgs, ftpSchema);
+  // FTP Mock Server
+  serve
+    .command('ftp')
+    .description('Start a mock FTP server for file transfer testing')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 2121,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('username', {
+      type: 'string',
+      short: 'u',
+      default: 'user',
+      description: 'Username for authentication',
+    })
+    .option('password', {
+      type: 'string',
+      short: 'P',
+      default: 'pass',
+      description: 'Password for authentication',
+    })
+    .option('delay', {
+      type: 'number',
+      short: 'd',
+      default: 0,
+      description: 'Add delay to responses in milliseconds',
+    })
+    .option('no-anonymous', {
+      description: 'Disable anonymous login',
+    })
+    .example('rek serve ftp', 'Start on port 2121')
+    .example('rek serve ftp -u admin -P secret', 'Custom credentials')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
       const { MockFtpServer } = await import('../../testing/mock-ftp-server.js');
 
-      const anonymous = options.noanonymous ? false : (options.anonymous !== undefined ? Boolean(options.anonymous) : true);
+      const port = options.port || 2121;
+      const host = options.host || '127.0.0.1';
+      const username = options.username || 'user';
+      const password = options.password || 'pass';
+      const delay = options.delay || 0;
+      const anonymous = !options['no-anonymous'];
 
       const server = await MockFtpServer.create({
-        port: data.port,
-        host: data.host,
-        username: data.username,
-        password: data.password,
+        port,
+        host,
+        username,
+        password,
         anonymous,
-        delay: data.delay,
+        delay,
       });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock FTP Server')}                    │
 ├─────────────────────────────────────────────┤
-│  Address: ${colors.cyan(`${data.host}:${data.port}`.padEnd(33))}
+│  Address: ${colors.cyan(`${host}:${port}`.padEnd(33))}
 │  Anonymous: ${colors.yellow((anonymous ? 'Allowed' : 'Disabled').padEnd(31))}
-│  User: ${colors.cyan(data.username.padEnd(36))}
+│  User: ${colors.cyan(username.padEnd(36))}
 ├─────────────────────────────────────────────┤
-│  Connect: ftp ${data.host} ${data.port}                  │
+│  Connect: ftp ${host} ${port}                  │
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
 

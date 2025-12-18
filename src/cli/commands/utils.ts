@@ -1,63 +1,38 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
-import { CommandSchema, RekArgs, generateHelp } from '../parser/index.js';
 import { promises as fs } from 'node:fs';
 import pathMod from 'node:path';
 import { installCurlImpersonate, hasImpersonate, getCurlPath } from '../../utils/binary-manager.js';
 
-const uploadSchema: CommandSchema = {
-  name: 'upload',
-  description: 'Upload a file to a URL',
-  params: {
-    field: { type: 'string', default: 'file', description: 'Form field name' },
-  },
-  flags: {
-    progress: { description: 'Show upload progress', default: true },
-    'no-progress': { description: 'Disable progress bar' }
-  },
-  examples: [
-    { cmd: 'rek upload api.com/files ./image.png', desc: 'Simple upload' },
-    { cmd: 'rek upload api.com/files data.json field=doc', desc: 'Custom field' }
-  ]
-};
-
-const downloadSchema: CommandSchema = {
-  name: 'download',
-  description: 'Download a file from a URL',
-  flags: {
-    resume: { description: 'Resume partial download', default: false },
-    progress: { description: 'Show progress', default: true },
-    'no-progress': { description: 'Disable progress' }
-  },
-  examples: [
-    { cmd: 'rek download example.com/file.zip', desc: 'Download' },
-    { cmd: 'rek download example.com/large.iso resume', desc: 'Resume download' }
-  ]
-};
-
-const proxySchema: CommandSchema = {
-  name: 'proxy',
-  description: 'Route requests through a proxy',
-  params: {
-    method: { type: 'string', default: 'GET', description: 'HTTP Method' },
-  },
-  examples: [
-    { cmd: 'rek proxy http://127.0.0.1:8080 api.com/get', desc: 'Proxy GET' },
-    { cmd: 'rek proxy socks5://127.0.0.1:9050 api.com/post method=POST', desc: 'SOCKS5 POST' }
-  ]
-};
-
 export function registerUtilsCommands(program: Command) {
   // Upload
   program.command('upload')
-    .description(uploadSchema.description)
-    .argument('<url>', 'Target URL')
-    .argument('<file>', 'File path')
-    .argument('[args...]', 'Options')
-    .addHelpText('after', generateHelp(uploadSchema))
-    .action(async (url, file, rawArgs) => {
-      const { data, options, headers } = RekArgs.parse(rawArgs, uploadSchema);
-      const showProgress = options['no-progress'] ? false : (options.progress !== false);
+    .description('Upload a file to a URL using multipart/form-data')
+    .argument('<url>', {
+      type: 'url',
+      description: 'Target upload URL',
+      example: 'api.com/files',
+    })
+    .argument('<file>', {
+      type: 'string',
+      description: 'Local file path to upload',
+      example: './image.png',
+    })
+    .option('field', {
+      type: 'string',
+      short: 'f',
+      default: 'file',
+      description: 'Form field name',
+      example: 'document',
+    })
+    .option('no-progress', {
+      description: 'Disable progress bar',
+    })
+    .example('rek upload api.com/files ./image.png', 'Simple upload')
+    .example('rek upload api.com/files data.json -f doc', 'Custom field name')
+    .action(async (url: string, file: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      const showProgress = !options['no-progress'];
 
       if (!url.startsWith('http')) url = `https://${url}`;
 
@@ -73,10 +48,11 @@ export function registerUtilsCommands(program: Command) {
         const fileContent = await fs.readFile(file);
         const boundary = `----ReckerBoundary${Date.now()}`;
         const filename = pathMod.basename(file);
+        const fieldName = options.field || 'file';
 
         const bodyParts = [
           `--${boundary}`,
-          `Content-Disposition: form-data; name="${data.field}"; filename="${filename}"`, 
+          `Content-Disposition: form-data; name="${fieldName}"; filename="${filename}"`,
           'Content-Type: application/octet-stream',
           '',
           ''
@@ -88,7 +64,6 @@ export function registerUtilsCommands(program: Command) {
 
         const response = await client.post(url, body, {
           headers: {
-            ...headers,
             'Content-Type': `multipart/form-data; boundary=${boundary}`,
           },
         });
@@ -105,14 +80,30 @@ export function registerUtilsCommands(program: Command) {
 
   // Download
   program.command('download')
-    .description(downloadSchema.description)
-    .argument('<url>', 'Source URL')
-    .argument('[args...]', 'Output path and options')
-    .addHelpText('after', generateHelp(downloadSchema))
-    .action(async (url, rawArgs) => {
-      const { options, headers, args } = RekArgs.parse(rawArgs, downloadSchema);
-      const output = args[0] as string; // Optional positional arg
-      const showProgress = options['no-progress'] ? false : (options.progress !== false);
+    .description('Download a file from a URL')
+    .argument('<url>', {
+      type: 'url',
+      description: 'Source URL to download',
+      example: 'example.com/file.zip',
+    })
+    .argument('[output]', {
+      type: 'string',
+      description: 'Output file path (default: filename from URL)',
+      example: './downloaded.zip',
+    })
+    .option('resume', {
+      short: 'r',
+      description: 'Resume partial download',
+    })
+    .option('no-progress', {
+      description: 'Disable progress bar',
+    })
+    .example('rek download example.com/file.zip', 'Download file')
+    .example('rek download example.com/large.iso -r', 'Resume partial download')
+    .example('rek download example.com/data.zip ./local.zip', 'Specify output path')
+    .action(async (url: string, output: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      const showProgress = !options['no-progress'];
       const resume = !!options.resume;
 
       if (!url.startsWith('http')) url = `https://${url}`;
@@ -129,7 +120,6 @@ export function registerUtilsCommands(program: Command) {
         const client = createClient();
         await downloadToFile(client, url, filename, {
           resume,
-          headers,
           onProgress: showProgress ? (p) => {
             const total = p.total || 0;
             const pct = total > 0 ? Math.round((p.loaded / total) * 100) : 0;
@@ -147,14 +137,35 @@ export function registerUtilsCommands(program: Command) {
 
   // Proxy
   program.command('proxy')
-    .description(proxySchema.description)
-    .argument('<proxy>', 'Proxy URL')
-    .argument('<target>', 'Target URL')
-    .argument('[args...]', 'Request options')
-    .addHelpText('after', generateHelp(proxySchema))
-    .action(async (proxy, target, rawArgs) => {
-      const { data, headers } = RekArgs.parse(rawArgs, proxySchema);
-      
+    .description('Make requests through a proxy server')
+    .argument('<proxy>', {
+      type: 'url',
+      description: 'Proxy server URL',
+      example: 'http://127.0.0.1:8080',
+    })
+    .argument('<target>', {
+      type: 'url',
+      description: 'Target URL to request',
+      example: 'httpbin.org/ip',
+    })
+    .option('method', {
+      type: 'string',
+      short: 'm',
+      default: 'GET',
+      description: 'HTTP method',
+      example: 'POST',
+    })
+    .option('data', {
+      type: 'string',
+      short: 'd',
+      description: 'Request body (JSON)',
+      example: '{"key":"value"}',
+    })
+    .example('rek proxy http://localhost:8080 httpbin.org/ip', 'GET through proxy')
+    .example('rek proxy http://proxy:8080 api.com/data -m POST -d \'{"x":1}\'', 'POST with data')
+    .action(async (proxy: string, target: string, args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+
       if (!target.startsWith('http')) target = `https://${target}`;
 
       console.log(colors.gray(`Proxy: ${proxy}`));
@@ -164,16 +175,18 @@ export function registerUtilsCommands(program: Command) {
 
       try {
         const client = createClient({ proxy: { url: proxy } });
-        const method = (data.method as string).toLowerCase() as any;
-        
-        // Remove known params from data to send rest as body
-        const body = { ...data };
-        delete body.method;
+        const method = (options.method || 'GET').toLowerCase() as any;
 
-        const hasBody = Object.keys(body).length > 0;
-        const options = hasBody ? { json: body, headers } : { headers };
+        let requestOptions: any = {};
+        if (options.data) {
+          try {
+            requestOptions.json = JSON.parse(options.data);
+          } catch {
+            requestOptions.body = options.data;
+          }
+        }
 
-        const response = await (client as any)[method](target, options);
+        const response = await (client as any)[method](target, requestOptions);
         console.log(colors.green(`✔ ${response.status} ${response.statusText}`));
         console.log(await response.text());
       } catch (err: any) {
@@ -184,6 +197,7 @@ export function registerUtilsCommands(program: Command) {
 
   program.command('setup')
     .description('Install external dependencies (curl-impersonate) for advanced features')
+    .example('rek setup', 'Install curl-impersonate binary')
     .action(async () => {
         if (await hasImpersonate()) {
             console.log(colors.green(`✔ curl-impersonate is already installed at:`));
