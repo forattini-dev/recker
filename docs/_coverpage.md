@@ -4,10 +4,10 @@
 
 # Recker
 
-> The HTTP SDK for the AI Era
+> Multi-Protocol SDK for the AI Era
 
-Fast as infrastructure demands. AI-ready from the first byte.<br>
-Observable down to the millisecond. Resilient when everything else fails.
+Nine protocols unified. AI-native from the first byte.<br>
+HTTP, WebSocket, DNS, FTP, SFTP, Telnet, HLS — one import, zero config.
 
 [Get Started](#/)
 [GitHub](https://github.com/forattini-dev/recker)

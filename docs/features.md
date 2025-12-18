@@ -2,7 +2,7 @@
 
 > Complete overview of Recker's capabilities
 
-Recker is a modern HTTP client built for Node.js 18+ with developer experience and AI integration in mind. Here's everything it can do:
+Recker is a multi-protocol SDK for the AI era. Nine protocols unified — HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS — with AI providers and MCP tools built-in. Here's everything it can do:
 
 ## 🚀 Core Features
 

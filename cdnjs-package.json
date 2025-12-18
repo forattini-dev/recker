@@ -1,0 +1,49 @@
+{
+  "name": "recker",
+  "description": "AI & DevX focused HTTP client - Network SDK for the AI era",
+  "keywords": [
+    "http",
+    "client",
+    "fetch",
+    "request",
+    "api",
+    "rest",
+    "typescript",
+    "browser",
+    "websocket",
+    "streaming",
+    "ai",
+    "llm",
+    "mcp",
+    "openai",
+    "anthropic",
+    "groq"
+  ],
+  "homepage": "https://forattini-dev.github.io/recker",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forattini-dev/recker.git"
+  },
+  "license": "MIT",
+  "author": "filipeforattini",
+  "autoupdate": {
+    "source": "npm",
+    "target": "recker",
+    "fileMap": [
+      {
+        "basePath": "dist/browser",
+        "files": [
+          "index.min.js",
+          "index.min.js.map",
+          "index.umd.js",
+          "index.umd.min.js",
+          "index.umd.min.js.map",
+          "index.iife.js",
+          "index.iife.min.js",
+          "index.iife.min.js.map"
+        ]
+      }
+    ]
+  },
+  "filename": "index.umd.min.js"
+}

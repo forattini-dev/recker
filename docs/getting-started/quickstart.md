@@ -19,7 +19,7 @@ console.log(user.name); // "The Octocat"
 
 ## Beyond HTTP
 
-Recker is more than just an HTTP client.
+Recker is a multi-protocol SDK — not just an HTTP client.
 
 ### AI & LLMs
 ```typescript

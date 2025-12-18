@@ -38,7 +38,10 @@ export interface HeadingAnalysis {
 }
 
 export interface ContentMetrics {
+  /** Visible word count (text users can actually read, excluding scripts, styles, nav, etc.) */
   wordCount: number;
+  /** Total word count including all text (visible + hidden in meta tags, scripts, etc.) */
+  totalWordCount?: number;
   characterCount: number;
   sentenceCount: number;
   paragraphCount: number;
@@ -166,9 +169,11 @@ export interface SeoSummary {
     ttfb?: number;
     /** Total request time (ms) */
     totalTime?: number;
-    /** Word count */
+    /** Visible word count (text users can read) */
     wordCount: number;
-    /** Reading time in minutes */
+    /** Total word count including hidden text (meta, scripts, etc.) */
+    totalWordCount?: number;
+    /** Reading time in minutes (based on visible words) */
     readingTime: number;
     /** Total images */
     imageCount: number;

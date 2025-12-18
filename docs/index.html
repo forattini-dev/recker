@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Recker - The AI-First HTTP Client</title>
+  <title>Recker - Multi-Protocol SDK for the AI Era</title>
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="description" content="A modern, type-safe HTTP client for Node.js and the Browser.">
+  <meta name="description" content="Nine protocols unified: HTTP, WebSocket, DNS, FTP, SFTP, Telnet, HLS. AI-native with OpenAI, Anthropic, Google + MCP server. One SDK to connect your app to everything.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
 
   <!-- SEO & Social -->
-  <meta property="og:title" content="Recker - The AI-First HTTP Client">
-  <meta property="og:description" content="A modern, type-safe HTTP client for Node.js built on Undici. Streaming, retries, caching, and more.">
+  <meta property="og:title" content="Recker - Multi-Protocol SDK for the AI Era">
+  <meta property="og:description" content="Nine protocols unified: HTTP, WebSocket, DNS, FTP, SFTP, Telnet, HLS. AI-native with 57 MCP tools. One SDK to connect your app to everything.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://forattini-dev.github.io/recker/">
   <meta name="twitter:card" content="summary_large_image">
@@ -103,19 +103,14 @@
       scroll-behavior: smooth;
     }
 
-    /* Hide navbar items when they leak into content area */
+    /* Hide navbar items and count plugin when they leak into content area */
     .content .markdown-section > nav,
     .content .markdown-section > .reading-time,
     .markdown-section > p > a > img[src*="shields.io"],
     .markdown-section > p > a > img[src*="github"],
-    .app-nav {
-      display: none !important;
-    }
-
-    /* Hide reading time badge in playground */
-    #mode-seo .reading-time,
-    #mode-terminal .reading-time,
-    #mode-chat .reading-time {
+    .app-nav,
+    .count,
+    .markdown-section > .count {
       display: none !important;
     }
 
@@ -502,6 +497,12 @@
         <div id="seo-grade-badge" style="width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: bold; color: white;">-</div>
         <div style="flex: 1;"><div style="font-size: 24px; font-weight: 600; margin-bottom: 5px;">Score: <span id="seo-score">--</span>/100</div><div id="seo-summary" style="opacity: 0.7; font-size: 14px;"></div></div>
         <div id="seo-timing" style="text-align: right; opacity: 0.6; font-size: 12px;"></div>
+      </div>
+      <!-- Timing Bar -->
+      <div id="seo-timings-bar" style="padding: 10px 15px; background: var(--code-background-color); border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-color); display: none;">
+        <div style="font-weight: 600; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7;">⏱️ Timing Breakdown</div>
+        <div style="display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; margin-bottom: 8px;" id="seo-timing-visual"></div>
+        <div id="seo-timing-labels" style="display: flex; gap: 15px; flex-wrap: wrap; font-size: 11px;"></div>
       </div>
       <!-- Stats Grid -->
       <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px;">
@@ -1083,14 +1084,19 @@
       if (!url) return;
       if (!url.startsWith('http')) url = 'https://' + url;
 
-      // Show loading
+      // Show loading, hide previous results
       if (placeholder) placeholder.innerHTML = '<div style="font-size: 48px; margin-bottom: 15px;">⏳</div><div>Running 400+ SEO rules engine...</div>';
       if (analyzeBtn) analyzeBtn.disabled = true;
+      const seoTimingsBarInit = document.getElementById('seo-timings-bar');
+      if (seoTimingsBarInit) seoTimingsBarInit.style.display = 'none';
 
       try {
+        const timings = { fetch: 0, parse: 0, analyze: 0 };
         const start = performance.now();
         let html = '';
 
+        // === FETCH PHASE ===
+        const fetchStart = performance.now();
         if (useProxy) {
           // Try multiple CORS proxies in order
           const proxies = [
@@ -1123,9 +1129,14 @@
           const res = await recker.get(url);
           html = await res.text();
         }
+        timings.fetch = Math.round(performance.now() - fetchStart);
 
+        // === ANALYZE PHASE (includes parsing) ===
         console.log('HTML length:', html.length, 'Has body:', html.includes('<body'));
+        const analyzeStart = performance.now();
         const report = await recker.seo(html, { baseUrl: url });
+        timings.analyze = Math.round(performance.now() - analyzeStart);
+
         const duration = Math.round(performance.now() - start);
         console.log('SEO Report:', report);
         console.log('Content wordCount:', report.content?.wordCount);
@@ -1170,6 +1181,26 @@
         const timingEl = document.getElementById('seo-timing');
         if (timingEl) timingEl.innerHTML = `<span style="font-size: 20px; font-weight: bold; color: #ff8a00;">${totalChecks}</span> checks<br><span style="font-size: 11px; opacity: 0.7;">${categoriesCount} categories • ${duration}ms</span>`;
 
+        // Render timing bar
+        const seoTimingsBar = document.getElementById('seo-timings-bar');
+        const seoTimingVisual = document.getElementById('seo-timing-visual');
+        const seoTimingLabels = document.getElementById('seo-timing-labels');
+        if (seoTimingsBar && seoTimingVisual && seoTimingLabels) {
+          const htmlSizeKB = (html.length / 1024).toFixed(1);
+          const segments = [
+            { name: 'Fetch', time: timings.fetch, color: '#60a5fa', detail: `${htmlSizeKB} KB` },
+            { name: 'Analyze', time: timings.analyze, color: '#4ade80', detail: `${totalChecks} rules` },
+          ];
+          const total = segments.reduce((a, s) => a + s.time, 0) || 1;
+          seoTimingVisual.innerHTML = segments.map(s =>
+            `<div style="flex: ${s.time / total}; background: ${s.color}; min-width: 4px;" title="${s.name}: ${s.time}ms"></div>`
+          ).join('');
+          seoTimingLabels.innerHTML = segments.map(s =>
+            `<span style="display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: ${s.color};"></span>${s.name}: <strong>${s.time}ms</strong> <span style="opacity: 0.5;">(${s.detail})</span></span>`
+          ).join('') + `<span style="opacity: 0.6; margin-left: auto;">Total: <strong>${duration}ms</strong></span>`;
+          seoTimingsBar.style.display = 'block';
+        }
+
         document.getElementById('seo-total').textContent = totalChecks;
         document.getElementById('seo-passed').textContent = passed;
         document.getElementById('seo-warnings').textContent = warnings;
@@ -1181,8 +1212,10 @@
         if (vitalsGrid && report.summary?.vitals) {
           const v = report.summary.vitals;
           const wordCountWarning = v.wordCount === 0 ? '<div style="grid-column: span 3; background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.3); border-radius: 6px; padding: 8px; font-size: 11px; color: #fbbf24;">⚠️ 0 words detected. This page may be JavaScript-rendered (SPA). The SEO analyzer can only see server-side HTML.</div>' : '';
+          const hiddenWords = (v.totalWordCount || 0) - (v.wordCount || 0);
+          const hiddenWordsInfo = hiddenWords > 0 ? `<div style="font-size: 9px; opacity: 0.5; margin-top: 2px;">+${hiddenWords} hidden</div>` : '';
           vitalsGrid.innerHTML = `
-            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: ${v.wordCount > 0 ? '#60a5fa' : '#ef4444'};">${v.wordCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Words</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: ${v.wordCount > 0 ? '#60a5fa' : '#ef4444'};">${v.wordCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Visible Words</div>${hiddenWordsInfo}</div>
             <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: #c084fc;">${v.readingTime || 0} min</div><div style="font-size: 10px; opacity: 0.7;">Reading Time</div></div>
             <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: #f472b6;">${v.imageCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Images</div></div>
             <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: #4ade80;">${v.linkCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Links</div></div>

@@ -1,6 +1,8 @@
 # Performance Benchmarks
 
-Comprehensive performance analysis comparing Recker against 16 industry-standard HTTP clients. These benchmarks measure real-world scenarios that matter for production applications.
+Comprehensive HTTP performance analysis comparing Recker against 16 industry-standard clients. These benchmarks measure real-world scenarios that matter for production applications.
+
+> Recker: Multi-Protocol SDK for the AI Era — Nine protocols unified with top-tier HTTP performance.
 
 > Benchmarks are automatically generated during release
 

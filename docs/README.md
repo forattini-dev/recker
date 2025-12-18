@@ -2,9 +2,13 @@
 
 <div align="center">
 
-### The Network SDK for the AI Era
+### Multi-Protocol SDK for the AI Era
 
-**Zero-config HTTP. Multi-protocol support. AI-native streaming. Observable to the millisecond.**
+Nine protocols unified: HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS.<br>
+AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 57 tools.<br>
+48 service presets built-in. Zero config.
+
+**One SDK to connect your app to everything.**
 
 [![npm version](https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623)](https://www.npmjs.com/package/recker)
 [![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)
@@ -190,6 +194,6 @@ const client = createClient({
 
 <div align="center">
 
-**Built for the AI era.**
+**One SDK to connect your app to everything.**
 
 </div>

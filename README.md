@@ -2,9 +2,15 @@
 
 # ⚡ Recker
 
-### The Network SDK for the AI Era
+### Multi-Protocol SDK for the AI Era
 
-**HTTP. WebSocket. DNS. FTP. AI. Browser. Node. One SDK.**
+Nine protocols unified: HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS.
+<br>
+AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 57 tools.
+<br>
+48 service presets built-in. Zero config.
+
+**One SDK to connect your app to everything.**
 
 [![npm version](https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623)](https://www.npmjs.com/package/recker)
 [![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)
@@ -30,7 +36,7 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-One import. Multiple protocols. Zero config. Works everywhere.
+One import. Nine protocols. Zero config. Works everywhere.
 
 ## Quick Start
 

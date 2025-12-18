@@ -1,6 +1,6 @@
 # API Reference
 
-> Complete API documentation for Recker HTTP client
+> Complete API documentation for Recker - Multi-Protocol SDK for the AI Era
 
 This page provides comprehensive documentation for all public APIs, classes, interfaces, and types in Recker.
 

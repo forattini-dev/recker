@@ -240,13 +240,13 @@ export class SeoAnalyzer {
 
     // Clone to safely remove elements without affecting the main analysis
     const clone = body.clone() as HTMLElement;
-    
-    // Remove non-visible elements
-    // Note: Query selector implementation in our parser might not support complex :not or comma lists efficiently
-    // so we iterate carefully.
-    const tagsToRemove = ['script', 'style', 'noscript', 'iframe', 'svg', 'header', 'footer', 'nav'];
-    
-    // We can't use querySelectorAll with comma list reliably in all parser versions, 
+
+    // Remove non-visible elements (tags that don't contain user-readable content)
+    // Keep: footer (visible), iframe (may have content)
+    // Remove: script, style, noscript, template (code/styles), header, nav (navigation), svg (graphics)
+    const tagsToRemove = ['script', 'style', 'noscript', 'template', 'header', 'nav', 'svg'];
+
+    // We can't use querySelectorAll with comma list reliably in all parser versions,
     // so we select all elements and filter or select by tag.
     // Our parser supports comma selectors now via css-select!
     try {
@@ -257,6 +257,15 @@ export class SeoAnalyzer {
         tagsToRemove.forEach(tag => {
             clone.querySelectorAll(tag).forEach(el => el.remove());
         });
+    }
+
+    // Also remove elements with hidden attribute or aria-hidden="true"
+    try {
+        clone.querySelectorAll('[hidden], [aria-hidden="true"]').forEach(el => el.remove());
+    } catch {
+        // Fallback: try each selector separately
+        clone.querySelectorAll('[hidden]').forEach(el => el.remove());
+        clone.querySelectorAll('[aria-hidden="true"]').forEach(el => el.remove());
     }
 
     return clone.text.replace(/\s+/g, ' ').trim();
@@ -1692,6 +1701,7 @@ export class SeoAnalyzer {
       ttfb: this.options.responseHeaders ? undefined : undefined, // Would need timing data
       totalTime: undefined,
       wordCount: data.content.wordCount,
+      totalWordCount: data.content.totalWordCount,
       readingTime: data.content.readingTimeMinutes,
       imageCount: data.imageAnalysis.total,
       linkCount: data.linkAnalysis.total,
@@ -1957,14 +1967,20 @@ export class SeoAnalyzer {
     keywordDensity?: number;
   } {
     const body = this.getMainBody();
-    let bodyText = body ? body.text.replace(/\s+/g, ' ').trim() : '';
+
+    // Get VISIBLE text (excluding scripts, styles, nav, header, footer, etc.)
+    // This is what users actually read
+    const visibleText = this.getVisibleText();
+
+    // Get TOTAL text (including all elements) for comparison
+    let totalBodyText = body ? body.text.replace(/\s+/g, ' ').trim() : '';
 
     // Fallback: if body text is empty, try to extract from root or paragraphs
-    if (!bodyText || bodyText.length === 0) {
+    if (!totalBodyText || totalBodyText.length === 0) {
       // Try root element text
       const rootText = this.root.text?.replace(/\s+/g, ' ').trim() || '';
       if (rootText.length > 0) {
-        bodyText = rootText;
+        totalBodyText = rootText;
       } else {
         // Last resort: concatenate text from all paragraphs
         const paragraphTexts: string[] = [];
@@ -1972,12 +1988,15 @@ export class SeoAnalyzer {
           const pText = el.text?.trim();
           if (pText) paragraphTexts.push(pText);
         });
-        bodyText = paragraphTexts.join(' ');
+        totalBodyText = paragraphTexts.join(' ');
       }
     }
 
-    const words = bodyText.split(/\s+/).filter((w: string) => w.length > 0);
-    const sentences = bodyText
+    // Use VISIBLE text for word count and reading metrics (this is what users actually see)
+    const visibleWords = visibleText.split(/\s+/).filter((w: string) => w.length > 0);
+    const totalWords = totalBodyText.split(/\s+/).filter((w: string) => w.length > 0);
+
+    const sentences = visibleText
       .split(/[.!?]+/)
       .filter((s: string) => s.trim().length > 0);
 
@@ -1992,7 +2011,9 @@ export class SeoAnalyzer {
       if (pWords > 0) paragraphWordCounts.push(pWords);
     });
 
-    const wordCount = words.length;
+    // Use VISIBLE word count for reading time (this is accurate)
+    const wordCount = visibleWords.length;
+    const totalWordCount = totalWords.length;
     const readingTimeMinutes = Math.ceil(wordCount / 200); // Average reading speed
     const avgWordsPerSentence =
       sentences.length > 0 ? Math.round(wordCount / sentences.length) : 0;
@@ -2024,7 +2045,8 @@ export class SeoAnalyzer {
 
     return {
       wordCount,
-      characterCount: bodyText.length,
+      totalWordCount,
+      characterCount: visibleText.length,
       sentenceCount: sentences.length,
       paragraphCount: paragraphs.length,
       readingTimeMinutes,
