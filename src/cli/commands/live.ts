@@ -275,13 +275,12 @@ export function registerLiveCommand(program: Command) {
         if (err.message?.includes('aborted') || err.code === 'ERR_ABORTED') {
           console.log(colors.yellow(`Recording stopped. File saved to: ${output}`));
         } else {
-          console.error(colors.red(`Error: ${err.message}`));
+          console.error(colors.red(`Error: ${err.message || err.toString()}`));
 
-          if (verbose) {
-            console.error(colors.gray('\n--- Error Details ---'));
-            if (err.cause) console.error('Cause:', err.cause);
-            if (err.stack) console.error(err.stack);
-          }
+          // Always show error details for debugging
+          console.error(colors.gray('\n--- Error Details ---'));
+          if (err.cause) console.error('Cause:', err.cause);
+          if (err.stack) console.error(err.stack);
           process.exit(1);
         }
       }
