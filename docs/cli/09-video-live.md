@@ -5,14 +5,63 @@ Download videos and record live streams from 38+ platforms directly from your te
 ## Quick Start
 
 ```bash
-# Download a YouTube video
+# Get video info (default action)
+rek video https://youtube.com/watch?v=dQw4w9WgXcQ
+
+# Using shortcuts (no full URL needed!)
+rek video @youtube/dQw4w9WgXcQ
+rek video youtube/dQw4w9WgXcQ
+
+# Download a video
 rek video download https://youtube.com/watch?v=dQw4w9WgXcQ
+rek video download @youtube/dQw4w9WgXcQ -o video.mp4
 
-# Record a Twitch live stream
-rek live https://twitch.tv/shroud -o shroud.ts
+# Download subtitles
+rek video @youtube/dQw4w9WgXcQ --sub en
+rek video @youtube/dQw4w9WgXcQ -s pt-BR -o legendas.vtt
 
-# Get video info without downloading
-rek video info https://tiktok.com/@user/video/123456
+# Check if live stream is active
+rek live @twitch/shroud
+
+# Record a live stream
+rek live download @twitch/shroud -o shroud.ts
+```
+
+## URL Shortcuts
+
+Save typing with shortcut syntax! Use `@site/path` or `site/path`:
+
+```bash
+# Full URL
+rek video https://youtube.com/watch?v=dQw4w9WgXcQ
+
+# Shortcut (with @)
+rek video @youtube/dQw4w9WgXcQ
+
+# Shortcut (without @)
+rek video youtube/dQw4w9WgXcQ
+```
+
+### Available Shortcuts
+
+| Site | Shortcut | Expands To |
+|------|----------|------------|
+| YouTube | `@youtube/VIDEO_ID` | `https://youtube.com/watch?v=VIDEO_ID` |
+| Twitch | `@twitch/USERNAME` | `https://twitch.tv/USERNAME` |
+| Kick | `@kick/USERNAME` | `https://kick.com/USERNAME` |
+| TikTok | `@tiktok/USER/VIDEO_ID` | `https://tiktok.com/@USER/video/VIDEO_ID` |
+| Instagram | `@instagram/p/CODE` | `https://instagram.com/p/CODE` |
+| Chaturbate | `@chaturbate/ROOM` | `https://chaturbate.com/ROOM/` |
+| Facebook | `@facebook/PATH` | `https://facebook.com/PATH` |
+| Twitter/X | `@twitter/USER/status/ID` | `https://twitter.com/USER/status/ID` |
+| Vimeo | `@vimeo/ID` | `https://vimeo.com/ID` |
+| Reddit | `@reddit/PATH` | `https://reddit.com/PATH` |
+| ...and more | Run `rek video shortcuts` | for full list |
+
+```bash
+# List all shortcuts
+rek video shortcuts
+rek live shortcuts
 ```
 
 ## Supported Platforms
@@ -35,43 +84,79 @@ rek video sites
 
 ### Live Stream Platforms (9 with native support)
 
-| Platform | Command Example |
-|----------|----------------|
-| **Twitch** | `rek live https://twitch.tv/shroud` |
-| **Kick** | `rek live https://kick.com/xqc` |
-| **YouTube Live** | `rek live https://youtube.com/live/xxxxx` |
-| **TikTok Live** | `rek live https://tiktok.com/@user/live` |
-| **Facebook Live** | `rek live https://facebook.com/user/live` |
-| **Chaturbate** | `rek live https://chaturbate.com/username/` |
-| **VK Live** | `rek live https://vk.com/video-xxx` |
-| **Twitter Spaces** | `rek live https://twitter.com/i/spaces/xxx` |
-| **PeerTube** | `rek live https://peertube.instance/w/xxx` |
+| Platform | Check Status | Record |
+|----------|-------------|--------|
+| **Twitch** | `rek live @twitch/shroud` | `rek live download @twitch/shroud` |
+| **Kick** | `rek live @kick/xqc` | `rek live download @kick/xqc` |
+| **YouTube Live** | `rek live @youtube/LIVE_ID` | `rek live download @youtube/LIVE_ID` |
+| **TikTok Live** | `rek live @tiktok/user` | `rek live download @tiktok/user` |
+| **Facebook Live** | `rek live @facebook/user/live` | `rek live download @facebook/user/live` |
+| **Chaturbate** | `rek live @chaturbate/room` | `rek live download @chaturbate/room` |
+| **VK Live** | `rek live @vk/VIDEO_ID` | `rek live download @vk/VIDEO_ID` |
+| **Twitter Spaces** | `rek live https://twitter.com/i/spaces/xxx` | Audio only |
+| **PeerTube** | `rek live @peertube/instance/id` | Instance dependent |
 
 ## Commands
 
-### `rek video info`
+### `rek video` / `rek video info`
 
-Get information about a video without downloading.
+Get information about a video. This is the **default action** - no subcommand needed.
 
 ```bash
-# Basic info
+# Default action: info
+rek video https://youtube.com/watch?v=xxx
+rek video @youtube/xxx
+
+# Explicit info subcommand (same result)
 rek video info https://youtube.com/watch?v=xxx
 
 # Output as JSON (for scripting)
-rek video info https://youtube.com/watch?v=xxx --json
+rek video @youtube/xxx --json
 ```
 
 **Output:**
 ```
+Video Info
+
+ID: dQw4w9WgXcQ
 Title: Never Gonna Give You Up
 Uploader: Rick Astley
-Duration: 3:33
+Duration: 3m 33s
 Views: 1,500,000,000
-Formats:
-  • 1080p (video+audio) - 45.2 MB
-  • 720p (video+audio) - 28.1 MB
-  • 480p (video+audio) - 15.3 MB
-  • audio only (m4a) - 3.2 MB
+
+Available Formats:
+  1. 1080p (m3u8) - 3500kbps
+  2. 720p (m3u8) - 2000kbps
+  3. 480p (m3u8) - 1000kbps
+
+Subtitles:
+  en       English (vtt, srv3, ttml, json3)
+  pt-BR    Portuguese (Brazil) (vtt, srv3, ttml, json3)
+
+Auto-Generated Captions:
+  en       English (auto-generated) (vtt, srv3, ttml, json3)
+
+To download: rek video @youtube/dQw4w9WgXcQ --sub <lang>
+```
+
+**Subtitle Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-s, --sub <lang>` | Download subtitle for language (e.g., `en`, `pt-BR`) |
+| `--sub-format <fmt>` | Subtitle format: `vtt`, `srv3`, `ttml`, `json3` (default: vtt) |
+| `--sub-auto` | Include auto-generated captions when downloading |
+| `-o, --output <file>` | Output file for subtitle |
+
+```bash
+# Download English subtitles
+rek video @youtube/dQw4w9WgXcQ --sub en
+
+# Download with custom output file
+rek video @youtube/dQw4w9WgXcQ -s pt-BR -o legendas.vtt
+
+# Download auto-generated captions
+rek video @youtube/dQw4w9WgXcQ --sub en --sub-auto
 ```
 
 ### `rek video download`
@@ -81,15 +166,16 @@ Download a video to disk.
 ```bash
 # Basic download (auto-selects best quality)
 rek video download https://youtube.com/watch?v=xxx
+rek video download @youtube/xxx
 
 # Specify output file
-rek video download https://vimeo.com/123456 -o my-video.mp4
+rek video download @vimeo/123456 -o my-video.mp4
 
 # Select quality
-rek video download https://tiktok.com/@user/video/xxx quality=720p
+rek video download @tiktok/user/123 quality=720p
 
 # Verbose mode (show progress details)
-rek video download https://instagram.com/p/xxx -v
+rek video download @instagram/p/xxx -v
 ```
 
 **Options:**
@@ -106,32 +192,70 @@ rek video download https://instagram.com/p/xxx -v
 
 ### `rek video check`
 
-Check if a URL is supported.
+Check if a URL or shortcut is supported.
 
 ```bash
-rek video check https://youtube.com/watch?v=xxx
-# ✓ Supported by: youtube
+rek video check @youtube/xxx
+# Shortcut: @youtube/xxx → https://youtube.com/watch?v=xxx
+# ✔ URL is supported
+# Extractor: youtube
 
 rek video check https://random-site.com/video
-# ✓ Supported by: generic (auto-detect)
+# ⚠ No specific extractor, will try generic
 ```
 
-### `rek live`
+### `rek live` / `rek live info`
 
-Shortcut for recording live streams. Equivalent to `rek video download --live`.
+Check live stream status. This is the **default action** for live.
+
+```bash
+# Default action: check status
+rek live https://twitch.tv/shroud
+rek live @twitch/shroud
+rek live twitch/shroud
+
+# Explicit info subcommand
+rek live info @kick/xqc
+
+# Output as JSON
+rek live @twitch/shroud --json
+```
+
+**Output:**
+```
+Live Stream Info
+
+Status: ● LIVE
+ID: shroud
+Title: VALORANT Ranked
+Channel: shroud
+Viewers: 45,234
+
+Available Qualities:
+  1. 1080p (m3u8) - 6000kbps
+  2. 720p (m3u8) - 3000kbps
+  3. 480p (m3u8) - 1500kbps
+
+To record this stream:
+  rek live download @twitch/shroud
+```
+
+### `rek live download`
+
+Record a live stream to disk.
 
 ```bash
 # Record indefinitely (Ctrl+C to stop)
-rek live https://twitch.tv/streamer
+rek live download @twitch/streamer
 
 # Record for specific duration
-rek live https://kick.com/streamer duration=3600
+rek live download @kick/streamer duration=3600
 
 # Specify output file
-rek live https://youtube.com/live/xxx -o stream.ts
+rek live download @youtube/xxx -o stream.ts
 
 # With custom quality
-rek live https://chaturbate.com/room/ quality=highest
+rek live download @chaturbate/room quality=highest
 ```
 
 **Options:**
@@ -150,60 +274,79 @@ rek live https://chaturbate.com/room/ quality=highest
 ### Download YouTube Video
 
 ```bash
-# Best quality
-rek video download https://youtube.com/watch?v=dQw4w9WgXcQ
+# Best quality (shortcuts work!)
+rek video download @youtube/dQw4w9WgXcQ
 
 # Specific quality
-rek video download https://youtube.com/watch?v=dQw4w9WgXcQ quality=720p
+rek video download @youtube/dQw4w9WgXcQ quality=720p -o video.mp4
+```
 
-# Audio only (if available)
-rek video download https://youtube.com/watch?v=xxx quality=audio
+### Download YouTube Subtitles
+
+```bash
+# View available subtitles (shown in video info)
+rek video @youtube/dQw4w9WgXcQ
+
+# Download English subtitles
+rek video @youtube/dQw4w9WgXcQ --sub en
+
+# Download Portuguese subtitles with custom filename
+rek video @youtube/dQw4w9WgXcQ -s pt-BR -o legendas.vtt
+
+# Download auto-generated captions (when manual not available)
+rek video @youtube/dQw4w9WgXcQ --sub en --sub-auto
+
+# Download in specific format
+rek video @youtube/dQw4w9WgXcQ --sub en --sub-format srv3
 ```
 
 ### Record Twitch Stream
 
 ```bash
-# Record until stopped
-rek live https://twitch.tv/shroud -o shroud-$(date +%Y%m%d).ts
+# Check if live first
+rek live @twitch/shroud
+
+# Record if live
+rek live download @twitch/shroud -o shroud-$(date +%Y%m%d).ts
 
 # Record 1 hour
-rek live https://twitch.tv/shroud duration=3600
-
-# With quality selection
-rek live https://twitch.tv/shroud quality=1080p
+rek live download @twitch/shroud duration=3600
 ```
 
 ### Download TikTok Video
 
 ```bash
-rek video download https://tiktok.com/@username/video/7123456789
+rek video download @tiktok/username/7123456789
 
-# Or with short URL
+# Or with full URL
 rek video download https://vm.tiktok.com/xxx
 ```
 
 ### Download Instagram Reel/Post
 
 ```bash
+rek video download @instagram/p/ABC123XYZ
 rek video download https://instagram.com/reel/xxx
-rek video download https://instagram.com/p/xxx
 ```
 
 ### Download Twitter/X Video
 
 ```bash
-rek video download https://twitter.com/user/status/123456789
-rek video download https://x.com/user/status/123456789
+rek video download @twitter/user/status/123456789
+rek video download @x/user/status/123456789
 ```
 
 ### Record Adult Live Stream
 
 ```bash
-# Chaturbate
-rek live https://chaturbate.com/username/ -o recording.ts
+# Chaturbate - check status
+rek live @chaturbate/username
+
+# Record
+rek live download @chaturbate/username -o recording.ts
 
 # With duration limit
-rek live https://chaturbate.com/username/ duration=1800
+rek live download @chaturbate/username duration=1800
 ```
 
 ### Generic Site (Auto-detect)
@@ -220,16 +363,24 @@ rek video download https://some-news-site.com/article-with-video
 When downloading, you'll see progress:
 
 ```
-Downloading: Never Gonna Give You Up
-Quality: 1080p (45.2 MB)
-Progress: ████████████████████░░░░░░░░░░ 67% | 30.2 MB | 2.1 MB/s | ETA: 7s
+Extracting video from https://youtube.com/watch?v=dQw4w9WgXcQ...
+Title: Never Gonna Give You Up
+Output: video.ts
+
+  45/120 segments | 30.2 MB downloaded (37.5%)
 ```
 
 For live streams:
 
 ```
-Recording: shroud - Valorant Ranked
-Duration: 00:15:32 | Segments: 93 | Size: 156.2 MB | Speed: 1.8 MB/s
+Connecting to live stream: https://twitch.tv/shroud
+Channel: shroud
+Title: VALORANT Ranked
+Output: shroud.ts
+Duration: Until stopped (Ctrl+C)
+
+Recording live stream...
+  15:32 | 93 segments | 156.2 MB
 ```
 
 ## Output Formats
@@ -277,18 +428,43 @@ done
 
 ```bash
 # Parse with jq
-rek video info https://youtube.com/watch?v=xxx --json | jq '.title'
+rek video @youtube/xxx --json | jq '.title'
 
 # Check duration
-rek video info https://youtube.com/watch?v=xxx --json | jq '.duration'
+rek video @youtube/xxx --json | jq '.duration'
+
+# Check if live
+rek live @twitch/shroud --json | jq '.isLive'
+
+# List available subtitle languages
+rek video @youtube/xxx --json | jq '.subtitles | keys'
+
+# Get subtitle URL for specific language
+rek video @youtube/xxx --json | jq '.subtitles.en[0].url'
 ```
 
 ### Record Live on Schedule
 
 ```bash
 # Record for 2 hours starting at specific time
-echo "rek live https://twitch.tv/streamer duration=7200 -o stream.ts" | at 20:00
+echo "rek live download @twitch/streamer duration=7200 -o stream.ts" | at 20:00
 ```
+
+## Command Summary
+
+| Command | Action |
+|---------|--------|
+| `rek video <url>` | Show video info + subtitles (default) |
+| `rek video <url> --sub <lang>` | Download subtitle for language |
+| `rek video @site/path` | Show info using shortcut |
+| `rek video download <url>` | Download video |
+| `rek video sites` | List supported sites |
+| `rek video shortcuts` | List available shortcuts |
+| `rek video check <url>` | Check URL support |
+| `rek live <url>` | Show live stream info (default) |
+| `rek live @site/path` | Show live info using shortcut |
+| `rek live download <url>` | Record live stream |
+| `rek live shortcuts` | List live shortcuts |
 
 ## Troubleshooting
 
@@ -306,8 +482,8 @@ rek video download https://site.com/video
 For live commands, the streamer must be live:
 
 ```bash
-rek video info https://twitch.tv/streamer
-# Check if "isLive: true" appears
+rek live @twitch/streamer
+# Check if status shows "● LIVE"
 ```
 
 ### Slow Downloads
@@ -336,9 +512,10 @@ rek shell
 ```
 
 ```
-rek> video info https://youtube.com/watch?v=xxx
-rek> video download https://youtube.com/watch?v=xxx quality=1080p
-rek> live https://twitch.tv/streamer duration=3600
+rek> video @youtube/xxx
+rek> video download @youtube/xxx quality=1080p
+rek> live @twitch/streamer
+rek> live download @twitch/streamer duration=3600
 ```
 
 ## Next Steps
