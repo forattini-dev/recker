@@ -23,6 +23,11 @@ export function registerMcpCommand(program: Command) {
       short: 'd',
       description: 'Enable debug logging',
     })
+    .option('offline', {
+      type: 'boolean',
+      short: 'O',
+      description: 'Offline mode - skip network downloads, use only cached/bundled data',
+    })
     .option('profile', {
       type: 'string',
       description: 'Tool profiles to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, full',
@@ -80,6 +85,7 @@ export function registerMcpCommand(program: Command) {
       description: 'Disable all network tools (http, dns, whois, ping)',
     })
     .example('rek mcp', 'Start MCP server in stdio mode (for Claude Code)')
+    .example('rek mcp --offline', 'Start in offline mode (no downloads)')
     .example('rek mcp --profile=minimal', 'Start with minimal profile')
     .example('rek mcp --transport=http --port=3100', 'Start HTTP server')
     .example('rek mcp --list-profiles', 'List available profiles')
@@ -203,6 +209,7 @@ export function registerMcpCommand(program: Command) {
         transport,
         port,
         debug: options.debug,
+        offline: options.offline,
         docsPath: options.docsPath,
         examplesPath: options.examplesPath,
         srcPath: options.srcPath,

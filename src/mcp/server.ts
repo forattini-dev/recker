@@ -48,6 +48,8 @@ export interface MCPServerOptions {
   port?: number;
   transport?: MCPTransportMode;
   debug?: boolean;
+  /** Skip network downloads (offline mode - uses only cached/bundled data) */
+  offline?: boolean;
   /** Enable specific tools only (glob patterns supported) */
   toolsFilter?: string[];
   /** Paths to external tool modules to load */
@@ -132,6 +134,7 @@ export class MCPServer {
       port: options.port || 3100,
       transport: options.transport || 'stdio',
       debug: options.debug || false,
+      offline: options.offline || false,
       toolsFilter: options.toolsFilter || [],
       toolPaths: options.toolPaths || [],
       profile: options.profile,
@@ -142,6 +145,7 @@ export class MCPServer {
 
     this.hybridSearch = createHybridSearch({
       debug: this.options.debug,
+      offline: this.options.offline,
       embedder: (text, model) => this.generateEmbedding(text, model || 'BGESmallENV15'),
     });
 

@@ -55,6 +55,7 @@ export class HybridSearch {
       fuzzyWeight: config.fuzzyWeight ?? 0.5,
       semanticWeight: config.semanticWeight ?? 0.5,
       debug: config.debug ?? false,
+      offline: config.offline ?? false,
       embedder: config.embedder,
     };
   }
@@ -114,6 +115,7 @@ export class HybridSearch {
         // Load using lazy loader (handles cache, bundled, and download)
         const data = await loadEmbeddings({
           debug: this.config.debug,
+          offline: this.config.offline,
         });
 
         if (data) {
