@@ -26,6 +26,11 @@ import { securityTools, securityToolHandlers } from './tools/security.js';
 import { ToolRegistry } from './tools/registry.js';
 import { loadToolModules } from './tools/loader.js';
 import { PromptRegistry } from './prompts/index.js';
+import {
+  resolveProfiles,
+  DEFAULT_PROFILE,
+  type ProfileName,
+} from './profiles.js';
 
 export type MCPTransportMode = 'stdio' | 'http' | 'sse';
 
@@ -42,6 +47,8 @@ export interface MCPServerOptions {
   toolsFilter?: string[];
   /** Paths to external tool modules to load */
   toolPaths?: string[];
+  /** Profile(s) to use - comma-separated or array */
+  profile?: string | ProfileName[];
 }
 
 interface CodeExample {
@@ -98,7 +105,7 @@ interface TypeDefinition {
  * - `rek_dns_toolkit`: DNS security (SPF, DMARC, DKIM validation)
  */
 export class MCPServer {
-  private options: Required<MCPServerOptions>;
+  private options: Required<Omit<MCPServerOptions, 'profile'>> & { profile?: string | ProfileName[] };
   private server?: ReturnType<typeof createServer>;
   private hybridSearch: HybridSearch;
   private docsIndex: IndexedDoc[] = [];
@@ -122,6 +129,7 @@ export class MCPServer {
       debug: options.debug || false,
       toolsFilter: options.toolsFilter || [],
       toolPaths: options.toolPaths || [],
+      profile: options.profile,
     };
 
     // Initialize AI client if available
@@ -134,7 +142,7 @@ export class MCPServer {
 
     this.toolRegistry = new ToolRegistry();
     this.promptRegistry = new PromptRegistry();
-    
+
     // Register built-in tools
     this.registerInternalTools();
     this.toolRegistry.registerModule({
@@ -154,8 +162,38 @@ export class MCPServer {
       handlers: securityToolHandlers
     });
 
+    // Apply profile-based filtering
+    this.applyProfileFiltering();
+
     // Note: buildIndex is async but constructor can't await.
     // Index is built lazily - guaranteed ready before handling requests via start() or ensureIndexReady()
+  }
+
+  /**
+   * Apply profile-based tool filtering
+   */
+  private applyProfileFiltering(): void {
+    // Profile takes precedence over toolsFilter
+    if (this.options.profile) {
+      try {
+        const patterns = resolveProfiles(this.options.profile);
+        this.toolRegistry.setEnabledPatterns(patterns);
+        this.log('Profile filtering applied', {
+          profiles: this.options.profile,
+          patterns,
+          enabledTools: this.toolRegistry.listTools().map(t => t.name),
+        });
+      } catch (error) {
+        // Fall back to default profile on error
+        const patterns = resolveProfiles(DEFAULT_PROFILE);
+        this.toolRegistry.setEnabledPatterns(patterns);
+        this.log('Profile error, using default', { error, default: DEFAULT_PROFILE });
+      }
+    } else if (this.options.toolsFilter && this.options.toolsFilter.length > 0) {
+      // Legacy toolsFilter support
+      this.toolRegistry.setEnabledPatterns(this.options.toolsFilter);
+    }
+    // If neither profile nor toolsFilter, all tools are enabled (default behavior)
   }
   /**
    * Promise that resolves when the index is ready.
@@ -840,43 +878,8 @@ export class MCPServer {
   }
 
   private getTools(): MCPTool[] {
-    const allTools = this.toolRegistry.listTools();
-
-    // Filter tools if filter is specified
-    if (this.options.toolsFilter.length > 0) {
-      return allTools.filter(tool => this.isToolEnabled(tool.name));
-    }
-
-    return allTools;
-  }
-
-  private isToolEnabled(name: string): boolean {
-    const filter = this.options.toolsFilter;
-    if (!filter.length) return true;
-
-    const positive = filter.filter(p => !p.startsWith('!'));
-    const negative = filter.filter(p => p.startsWith('!')).map(p => p.slice(1));
-
-    // Negative patterns win
-    if (negative.some(p => this.matchPattern(name, p))) return false;
-
-    // If only negative, enable everything else
-    if (!positive.length) return true;
-
-    // Check positive patterns
-    return positive.some(p => this.matchPattern(name, p));
-  }
-
-  private matchPattern(name: string, pattern: string): boolean {
-    // Simple glob matching
-    if (pattern === '*') return true;
-    if (pattern.endsWith('*')) {
-      return name.startsWith(pattern.slice(0, -1));
-    }
-    if (pattern.startsWith('*')) {
-      return name.endsWith(pattern.slice(1));
-    }
-    return name === pattern;
+    // ToolRegistry handles filtering via profiles/patterns
+    return this.toolRegistry.listTools();
   }
 
   private async handleToolCall(name: string, args: Record<string, unknown>): Promise<MCPToolResult> {

@@ -1,4 +1,5 @@
 import type { MCPTool, MCPToolResult } from '../types.js';
+import { matchesPattern } from '../profiles.js';
 
 export type MCPToolHandler = (args: Record<string, unknown>) => Promise<MCPToolResult>;
 
@@ -13,8 +14,24 @@ export interface ToolModule {
 export class ToolRegistry {
   private tools: Map<string, MCPTool> = new Map();
   private handlers: Map<string, MCPToolHandler> = new Map();
+  private enabledPatterns: string[] = [];
 
   constructor() {}
+
+  /**
+   * Set patterns for enabled tools (from profiles)
+   * Empty array means all tools are enabled
+   */
+  setEnabledPatterns(patterns: string[]): void {
+    this.enabledPatterns = patterns;
+  }
+
+  /**
+   * Get current enabled patterns
+   */
+  getEnabledPatterns(): string[] {
+    return this.enabledPatterns;
+  }
 
   /**
    * Register a single tool.
@@ -48,10 +65,35 @@ export class ToolRegistry {
   }
 
   /**
-   * Get all registered tools.
+   * Get all registered tools (respects enabled patterns).
    */
   listTools(): MCPTool[] {
+    const allTools = Array.from(this.tools.values());
+
+    // If no patterns set, return all tools
+    if (this.enabledPatterns.length === 0) {
+      return allTools;
+    }
+
+    // Filter by enabled patterns
+    return allTools.filter(tool => this.isToolEnabled(tool.name));
+  }
+
+  /**
+   * Get all registered tools without filtering.
+   */
+  listAllTools(): MCPTool[] {
     return Array.from(this.tools.values());
+  }
+
+  /**
+   * Check if a tool is enabled based on current patterns.
+   */
+  isToolEnabled(name: string): boolean {
+    if (this.enabledPatterns.length === 0) {
+      return true;
+    }
+    return matchesPattern(name, this.enabledPatterns);
   }
 
   /**

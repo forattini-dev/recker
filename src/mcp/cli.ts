@@ -9,25 +9,31 @@
  * # Start with stdio (for Claude Code)
  * recker-mcp
  *
+ * # Start with minimal profile (recommended)
+ * recker-mcp --profile=minimal
+ *
+ * # Combine profiles
+ * recker-mcp --profile=minimal,seo,security
+ *
+ * # List available profiles
+ * recker-mcp --list-profiles
+ *
  * # Start with HTTP transport
  * recker-mcp --transport http --port 3100
  *
- * # Disable HTTP request tools
- * recker-mcp --no-http
- *
- * # Disable documentation tools
- * recker-mcp --no-docs
- *
- * # Disable all network tools
- * recker-mcp --no-network
- *
- * # Only enable specific tools
+ * # Only enable specific tools (legacy)
  * recker-mcp --only rek_search_docs,rek_get_doc
  * ```
  */
 
 import { RekCommand as Command } from '../cli/router.js';
 import { MCPServer, type MCPTransportMode } from './server.js';
+import {
+  listProfiles,
+  validateProfiles,
+  estimateProfileTokens,
+  type ProfileName,
+} from './profiles.js';
 
 const program = new Command('recker-mcp');
 
@@ -64,7 +70,10 @@ program
   .option('--docs-path <path>', 'Path to documentation directory')
   .option('--examples-path <path>', 'Path to examples directory')
   .option('--src-path <path>', 'Path to source directory')
-  // Tool filtering flags
+  // Profile-based filtering (recommended)
+  .option('--profile <profiles>', 'Tool profiles to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, full')
+  .option('--list-profiles', 'List available profiles and exit')
+  // Legacy tool filtering flags
   .option('--no-docs', 'Disable documentation tools (search, get, examples, schema, suggest)')
   .option('--no-http', 'Disable HTTP request tool')
   .option('--no-dns', 'Disable DNS lookup tool')
@@ -74,7 +83,48 @@ program
   .option('--no-network', 'Disable all network tools (http, dns, whois, ping)')
   .option('--only <tools>', 'Only enable specified tools (comma-separated)')
   .option('--filter <patterns>', 'Custom tool filter patterns (comma-separated, prefix with ! to exclude)')
-  .action(async (opts) => {
+  .action(async (_args: string[], cmd: Command) => {
+    // Get parsed options from command
+    const opts = cmd.opts();
+
+    // Apply defaults for options that might not be parsed correctly
+    opts.transport = opts.transport || 'stdio';
+    opts.port = opts.port || '3100';
+
+    // Handle --list-profiles
+    if (opts.listProfiles) {
+      console.log('╔═══════════════════════════════════════════════════════════════════╗');
+      console.log('║                    Recker MCP Profiles                            ║');
+      console.log('╚═══════════════════════════════════════════════════════════════════╝');
+      console.log('');
+      console.log('Available profiles:');
+      console.log('');
+
+      for (const profile of listProfiles()) {
+        const toolCount = profile.toolCount === -1 ? 'all' : profile.toolCount;
+        console.log(`  ${profile.name.padEnd(12)} ${profile.description}`);
+        console.log(`               Tools: ${toolCount}, ~${profile.estimatedTokens} tokens`);
+        console.log('');
+      }
+
+      console.log('Usage examples:');
+      console.log('  recker-mcp --profile=minimal              # Basic tools only');
+      console.log('  recker-mcp --profile=minimal,seo          # Combine profiles');
+      console.log('  recker-mcp --profile=full                 # All tools (high context)');
+      console.log('');
+      process.exit(0);
+    }
+
+    // Validate profile names if provided
+    if (opts.profile) {
+      const profileNames = opts.profile.split(',').map((p: string) => p.trim());
+      const validation = validateProfiles(profileNames);
+      if (!validation.valid) {
+        console.error(`Invalid profile(s): ${validation.invalid.join(', ')}`);
+        console.error('Use --list-profiles to see available profiles');
+        process.exit(1);
+      }
+    }
     const toolsFilter: string[] = [];
 
     // Handle --only flag (exclusive mode)
@@ -84,7 +134,7 @@ program
     }
 
     // Handle --filter flag (custom patterns)
-    if (opts.filter) {
+    if (opts.filter && typeof opts.filter === 'string') {
       const patterns = opts.filter.split(',').map((p: string) => p.trim());
       toolsFilter.push(...patterns);
     }
@@ -129,7 +179,7 @@ program
       process.exit(1);
     }
 
-    // Create server
+    // Create server with profile or legacy toolsFilter
     const server = new MCPServer({
       transport,
       port,
@@ -137,7 +187,8 @@ program
       docsPath: opts.docsPath,
       examplesPath: opts.examplesPath,
       srcPath: opts.srcPath,
-      toolsFilter: toolsFilter.length > 0 ? toolsFilter : undefined,
+      profile: opts.profile, // Profile takes precedence
+      toolsFilter: !opts.profile && toolsFilter.length > 0 ? toolsFilter : undefined,
     });
 
     // Log startup info (not in stdio mode to avoid polluting the protocol)
@@ -149,8 +200,14 @@ program
       console.log(`  Transport: ${transport}`);
       console.log(`  Port:      ${port}`);
       console.log(`  Debug:     ${opts.debug ? 'enabled' : 'disabled'}`);
-      if (toolsFilter.length > 0) {
+
+      if (opts.profile) {
+        const tokens = estimateProfileTokens(opts.profile);
+        console.log(`  Profile:   ${opts.profile} (~${tokens} tokens)`);
+      } else if (toolsFilter.length > 0) {
         console.log(`  Filters:   ${toolsFilter.join(', ')}`);
+      } else {
+        console.log(`  Profile:   full (all tools enabled)`);
       }
       console.log('');
       console.log('  Available tools:');
