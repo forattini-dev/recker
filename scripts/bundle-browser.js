@@ -138,6 +138,8 @@ const nodeStubPlugin = {
         export const createPrivateKey = () => ({});
         export const randomBytes = (n) => new Uint8Array(n);
         export const randomUUID = () => crypto.randomUUID();
+        export const createDecipheriv = () => ({ update: (d) => d, final: () => new Uint8Array(0), setAutoPadding: noop });
+        export const createCipheriv = () => ({ update: (d) => d, final: () => new Uint8Array(0), setAutoPadding: noop });
 
         // util module
         export const promisify = (fn) => fn;
@@ -178,6 +180,10 @@ const nodeStubPlugin = {
         export const gunzip = (data, cb) => cb(null, data);
         export const inflate = (data, cb) => cb(null, data);
         export const brotliDecompress = (data, cb) => cb(null, data);
+        export const gunzipSync = (data) => data;
+        export const gzipSync = (data) => data;
+        export const deflateSync = (data) => data;
+        export const inflateSync = (data) => data;
 
         // perf_hooks module
         export const performance = globalThis.performance;
