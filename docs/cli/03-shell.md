@@ -435,7 +435,7 @@ Analyze web pages for SEO issues directly from the shell:
 › seo https://example.com -v
 ```
 
-The SEO analyzer checks **250+ rules across 21 categories**:
+The SEO analyzer checks **400+ rules across 19 categories**:
 - **Meta**: Title, description, keywords, robots
 - **Content**: H1, headings hierarchy, word count, readability
 - **Links**: Anchor text, noopener/noreferrer, sponsored/ugc

@@ -2,7 +2,7 @@
  * SEO MCP Tools
  *
  * Provides AI agents with SEO analysis capabilities:
- * - Single page analysis with 250+ rules
+ * - Single page analysis with 400+ rules
  * - Site-wide crawling with duplicate detection
  * - Prioritized quick wins for immediate action
  */
@@ -444,7 +444,7 @@ async function seoQuickWins(args: Record<string, unknown>): Promise<MCPToolResul
 export const seoTools: MCPTool[] = [
   {
     name: 'rek_seo_analyze',
-    description: `Analyze a single web page for SEO issues using 250+ rules across 21 categories.
+    description: `Analyze a single web page for SEO issues using 400+ rules across 19 categories.
 
 Returns:
 - SEO score (0-100) and grade (A-F)

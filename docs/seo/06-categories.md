@@ -1,6 +1,6 @@
 # SEO Rule Categories
 
-Recker's SEO analyzer includes **250+ rules** organized into **22 categories**. Each category focuses on a specific aspect of SEO optimization.
+Recker's SEO analyzer includes **400+ rules** organized into **19 categories**. Each category focuses on a specific aspect of SEO optimization.
 
 ## Category Overview
 

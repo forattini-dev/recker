@@ -15,6 +15,7 @@ describe('MCP Server', () => {
         port: testPort,
         docsPath,
         debug: false,
+        profile: 'full', // Use full profile to test all 57 tools
       });
       await server.start();
     });
@@ -359,6 +360,7 @@ describe('MCP Server', () => {
         port: testPort,
         docsPath,
         debug: false,
+        profile: 'full', // Use full profile to test all 57 tools
       });
       await server.start();
     });

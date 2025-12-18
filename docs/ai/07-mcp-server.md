@@ -44,7 +44,11 @@ await server.start();
 
 ## Profiles
 
-Profiles allow you to control which tools are exposed to AI agents. This is useful for:
+Profiles allow you to control which tools are exposed to AI agents.
+
+**Default Profile**: When no profile is specified, `minimal` is used automatically (6 core tools, ~1800 tokens).
+
+This is useful for:
 
 - **Reducing context size**: AI models have limited context windows
 - **Security**: Only expose necessary tools
@@ -557,7 +561,7 @@ Web scraping with CSS selectors:
 
 #### rek_seo_analyze
 
-Analyze page SEO with 250+ rules:
+Analyze page SEO with 400+ rules:
 
 ```json
 {

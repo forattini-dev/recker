@@ -1,6 +1,6 @@
 # SEO Analyzer
 
-The core SEO analyzer evaluates web pages against **250+ rules** across **22 categories**, providing detailed reports with scores, grades, and actionable recommendations.
+The core SEO analyzer evaluates web pages against **400+ rules** across **19 categories**, providing detailed reports with scores, grades, and actionable recommendations.
 
 ## Basic Usage
 

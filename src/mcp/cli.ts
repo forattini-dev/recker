@@ -108,9 +108,9 @@ program
       }
 
       console.log('Usage examples:');
-      console.log('  recker-mcp --profile=minimal              # Basic tools only');
+      console.log('  recker-mcp                                # Default: minimal profile');
       console.log('  recker-mcp --profile=minimal,seo          # Combine profiles');
-      console.log('  recker-mcp --profile=full                 # All tools (high context)');
+      console.log('  recker-mcp --profile=full                 # All 57 tools (high context)');
       console.log('');
       process.exit(0);
     }

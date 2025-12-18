@@ -11,7 +11,7 @@ MCP is a standard protocol for connecting AI models to external tools and data s
 - Inspect TLS certificates and analyze security headers
 - Perform GeoIP lookups and RDAP queries
 - Scrape web pages with CSS selectors
-- Analyze SEO with 250+ rules across 21 categories
+- Analyze SEO with 400+ rules across 19 categories
 - Extract video/audio info from 1800+ sites
 - Query AI providers (OpenAI, Anthropic, etc.)
 - Connect via FTP, SFTP, Telnet, WebSocket
@@ -26,7 +26,9 @@ MCP is a standard protocol for connecting AI models to external tools and data s
 claude mcp add recker npx recker@latest mcp
 ```
 
-That's it! Claude Code now has access to all 57 tools.
+That's it! Claude Code now has access to the **minimal** profile (6 core tools) by default.
+
+To enable all 57 tools, use `--profile=full`.
 
 ### Manual Configuration
 
@@ -147,7 +149,7 @@ rek mcp --profile=full
 
 | Tool | Description |
 |------|-------------|
-| `rek_seo_analyze` | Analyze page SEO with 250+ rules (score 0-100, grade A-F) |
+| `rek_seo_analyze` | Analyze page SEO with 400+ rules (score 0-100, grade A-F) |
 | `rek_seo_spider` | Crawl site and detect duplicates, orphan pages |
 | `rek_seo_quick_wins` | Get prioritized SEO fixes (high/medium/low) |
 

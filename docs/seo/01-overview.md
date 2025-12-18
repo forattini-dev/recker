@@ -1,11 +1,11 @@
 # SEO Analysis
 
-Comprehensive SEO analysis toolkit with **250+ checks across 22 categories**, site-wide crawling, and AI-first optimization.
+Comprehensive SEO analysis toolkit with **400+ checks across 19 categories**, site-wide crawling, and AI-first optimization.
 
 ## Features
 
-- **250+ SEO Rules** - The most comprehensive SEO checker available
-- **22 Categories** - From basic meta tags to AI search optimization
+- **400+ SEO Rules** - The most comprehensive SEO checker available
+- **19 Categories** - From basic meta tags to AI search optimization
 - **Site-Wide Analysis** - Spider crawls entire sites detecting duplicates and orphan pages
 - **AI-First SEO** - llms.txt support, GPTBot/Anthropic detection, question headings
 - **Request Timing** - Full timing waterfall (DNS, TCP, TLS, TTFB, Download)

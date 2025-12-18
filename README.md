@@ -80,7 +80,7 @@ recker.ws('wss://example.com/socket'); // WebSocket
 | **AI** | OpenAI, Anthropic, Google, Ollama, Groq, Mistral + streaming |
 | **Resilience** | Retry, circuit breaker, rate limiting, request deduplication |
 | **Auth** | Basic, Bearer, OAuth2, AWS SigV4, Digest, API Key + 15 providers |
-| **SEO** | 250+ rules, 21 categories, site-wide spider crawler |
+| **SEO** | 400+ rules, 19 categories, site-wide spider crawler |
 | **Testing** | 9 mock servers (HTTP, WebSocket, DNS, FTP, HLS, SSE...) |
 | **CLI** | `rek` - curl replacement with superpowers |
 | **MCP** | 57 tools for AI assistants (Claude, Cursor, Windsurf) |
@@ -125,7 +125,7 @@ import { analyzeSeo } from 'recker/seo';
 
 const report = await analyzeSeo(html, { baseUrl: 'https://example.com' });
 console.log(`Score: ${report.score}/100 (Grade: ${report.grade})`);
-// 250+ checks across 21 categories
+// 400+ checks across 19 categories
 ```
 
 ### Web Scraping
@@ -194,14 +194,17 @@ rek shell
 57 tools for AI assistants like Claude Code, Cursor, and Windsurf:
 
 ```bash
-# One-liner for Claude Code
+# One-liner for Claude Code (uses minimal profile by default)
 claude mcp add recker npx recker@latest mcp
 
-# Or with profiles to reduce context
-claude mcp add recker npx recker@latest mcp --profile=minimal,video
+# Add more profiles as needed
+claude mcp add recker npx recker@latest mcp --profile=minimal,video,seo
+
+# Enable all 57 tools
+claude mcp add recker npx recker@latest mcp --profile=full
 ```
 
-**Profiles:** `minimal` `docs` `network` `dns` `security` `seo` `scrape` `video` `ai` `protocols` `parsing` `streaming` `full`
+**Profiles:** `minimal` (default) `docs` `network` `dns` `security` `seo` `scrape` `video` `ai` `protocols` `parsing` `streaming` `full`
 
 [→ MCP Documentation](https://forattini-dev.github.io/recker/#/getting-started/mcp)
 
@@ -216,7 +219,7 @@ claude mcp add recker npx recker@latest mcp --profile=minimal,video
 | AI Integration | [→ AI Providers](https://forattini-dev.github.io/recker/#/ai/01-overview) |
 | CLI | [→ Terminal Client](https://forattini-dev.github.io/recker/#/cli/01-overview) |
 | MCP Server | [→ AI Tools](https://forattini-dev.github.io/recker/#/getting-started/mcp) |
-| SEO Analysis | [→ 250+ Rules](https://forattini-dev.github.io/recker/#/http/19-seo) |
+| SEO Analysis | [→ 400+ Rules](https://forattini-dev.github.io/recker/#/http/19-seo) |
 | Mock Servers | [→ Testing](https://forattini-dev.github.io/recker/#/cli/08-mock-servers) |
 | API Reference | [→ Full API](https://forattini-dev.github.io/recker/#/reference/01-api) |
 
@@ -229,7 +232,7 @@ claude mcp add recker npx recker@latest mcp --profile=minimal,video
 | Auth Methods | 15 |
 | API Presets | 48 |
 | MCP Tools | 57 |
-| SEO Rules | 250+ |
+| SEO Rules | 400+ |
 | Mock Servers | 9 |
 | Tests | 4200+ |
 

@@ -96,7 +96,7 @@ const result = await seoSpider('https://example.com', {
 
 // Everything from base report PLUS:
 
-// Per-page SEO scores (250+ checks each!)
+// Per-page SEO scores (400+ checks each!)
 for (const page of result.pages) {
   console.log(`${page.url}`);
   console.log(`  SEO Score: ${page.seoReport?.score}/100`);
@@ -142,7 +142,7 @@ interface SeoSpiderResult extends SpiderResult {
 }
 
 interface SeoPageResult extends SpiderPageResult {
-  /** Full SEO report with 250+ checks */
+  /** Full SEO report with 400+ checks */
   seoReport?: SeoReport;
 }
 
@@ -158,7 +158,7 @@ interface SeoReport {
     topIssues: Issue[];
     quickWins: Issue[];
   };
-  checks: Check[];      // All 250+ checks with results
+  checks: Check[];      // All 400+ checks with results
   categories: { [category: string]: CategoryResult };
 }
 ```
@@ -175,7 +175,7 @@ interface SeoReport {
 | Sitemap analysis | ✅ | ✅ |
 | Robots.txt analysis | ✅ | ✅ |
 | Per-page SEO score | ❌ | ✅ |
-| 250+ SEO checks per page | ❌ | ✅ |
+| 400+ SEO checks per page | ❌ | ✅ |
 | Duplicate title detection | ❌ | ✅ |
 | Duplicate description detection | ❌ | ✅ |
 | Duplicate H1 detection | ❌ | ✅ |

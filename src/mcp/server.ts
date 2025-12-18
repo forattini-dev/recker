@@ -99,7 +99,7 @@ interface TypeDefinition {
  * - `dns_lookup`: Resolve DNS records
  * - `whois_lookup`: Query WHOIS databases
  * - `network_ping`: Check TCP connectivity
- * - `rek_seo_analyze`: Analyze a single page for SEO issues (250+ rules)
+ * - `rek_seo_analyze`: Analyze a single page for SEO issues (400+ rules)
  * - `rek_seo_spider`: Crawl entire site and detect duplicates/orphans
  * - `rek_seo_quick_wins`: Get prioritized SEO improvements
  * - `rek_scrape`: Web scraping with CSS selectors and built-in extractors
@@ -229,8 +229,12 @@ export class MCPServer {
     } else if (this.options.toolsFilter && this.options.toolsFilter.length > 0) {
       // Legacy toolsFilter support
       this.toolRegistry.setEnabledPatterns(this.options.toolsFilter);
+    } else {
+      // Default to minimal profile to reduce context size
+      const patterns = resolveProfiles(DEFAULT_PROFILE);
+      this.toolRegistry.setEnabledPatterns(patterns);
+      this.log('Using default profile', { profile: DEFAULT_PROFILE });
     }
-    // If neither profile nor toolsFilter, all tools are enabled (default behavior)
   }
   /**
    * Promise that resolves when the index is ready.
