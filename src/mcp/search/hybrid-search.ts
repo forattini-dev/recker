@@ -257,9 +257,8 @@ export class HybridSearch {
       };
     });
 
-    // Sort by final score (with boost) and normalize to 0-1
+    // Sort by final score (with boost) - keep absolute scores (not normalized)
     scored.sort((a, b) => b.finalScore - a.finalScore);
-    const maxScore = scored[0]?.finalScore || 1;
 
     return scored.map((r) => ({
       id: r.item.id,
@@ -267,7 +266,9 @@ export class HybridSearch {
       title: r.item.title,
       content: r.item.content,
       snippet: this.extractSnippet(r.item.content, query),
-      score: Math.max(0, Math.min(1, r.finalScore / maxScore)), // Normalize to 0-1
+      // Clamp to 0-1 without normalizing by maxScore
+      // This preserves absolute match quality (low score = bad match)
+      score: Math.max(0, Math.min(1, r.finalScore)),
       source: 'fuzzy' as const,
     }));
   }

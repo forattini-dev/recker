@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "recker": {
+      "command": "pnpm",
+      "args": ["cli", "mcp", "--debug"],
+      "cwd": "/home/cyber/Work/tetis/recker"
+    }
+  }
+}
