@@ -26,6 +26,7 @@ export class HttpRequest implements ReckerRequest {
   public readonly maxRedirects?: number;
   public readonly followRedirects?: boolean;
   public readonly http2?: boolean;
+  public readonly useCurl?: boolean;
 
   constructor(url: string, options: RequestOptions = {}) {
     this.url = url;
@@ -42,6 +43,7 @@ export class HttpRequest implements ReckerRequest {
     this.maxRedirects = options.maxRedirects;
     this.followRedirects = options.followRedirects;
     this.http2 = options.http2;
+    this.useCurl = options.useCurl;
   }
 
   withHeader(name: string, value: string): ReckerRequest {
@@ -61,6 +63,7 @@ export class HttpRequest implements ReckerRequest {
       maxRedirects: this.maxRedirects,
       followRedirects: this.followRedirects,
       http2: this.http2,
+      useCurl: this.useCurl,
     });
   }
 
@@ -79,6 +82,7 @@ export class HttpRequest implements ReckerRequest {
       maxRedirects: this.maxRedirects,
       followRedirects: this.followRedirects,
       http2: this.http2,
+      useCurl: this.useCurl,
     });
   }
 }

@@ -226,6 +226,17 @@ export interface RequestOptions {
    * ```
    */
   http2?: boolean;
+  /**
+   * Use curl transport for this request (bypasses TLS fingerprinting)
+   * Requires curl-impersonate to be installed for best results
+   *
+   * @example
+   * ```typescript
+   * // Use curl for a specific request to bypass JA3 fingerprinting
+   * await client.get('/api/data', { useCurl: true });
+   * ```
+   */
+  useCurl?: boolean;
 }
 
 export interface ReckerRequest {
