@@ -21,6 +21,7 @@
  */
 
 import type { Client } from '../core/client.js';
+import { gunzipSync } from 'node:zlib';
 
 // ============================================
 // Types
@@ -41,6 +42,7 @@ export interface Format {
   protocol: 'http' | 'https' | 'm3u8' | 'm3u8_native' | 'mpd' | 'rtmp' | 'dash' | 'websocket' | 'niconico_dmc';
   httpHeaders?: Record<string, string>;
   formatNote?: string; // Human-readable format description
+  useCurl?: boolean; // Use curl transport for this format's downloads (bypasses TLS fingerprinting)
 }
 
 /**
@@ -141,6 +143,9 @@ export abstract class BaseExtractor {
   /** Age limit for content (default 0) */
   readonly AGE_LIMIT: number = 0;
 
+  /** Whether this extractor requires curl transport to bypass TLS fingerprinting */
+  protected readonly NEEDS_CURL: boolean = false;
+
   constructor(client: Client) {
     this.client = client;
   }
@@ -201,14 +206,34 @@ export abstract class BaseExtractor {
   // ============================================
 
   /**
-   * Download webpage as text
+   * Download webpage as text (auto-decompresses gzip if server ignores Accept-Encoding)
    */
   protected async downloadWebpage(
     url: string,
     headers?: Record<string, string>
   ): Promise<string> {
-    const response = await this.client.get(url, { headers });
-    return response.text();
+    const response = await this.client.get(url, {
+      headers: {
+        ...headers,
+      },
+      useCurl: this.NEEDS_CURL,
+    });
+
+    // Get raw bytes to check for gzip magic bytes
+    const blob = await response.blob();
+    const buffer = Buffer.from(await blob.arrayBuffer());
+
+    // Auto-decompress gzip if needed (some CDNs ignore Accept-Encoding: identity)
+    if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) {
+      try {
+        const decompressed = gunzipSync(buffer);
+        return decompressed.toString('utf-8');
+      } catch {
+        // Not actually gzip, return as-is
+      }
+    }
+
+    return buffer.toString('utf-8');
   }
 
   /**
@@ -218,7 +243,7 @@ export abstract class BaseExtractor {
     url: string,
     headers?: Record<string, string>
   ): Promise<T> {
-    const response = await this.client.get(url, { headers });
+    const response = await this.client.get(url, { headers, useCurl: this.NEEDS_CURL });
     return response.json() as Promise<T>;
   }
 
@@ -235,6 +260,7 @@ export abstract class BaseExtractor {
         'Content-Type': 'application/json',
         ...headers,
       },
+      useCurl: this.NEEDS_CURL,
     });
     return response.json() as Promise<T>;
   }
@@ -253,6 +279,7 @@ export abstract class BaseExtractor {
         'Content-Type': 'application/x-www-form-urlencoded',
         ...headers,
       },
+      useCurl: this.NEEDS_CURL,
     });
     return response.json() as Promise<T>;
   }
@@ -505,6 +532,7 @@ export abstract class BaseExtractor {
             protocol: 'm3u8_native',
             quality: pendingFormat.height ?? pendingFormat.tbr,
             httpHeaders: options.httpHeaders,
+            useCurl: this.NEEDS_CURL || undefined,
             ...pendingFormat,
           });
           pendingFormat = {};
@@ -518,6 +546,7 @@ export abstract class BaseExtractor {
         ext: 'mp4',
         protocol: 'm3u8_native',
         httpHeaders: options.httpHeaders,
+        useCurl: this.NEEDS_CURL || undefined,
       });
     }
 

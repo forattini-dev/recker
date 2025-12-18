@@ -43,6 +43,7 @@ export class ChaturbateExtractor extends BaseExtractor {
   readonly VALID_URL = /https?:\/\/(?:[^/]+\.)?chaturbate\.(?<tld>com|eu|global)\/(?:fullvideo\/?\?.*?\bb=)?(?<id>[^/?&#]+)/;
   readonly IE_NAME = 'chaturbate';
   readonly AGE_LIMIT = 18;
+  protected readonly NEEDS_CURL = true;
 
   async extract(url: string): Promise<ExtractorResult> {
     const match = this.matchUrl(url);
@@ -67,43 +68,48 @@ export class ChaturbateExtractor extends BaseExtractor {
     username: string,
     tld: string
   ): Promise<ExtractorResult | null> {
+    // Step 1: Call the API to get the stream URL
+    let response: ChaturbateApiResponse;
     try {
-      const response = await this.postForm<ChaturbateApiResponse>(
+      response = await this.postForm<ChaturbateApiResponse>(
         `https://chaturbate.${tld}/get_edge_hls_url_ajax/`,
         { room_slug: username },
         { 'X-Requested-With': 'XMLHttpRequest' }
       );
-
-      if (!response.url) {
-        const status = response.room_status;
-        if (status && ERROR_MAP[status]) {
-          if (status === 'offline') {
-            throw new UserNotLiveError(username);
-          }
-          throw new ExtractorError(ERROR_MAP[status], true);
-        }
-        // API failed, try HTML fallback
-        return null;
-      }
-
-      const formats = await this.extractM3U8Formats(response.url, username, {
-        live: true,
-      });
-
-      return {
-        id: username,
-        title: username,
-        thumbnail: `https://roomimg.stream.highwebmedia.com/ri/${username}.jpg`,
-        isLive: true,
-        liveStatus: 'is_live',
-        ageLimit: this.AGE_LIMIT,
-        formats,
-      };
     } catch (error) {
+      // API call itself failed (network error, etc.) - fallback to HTML
       if (error instanceof ExtractorError) throw error;
-      // API failed, return null to try HTML fallback
       return null;
     }
+
+    // Step 2: Check API response status
+    if (!response.url) {
+      const status = response.room_status;
+      if (status && ERROR_MAP[status]) {
+        if (status === 'offline') {
+          throw new UserNotLiveError(username);
+        }
+        throw new ExtractorError(ERROR_MAP[status], true);
+      }
+      // API returned no URL and no known status - fallback to HTML
+      return null;
+    }
+
+    // Step 3: Fetch M3U8 formats (API succeeded, so user IS live)
+    // If this fails, throw error - don't fallback to HTML which may incorrectly detect offline
+    const formats = await this.extractM3U8Formats(response.url, username, {
+      live: true,
+    });
+
+    return {
+      id: username,
+      title: username,
+      thumbnail: `https://roomimg.stream.highwebmedia.com/ri/${username}.jpg`,
+      isLive: true,
+      liveStatus: 'is_live',
+      ageLimit: this.AGE_LIMIT,
+      formats,
+    };
   }
 
   /**

@@ -23,6 +23,7 @@ export class XVideosExtractor extends BaseExtractor {
     /https?:\/\/(?:(?:[^/]+\.)?xvideos2?\.com\/video\.?|(?:www\.)?xvideos\.es\/video\.?|(?:www|flashservice)\.xvideos\.com\/embedframe\/|static-hw\.xvideos\.com\/swf\/xv-player\.swf\?.*?\bid_video=)(?<id>[0-9a-z]+)/i;
   readonly IE_NAME = 'xvideos';
   readonly AGE_LIMIT = 18;
+  protected readonly NEEDS_CURL = true;
 
   async extract(url: string): Promise<ExtractorResult> {
     const match = this.matchUrl(url);
@@ -247,6 +248,7 @@ export class XVideosQuickiesExtractor extends BaseExtractor {
     /https?:\/\/(?<domain>(?:[^/?#]+\.)?xvideos2?\.com)\/(?:profiles\/|amateur-channels\/)?[^/?#]+#quickies\/a\/(?<id>\w+)/i;
   readonly IE_NAME = 'xvideos:quickies';
   readonly AGE_LIMIT = 18;
+  protected readonly NEEDS_CURL = true;
 
   async extract(url: string): Promise<ExtractorResult> {
     const match = this.matchUrl(url);

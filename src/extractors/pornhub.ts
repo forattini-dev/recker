@@ -53,6 +53,7 @@ export class PornHubExtractor extends BaseExtractor {
     /https?:\/\/(?:(?:[^/]+\.)?pornhub(?:premium)?\.(?:com|net|org)|(?:www\.)?thumbzilla\.com)\/(?:(?:view_video\.php|video\/show)\?viewkey=|embed\/|video\/)(?<id>[\da-z]+)/i;
   readonly IE_NAME = 'pornhub';
   readonly AGE_LIMIT = 18;
+  protected readonly NEEDS_CURL = true;
 
   private cookies: Record<string, string> = {};
 
