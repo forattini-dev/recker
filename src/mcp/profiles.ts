@@ -28,6 +28,8 @@ export type ProfileName =
   | 'seo'
   | 'security'
   | 'scrape'
+  | 'video'
+  | 'ai'
   | 'full';
 
 /**
@@ -172,14 +174,47 @@ export const profiles: Record<ProfileName, Profile> = {
   },
 
   /**
+   * Video profile - Video/audio extraction from 35+ platforms
+   * Best for: Media extraction, video info, format selection
+   */
+  video: {
+    name: 'video',
+    description: 'Video/audio extraction from 35+ platforms',
+    tools: [
+      'rek_video_info',
+      'rek_video_formats',
+      'rek_video_check',
+      'rek_video_extractors',
+      'rek_video_url',
+    ],
+    estimatedTokens: 1500,
+  },
+
+  /**
+   * AI profile - Multi-provider AI chat and embeddings
+   * Best for: AI integration, LLM calls, embeddings
+   */
+  ai: {
+    name: 'ai',
+    description: 'Multi-provider AI chat and embeddings',
+    tools: [
+      'rek_ai_chat',
+      'rek_ai_embed',
+      'rek_ai_providers',
+      'rek_ai_tokens',
+    ],
+    estimatedTokens: 1200,
+  },
+
+  /**
    * Full profile - All available tools
-   * Warning: High context cost (~8K tokens)
+   * Warning: High context cost (~12K tokens with video+ai)
    */
   full: {
     name: 'full',
     description: 'All available tools (high context cost)',
     tools: ['*'], // Wildcard for all tools
-    estimatedTokens: 8000,
+    estimatedTokens: 12000,
   },
 };
 

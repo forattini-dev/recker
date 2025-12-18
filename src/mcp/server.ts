@@ -23,6 +23,8 @@ import { networkTools, networkToolHandlers } from './tools/network.js';
 import { seoTools, seoToolHandlers } from './tools/seo.js';
 import { scrapeTools, scrapeToolHandlers } from './tools/scrape.js';
 import { securityTools, securityToolHandlers } from './tools/security.js';
+import { videoTools, videoToolHandlers } from './tools/video.js';
+import { aiTools, aiToolHandlers } from './tools/ai.js';
 import { ToolRegistry } from './tools/registry.js';
 import { loadToolModules } from './tools/loader.js';
 import { PromptRegistry } from './prompts/index.js';
@@ -160,6 +162,14 @@ export class MCPServer {
     this.toolRegistry.registerModule({
       tools: securityTools,
       handlers: securityToolHandlers
+    });
+    this.toolRegistry.registerModule({
+      tools: videoTools,
+      handlers: videoToolHandlers
+    });
+    this.toolRegistry.registerModule({
+      tools: aiTools,
+      handlers: aiToolHandlers
     });
 
     // Apply profile-based filtering

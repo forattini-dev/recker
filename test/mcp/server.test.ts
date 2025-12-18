@@ -75,7 +75,7 @@ describe('MCP Server', () => {
         const result = await sendRequest('tools/list');
 
         expect(result.result.tools).toBeDefined();
-                expect(result.result.tools).toHaveLength(28);
+                expect(result.result.tools).toHaveLength(37);
 
         const toolNames = result.result.tools.map((t: any) => t.name);
         expect(toolNames).toContain('rek_search_docs');
@@ -393,7 +393,7 @@ describe('MCP Server', () => {
       });
 
       const result = await response.json();
-              expect(result.result.tools).toHaveLength(28);
+              expect(result.result.tools).toHaveLength(37);
     });
 
     it('should establish SSE connection', async () => {
