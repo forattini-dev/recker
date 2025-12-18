@@ -1957,7 +1957,24 @@ export class SeoAnalyzer {
     keywordDensity?: number;
   } {
     const body = this.getMainBody();
-    const bodyText = body ? body.text.replace(/\s+/g, ' ').trim() : '';
+    let bodyText = body ? body.text.replace(/\s+/g, ' ').trim() : '';
+
+    // Fallback: if body text is empty, try to extract from root or paragraphs
+    if (!bodyText || bodyText.length === 0) {
+      // Try root element text
+      const rootText = this.root.text?.replace(/\s+/g, ' ').trim() || '';
+      if (rootText.length > 0) {
+        bodyText = rootText;
+      } else {
+        // Last resort: concatenate text from all paragraphs
+        const paragraphTexts: string[] = [];
+        this.root.querySelectorAll('p').forEach((el: any) => {
+          const pText = el.text?.trim();
+          if (pText) paragraphTexts.push(pText);
+        });
+        bodyText = paragraphTexts.join(' ');
+      }
+    }
 
     const words = bodyText.split(/\s+/).filter((w: string) => w.length > 0);
     const sentences = bodyText
@@ -1969,7 +1986,7 @@ export class SeoAnalyzer {
     const paragraphWordCounts: number[] = [];
 
     paragraphs.forEach((el: any) => {
-      const text = el.text.trim();
+      const text = el.text?.trim() || '';
       totalParagraphLength += text.length;
       const pWords = text.split(/\s+/).filter((w: string) => w.length > 0).length;
       if (pWords > 0) paragraphWordCounts.push(pWords);
