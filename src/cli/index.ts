@@ -22,6 +22,7 @@ import { registerVectorCommand } from './commands/vector.js';
 import { registerSeoCommand } from './commands/seo.js';
 import { registerVideoCommand } from './commands/video.js';
 import { registerLiveCommand } from './commands/live.js';
+import { registerMcpCommand } from './commands/mcp.js';
 import { parseEnhancerPresets, loadEnvFile, levenshtein } from './helpers.js';
 
 async function readStdin(): Promise<string | null> {
@@ -340,6 +341,7 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
   registerBenchCommand(program as any);
   registerServeCommand(program as any);
   registerUtilsCommands(program as any);
+  registerMcpCommand(program as any);
 
   const sftpCmd = program.command('sftp').description('SFTP client operations');
   sftpCmd.command('ls').argument('<host>').action(async (host, args) => {
