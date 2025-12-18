@@ -162,8 +162,13 @@
       // Not found page
       notFoundPage: true,
 
-      // Markdown config
+      // Markdown config - enable HTML rendering
       markdown: {
+        gfm: true,
+        breaks: false,
+        pedantic: false,
+        smartLists: true,
+        smartypants: false,
         renderer: {
           // Add IDs to headings for anchor links
           heading: function(text, level) {
@@ -399,9 +404,149 @@
     });
   </script>
 
-  <!-- Footer -->
+  <!-- Footer & Playground Injection -->
   <script>
+    // Playground HTML template
+    const PLAYGROUND_HTML = `
+<div id="playground-container" style="border: 1px solid var(--border-color); border-radius: 12px; background: rgba(0,0,0,0.05); overflow: hidden;">
+  <div style="background: rgba(0,0,0,0.15); padding: 0; display: flex; gap: 0; border-bottom: 1px solid var(--border-color);">
+    <button onclick="window.switchMode('terminal')" id="btn-terminal" class="tab-btn active" style="font-weight: 600; border: none; background: rgba(255, 138, 0, 0.15); color: #ff8a00; cursor: pointer; padding: 12px 24px; border-bottom: 2px solid #ff8a00; transition: all 0.2s;">HTTP Client</button>
+    <button onclick="window.switchMode('seo')" id="btn-seo" class="tab-btn" style="font-weight: 600; border: none; background: none; color: var(--text-color); cursor: pointer; padding: 12px 24px; opacity: 0.7; transition: all 0.2s;">SEO Analyzer</button>
+    <button onclick="window.switchMode('chat')" id="btn-chat" class="tab-btn" style="font-weight: 600; border: none; background: none; color: var(--text-color); cursor: pointer; padding: 12px 24px; opacity: 0.7; transition: all 0.2s;">AI Chat</button>
+  </div>
+  <div id="mode-terminal" style="padding: 20px;">
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+      <span style="padding: 10px 12px; font-family: 'JetBrains Mono', monospace; color: #ff8a00; font-weight: bold; background: rgba(255, 138, 0, 0.1); border-radius: 6px; user-select: none;">$ rek</span>
+      <input type="text" id="cli-input" value="+chrome post https://httpbin.org/post name=John age:=30 X-Custom:header" style="flex: 1; padding: 10px 12px; border-radius: 6px; background: var(--code-background-color); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'JetBrains Mono', monospace; font-size: 14px;" placeholder="+preset method url Header:Value key=string num:=123" onkeydown="if(event.key === 'Enter') window.runTerminal()">
+      <button onclick="window.runTerminal()" style="padding: 10px 20px; background: linear-gradient(135deg, #ff8a00, #ff6b00); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: transform 0.1s; display: flex; align-items: center; gap: 6px;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'">
+        <span>Run</span>
+        <span style="font-size: 16px;">⚡</span>
+      </button>
+    </div>
+    <details style="margin-bottom: 15px; font-size: 13px;">
+      <summary style="cursor: pointer; color: var(--text-color); opacity: 0.7; padding: 5px 0;">📖 CLI Syntax Reference</summary>
+      <div style="background: var(--code-background-color); padding: 15px; border-radius: 6px; margin-top: 10px; border: 1px solid var(--border-color);">
+        <table style="width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+          <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 8px; color: #ff8a00; width: 40%;">+chrome, +mobile, +retry</td><td style="padding: 8px; opacity: 0.8;">Presets (User-Agent, retry config, etc.)</td></tr>
+          <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 8px; color: #4ade80;">GET POST PUT DELETE</td><td style="padding: 8px; opacity: 0.8;">HTTP Method (defaults to GET)</td></tr>
+          <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 8px; color: #60a5fa;">Header:Value</td><td style="padding: 8px; opacity: 0.8;">Set HTTP header</td></tr>
+          <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 8px; color: #c084fc;">key=string</td><td style="padding: 8px; opacity: 0.8;">String body parameter</td></tr>
+          <tr><td style="padding: 8px; color: #f472b6;">key:=123 or key:=true</td><td style="padding: 8px; opacity: 0.8;">Typed parameter (number, boolean)</td></tr>
+        </table>
+      </div>
+    </details>
+    <div style="margin-bottom: 15px; display: flex; gap: 20px; flex-wrap: wrap; padding: 10px 15px; background: rgba(0,0,0,0.1); border-radius: 6px;">
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-color); font-size: 13px;"><input type="checkbox" id="useProxy" checked style="accent-color: #ff8a00;"><span>CORS Proxy</span></label>
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-color); font-size: 13px;"><input type="checkbox" id="recordHar" style="accent-color: #ff8a00;"><span>Record HAR</span></label>
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-color); font-size: 13px;"><input type="checkbox" id="simulateSlow" style="accent-color: #ff8a00;"><span>Simulate Slow (1s)</span></label>
+      <div id="drop-zone" onclick="document.getElementById('file-input').click()" style="margin-left: auto; padding: 6px 12px; border: 1px dashed var(--border-color); border-radius: 4px; cursor: pointer; color: var(--text-color); opacity: 0.7; font-size: 13px; transition: all 0.2s;">📂 Upload file<input type="file" id="file-input" style="display: none" onchange="window.handleFileSelect(this.files)"></div>
+    </div>
+    <div id="results-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+      <div style="display: flex; flex-direction: column; gap: 15px;">
+        <div style="background: var(--code-background-color); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden;">
+          <div style="background: rgba(255, 138, 0, 0.1); padding: 8px 12px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #ff8a00; border-bottom: 1px solid var(--border-color);">1. CLI Parsed Arguments</div>
+          <div id="cli-parsed" style="padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; min-height: 100px;"><div style="color: var(--text-color); opacity: 0.5;">Run a command to see parsed arguments...</div></div>
+        </div>
+        <div style="background: var(--code-background-color); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden;">
+          <div style="background: rgba(96, 165, 250, 0.1); padding: 8px 12px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #60a5fa; border-bottom: 1px solid var(--border-color);">2. HTTP Request Sent</div>
+          <div id="request-details" style="padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; min-height: 100px;"><div style="color: var(--text-color); opacity: 0.5;">Waiting for request...</div></div>
+        </div>
+      </div>
+      <div style="background: var(--code-background-color); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; display: flex; flex-direction: column;">
+        <div style="background: rgba(74, 222, 128, 0.1); padding: 8px 12px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #4ade80; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+          <span>3. Response</span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div id="response-view-toggle" style="display: none; gap: 4px;">
+              <button onclick="window.showResponseView('raw')" id="btn-raw" style="padding: 2px 8px; font-size: 10px; border: 1px solid var(--border-color); background: rgba(74, 222, 128, 0.2); color: #4ade80; border-radius: 3px; cursor: pointer;">Raw</button>
+              <button onclick="window.showResponseView('preview')" id="btn-preview" style="padding: 2px 8px; font-size: 10px; border: 1px solid var(--border-color); background: transparent; color: var(--text-color); border-radius: 3px; cursor: pointer; opacity: 0.7;">Preview</button>
+            </div>
+            <span id="response-status" style="font-size: 11px; opacity: 0.7;"></span>
+          </div>
+        </div>
+        <div id="timings-bar" style="padding: 8px 12px; background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--border-color); display: none;">
+          <div style="display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 6px;" id="timing-visual"></div>
+          <div id="timing-labels" style="display: flex; gap: 10px; flex-wrap: wrap; font-size: 10px; opacity: 0.8;"></div>
+        </div>
+        <pre id="response-body" style="padding: 12px; margin: 0; overflow: auto; flex: 1; max-height: 350px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--code-text-color);">Waiting for response...</pre>
+        <iframe id="response-preview" style="display: none; border: none; flex: 1; max-height: 350px; background: white;" sandbox="allow-same-origin"></iframe>
+      </div>
+    </div>
+  </div>
+  <div id="mode-seo" style="display: none; padding: 20px;">
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+      <input type="text" id="seo-url" value="https://example.com" style="flex: 1; padding: 10px 12px; border-radius: 6px; background: var(--code-background-color); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'JetBrains Mono', monospace; font-size: 14px;" placeholder="Enter URL to analyze..." onkeydown="if(event.key === 'Enter') window.runSeoAnalysis()">
+      <button onclick="window.runSeoAnalysis()" id="seo-analyze-btn" style="padding: 10px 20px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: transform 0.1s; display: flex; align-items: center; gap: 6px;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'"><span>Analyze</span><span style="font-size: 16px;">🔍</span></button>
+    </div>
+    <div style="margin-bottom: 15px; display: flex; gap: 15px; flex-wrap: wrap; padding: 10px 15px; background: rgba(0,0,0,0.1); border-radius: 6px;">
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-color); font-size: 13px;"><input type="checkbox" id="seo-proxy" checked style="accent-color: #10b981;"><span>CORS Proxy</span></label>
+    </div>
+    <div id="seo-results" style="display: none;">
+      <!-- Grade Card -->
+      <div id="seo-grade-card" style="background: var(--code-background-color); border-radius: 12px; padding: 20px; margin-bottom: 15px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 20px;">
+        <div id="seo-grade-badge" style="width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: bold; color: white;">-</div>
+        <div style="flex: 1;"><div style="font-size: 24px; font-weight: 600; margin-bottom: 5px;">Score: <span id="seo-score">--</span>/100</div><div id="seo-summary" style="opacity: 0.7; font-size: 14px;"></div></div>
+        <div id="seo-timing" style="text-align: right; opacity: 0.6; font-size: 12px;"></div>
+      </div>
+      <!-- Stats Grid -->
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px;">
+        <div style="background: rgba(255, 138, 0, 0.1); border: 1px solid rgba(255, 138, 0, 0.3); border-radius: 8px; padding: 12px; text-align: center;"><div id="seo-total" style="font-size: 24px; font-weight: bold; color: #ff8a00;">0</div><div style="font-size: 11px; opacity: 0.7; text-transform: uppercase;">Total Rules</div></div>
+        <div style="background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3); border-radius: 8px; padding: 12px; text-align: center;"><div id="seo-passed" style="font-size: 24px; font-weight: bold; color: #4ade80;">0</div><div style="font-size: 11px; opacity: 0.7; text-transform: uppercase;">Passed</div></div>
+        <div style="background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px; padding: 12px; text-align: center;"><div id="seo-warnings" style="font-size: 24px; font-weight: bold; color: #fbbf24;">0</div><div style="font-size: 11px; opacity: 0.7; text-transform: uppercase;">Warnings</div></div>
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px; text-align: center;"><div id="seo-errors" style="font-size: 24px; font-weight: bold; color: #ef4444;">0</div><div style="font-size: 11px; opacity: 0.7; text-transform: uppercase;">Errors</div></div>
+        <div style="background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 8px; padding: 12px; text-align: center;"><div id="seo-info" style="font-size: 24px; font-weight: bold; color: #60a5fa;">0</div><div style="font-size: 11px; opacity: 0.7; text-transform: uppercase;">Info</div></div>
+      </div>
+      <!-- Page Vitals -->
+      <div id="seo-vitals" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">📊 Page Vitals</div><div id="vitals-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;"></div></div>
+      <!-- Quick Wins -->
+      <div id="seo-quickwins" style="background: rgba(74, 222, 128, 0.05); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid rgba(74, 222, 128, 0.2);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #4ade80;">⚡ Quick Wins</div><div id="quickwins-list" style="display: flex; flex-direction: column; gap: 6px;"></div></div>
+      <!-- Completeness -->
+      <div id="seo-completeness" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">📈 Completeness</div><div id="completeness-bars" style="display: grid; gap: 10px;"></div></div>
+      <!-- Title & Description -->
+      <div id="seo-meta-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">🏷️ Title & Description</div><div id="meta-analysis"></div></div>
+      <!-- Social Preview -->
+      <div id="seo-social-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">📱 Social Preview</div><div id="social-preview" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;"></div></div>
+      <!-- Headings Structure -->
+      <div id="seo-headings-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">📑 Headings Structure</div><div id="headings-tree"></div></div>
+      <!-- Keywords Cloud -->
+      <div id="seo-keywords-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">🔑 Top Keywords</div><div id="keywords-cloud" style="display: flex; flex-wrap: wrap; gap: 8px;"></div></div>
+      <!-- Content Analysis -->
+      <div id="seo-content-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">📝 Content Analysis</div><div id="content-metrics" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;"></div></div>
+      <!-- Links Analysis -->
+      <div id="seo-links-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">🔗 Links Analysis</div><div id="links-metrics" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;"></div></div>
+      <!-- Images Analysis -->
+      <div id="seo-images-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">🖼️ Images Analysis</div><div id="images-metrics" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;"></div></div>
+      <!-- Technical SEO -->
+      <div id="seo-technical-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">⚙️ Technical SEO</div><div id="technical-checks"></div></div>
+      <!-- Structured Data -->
+      <div id="seo-schema-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">🧬 Structured Data</div><div id="schema-info"></div></div>
+      <!-- Issues by Category -->
+      <div id="seo-issues-section" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">🚨 All Issues</div><div id="seo-issues" style="display: flex; flex-direction: column; gap: 8px;"></div></div>
+      <!-- All Checks by Category -->
+      <div id="seo-all-checks" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">📋 All Checks by Category</div><div id="checks-by-category"></div></div>
+      <!-- Rules Engine Info -->
+      <div id="seo-engine-info" style="background: rgba(255,138,0,0.05); border-radius: 8px; padding: 12px 15px; border: 1px solid rgba(255,138,0,0.2);"><div style="font-size: 12px; opacity: 0.8;"><span style="color: #ff8a00; font-weight: 600;">Recker SEO Engine</span> — Powered by 400+ SEO rules across 25+ categories. Only applicable rules are shown for each page. <a href="#/seo/overview" style="color: #60a5fa;">Learn more</a></div></div>
+    </div>
+    <div id="seo-placeholder" style="text-align: center; padding: 60px 20px; color: var(--text-color); opacity: 0.5;"><div style="font-size: 48px; margin-bottom: 15px;">🔍</div><div>Enter a URL above to analyze its SEO</div></div>
+  </div>
+  <div id="mode-chat" style="display: none; padding: 20px;">
+    <div style="margin-bottom: 10px;"><input type="password" id="ai-key" style="width: 100%; padding: 10px 12px; border-radius: 6px; background: var(--code-background-color); color: var(--text-color); border: 1px solid var(--border-color); font-size: 14px;" placeholder="Enter OpenAI API Key (sk-...) to activate" onchange="window.saveKey()"></div>
+    <div id="chat-history" style="height: 350px; overflow-y: auto; background: var(--code-background-color); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px;"><div style="color: #888; text-align: center; margin-top: 130px;">Enter your API key above and say hello!</div></div>
+    <div style="display: flex; gap: 10px;"><input type="text" id="chat-input" style="flex: 1; padding: 10px 12px; border-radius: 6px; background: var(--code-background-color); color: var(--text-color); border: 1px solid var(--border-color); font-size: 14px;" placeholder="Type a message..." onkeydown="if(event.key === 'Enter') window.sendChat()"><button onclick="window.sendChat()" style="padding: 10px 20px; background: linear-gradient(135deg, #ff8a00, #ff6b00); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Send</button></div>
+  </div>
+</div>
+`;
+
     window.$docsify.plugins = [].concat(function(hook) {
+      // Inject playground HTML after page render
+      hook.doneEach(function() {
+        const root = document.getElementById('playground-root');
+        if (root && !root.innerHTML.includes('playground-container')) {
+          root.innerHTML = PLAYGROUND_HTML;
+          // Initialize drop zone
+          initDropZone();
+        }
+      });
+
       hook.afterEach(function(html) {
         const footer = `
           <footer style="margin-top: 50px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 14px; color: #888; text-align: center;">
@@ -417,6 +562,25 @@
         return html + footer;
       });
     }, window.$docsify.plugins || []);
+
+    function initDropZone() {
+      const dropZone = document.getElementById('drop-zone');
+      if (dropZone) {
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.style.background = 'rgba(255, 138, 0, 0.1)';
+        });
+        dropZone.addEventListener('dragleave', (e) => {
+          e.preventDefault();
+          dropZone.style.background = 'transparent';
+        });
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.style.background = 'transparent';
+          window.handleFileSelect(e.dataTransfer.files);
+        });
+      }
+    }
   </script>
   <!-- Recker Browser SDK -->
   <script src="./static/recker.min.js"></script>
@@ -440,25 +604,6 @@
       }
     };
 
-    // Initialize Drop Zone
-    setTimeout(() => {
-      const dropZone = document.getElementById('drop-zone');
-      if (dropZone) {
-        dropZone.addEventListener('dragover', (e) => {
-          e.preventDefault();
-          dropZone.style.background = 'rgba(255, 138, 0, 0.1)';
-        });
-        dropZone.addEventListener('dragleave', (e) => {
-          e.preventDefault();
-          dropZone.style.background = 'transparent';
-        });
-        dropZone.addEventListener('drop', (e) => {
-          e.preventDefault();
-          dropZone.style.background = 'transparent';
-          window.handleFileSelect(e.dataTransfer.files);
-        });
-      }
-    }, 1000);
 
     // ===== Preset Definitions =====
     const PRESETS = {
@@ -914,6 +1059,7 @@
       const useProxy = document.getElementById('seo-proxy')?.checked ?? true;
       const resultsDiv = document.getElementById('seo-results');
       const placeholder = document.getElementById('seo-placeholder');
+      const analyzeBtn = document.getElementById('seo-analyze-btn');
 
       if (!urlInput || !resultsDiv) return;
 
@@ -922,28 +1068,60 @@
       if (!url.startsWith('http')) url = 'https://' + url;
 
       // Show loading
-      if (placeholder) placeholder.innerHTML = '<div style="font-size: 48px; margin-bottom: 15px;">⏳</div><div>Analyzing...</div>';
+      if (placeholder) placeholder.innerHTML = '<div style="font-size: 48px; margin-bottom: 15px;">⏳</div><div>Running 400+ SEO rules engine...</div>';
+      if (analyzeBtn) analyzeBtn.disabled = true;
 
       try {
         const start = performance.now();
+        let html = '';
 
-        let fetchUrl = url;
         if (useProxy) {
-          fetchUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+          // Try multiple CORS proxies in order
+          const proxies = [
+            'https://api.allorigins.win/raw?url=',
+            'https://corsproxy.io/?',
+          ];
+          let lastError = null;
+
+          for (const proxy of proxies) {
+            try {
+              const proxyUrl = proxy + encodeURIComponent(url);
+              const res = await recker.get(proxyUrl);
+              html = await res.text();
+              // Verify we got real HTML (not an error page)
+              if (html && (html.includes('<body') || html.includes('<html') || html.includes('<!DOCTYPE'))) {
+                console.log('Using proxy:', proxy);
+                break;
+              }
+              html = ''; // Reset if not valid HTML
+            } catch (e) {
+              lastError = e;
+              console.warn('Proxy failed:', proxy, e.message);
+            }
+          }
+
+          if (!html) {
+            throw lastError || new Error('All CORS proxies failed');
+          }
+        } else {
+          const res = await recker.get(url);
+          html = await res.text();
         }
 
-        const res = await recker.get(fetchUrl);
-        const html = await res.text();
-
+        console.log('HTML length:', html.length, 'Has body:', html.includes('<body'));
         const report = await recker.seo(html, { baseUrl: url });
         const duration = Math.round(performance.now() - start);
+        console.log('SEO Report:', report);
+        console.log('Content wordCount:', report.content?.wordCount);
 
         // Hide placeholder, show results
         if (placeholder) placeholder.style.display = 'none';
         resultsDiv.style.display = 'block';
 
-        // Grade Badge
+        // Grade Colors
         const gradeColors = { A: '#4ade80', B: '#a3e635', C: '#fbbf24', D: '#f97316', F: '#ef4444' };
+
+        // Grade Badge
         const gradeBadge = document.getElementById('seo-grade-badge');
         if (gradeBadge) {
           gradeBadge.textContent = report.grade;
@@ -957,12 +1135,8 @@
         // Summary
         const summaryEl = document.getElementById('seo-summary');
         if (summaryEl) {
-          summaryEl.textContent = `${report.title?.text || 'No title'} • ${report.metaDescription?.text?.slice(0, 60) || 'No description'}...`;
+          summaryEl.innerHTML = `<a href="${url}" target="_blank" style="color: #60a5fa; text-decoration: none;">${url}</a>`;
         }
-
-        // Timing
-        const timingEl = document.getElementById('seo-timing');
-        if (timingEl) timingEl.textContent = `Analyzed in ${duration}ms`;
 
         // Stats
         const checks = report.checks || [];
@@ -970,11 +1144,47 @@
         const warnings = checks.filter(c => c.status === 'warn').length;
         const errors = checks.filter(c => c.status === 'fail').length;
         const info = checks.filter(c => c.status === 'info').length;
+        const totalChecks = checks.length;
 
+        // Count categories
+        const categoriesSet = new Set(checks.map(c => c.category));
+        const categoriesCount = categoriesSet.size;
+
+        // Timing - show total prominently
+        const timingEl = document.getElementById('seo-timing');
+        if (timingEl) timingEl.innerHTML = `<span style="font-size: 20px; font-weight: bold; color: #ff8a00;">${totalChecks}</span> checks<br><span style="font-size: 11px; opacity: 0.7;">${categoriesCount} categories • ${duration}ms</span>`;
+
+        document.getElementById('seo-total').textContent = totalChecks;
         document.getElementById('seo-passed').textContent = passed;
         document.getElementById('seo-warnings').textContent = warnings;
         document.getElementById('seo-errors').textContent = errors;
         document.getElementById('seo-info').textContent = info;
+
+        // Page Vitals
+        const vitalsGrid = document.getElementById('vitals-grid');
+        if (vitalsGrid && report.summary?.vitals) {
+          const v = report.summary.vitals;
+          const wordCountWarning = v.wordCount === 0 ? '<div style="grid-column: span 3; background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.3); border-radius: 6px; padding: 8px; font-size: 11px; color: #fbbf24;">⚠️ 0 words detected. This page may be JavaScript-rendered (SPA). The SEO analyzer can only see server-side HTML.</div>' : '';
+          vitalsGrid.innerHTML = `
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: ${v.wordCount > 0 ? '#60a5fa' : '#ef4444'};">${v.wordCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Words</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: #c084fc;">${v.readingTime || 0} min</div><div style="font-size: 10px; opacity: 0.7;">Reading Time</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: #f472b6;">${v.imageCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Images</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: #4ade80;">${v.linkCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Links</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: #fbbf24;">${v.domElements || 0}</div><div style="font-size: 10px; opacity: 0.7;">DOM Elements</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 18px; font-weight: bold; color: #ff8a00;">${((v.htmlSize || 0) / 1024).toFixed(1)} KB</div><div style="font-size: 10px; opacity: 0.7;">HTML Size</div></div>
+            ${wordCountWarning}
+          `;
+        }
+
+        // Quick Wins
+        const quickwinsDiv = document.getElementById('quickwins-list');
+        const quickwinsSection = document.getElementById('seo-quickwins');
+        if (quickwinsDiv && report.summary?.quickWins?.length > 0) {
+          quickwinsSection.style.display = 'block';
+          quickwinsDiv.innerHTML = report.summary.quickWins.map(qw => `<div style="font-size: 13px; padding: 6px 10px; background: rgba(74,222,128,0.1); border-radius: 4px;">✅ ${qw}</div>`).join('');
+        } else if (quickwinsSection) {
+          quickwinsSection.style.display = 'none';
+        }
 
         // Completeness bars
         const completenessDiv = document.getElementById('completeness-bars');
@@ -984,49 +1194,189 @@
             { key: 'social', label: 'Social', color: '#60a5fa' },
             { key: 'technical', label: 'Technical', color: '#4ade80' },
             { key: 'content', label: 'Content', color: '#c084fc' },
-            { key: 'images', label: 'Images', color: '#f472b6' }
+            { key: 'images', label: 'Images', color: '#f472b6' },
+            { key: 'links', label: 'Links', color: '#fbbf24' }
           ];
-
           completenessDiv.innerHTML = categories.map(cat => {
             const value = report.summary.completeness[cat.key] || 0;
-            return `
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="width: 80px; font-size: 12px; opacity: 0.8;">${cat.label}</span>
-                <div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-                  <div style="width: ${value}%; height: 100%; background: ${cat.color}; border-radius: 4px; transition: width 0.5s;"></div>
-                </div>
-                <span style="width: 40px; text-align: right; font-size: 12px; font-weight: 600;">${value}%</span>
-              </div>
-            `;
+            return `<div style="display: flex; align-items: center; gap: 10px;"><span style="width: 80px; font-size: 12px; opacity: 0.8;">${cat.label}</span><div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;"><div style="width: ${value}%; height: 100%; background: ${cat.color}; border-radius: 4px; transition: width 0.5s;"></div></div><span style="width: 40px; text-align: right; font-size: 12px; font-weight: 600;">${value}%</span></div>`;
           }).join('');
+        }
+
+        // Title & Description
+        const metaDiv = document.getElementById('meta-analysis');
+        if (metaDiv) {
+          const title = report.title;
+          const desc = report.metaDescription;
+          const titleLen = title?.length || 0;
+          const descLen = desc?.length || 0;
+          const titleColor = titleLen >= 30 && titleLen <= 60 ? '#4ade80' : titleLen > 0 ? '#fbbf24' : '#ef4444';
+          const descColor = descLen >= 120 && descLen <= 160 ? '#4ade80' : descLen > 0 ? '#fbbf24' : '#ef4444';
+          metaDiv.innerHTML = `
+            <div style="margin-bottom: 12px;"><div style="font-size: 11px; opacity: 0.6; margin-bottom: 4px;">TITLE <span style="color: ${titleColor};">(${titleLen}/60 chars)</span></div><div style="font-size: 14px; padding: 8px 10px; background: rgba(255,255,255,0.05); border-radius: 4px; border-left: 3px solid ${titleColor};">${title?.text || '<em style="opacity:0.5;">No title found</em>'}</div></div>
+            <div><div style="font-size: 11px; opacity: 0.6; margin-bottom: 4px;">META DESCRIPTION <span style="color: ${descColor};">(${descLen}/160 chars)</span></div><div style="font-size: 13px; padding: 8px 10px; background: rgba(255,255,255,0.05); border-radius: 4px; border-left: 3px solid ${descColor};">${desc?.text || '<em style="opacity:0.5;">No description found</em>'}</div></div>
+          `;
+        }
+
+        // Social Preview
+        const socialDiv = document.getElementById('social-preview');
+        if (socialDiv) {
+          const og = report.openGraph || {};
+          const tw = report.twitterCard || {};
+          socialDiv.innerHTML = `
+            <div style="background: rgba(0,0,0,0.2); border-radius: 8px; overflow: hidden;"><div style="font-size: 10px; padding: 6px 10px; background: #1877f2; color: white;">Facebook / OpenGraph</div><div style="padding: 10px;">${og.image ? `<div style="height: 80px; background: url('${og.image}') center/cover; border-radius: 4px; margin-bottom: 8px;"></div>` : ''}<div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${og.title || '<em style="opacity:0.5;">No og:title</em>'}</div><div style="font-size: 11px; opacity: 0.7;">${og.description?.slice(0, 100) || '<em>No og:description</em>'}...</div></div></div>
+            <div style="background: rgba(0,0,0,0.2); border-radius: 8px; overflow: hidden;"><div style="font-size: 10px; padding: 6px 10px; background: #1da1f2; color: white;">Twitter Card</div><div style="padding: 10px;">${tw.image ? `<div style="height: 80px; background: url('${tw.image}') center/cover; border-radius: 4px; margin-bottom: 8px;"></div>` : ''}<div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${tw.title || '<em style="opacity:0.5;">No twitter:title</em>'}</div><div style="font-size: 11px; opacity: 0.7;">${tw.description?.slice(0, 100) || '<em>No twitter:description</em>'}...</div><div style="font-size: 10px; opacity: 0.5; margin-top: 4px;">Card: ${tw.card || 'none'}</div></div></div>
+          `;
+        }
+
+        // Headings Structure
+        const headingsDiv = document.getElementById('headings-tree');
+        if (headingsDiv && report.headings) {
+          const h = report.headings;
+          const issues = h.issues?.length > 0 ? `<div style="color: #fbbf24; font-size: 11px; margin-bottom: 8px;">⚠️ ${h.issues.join(' | ')}</div>` : '';
+          const renderHeadings = (headings) => headings.map(heading => {
+            const indent = Math.min((heading.level - 1) * 12, 48);
+            const colors = { 1: '#ef4444', 2: '#fbbf24', 3: '#4ade80', 4: '#60a5fa', 5: '#c084fc', 6: '#f472b6' };
+            const safeText = (heading.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `<div style="margin-left: ${indent}px; padding: 4px 8px; margin-bottom: 2px; background: rgba(255,255,255,0.03); border-left: 3px solid ${colors[heading.level]}; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="color: ${colors[heading.level]}; font-weight: bold;">H${heading.level}</span> ${safeText.slice(0, 80)}${safeText.length > 80 ? '...' : ''}</div>`;
+          }).join('') || '<div style="opacity: 0.5;">No headings found</div>';
+          const allHeadings = h.structure || [];
+          headingsDiv.innerHTML = `${issues}<div style="font-size: 11px; opacity: 0.6; margin-bottom: 8px;">H1: ${h.h1Count} | Total: ${allHeadings.length} | Hierarchy: ${h.hasProperHierarchy ? '✅' : '❌'}</div><div style="overflow-x: hidden;">${renderHeadings(allHeadings)}</div>`;
         }
 
         // Keywords cloud
         const keywordsDiv = document.getElementById('keywords-cloud');
-        if (keywordsDiv && report.keywords) {
-          const topKeywords = report.keywords.slice(0, 15);
-          keywordsDiv.innerHTML = topKeywords.map((kw, i) => {
-            const size = Math.max(12, 20 - i);
-            const opacity = Math.max(0.5, 1 - i * 0.05);
-            return `<span style="background: rgba(255,138,0,0.15); color: #ff8a00; padding: 4px 10px; border-radius: 20px; font-size: ${size}px; opacity: ${opacity};">${kw.keyword} <span style="opacity:0.6; font-size:10px;">${kw.count}</span></span>`;
-          }).join('');
+        if (keywordsDiv && report.keywords?.topKeywords) {
+          const allKeywords = report.keywords.topKeywords;
+          if (allKeywords.length === 0) {
+            keywordsDiv.innerHTML = '<div style="opacity: 0.5;">No keywords extracted</div>';
+          } else {
+            const showKeywords = (max) => allKeywords.slice(0, max).map((kw, i) => {
+              const size = Math.max(11, 16 - Math.floor(i / 3));
+              const opacity = Math.max(0.6, 1 - i * 0.02);
+              return `<span style="background: rgba(255,138,0,0.15); color: #ff8a00; padding: 4px 10px; border-radius: 20px; font-size: ${size}px; opacity: ${opacity};">${kw.word} <span style="opacity:0.6; font-size:10px;">${kw.count}</span></span>`;
+            }).join('');
+            const showMoreBtn = allKeywords.length > 25 ? `<button id="show-more-kw" onclick="document.getElementById('keywords-cloud').innerHTML = '${showKeywords(50).replace(/'/g, "\\'")}'; document.getElementById('show-more-kw')?.remove();" style="background: rgba(255,138,0,0.2); color: #ff8a00; border: none; padding: 4px 12px; border-radius: 20px; cursor: pointer; font-size: 11px;">+${allKeywords.length - 25} more</button>` : '';
+            keywordsDiv.innerHTML = showKeywords(25) + showMoreBtn;
+          }
+        }
+
+        // Content Analysis
+        const contentDiv = document.getElementById('content-metrics');
+        if (contentDiv && report.content) {
+          const c = report.content;
+          contentDiv.innerHTML = `
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold;">${c.wordCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Words</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold;">${c.sentenceCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Sentences</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold;">${c.paragraphCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Paragraphs</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold;">${c.listCount || 0}</div><div style="font-size: 10px; opacity: 0.7;">Lists</div></div>
+          `;
+        }
+
+        // Links Analysis
+        const linksDiv = document.getElementById('links-metrics');
+        if (linksDiv && report.links) {
+          const l = report.links;
+          linksDiv.innerHTML = `
+            <div style="text-align: center; padding: 8px; background: rgba(74,222,128,0.1); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold; color: #4ade80;">${l.internal || 0}</div><div style="font-size: 10px; opacity: 0.7;">Internal</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(96,165,250,0.1); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold; color: #60a5fa;">${l.external || 0}</div><div style="font-size: 10px; opacity: 0.7;">External</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(251,191,36,0.1); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold; color: #fbbf24;">${l.nofollow || 0}</div><div style="font-size: 10px; opacity: 0.7;">Nofollow</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(239,68,68,0.1); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold; color: #ef4444;">${l.withoutText || 0}</div><div style="font-size: 10px; opacity: 0.7;">Empty</div></div>
+          `;
+        }
+
+        // Images Analysis
+        const imagesDiv = document.getElementById('images-metrics');
+        if (imagesDiv && report.images) {
+          const img = report.images;
+          imagesDiv.innerHTML = `
+            <div style="text-align: center; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold;">${img.total || 0}</div><div style="font-size: 10px; opacity: 0.7;">Total</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(74,222,128,0.1); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold; color: #4ade80;">${img.withAlt || 0}</div><div style="font-size: 10px; opacity: 0.7;">With Alt</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(239,68,68,0.1); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold; color: #ef4444;">${img.withoutAlt || 0}</div><div style="font-size: 10px; opacity: 0.7;">No Alt</div></div>
+            <div style="text-align: center; padding: 8px; background: rgba(96,165,250,0.1); border-radius: 6px;"><div style="font-size: 16px; font-weight: bold; color: #60a5fa;">${img.lazy || 0}</div><div style="font-size: 10px; opacity: 0.7;">Lazy Load</div></div>
+          `;
+        }
+
+        // Technical SEO
+        const technicalDiv = document.getElementById('technical-checks');
+        if (technicalDiv && report.technical) {
+          const t = report.technical;
+          const check = (val, label) => `<div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(255,255,255,0.05); border-radius: 4px; font-size: 12px; margin: 2px;">${val ? '✅' : '❌'} ${label}</div>`;
+          technicalDiv.innerHTML = `
+            ${check(t.hasCanonical, 'Canonical')}
+            ${check(t.hasViewport, 'Viewport')}
+            ${check(t.hasCharset, 'Charset')}
+            ${check(t.hasLang, 'Lang: ' + (t.langValue || 'none'))}
+            ${check(t.hasRobotsMeta, 'Robots Meta')}
+            ${t.canonicalUrl ? `<div style="margin-top: 8px; font-size: 11px; opacity: 0.7;">Canonical: <a href="${t.canonicalUrl}" target="_blank" style="color: #60a5fa;">${t.canonicalUrl.slice(0, 50)}...</a></div>` : ''}
+          `;
+        }
+
+        // Structured Data
+        const schemaDiv = document.getElementById('schema-info');
+        if (schemaDiv && report.structuredData) {
+          const sd = report.structuredData;
+          if (sd.count > 0) {
+            schemaDiv.innerHTML = `
+              <div style="font-size: 13px; margin-bottom: 8px;"><span style="color: #4ade80;">✅</span> Found ${sd.count} JSON-LD block(s)</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px;">${sd.types.map(type => `<span style="background: rgba(192,132,252,0.15); color: #c084fc; padding: 4px 10px; border-radius: 4px; font-size: 12px;">${type}</span>`).join('')}</div>
+            `;
+          } else {
+            schemaDiv.innerHTML = '<div style="opacity: 0.5; font-size: 13px;">❌ No structured data found</div>';
+          }
         }
 
         // Issues
         const issuesDiv = document.getElementById('seo-issues');
         if (issuesDiv) {
-          const issues = checks.filter(c => c.status === 'fail' || c.status === 'warn').slice(0, 10);
+          const issues = checks.filter(c => c.status === 'fail' || c.status === 'warn');
           if (issues.length === 0) {
             issuesDiv.innerHTML = '<div style="color: #4ade80; text-align: center; padding: 20px;">✅ All checks passed!</div>';
           } else {
-            issuesDiv.innerHTML = issues.map(issue => {
-              const icon = issue.status === 'fail' ? '❌' : '⚠️';
-              const bgColor = issue.status === 'fail' ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)';
-              return `<div style="background: ${bgColor}; padding: 10px 12px; border-radius: 6px; font-size: 13px;">
-                <span style="margin-right: 8px;">${icon}</span>${issue.message}
-              </div>`;
-            }).join('');
+            const renderIssues = (showAll) => {
+              const displayIssues = showAll ? issues : issues.slice(0, 20);
+              const issuesHtml = displayIssues.map(issue => {
+                const icon = issue.status === 'fail' ? '❌' : '⚠️';
+                const bgColor = issue.status === 'fail' ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)';
+                const categoryLabel = issue.category || 'general';
+                return `<div style="background: ${bgColor}; padding: 10px 12px; border-radius: 6px; font-size: 12px;"><div style="display: flex; align-items: flex-start; gap: 8px;"><span>${icon}</span><div style="flex: 1;"><div style="font-weight: 500;">${issue.name || issue.message}</div>${issue.name ? `<div style="opacity: 0.8; margin-top: 2px;">${issue.message}</div>` : ''}<div style="display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap;"><span style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 10px; text-transform: uppercase;">${categoryLabel}</span>${issue.value !== undefined ? `<span style="opacity: 0.6; font-size: 11px;">Value: ${issue.value}</span>` : ''}</div>${issue.recommendation ? `<div style="font-size: 11px; color: #60a5fa; margin-top: 6px;">💡 ${issue.recommendation}</div>` : ''}</div></div></div>`;
+              }).join('');
+              const showMoreBtn = !showAll && issues.length > 20 ? `<button onclick="window.showAllIssues()" style="width: 100%; padding: 10px; background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: inherit; cursor: pointer; font-size: 12px; margin-top: 8px;">Show all ${issues.length} issues</button>` : '';
+              return issuesHtml + showMoreBtn;
+            };
+            window.showAllIssues = () => { issuesDiv.innerHTML = renderIssues(true); };
+            issuesDiv.innerHTML = renderIssues(false);
           }
+        }
+
+        // All Checks by Category
+        const checksDiv = document.getElementById('checks-by-category');
+        if (checksDiv) {
+          const categories = {};
+          checks.forEach(c => {
+            const cat = c.category || 'General';
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(c);
+          });
+          const sortedCats = Object.keys(categories).sort((a, b) => {
+            // Put 'General' at the end
+            if (a === 'General') return 1;
+            if (b === 'General') return -1;
+            return a.localeCompare(b);
+          });
+          checksDiv.innerHTML = sortedCats.map(cat => {
+            const catChecks = categories[cat];
+            const passCount = catChecks.filter(c => c.status === 'pass').length;
+            const warnCount = catChecks.filter(c => c.status === 'warn').length;
+            const failCount = catChecks.filter(c => c.status === 'fail').length;
+            const totalCount = catChecks.length;
+            const catIcon = { 'title': '📝', 'meta': '🏷️', 'og': '📘', 'twitter': '🐦', 'headings': '📑', 'images': '🖼️', 'links': '🔗', 'content': '📄', 'technical': '⚙️', 'security': '🔒', 'mobile': '📱', 'structured-data': '🧬', 'performance': '⚡', 'accessibility': '♿', 'i18n': '🌐', 'social': '📱', 'crawl': '🕷️', 'General': '📋' }[cat] || '📋';
+            return `<details style="margin-bottom: 8px;"><summary style="cursor: pointer; padding: 10px 12px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;"><span style="font-weight: 600;">${catIcon} ${cat}</span> <span style="display: flex; gap: 8px; font-size: 11px;"><span style="color: #4ade80;">✅${passCount}</span>${warnCount > 0 ? `<span style="color: #fbbf24;">⚠️${warnCount}</span>` : ''}${failCount > 0 ? `<span style="color: #ef4444;">❌${failCount}</span>` : ''}<span style="opacity: 0.5;">${totalCount} total</span></span></summary><div style="padding: 10px; font-size: 12px;">${catChecks.map(c => {
+              const icon = c.status === 'pass' ? '✅' : c.status === 'fail' ? '❌' : c.status === 'warn' ? '⚠️' : 'ℹ️';
+              const opacity = c.status === 'pass' ? '0.6' : '1';
+              return `<div style="padding: 6px 8px; margin-bottom: 4px; background: rgba(255,255,255,0.02); border-radius: 4px; opacity: ${opacity};">${icon} <strong>${c.name || 'Check'}</strong><div style="font-size: 11px; opacity: 0.8; margin-top: 2px;">${c.message}</div>${c.recommendation ? `<div style="font-size: 10px; color: #60a5fa; margin-top: 4px;">💡 ${c.recommendation}</div>` : ''}${c.value !== undefined ? `<div style="font-size: 10px; opacity: 0.5; margin-top: 2px;">Value: ${c.value}</div>` : ''}</div>`;
+            }).join('')}</div></details>`;
+          }).join('');
         }
 
       } catch (err) {
@@ -1036,6 +1386,8 @@
         }
         resultsDiv.style.display = 'none';
         console.error(err);
+      } finally {
+        if (analyzeBtn) analyzeBtn.disabled = false;
       }
     };
 

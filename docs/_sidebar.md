@@ -29,9 +29,40 @@
   - [Mini Client](/mini/01-overview.md)
   - [Browser](/browser/01-quickstart.md)
 
-- **Media Download**
-  - [Video Extractors](/media/01-video-extractors.md)
-  - [Live Streams](/media/02-live-streams.md)
+- **AI & LLMs**
+  - [Overview](/ai/01-overview.md)
+  - [Streaming](/ai/02-streaming.md)
+  - [Providers](/ai/03-providers.md)
+  - [Patterns](/ai/04-patterns.md)
+  - [Vector Store](/ai/05-vector-store.md)
+  - [MCP Client](/ai/06-mcp-client.md)
+  - [MCP Server](/ai/07-mcp-server.md)
+
+- **Plugins**
+  - [Overview](/plugins/00-overview.md)
+  - [Memory Cache](/plugins/01-memory-cache.md)
+  - [Retry](/plugins/02-retry.md)
+  - [Circuit Breaker](/plugins/03-circuit-breaker.md)
+  - [Cache](/plugins/04-cache.md)
+  - [Dedup](/plugins/05-dedup.md)
+  - [Auth](/plugins/06-auth.md)
+  - [Logger](/plugins/07-logger.md)
+  - [Cookie Jar](/plugins/08-cookie-jar.md)
+  - [Rate Limit](/plugins/09-rate-limit.md)
+  - [Certificate Pinning](/plugins/10-certificate-pinning.md)
+  - [YAML](/plugins/19-yaml.md)
+  - [CSV](/plugins/20-csv.md)
+
+- **Protocols**
+  - [WebSocket](/protocols/01-websocket.md)
+  - [FTP & SFTP](/protocols/02-ftp-sftp.md)
+  - [Telnet](/protocols/03-telnet.md)
+  - [DNS](/protocols/04-dns.md)
+  - [WHOIS & RDAP](/protocols/05-whois-rdap.md)
+  - [SSE](/protocols/06-sse.md)
+  - [Enterprise](/protocols/07-enterprise.md)
+  - [HLS](/protocols/08-hls.md)
+  - [UDP SDK](/protocols/09-udp.md)
 
 - **Scraping**
   - [Overview](/scraping/01-overview.md)
@@ -50,31 +81,7 @@
   - [Categories](/seo/06-categories.md)
   - [CI/CD](/seo/07-cicd.md)
 
-- **Plugins**
-  - [Overview](/plugins/00-overview.md)
-  - [Memory Cache](/plugins/01-memory-cache.md)
-  - [Retry](/plugins/02-retry.md)
-  - [Circuit Breaker](/plugins/03-circuit-breaker.md)
-  - [Cache](/plugins/04-cache.md)
-  - [Dedup](/plugins/05-dedup.md)
-  - [Auth](/plugins/06-auth.md)
-  - [Logger](/plugins/07-logger.md)
-  - [Cookie Jar](/plugins/08-cookie-jar.md)
-  - [Rate Limit](/plugins/09-rate-limit.md)
-  - [Certificate Pinning](/plugins/10-certificate-pinning.md)
-  - [YAML](/plugins/19-yaml.md)
-  - [CSV](/plugins/20-csv.md)
-
-- **AI & LLM**
-  - [Overview](/ai/01-overview.md)
-  - [Streaming](/ai/02-streaming.md)
-  - [Providers](/ai/03-providers.md)
-  - [Patterns](/ai/04-patterns.md)
-  - [Vector Store](/ai/05-vector-store.md)
-  - [MCP Client](/ai/06-mcp-client.md)
-  - [MCP Server](/ai/07-mcp-server.md)
-
-- **CLI Tool**
+- **CLI**
   - [Overview](/cli/01-overview.md)
   - [Quick Start](/cli/02-quick-start.md)
   - [Interactive Shell](/cli/03-shell.md)
@@ -85,16 +92,9 @@
   - [Mock Servers](/cli/08-mock-servers.md)
   - [Video & Live](/cli/09-video-live.md)
 
-- **Protocols**
-  - [WebSocket](/protocols/01-websocket.md)
-  - [FTP & SFTP](/protocols/02-ftp-sftp.md)
-  - [Telnet](/protocols/03-telnet.md)
-  - [DNS](/protocols/04-dns.md)
-  - [WHOIS & RDAP](/protocols/05-whois-rdap.md)
-  - [SSE](/protocols/06-sse.md)
-  - [Enterprise](/protocols/07-enterprise.md)
-  - [HLS](/protocols/08-hls.md)
-  - [UDP SDK](/protocols/09-udp.md)
+- **Media**
+  - [Video Extractors](/media/01-video-extractors.md)
+  - [Live Streams](/media/02-live-streams.md)
 
 - **Reference**
   - [API Reference](/reference/01-api.md)
