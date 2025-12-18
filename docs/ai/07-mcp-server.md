@@ -1,8 +1,8 @@
 # MCP Server
 
-Recker includes a built-in MCP Server that exposes documentation, network, security, scraping, and SEO tools to AI agents like Claude Code, Cursor, and other AI-powered tools.
+Recker includes a built-in MCP Server that exposes **57 tools** across 12 categories to AI agents like Claude Code, Cursor, and other AI-powered tools.
 
-> **TL;DR**: Run `rek mcp` and add the configuration to your AI tool to get access to 18 powerful tools.
+> **TL;DR**: Run `rek mcp` and add the configuration to your AI tool to get access to 57 powerful tools.
 
 ## Quick Start
 
@@ -12,92 +12,123 @@ Recker includes a built-in MCP Server that exposes documentation, network, secur
 # Start in stdio mode (for Claude Code, Cursor)
 rek mcp
 
+# With a specific profile
+rek mcp --profile=minimal
+
+# Combine profiles
+rek mcp --profile=minimal,video,ai
+
 # Start HTTP server
-rek mcp transport=http port=3100
+rek mcp --transport=http --port=3100
 
 # Start with SSE support
-rek mcp transport=sse port=3100
+rek mcp --transport=sse --port=3100
 
 # Enable debug logging
-rek mcp debug
-```
-
-### Tool Filtering
-
-Control which tools are available to AI agents using command-line options:
-
-```bash
-# Disable documentation tools (search, get, examples, schema, suggest)
-rek mcp nodocs
-
-# Disable HTTP request tool
-rek mcp nohttp
-
-# Disable all network tools (http, dns, whois, ping)
-rek mcp nonetwork
-
-# Disable security tools (tls, rdap, geoip, security headers, dns toolkit)
-rek mcp nosecurity
-
-# Disable SEO tools (analyze, spider, quick wins)
-rek mcp noseo
-
-# Disable scraping tool
-rek mcp noscrape
-
-# Disable specific tools
-rek mcp nodns nowhois
-
-# Only enable specific tools (exclusive mode)
-rek mcp only=rek_search_docs,rek_get_doc,rek_seo_analyze
-
-# Custom filter patterns (glob-style)
-rek mcp filter="rek_*_docs,!rek_http_*"
-```
-
-**Available Options:**
-
-| Option | Effect |
-|--------|--------|
-| `nodocs` | Disable `rek_search_docs`, `rek_get_doc`, `rek_code_examples`, `rek_api_schema`, `rek_suggest` |
-| `nohttp` | Disable `rek_http_request` |
-| `nodns` | Disable `rek_dns_lookup` |
-| `nowhois` | Disable `rek_whois_lookup` |
-| `noping` | Disable `rek_network_ping` |
-| `nonetwork` | Disable all network tools (http, dns, whois, ping) |
-| `nosecurity` | Disable all security tools (tls, rdap, geoip, security headers, dns toolkit) |
-| `noseo` | Disable all SEO tools (analyze, spider, quick wins) |
-| `noscrape` | Disable `rek_scrape` |
-| `only=<tools>` | Only enable specified tools (comma-separated) |
-| `filter=<patterns>` | Custom glob patterns (prefix with `!` to exclude) |
-
-**Use Cases:**
-
-```bash
-# Documentation-only mode (no network operations)
-rek mcp nonetwork nosecurity noseo noscrape
-
-# Network tools only (no docs, for testing)
-rek mcp nodocs nosecurity noseo noscrape
-
-# SEO audit mode
-rek mcp only=rek_seo_analyze,rek_seo_spider,rek_seo_quick_wins,rek_scrape
-
-# Minimal mode for security-conscious environments
-rek mcp only=rek_search_docs,rek_get_doc
+rek mcp --debug
 ```
 
 ### Programmatic Usage
 
 ```typescript
-import { createMCPServer } from 'recker/mcp';
+import { MCPServer } from 'recker/mcp';
 
-const server = createMCPServer({
+const server = new MCPServer({
   transport: 'http',
-  port: 3100
+  port: 3100,
+  profile: 'full'
 });
 
 await server.start();
+```
+
+## Profiles
+
+Profiles allow you to control which tools are exposed to AI agents. This is useful for:
+
+- **Reducing context size**: AI models have limited context windows
+- **Security**: Only expose necessary tools
+- **Focus**: Limit tools to specific tasks
+
+### Available Profiles
+
+| Profile | Tools | Est. Tokens | Description |
+|---------|-------|-------------|-------------|
+| `minimal` | 6 | ~1800 | Core docs + basic network |
+| `docs` | 5 | ~1500 | Documentation tools only |
+| `network` | 4 | ~1200 | HTTP, DNS, WHOIS, Ping |
+| `dns` | 9 | ~2700 | All DNS tools |
+| `security` | 5 | ~1500 | TLS, RDAP, GeoIP, security headers |
+| `seo` | 3 | ~900 | SEO analysis tools |
+| `scrape` | 1 | ~300 | Web scraping |
+| `video` | 5 | ~1500 | Video/audio extraction |
+| `ai` | 4 | ~1200 | AI providers |
+| `protocols` | 7 | ~2100 | FTP, SFTP, Telnet, WebSocket |
+| `parsing` | 10 | ~3000 | GraphQL, JSON-RPC, CSV, YAML, XML |
+| `streaming` | 3 | ~900 | HLS streaming |
+| `full` | 57 | ~18000 | All tools |
+
+### Profile Tools
+
+**minimal** (6 tools):
+- `rek_search_docs`, `rek_get_doc`, `rek_ip_lookup`, `rek_http_request`, `rek_dns`, `rek_ping`
+
+**docs** (5 tools):
+- `rek_search_docs`, `rek_get_doc`, `rek_code_examples`, `rek_api_schema`, `rek_suggest`
+
+**network** (4 tools):
+- `rek_http_request`, `rek_dns`, `rek_whois`, `rek_ping`
+
+**dns** (9 tools):
+- `rek_dns`, `rek_dns_propagate`, `rek_dns_health`, `rek_dns_spf`, `rek_dns_dmarc`, `rek_dns_dkim`, `rek_dns_dig`, `rek_dns_system`, `rek_dns_toolkit`
+
+**security** (5 tools):
+- `rek_tls`, `rek_tls_inspect`, `rek_rdap`, `rek_rdap_lookup`, `rek_geoip_lookup`, `rek_security_headers`
+
+**seo** (3 tools):
+- `rek_seo_analyze`, `rek_seo_spider`, `rek_seo_quick_wins`
+
+**scrape** (1 tool):
+- `rek_scrape`
+
+**video** (5 tools):
+- `rek_video_info`, `rek_video_formats`, `rek_video_check`, `rek_video_extractors`, `rek_video_url`
+
+**ai** (4 tools):
+- `rek_ai_chat`, `rek_ai_embed`, `rek_ai_providers`, `rek_ai_tokens`
+
+**protocols** (7 tools):
+- `rek_ftp_connect`, `rek_ftp_download`, `rek_sftp_connect`, `rek_sftp_download`, `rek_telnet_connect`, `rek_websocket_connect`, `rek_websocket_ping`
+
+**parsing** (10 tools):
+- `rek_graphql_query`, `rek_graphql_introspect`, `rek_jsonrpc_call`, `rek_jsonrpc_batch`, `rek_csv_parse`, `rek_csv_serialize`, `rek_yaml_parse`, `rek_yaml_serialize`, `rek_xml_parse`, `rek_xml_serialize`
+
+**streaming** (3 tools):
+- `rek_hls_info`, `rek_hls_variants`, `rek_hls_download`
+
+### Using Profiles
+
+```bash
+# CLI
+rek mcp --profile=minimal
+rek mcp --profile=minimal,video,ai
+rek mcp --profile=full
+
+# Programmatic
+const server = new MCPServer({ profile: 'minimal,video' });
+```
+
+### Claude Code Configuration with Profiles
+
+```json
+{
+  "mcpServers": {
+    "recker": {
+      "command": "npx",
+      "args": ["recker@latest", "mcp", "--profile=minimal,video"]
+    }
+  }
+}
 ```
 
 ## Transport Modes
@@ -131,22 +162,20 @@ Or add manually to `~/.claude.json`:
 }
 ```
 
-Or with a local installation:
+With a profile:
 
 ```json
 {
   "mcpServers": {
     "recker": {
-      "command": "rek",
-      "args": ["mcp"]
+      "command": "npx",
+      "args": ["recker@latest", "mcp", "--profile=minimal,video,ai"]
     }
   }
 }
 ```
 
 ### Cursor IDE
-
-Add to your Cursor MCP settings:
 
 ```json
 {
@@ -173,32 +202,10 @@ Add to your Cursor MCP settings:
 }
 ```
 
-### OpenAI Codex / ChatGPT
-
-Start the HTTP server and configure:
+### OpenAI / Google Gemini (HTTP)
 
 ```bash
-rek mcp transport=http port=3100
-```
-
-```json
-{
-  "tools": [
-    {
-      "type": "mcp",
-      "mcp": {
-        "url": "http://localhost:3100",
-        "transport": "http"
-      }
-    }
-  ]
-}
-```
-
-### Google Gemini
-
-```bash
-rek mcp transport=http port=3100
+rek mcp --transport=http --port=3100
 ```
 
 ```json
@@ -212,10 +219,10 @@ rek mcp transport=http port=3100
 }
 ```
 
-### xAI Grok
+### xAI Grok (SSE)
 
 ```bash
-rek mcp transport=sse port=3100
+rek mcp --transport=sse --port=3100
 ```
 
 ```json
@@ -230,58 +237,9 @@ rek mcp transport=sse port=3100
 }
 ```
 
-### Generic HTTP Integration
+## Available Tools (57)
 
-For any AI tool that supports HTTP endpoints:
-
-```bash
-curl -X POST http://localhost:3100 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "search_docs",
-      "arguments": { "query": "retry" }
-    }
-  }'
-```
-
-## Available Tools
-
-The MCP Server provides **28 tools** organized in five categories. All tools use the `rek_` prefix.
-
-| Tool | Category | Description |
-|------|----------|-------------|
-| `rek_search_docs` | Documentation | Search Recker docs by keyword (hybrid/fuzzy/semantic) |
-| `rek_get_doc` | Documentation | Get full content of a doc file |
-| `rek_code_examples` | Documentation | Get runnable code examples |
-| `rek_api_schema` | Documentation | Get TypeScript types and interfaces |
-| `rek_suggest` | Documentation | Get implementation suggestions |
-| `rek_http_request` | Network | Perform HTTP requests (GET, POST, PUT, DELETE, etc.) |
-| `rek_dns` | Network | Resolve DNS records (A, AAAA, MX, TXT, NS, ALL) |
-| `rek_dns_propagate` | Network | Check DNS propagation globally |
-| `rek_dns_system` | Network | Get system DNS configuration (local resolver status) |
-| `rek_dns_health` | Network | Comprehensive DNS health check |
-| `rek_whois` | Network | WHOIS lookup for domains/IPs |
-| `rek_ping` | Network | TCP ping with latency measurement |
-| `rek_tls` | Security | Inspect SSL/TLS certificates and connections |
-| `rek_rdap` | Security | Modern WHOIS (RDAP) for domains and IPs |
-| `rek_geoip_lookup` | Security | IP geolocation with bogon detection (MaxMind) |
-| `rek_security_headers` | Security | Analyze HTTP security headers (grade A+ to F) |
-| `rek_dns_spf` | Security | Validate SPF record |
-| `rek_dns_dmarc` | Security | Validate DMARC record |
-| `rek_dns_dkim` | Security | Check DKIM record |
-| `rek_dns_dig` | Network | Advanced DNS lookup (like dig) with custom server |
-| `rek_scrape` | Scraping | Web scraping with CSS selectors |
-| `rek_seo_analyze` | SEO | Analyze page SEO with 250+ rules (21 categories) |
-| `rek_seo_spider` | SEO | Crawl site and detect duplicates, orphan pages |
-| `rek_seo_quick_wins` | SEO | Get prioritized SEO fixes (high/medium/low) |
-
-### Documentation Tools
-
-Tools for searching and reading Recker documentation.
+### Documentation Tools (5)
 
 #### rek_search_docs
 
@@ -318,12 +276,9 @@ Get full content of a documentation file:
 }
 ```
 
-**Parameters:**
-- `path` (required): Documentation file path from search results
-
 #### rek_code_examples
 
-Get runnable code examples for Recker features:
+Get runnable code examples:
 
 ```json
 {
@@ -336,54 +291,37 @@ Get runnable code examples for Recker features:
 }
 ```
 
-**Parameters:**
-- `feature` (required): Feature to get examples for
-- `complexity` (optional): Complexity level - basic, intermediate, advanced
-- `limit` (optional): Max examples to return
-
 #### rek_api_schema
 
-Get TypeScript types, interfaces, and API schemas:
+Get TypeScript types and interfaces:
 
 ```json
 {
   "name": "rek_api_schema",
   "arguments": {
-    "type": "ClientOptions",
-    "include": "both"
+    "type": "ClientOptions"
   }
 }
 ```
 
-**Parameters:**
-- `type` (required): Type/interface name to look up
-- `include` (optional): What to include - definition, properties, or both
-
 #### rek_suggest
 
-Get implementation suggestions based on use case:
+Get implementation suggestions:
 
 ```json
 {
   "name": "rek_suggest",
   "arguments": {
-    "useCase": "I need to retry failed requests with exponential backoff",
-    "constraints": ["must support custom retry conditions", "need rate limiting"]
+    "useCase": "retry failed requests with exponential backoff"
   }
 }
 ```
 
-**Parameters:**
-- `useCase` (required): Description of what you want to achieve
-- `constraints` (optional): Array of constraints or requirements
-
-### Network Tools
-
-Tools for performing network operations directly from the AI agent.
+### Network Tools (13)
 
 #### rek_http_request
 
-Perform an HTTP request to any URL:
+Perform HTTP requests:
 
 ```json
 {
@@ -397,17 +335,20 @@ Perform an HTTP request to any URL:
 }
 ```
 
-**Parameters:**
-- `url` (required): Target URL
-- `method` (optional): HTTP method - GET, POST, PUT, DELETE, PATCH, HEAD (default: GET)
-- `headers` (optional): Request headers object
-- `body` (optional): JSON body for POST/PUT/PATCH
-- `timeout` (optional): Timeout in milliseconds (default: 10000)
-- `retries` (optional): Number of retries (default: 0)
+#### rek_ip_lookup
+
+Get public IP information:
+
+```json
+{
+  "name": "rek_ip_lookup",
+  "arguments": {}
+}
+```
 
 #### rek_dns
 
-Resolve DNS records for a domain:
+Resolve DNS records:
 
 ```json
 {
@@ -419,13 +360,86 @@ Resolve DNS records for a domain:
 }
 ```
 
-**Parameters:**
-- `domain` (required): Domain name to resolve
-- `type` (optional): Record type - A, AAAA, MX, TXT, NS, CNAME, SOA, ALL (default: A)
+#### rek_dns_propagate
+
+Check DNS propagation globally:
+
+```json
+{
+  "name": "rek_dns_propagate",
+  "arguments": {
+    "domain": "example.com",
+    "type": "A"
+  }
+}
+```
+
+#### rek_dns_health
+
+Comprehensive DNS health check:
+
+```json
+{
+  "name": "rek_dns_health",
+  "arguments": {
+    "domain": "example.com"
+  }
+}
+```
+
+#### rek_dns_spf / rek_dns_dmarc / rek_dns_dkim
+
+DNS security record validation:
+
+```json
+{
+  "name": "rek_dns_spf",
+  "arguments": { "domain": "github.com" }
+}
+```
+
+#### rek_dns_dig
+
+Advanced DNS lookup (like dig):
+
+```json
+{
+  "name": "rek_dns_dig",
+  "arguments": {
+    "domain": "example.com",
+    "type": "A",
+    "server": "8.8.8.8"
+  }
+}
+```
+
+#### rek_dns_system
+
+Get system DNS configuration:
+
+```json
+{
+  "name": "rek_dns_system",
+  "arguments": {}
+}
+```
+
+#### rek_dns_toolkit
+
+Complete DNS security toolkit:
+
+```json
+{
+  "name": "rek_dns_toolkit",
+  "arguments": {
+    "domain": "example.com"
+  }
+}
+```
 
 #### rek_whois
 
-Perform a WHOIS lookup for domain registration info:
+WHOIS lookup:
 
 ```json
 {
@@ -436,12 +450,9 @@ Perform a WHOIS lookup for domain registration info:
 }
 ```
 
-**Parameters:**
-- `query` (required): Domain name or IP address to lookup
-
 #### rek_ping
 
-Check TCP connectivity and measure latency:
+TCP ping with latency:
 
 ```json
 {
@@ -454,36 +465,11 @@ Check TCP connectivity and measure latency:
 }
 ```
 
-**Parameters:**
-- `host` (required): Hostname or IP address
-- `port` (optional): Target port (default: 80)
-- `count` (optional): Number of pings (default: 3)
-- `timeout` (optional): Timeout per ping in milliseconds (default: 5000)
-
-**Response:**
-```json
-{
-  "host": "google.com",
-  "port": 443,
-  "sent": 5,
-  "received": 5,
-  "loss": "0.0%",
-  "avgLatency": "12.45ms",
-  "details": [
-    { "seq": 1, "time": 11 },
-    { "seq": 2, "time": 13 },
-    { "seq": 3, "time": 12 }
-  ]
-}
-```
-
-### Security Tools
-
-Tools for security analysis and network intelligence.
+### Security Tools (6)
 
 #### rek_tls
 
-Inspect SSL/TLS certificate and connection details:
+Inspect SSL/TLS certificates:
 
 ```json
 {
@@ -495,21 +481,22 @@ Inspect SSL/TLS certificate and connection details:
 }
 ```
 
-**Parameters:**
-- `host` (required): Hostname to inspect
-- `port` (optional): Port number (default: 443)
+#### rek_tls_inspect
 
-**Response includes:**
-- Certificate validity and expiration (days remaining)
-- Subject and issuer details
-- Subject Alternative Names (SANs)
-- TLS protocol version and cipher suite
-- Public key algorithm and size
-- Warnings for expiring certs, weak keys, or trust issues
+Detailed TLS connection analysis:
 
-#### rek_rdap
+```json
+{
+  "name": "rek_tls_inspect",
+  "arguments": {
+    "host": "github.com"
+  }
+}
+```
 
-Perform RDAP lookup (modern WHOIS) for a domain or IP:
+#### rek_rdap / rek_rdap_lookup
+
+Modern WHOIS (RDAP):
 
 ```json
 {
@@ -520,14 +507,9 @@ Perform RDAP lookup (modern WHOIS) for a domain or IP:
 }
 ```
 
-**Parameters:**
-- `query` (required): Domain name or IP address
-
-**Note:** Some TLDs (.io, .ai, etc.) don't support RDAP yet - use `rek_whois` for those.
-
 #### rek_geoip_lookup
 
-Get geolocation data for an IP address using MaxMind GeoLite2:
+IP geolocation with MaxMind:
 
 ```json
 {
@@ -538,19 +520,9 @@ Get geolocation data for an IP address using MaxMind GeoLite2:
 }
 ```
 
-**Parameters:**
-- `ip` (required): IPv4 or IPv6 address
-
-**Response includes:**
-- City, region, country, continent
-- Coordinates (latitude, longitude)
-- Timezone and postal code
-- Accuracy radius
-- Bogon detection (identifies private/reserved IPs)
-
 #### rek_security_headers
 
-Analyze HTTP security headers for a URL:
+Analyze HTTP security headers (grade A+ to F):
 
 ```json
 {
@@ -561,37 +533,11 @@ Analyze HTTP security headers for a URL:
 }
 ```
 
-**Parameters:**
-- `url` (required): URL to analyze
-
-**Grades (A+ to F) based on:**
-- HSTS (Strict-Transport-Security)
-- CSP (Content-Security-Policy) with detailed analysis
-- X-Frame-Options / frame-ancestors
-- X-Content-Type-Options
-- Referrer-Policy
-- Permissions-Policy
-- Cross-Origin policies (COOP, COEP, CORP)
-- Information leakage (Server, X-Powered-By)
-
-#### rek_dns_spf / rek_dns_dmarc / rek_dns_dkim
-
-Specific DNS security checks:
-
-```json
-{
-  "name": "rek_dns_spf",
-  "arguments": { "domain": "github.com" }
-}
-```
-
-### Scraping Tools
-
-Tools for web scraping and data extraction.
+### Scraping Tools (1)
 
 #### rek_scrape
 
-Scrape a web page and extract data using CSS selectors:
+Web scraping with CSS selectors:
 
 ```json
 {
@@ -607,24 +553,11 @@ Scrape a web page and extract data using CSS selectors:
 }
 ```
 
-**Parameters:**
-- `url` (required): URL to scrape
-- `selector` (optional): Single CSS selector to extract elements
-- `selectors` (optional): Map of field names to CSS selectors (add `[]` suffix for multiple values)
-- `extract` (optional): Built-in extractors to run: links, images, meta, og, twitter, jsonld, tables, forms, headings, all
-
-**Examples:**
-- Get all product titles: `selector: ".product-title"`
-- Extract multiple fields: `selectors: {"title":"h1","price":".price"}`
-- Full extraction: `extract: ["all"]`
-
-### SEO Tools
-
-Tools for SEO analysis and optimization.
+### SEO Tools (3)
 
 #### rek_seo_analyze
 
-Analyze a single web page for SEO issues using 250+ rules across 21 categories:
+Analyze page SEO with 250+ rules:
 
 ```json
 {
@@ -636,21 +569,9 @@ Analyze a single web page for SEO issues using 250+ rules across 21 categories:
 }
 ```
 
-**Parameters:**
-- `url` (required): URL to analyze (works with localhost too)
-- `categories` (optional): Filter by specific categories
-
-**Categories:** meta, content, links, images, technical, security, performance, mobile, accessibility, schema, structural, i18n, PWA, social, e-commerce, local SEO, Core Web Vitals, readability, crawlability, internal linking, best practices
-
-**Response includes:**
-- SEO score (0-100) and grade (A-F)
-- Critical issues and warnings with recommendations
-- OpenGraph/social meta analysis
-- Detailed analysis (title, description, headings, content, links, images, technical)
-
 #### rek_seo_spider
 
-Crawl an entire website and analyze SEO across all pages:
+Crawl entire website:
 
 ```json
 {
@@ -663,21 +584,9 @@ Crawl an entire website and analyze SEO across all pages:
 }
 ```
 
-**Parameters:**
-- `url` (required): Starting URL to crawl
-- `maxPages` (optional): Maximum pages to crawl (default: 100)
-- `maxDepth` (optional): Maximum link depth to follow (default: 5)
-- `concurrency` (optional): Parallel requests (default: 3)
-
-**Detects site-wide issues:**
-- Duplicate titles, descriptions, and H1s
-- Orphan pages (no internal links pointing to them)
-- Pages with low SEO scores
-- Crawl errors
-
 #### rek_seo_quick_wins
 
-Get prioritized, actionable SEO improvements for a page:
+Get prioritized SEO improvements:
 
 ```json
 {
@@ -689,21 +598,439 @@ Get prioritized, actionable SEO improvements for a page:
 }
 ```
 
-**Parameters:**
-- `url` (required): URL to analyze
-- `limit` (optional): Maximum number of quick wins to return (default: 10)
+### Video Tools (5)
 
-**Response includes issues sorted by priority (high/medium/low) with:**
-- What to fix
-- How to fix it
-- Expected impact
-- Category
+#### rek_video_info
 
-## How It Works
+Get video metadata from 1800+ sites:
 
-Once configured, your AI assistant can use these tools autonomously.
+```json
+{
+  "name": "rek_video_info",
+  "arguments": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  }
+}
+```
 
-### Documentation Example
+**Returns:** title, duration, thumbnail, description, formats, uploader, view count, etc.
+
+#### rek_video_formats
+
+List all available formats/qualities:
+
+```json
+{
+  "name": "rek_video_formats",
+  "arguments": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  }
+}
+```
+
+#### rek_video_check
+
+Check if URL is supported:
+
+```json
+{
+  "name": "rek_video_check",
+  "arguments": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  }
+}
+```
+
+#### rek_video_extractors
+
+List all 1800+ supported sites:
+
+```json
+{
+  "name": "rek_video_extractors",
+  "arguments": {
+    "search": "youtube"
+  }
+}
+```
+
+#### rek_video_url
+
+Get direct download URL:
+
+```json
+{
+  "name": "rek_video_url",
+  "arguments": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "format": "best"
+  }
+}
+```
+
+### AI Tools (4)
+
+#### rek_ai_chat
+
+Chat with AI providers:
+
+```json
+{
+  "name": "rek_ai_chat",
+  "arguments": {
+    "message": "Explain recursion",
+    "provider": "openai",
+    "model": "gpt-4o"
+  }
+}
+```
+
+**Supported providers:** openai, anthropic, google, groq, mistral, ollama
+
+#### rek_ai_embed
+
+Generate text embeddings:
+
+```json
+{
+  "name": "rek_ai_embed",
+  "arguments": {
+    "text": "Hello world",
+    "provider": "openai",
+    "model": "text-embedding-3-small"
+  }
+}
+```
+
+#### rek_ai_providers
+
+List available AI providers:
+
+```json
+{
+  "name": "rek_ai_providers",
+  "arguments": {}
+}
+```
+
+#### rek_ai_tokens
+
+Count tokens for text:
+
+```json
+{
+  "name": "rek_ai_tokens",
+  "arguments": {
+    "text": "Hello world",
+    "model": "gpt-4"
+  }
+}
+```
+
+### Protocol Tools (7)
+
+#### rek_ftp_connect
+
+Connect to FTP server and list files:
+
+```json
+{
+  "name": "rek_ftp_connect",
+  "arguments": {
+    "host": "ftp.example.com",
+    "username": "user",
+    "password": "pass",
+    "path": "/public"
+  }
+}
+```
+
+#### rek_ftp_download
+
+Download file from FTP:
+
+```json
+{
+  "name": "rek_ftp_download",
+  "arguments": {
+    "host": "ftp.example.com",
+    "username": "user",
+    "password": "pass",
+    "remotePath": "/file.txt",
+    "localPath": "./downloaded.txt"
+  }
+}
+```
+
+#### rek_sftp_connect
+
+Connect to SFTP server:
+
+```json
+{
+  "name": "rek_sftp_connect",
+  "arguments": {
+    "host": "sftp.example.com",
+    "username": "user",
+    "password": "pass",
+    "path": "/home/user"
+  }
+}
+```
+
+#### rek_sftp_download
+
+Download file from SFTP:
+
+```json
+{
+  "name": "rek_sftp_download",
+  "arguments": {
+    "host": "sftp.example.com",
+    "username": "user",
+    "password": "pass",
+    "remotePath": "/home/user/file.txt",
+    "localPath": "./downloaded.txt"
+  }
+}
+```
+
+#### rek_telnet_connect
+
+Connect to Telnet server:
+
+```json
+{
+  "name": "rek_telnet_connect",
+  "arguments": {
+    "host": "telnet.example.com",
+    "port": 23,
+    "commands": ["help", "quit"]
+  }
+}
+```
+
+#### rek_websocket_connect
+
+Connect to WebSocket:
+
+```json
+{
+  "name": "rek_websocket_connect",
+  "arguments": {
+    "url": "wss://echo.websocket.org",
+    "messages": ["Hello", "World"],
+    "timeout": 5000
+  }
+}
+```
+
+#### rek_websocket_ping
+
+Ping WebSocket server:
+
+```json
+{
+  "name": "rek_websocket_ping",
+  "arguments": {
+    "url": "wss://echo.websocket.org"
+  }
+}
+```
+
+### Parsing Tools (10)
+
+#### rek_graphql_query
+
+Execute GraphQL query:
+
+```json
+{
+  "name": "rek_graphql_query",
+  "arguments": {
+    "url": "https://api.example.com/graphql",
+    "query": "{ users { id name } }",
+    "variables": { "limit": 10 }
+  }
+}
+```
+
+#### rek_graphql_introspect
+
+Introspect GraphQL schema:
+
+```json
+{
+  "name": "rek_graphql_introspect",
+  "arguments": {
+    "url": "https://api.example.com/graphql"
+  }
+}
+```
+
+#### rek_jsonrpc_call
+
+Call JSON-RPC method:
+
+```json
+{
+  "name": "rek_jsonrpc_call",
+  "arguments": {
+    "url": "https://api.example.com/rpc",
+    "method": "getUser",
+    "params": { "id": 1 }
+  }
+}
+```
+
+#### rek_jsonrpc_batch
+
+Batch JSON-RPC calls:
+
+```json
+{
+  "name": "rek_jsonrpc_batch",
+  "arguments": {
+    "url": "https://api.example.com/rpc",
+    "calls": [
+      { "method": "getUser", "params": { "id": 1 } },
+      { "method": "getUser", "params": { "id": 2 } }
+    ]
+  }
+}
+```
+
+#### rek_csv_parse
+
+Parse CSV to JSON:
+
+```json
+{
+  "name": "rek_csv_parse",
+  "arguments": {
+    "content": "name,age\nJohn,30\nJane,25",
+    "delimiter": ","
+  }
+}
+```
+
+#### rek_csv_serialize
+
+Convert JSON to CSV:
+
+```json
+{
+  "name": "rek_csv_serialize",
+  "arguments": {
+    "data": [{ "name": "John", "age": 30 }],
+    "delimiter": ","
+  }
+}
+```
+
+#### rek_yaml_parse
+
+Parse YAML to JSON:
+
+```json
+{
+  "name": "rek_yaml_parse",
+  "arguments": {
+    "content": "name: John\nage: 30"
+  }
+}
+```
+
+#### rek_yaml_serialize
+
+Convert JSON to YAML:
+
+```json
+{
+  "name": "rek_yaml_serialize",
+  "arguments": {
+    "data": { "name": "John", "age": 30 }
+  }
+}
+```
+
+#### rek_xml_parse
+
+Parse XML to JSON:
+
+```json
+{
+  "name": "rek_xml_parse",
+  "arguments": {
+    "content": "<user><name>John</name><age>30</age></user>"
+  }
+}
+```
+
+#### rek_xml_serialize
+
+Convert JSON to XML:
+
+```json
+{
+  "name": "rek_xml_serialize",
+  "arguments": {
+    "data": { "user": { "name": "John", "age": 30 } },
+    "rootName": "root"
+  }
+}
+```
+
+### Streaming Tools (3)
+
+#### rek_hls_info
+
+Get HLS stream information:
+
+```json
+{
+  "name": "rek_hls_info",
+  "arguments": {
+    "url": "https://example.com/playlist.m3u8"
+  }
+}
+```
+
+**Returns:** Whether master/media playlist, variants, segment count, duration, live status.
+
+#### rek_hls_variants
+
+List HLS quality variants:
+
+```json
+{
+  "name": "rek_hls_variants",
+  "arguments": {
+    "url": "https://example.com/master.m3u8"
+  }
+}
+```
+
+**Returns:** All variants sorted by bandwidth with resolution, codecs, frame rate.
+
+#### rek_hls_download
+
+Download HLS stream:
+
+```json
+{
+  "name": "rek_hls_download",
+  "arguments": {
+    "url": "https://example.com/playlist.m3u8",
+    "output": "./video.ts",
+    "concurrency": 5
+  }
+}
+```
+
+## Example Conversations
+
+### Documentation Search
 
 ```
 User: How do I implement retry logic with recker?
@@ -726,73 +1053,30 @@ const client = createClient({
 });
 ```
 
-### Network Tools Example
+### Video Extraction
 
 ```
-User: Check if api.github.com is reachable and get its DNS records
+User: Get info about this YouTube video: https://youtube.com/watch?v=...
 
-AI: Let me check the connectivity and DNS...
-[Uses rek_ping with host "api.github.com", port 443]
-[Uses rek_dns with domain "api.github.com", type "A"]
+AI: [Uses rek_video_info]
 
-Results:
-- TCP ping to api.github.com:443 - 5/5 successful, avg latency 15.2ms
-- DNS A records: 140.82.121.6
+Video Information:
+- Title: "Building REST APIs"
+- Duration: 15:34
+- Uploader: TechChannel
+- Views: 125,000
+- Available formats: 1080p, 720p, 480p, 360p, audio-only
 
-The API is reachable with low latency.
+Would you like me to get the direct download URL for a specific format?
 ```
 
-```
-User: Make a GET request to https://httpbin.org/json
-
-AI: [Uses rek_http_request with url "https://httpbin.org/json"]
-
-Response (200 OK):
-{
-  "slideshow": {
-    "author": "Yours Truly",
-    "title": "Sample Slideshow"
-  }
-}
-```
-
-### SEO Analysis Example
+### Security Analysis
 
 ```
-User: Analyze my site's SEO at https://mysite.com
+User: Check the security of github.com
 
-AI: Let me run an SEO analysis...
-[Uses rek_seo_analyze with url "https://mysite.com"]
-
-SEO Analysis Results:
-- Score: 72/100 (Grade: C)
-- 3 critical issues found
-- 8 warnings
-
-Critical Issues:
-1. Missing meta description - Add a unique description (150-160 chars)
-2. Multiple H1 tags - Use only one H1 per page
-3. Images missing alt text - Add descriptive alt attributes
-
-Would you like me to get prioritized quick wins or crawl the entire site?
-
-User: Yes, get the quick wins
-
-AI: [Uses rek_seo_quick_wins with url "https://mysite.com"]
-
-Top SEO Quick Wins (High Priority):
-1. Add meta description → Improves CTR in search results
-2. Fix H1 structure → Better semantic hierarchy
-3. Add alt text to 5 images → Accessibility + image SEO
-```
-
-### Security Analysis Example
-
-```
-User: Check the security headers for github.com
-
-AI: [Uses rek_security_headers with url "https://github.com"]
-[Uses rek_tls with host "github.com"]
+AI: [Uses rek_security_headers]
+[Uses rek_tls]
 
 Security Analysis:
 - Security Headers Grade: A
@@ -805,7 +1089,27 @@ Headers Present:
 ✓ X-Content-Type-Options
 ✓ X-Frame-Options
 
-No critical issues found. The site follows security best practices.
+No critical issues found.
+```
+
+### Data Parsing
+
+```
+User: Parse this CSV and convert to YAML
+
+AI: [Uses rek_csv_parse with the CSV content]
+
+Parsed 3 rows with columns: name, age, city
+
+[Uses rek_yaml_serialize]
+
+Here's the YAML output:
+- name: John
+  age: 30
+  city: NYC
+- name: Jane
+  age: 25
+  city: LA
 ```
 
 ## Configuration Options
@@ -820,65 +1124,26 @@ interface MCPServerOptions {
   transport?: 'stdio' | 'http' | 'sse';  // Default: 'stdio'
   port?: number;        // Default: 3100 (for http/sse)
 
-  // Documentation paths
-  docsPath?: string;      // Default: auto-detected
-  examplesPath?: string;  // Default: auto-detected
-  srcPath?: string;       // Default: auto-detected
+  // Profile
+  profile?: string;     // Default: 'full'
 
-  // Tool filtering
-  toolsFilter?: string[];  // Glob patterns for tool filtering
-  toolPaths?: string[];    // External tool module paths
+  // Documentation paths
+  docsPath?: string;
+  examplesPath?: string;
+  srcPath?: string;
 
   // Debugging
   debug?: boolean;      // Default: false
 }
 ```
 
-**Tool Filtering Examples (Programmatic):**
-
-```typescript
-import { createMCPServer } from 'recker/mcp';
-
-// Disable network tools
-const server = createMCPServer({
-  toolsFilter: ['!rek_http_request', '!rek_dns', '!rek_whois', '!rek_ping']
-});
-
-// Only enable documentation tools
-const docsOnly = createMCPServer({
-  toolsFilter: ['rek_search_docs', 'rek_get_doc', 'rek_code_examples']
-});
-
-// Exclude HTTP but keep DNS
-const customServer = createMCPServer({
-  toolsFilter: ['!rek_http_*']  // Glob pattern
-});
-```
-
-## Custom Documentation
-
-Serve your own project's documentation:
-
-```bash
-rek mcp docs=/path/to/your/docs
-```
-
-```typescript
-const server = createMCPServer({
-  docsPath: '/path/to/your/docs',
-  name: 'my-project-docs'
-});
-```
-
 ## Docker Deployment
-
-Run the MCP server in Docker for remote access:
 
 ```dockerfile
 FROM node:20-alpine
 RUN npm install -g recker
 EXPOSE 3100
-CMD ["rek", "mcp", "transport=http", "port=3100"]
+CMD ["rek", "mcp", "--transport=http", "--port=3100"]
 ```
 
 ```bash
@@ -886,20 +1151,7 @@ docker build -t recker-mcp .
 docker run -p 3100:3100 recker-mcp
 ```
 
-Configure your AI tool to connect remotely:
-
-```json
-{
-  "mcpServers": {
-    "recker": {
-      "transport": "http",
-      "url": "http://your-server:3100"
-    }
-  }
-}
-```
-
-## Health Check (SSE Mode)
+## Health Check (SSE/HTTP Mode)
 
 ```bash
 curl http://localhost:3100/health
@@ -910,8 +1162,8 @@ curl http://localhost:3100/health
   "status": "ok",
   "name": "recker",
   "version": "1.0.0",
-  "docsCount": 58,
-  "sseClients": 2
+  "toolCount": 57,
+  "profile": "full"
 }
 ```
 
@@ -923,10 +1175,10 @@ curl http://localhost:3100/health
 | `ping` | Health check |
 | `tools/list` | List available tools |
 | `tools/call` | Execute a tool |
-| `resources/list` | List resources (empty) |
-| `prompts/list` | List prompts (empty) |
+| `resources/list` | List resources |
+| `prompts/list` | List prompts |
 
 ## Next Steps
 
-- **[MCP Client](05-mcp-client.md)** - Connect to other MCP servers
+- **[MCP Client](06-mcp-client.md)** - Connect to other MCP servers
 - **[AI Patterns](04-patterns.md)** - Common AI integration patterns
