@@ -160,7 +160,7 @@
   },
   "scripts": {
     "build": "pnpm build:node && pnpm build:browser",
-    "build:node": "tsc",
+    "build:node": "tsc && mkdir -p dist/mcp/data && cp src/mcp/data/embeddings.json dist/mcp/data/embeddings.json 2>/dev/null || true",
     "build:browser": "tsc -p tsconfig.browser.json",
     "build:browser:bundle": "pnpm build:browser && node scripts/bundle-browser.js",
     "build:cli": "node scripts/bundle-cli.js",

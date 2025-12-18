@@ -418,35 +418,80 @@ export class MCPServer {
   }
 
   private async indexDocs(): Promise<void> {
-    if (!existsSync(this.options.docsPath)) {
-      this.log(`Docs path not found: ${this.options.docsPath}`);
+    // Try to load from filesystem first
+    if (existsSync(this.options.docsPath)) {
+      const files = this.walkDir(this.options.docsPath);
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.endsWith('.md')) continue;
+
+        try {
+          const content = readFileSync(file, 'utf-8');
+          const relativePath = relative(this.options.docsPath, file);
+          const category = relativePath.split('/')[0] || 'root';
+          const title = this.extractTitle(content) || relativePath;
+          const keywords = this.extractKeywords(content);
+
+          this.docsIndex.push({
+            id: `doc-${i}`,
+            path: relativePath,
+            title,
+            category,
+            content,
+            keywords,
+          });
+        } catch (err) {
+          this.log(`Failed to index ${file}:`, err);
+        }
+      }
       return;
     }
 
-    const files = this.walkDir(this.options.docsPath);
+    // Fallback: load docs from bundled embeddings data
+    this.log(`Docs path not found: ${this.options.docsPath}, loading from embeddings...`);
+    await this.loadDocsFromEmbeddings();
+  }
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!file.endsWith('.md')) continue;
+  private async loadDocsFromEmbeddings(): Promise<void> {
+    try {
+      // Try bundled embeddings first
+      const bundledPath = join(dirname(fileURLToPath(import.meta.url)), 'data', 'embeddings.json');
 
-      try {
-        const content = readFileSync(file, 'utf-8');
-        const relativePath = relative(this.options.docsPath, file);
-        const category = relativePath.split('/')[0] || 'root';
-        const title = this.extractTitle(content) || relativePath;
-        const keywords = this.extractKeywords(content);
+      let embeddingsData: any = null;
 
-        this.docsIndex.push({
-          id: `doc-${i}`,
-          path: relativePath,
-          title,
-          category,
-          content,
-          keywords,
-        });
-      } catch (err) {
-        this.log(`Failed to index ${file}:`, err);
+      if (existsSync(bundledPath)) {
+        const raw = readFileSync(bundledPath, 'utf-8');
+        embeddingsData = JSON.parse(raw);
+        this.log(`Loaded ${embeddingsData.documents?.length || 0} docs from bundled embeddings`);
+      } else {
+        // Try loading from cache via embeddings-loader
+        const { loadEmbeddings } = await import('./embeddings-loader.js');
+        embeddingsData = await loadEmbeddings({ offline: this.options.offline });
+        if (embeddingsData) {
+          this.log(`Loaded ${embeddingsData.documents?.length || 0} docs from cached embeddings`);
+        }
       }
+
+      if (!embeddingsData?.documents) {
+        this.log('No embeddings data available');
+        return;
+      }
+
+      // Convert embeddings documents to IndexedDoc format
+      for (const doc of embeddingsData.documents) {
+        this.docsIndex.push({
+          id: doc.id,
+          path: doc.path,
+          title: doc.title,
+          category: doc.category || 'root',
+          content: doc.content || '',
+          keywords: doc.keywords || [],
+          section: doc.section,
+        });
+      }
+    } catch (err) {
+      this.log(`Failed to load docs from embeddings: ${err}`);
     }
   }
 

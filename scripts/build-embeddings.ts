@@ -310,34 +310,34 @@ function indexDocs(docsPath: string): IndexedDoc[] {
     // Split into sections
     const sections = splitIntoSections(content);
 
+    // Always store full content for search results (truncate only for embedding generation)
+    const fullDisplayContent = prepareDisplayContent(content);
+    const fullCleanContent = cleanContentForEmbedding(content);
+
     if (sections.length <= 1) {
-      // Small document - keep as single doc
+      // Small document - keep as single doc with full content
       docs.push({
         id: `doc-${docIndex++}`,
         path: relativePath,
         title: docTitle,
         category,
         keywords: extractKeywords(content, docTitle),
-        content: cleanContentForEmbedding(content),
-        displayContent: prepareDisplayContent(content),
+        content: fullCleanContent,
+        displayContent: fullDisplayContent,
       });
     } else {
-      // Large document - create chunks for each major section
-      // First, add the document itself with just title + intro for overview queries
-      const introSection = sections.find(s => s.level === 1) || sections[0];
-      const introContent = `${docTitle}. ${introSection?.content || ''}`;
-      
+      // Large document - create main entry with FULL content for search results
       docs.push({
         id: `doc-${docIndex++}`,
         path: relativePath,
         title: docTitle,
         category,
         keywords: extractKeywords(content, docTitle),
-        content: cleanContentForEmbedding(introContent).slice(0, 500),
-        displayContent: prepareDisplayContent(introContent),
+        content: fullCleanContent,
+        displayContent: fullDisplayContent,
       });
 
-      // Then add each H2 section as a separate chunk
+      // Also add H2 sections as separate chunks for more granular search
       for (const section of sections) {
         if (section.level === 2 && section.content.length > 100) {
           const chunkTitle = `${docTitle} - ${section.heading}`;
