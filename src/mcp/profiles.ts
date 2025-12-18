@@ -30,6 +30,9 @@ export type ProfileName =
   | 'scrape'
   | 'video'
   | 'ai'
+  | 'protocols'
+  | 'parsing'
+  | 'streaming'
   | 'full';
 
 /**
@@ -207,14 +210,70 @@ export const profiles: Record<ProfileName, Profile> = {
   },
 
   /**
+   * Protocols profile - FTP, SFTP, Telnet, WebSocket
+   * Best for: File transfer, remote connections, real-time communication
+   */
+  protocols: {
+    name: 'protocols',
+    description: 'FTP, SFTP, Telnet, WebSocket protocols',
+    tools: [
+      'rek_ftp_connect',
+      'rek_ftp_download',
+      'rek_sftp_connect',
+      'rek_sftp_download',
+      'rek_telnet_connect',
+      'rek_websocket_connect',
+      'rek_websocket_ping',
+    ],
+    estimatedTokens: 2100,
+  },
+
+  /**
+   * Parsing profile - GraphQL, JSON-RPC, CSV, YAML, XML
+   * Best for: API interactions, data transformation, format conversion
+   */
+  parsing: {
+    name: 'parsing',
+    description: 'GraphQL, JSON-RPC, CSV, YAML, XML parsing',
+    tools: [
+      'rek_graphql_query',
+      'rek_graphql_introspect',
+      'rek_jsonrpc_call',
+      'rek_jsonrpc_batch',
+      'rek_csv_parse',
+      'rek_csv_serialize',
+      'rek_yaml_parse',
+      'rek_yaml_serialize',
+      'rek_xml_parse',
+      'rek_xml_serialize',
+    ],
+    estimatedTokens: 3000,
+  },
+
+  /**
+   * Streaming profile - HLS and other streaming protocols
+   * Best for: Video streaming, live content, media analysis
+   */
+  streaming: {
+    name: 'streaming',
+    description: 'HLS streaming analysis and download',
+    tools: [
+      'rek_hls_info',
+      'rek_hls_variants',
+      'rek_hls_download',
+    ],
+    estimatedTokens: 900,
+  },
+
+  /**
    * Full profile - All available tools
-   * Warning: High context cost (~12K tokens with video+ai)
+   * Warning: High context cost (~18K tokens with all profiles)
    */
   full: {
     name: 'full',
     description: 'All available tools (high context cost)',
     tools: ['*'], // Wildcard for all tools
-    estimatedTokens: 12000,
+    estimatedTokens: 18000,
   },
 };
 

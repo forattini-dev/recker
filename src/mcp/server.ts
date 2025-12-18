@@ -25,6 +25,9 @@ import { scrapeTools, scrapeToolHandlers } from './tools/scrape.js';
 import { securityTools, securityToolHandlers } from './tools/security.js';
 import { videoTools, videoToolHandlers } from './tools/video.js';
 import { aiTools, aiToolHandlers } from './tools/ai.js';
+import { protocolTools } from './tools/protocols.js';
+import { parsingTools } from './tools/parsing.js';
+import { streamingTools } from './tools/streaming.js';
 import { ToolRegistry } from './tools/registry.js';
 import { loadToolModules } from './tools/loader.js';
 import { PromptRegistry } from './prompts/index.js';
@@ -171,6 +174,30 @@ export class MCPServer {
       tools: aiTools,
       handlers: aiToolHandlers
     });
+
+    // Register protocol tools (FTP, SFTP, Telnet, WebSocket)
+    for (const tool of protocolTools) {
+      this.toolRegistry.registerTool(
+        { name: tool.name, description: tool.description, inputSchema: tool.inputSchema },
+        tool.handler
+      );
+    }
+
+    // Register parsing tools (GraphQL, JSON-RPC, CSV, YAML, XML)
+    for (const tool of parsingTools) {
+      this.toolRegistry.registerTool(
+        { name: tool.name, description: tool.description, inputSchema: tool.inputSchema },
+        tool.handler
+      );
+    }
+
+    // Register streaming tools (HLS)
+    for (const tool of streamingTools) {
+      this.toolRegistry.registerTool(
+        { name: tool.name, description: tool.description, inputSchema: tool.inputSchema },
+        tool.handler
+      );
+    }
 
     // Apply profile-based filtering
     this.applyProfileFiltering();
