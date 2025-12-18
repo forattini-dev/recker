@@ -1,6 +1,6 @@
 {
   "name": "recker",
-  "version": "1.0.46",
+  "version": "1.0.47",
   "description": "Multi-Protocol SDK for the AI Era - HTTP, WebSocket, DNS, FTP, SFTP, Telnet, HLS unified with AI providers and MCP tools",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
