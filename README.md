@@ -4,48 +4,60 @@
 
 ### The Network SDK for the AI Era
 
-**Zero-config HTTP. Multi-protocol support. AI-native streaming. Observable to the millisecond.**
+**HTTP. WebSocket. DNS. FTP. AI. Browser. Node. One SDK.**
 
 [![npm version](https://img.shields.io/npm/v/recker.svg?style=flat-square&color=F5A623)](https://www.npmjs.com/package/recker)
 [![npm downloads](https://img.shields.io/npm/dm/recker.svg?style=flat-square&color=34C759)](https://www.npmjs.com/package/recker)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Coverage](https://img.shields.io/badge/coverage-90%25-34C759?style=flat-square)](https://github.com/forattini-dev/recker)
 [![License](https://img.shields.io/npm/l/recker.svg?style=flat-square&color=007AFF)](https://github.com/forattini-dev/recker/blob/main/LICENSE)
 
-[Documentation](https://forattini-dev.github.io/recker) · [API Reference](./docs/reference/01-api.md) · [Examples](./docs/examples/README.md)
+[📖 Documentation](https://forattini-dev.github.io/recker) · [🚀 Quick Start](#quick-start) · [🔧 CLI](#cli-rek)
 
 </div>
 
 ---
 
-## Install
+## Why Recker?
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  HTTP    WebSocket    DNS    FTP/SFTP    Telnet    HLS    AI   │
+│    ↓         ↓         ↓        ↓          ↓        ↓      ↓   │
+│                         RECKER                                  │
+│    ↓                       ↓                        ↓          │
+│  Node.js                Browser                    CLI          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+One import. Multiple protocols. Zero config. Works everywhere.
+
+## Quick Start
 
 ```bash
 npm install recker
 ```
 
-## Quick Start
-
 ```typescript
 import { get, post, whois, dns } from 'recker';
-import { rdap, supportsRDAP } from 'recker/utils/rdap';
 
-// HTTP - zero config
+// HTTP - just works
 const users = await get('https://api.example.com/users').json();
 await post('https://api.example.com/users', { json: { name: 'John' } });
 
-// WHOIS
-const info = await whois('github.com');
-
-// RDAP (modern WHOIS)
-if (supportsRDAP('com')) {
-  const data = await rdap(client, 'google.com');
-  console.log(data.status, data.events);
-}
-
-// DNS
+// DNS & WHOIS
 const ips = await dns('google.com');
+const info = await whois('github.com');
+```
+
+### Browser
+
+```html
+<script src="https://unpkg.com/recker/dist/recker.min.js"></script>
+<script>
+  const { get, post } = recker;
+  const data = await get('https://api.example.com/data').json();
+</script>
 ```
 
 ### Unified Namespace
@@ -53,221 +65,173 @@ const ips = await dns('google.com');
 ```typescript
 import { recker } from 'recker';
 
-// Everything in one place
-await recker.get('https://api.example.com/users').json();
-await recker.whois('github.com');
-await recker.dns('google.com');
-await recker.ai.chat('Hello!');
-
-const socket = recker.ws('wss://api.example.com/ws');
+await recker.get('/users').json();     // HTTP
+await recker.whois('github.com');      // WHOIS
+await recker.dns('google.com');        // DNS
+await recker.ai.chat('Hello!');        // AI
+recker.ws('wss://example.com/socket'); // WebSocket
 ```
 
-### With Configuration
+## What's Inside
 
-```typescript
-import { createClient } from 'recker';
-
-const api = createClient({
-  baseUrl: 'https://api.example.com',
-  headers: { 'Authorization': 'Bearer token' },
-  timeout: 10000,
-  retry: { maxAttempts: 3 }
-});
-
-const user = await api.get('/users/:id', { params: { id: '123' } }).json();
-```
-
-### Mini Client (Maximum Performance)
-
-Need raw speed? Use `recker-mini` for ~2% overhead vs raw undici:
-
-```typescript
-import { createMiniClient, miniGet } from 'recker/mini';
-
-// Client instance
-const fast = createMiniClient({ baseUrl: 'https://api.example.com' });
-const data = await fast.get('/users').then(r => r.json());
-
-// Or direct function (even faster)
-const users = await miniGet('https://api.example.com/users').then(r => r.json());
-```
-
-| Mode | Speed | Features |
-|------|-------|----------|
-| `recker-mini` | ~146µs (2% overhead) | Base URL, headers, JSON |
-| `recker` | ~265µs (86% overhead) | Retry, cache, auth, hooks, plugins |
-
-See [Mini Client documentation](./docs/http/18-mini-client.md) for more.
-
-## Features
-
-| Feature | Description |
-|:---|:---|
-| **Zero Config** | Direct functions work out of the box. No setup required. |
-| **Multi-Protocol** | HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet in one SDK. |
-| **AI-Native** | SSE streaming, token counting, provider abstraction. |
-| **Type-Safe** | Full TypeScript with Zod schema validation. |
-| **Observable** | DNS/TCP/TLS/TTFB timing breakdown per request. |
-| **Resilient** | Retry, circuit breaker, rate limiting, deduplication. |
-| **SEO Analysis** | 250+ rules across 21 categories. Site-wide crawling with duplicate detection. |
-| **Spider Crawler** | Web crawler with URL deduplication, depth control, and concurrency. |
-| **GeoIP (Offline)** | MaxMind GeoLite2 database with bogon detection. |
-| **RDAP Support** | Modern WHOIS with IANA Bootstrap and TLD detection. |
+| Category | Features |
+|:---------|:---------|
+| **Protocols** | HTTP/2, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS |
+| **AI** | OpenAI, Anthropic, Google, Ollama, Groq, Mistral + streaming |
+| **Resilience** | Retry, circuit breaker, rate limiting, request deduplication |
+| **Auth** | Basic, Bearer, OAuth2, AWS SigV4, Digest, API Key + 15 providers |
+| **SEO** | 250+ rules, 21 categories, site-wide spider crawler |
+| **Testing** | 9 mock servers (HTTP, WebSocket, DNS, FTP, HLS, SSE...) |
+| **CLI** | `rek` - curl replacement with superpowers |
+| **MCP** | 57 tools for AI assistants (Claude, Cursor, Windsurf) |
 
 ## Highlights
 
 ### AI Streaming
 
 ```typescript
-for await (const event of recker.ai.stream({
+for await (const chunk of recker.ai.stream({
   model: 'gpt-4',
   messages: [{ role: 'user', content: 'Hello!' }]
 })) {
-  process.stdout.write(event.choices[0]?.delta?.content || '');
+  process.stdout.write(chunk.choices[0]?.delta?.content || '');
 }
+```
+
+### Retry & Circuit Breaker
+
+```typescript
+import { createClient, circuitBreaker } from 'recker';
+
+const api = createClient({
+  baseUrl: 'https://api.example.com',
+  retry: { maxAttempts: 3, backoff: 'exponential' },
+  plugins: [circuitBreaker({ threshold: 5, resetTimeout: 30000 })]
+});
 ```
 
 ### Request Timing
 
 ```typescript
-const response = await get('https://api.example.com/data');
-console.log(response.timings);
+const res = await get('https://api.example.com/data');
+console.log(res.timings);
 // { dns: 12, tcp: 8, tls: 45, firstByte: 23, total: 156 }
-```
-
-### Scraping & Spider
-
-```typescript
-// Scrape single page
-const doc = await client.scrape('https://example.com');
-const titles = doc.selectAll('h1').map(el => el.text());
-
-// Crawl entire site
-import { spider } from 'recker/scrape';
-const result = await spider('https://example.com', { maxPages: 50 });
-console.log(`Crawled ${result.pages.length} pages`);
 ```
 
 ### SEO Analysis
 
 ```typescript
-import { analyzeSeo, seoSpider } from 'recker/seo';
+import { analyzeSeo } from 'recker/seo';
 
-// Single page analysis - 250+ checks across 21 categories
 const report = await analyzeSeo(html, { baseUrl: 'https://example.com' });
-console.log(`Score: ${report.score}/100 (${report.grade})`);
-
-// Site-wide analysis - detect duplicates and orphan pages
-const siteReport = await seoSpider('https://example.com', { seo: true });
-console.log(`Duplicate titles: ${siteReport.summary.duplicateTitles}`);
+console.log(`Score: ${report.score}/100 (Grade: ${report.grade})`);
+// 250+ checks across 21 categories
 ```
 
-### Vector Store (RAG)
-
-In-memory vector database for semantic search and RAG applications. Uses your configured AI provider for embeddings.
+### Web Scraping
 
 ```typescript
-import { MemoryVectorStore } from 'recker/ai/vector';
-
-const store = new MemoryVectorStore({ client: recker.ai });
-await store.add([{ content: 'Recker handles HTTP and DNS...' }]);
-
-const results = await store.search('What protocols are supported?');
-console.log(results[0].content);
+const doc = await client.scrape('https://news.ycombinator.com');
+const headlines = doc.selectAll('.titleline > a').map(el => el.text());
 ```
 
-Also available via CLI for local knowledge management:
-```bash
-rek vector add content="Server IP is 10.0.0.1" file=knowledge.json
-rek vector search query="server ip" file=knowledge.json
-```
+### 48 API Presets
 
-### Enhanced Spider
-
-The crawler automatically discovers:
-- **Sitemaps** (prioritizes robots.txt)
-- **RSS/Atom Feeds** (finds in HTML header)
-- **Metadata files** (robots.txt, humans.txt, llms.txt)
-
-```bash
-# Crawl site (ignores robots.txt by default)
-rek spider example.com
-
-# Respect robots.txt
-rek spider example.com --robots
-
-# Generate JSON report with all metadata
-rek spider example.com format=json
-```
-
-### System DNS
-
-Inspect your local system's DNS resolver configuration (without sudo):
-
-```bash
-rek dns system
-# Shows current DNS servers (resolvectl/scutil/ipconfig)
-```
-
-### Circuit Breaker
+Pre-configured clients for popular services:
 
 ```typescript
-import { createClient, circuitBreaker } from 'recker';
+import { presets } from 'recker';
 
-const client = createClient({
-  baseUrl: 'https://api.example.com',
-  plugins: [
-    circuitBreaker({ threshold: 5, resetTimeout: 30000 })
-  ]
-});
+const github = presets.github({ token: '...' });
+const stripe = presets.stripe({ apiKey: '...' });
+const openai = presets.openai({ apiKey: '...' });
 ```
+
+<details>
+<summary>All 48 presets</summary>
+
+`anthropic` `aws` `azure` `azure-openai` `chaturbate` `cloudflare` `cohere` `deepseek` `digitalocean` `discord` `elevenlabs` `fireworks` `gcp` `gemini` `github` `gitlab` `groq` `hubspot` `huggingface` `linear` `mailgun` `meta` `mistral` `notion` `openai` `oracle` `perplexity` `pinecone` `pornhub` `replicate` `sendgrid` `sentry` `sinch` `slack` `square` `stripe` `supabase` `tiktok` `together` `twilio` `vercel` `vultr` `xai` `xvideos` `youtube` `android` `ios`
+
+</details>
 
 ## CLI (`rek`)
 
-A powerful terminal client that replaces curl:
+A curl replacement with better DX:
 
 ```bash
-# Install globally
+# Install
 npm install -g recker
 
-# Simple requests
+# HTTP requests
 rek httpbin.org/json
 rek POST api.com/users name="John" age:=30
 
 # Pipe to bash (like curl)
 rek -q https://get.docker.com | bash
 
-# Save to file
-rek -o data.json api.com/export
-
-# Interactive shell
-rek shell
-
 # SEO analysis
 rek seo https://example.com
 
+# DNS toolkit
+rek dns google.com
+rek dns propagate example.com
+rek dns spf github.com
+
 # Mock servers for testing
-rek serve http    # HTTP on :3000
-rek serve ws      # WebSocket on :8080
-rek serve hls     # HLS streaming on :8082
+rek serve http     # HTTP on :3000
+rek serve ws       # WebSocket on :8080
+rek serve hls      # HLS streaming on :8082
+rek serve dns      # DNS on :5353
+
+# Interactive shell
+rek shell
 ```
 
-See [CLI Documentation](./docs/cli/01-overview.md) for more.
+[→ CLI Documentation](https://forattini-dev.github.io/recker/#/cli/01-overview)
+
+## MCP Server
+
+57 tools for AI assistants like Claude Code, Cursor, and Windsurf:
+
+```bash
+# One-liner for Claude Code
+claude mcp add recker npx recker@latest mcp
+
+# Or with profiles to reduce context
+claude mcp add recker npx recker@latest mcp --profile=minimal,video
+```
+
+**Profiles:** `minimal` `docs` `network` `dns` `security` `seo` `scrape` `video` `ai` `protocols` `parsing` `streaming` `full`
+
+[→ MCP Documentation](https://forattini-dev.github.io/recker/#/getting-started/mcp)
 
 ## Documentation
 
-- **[Quick Start](./docs/http/01-quickstart.md)** - Get running in 2 minutes
-- **[Mini Client](./docs/http/18-mini-client.md)** - Maximum performance mode
-- **[CLI Guide](./docs/cli/01-overview.md)** - Terminal client documentation
-- **[SEO Analysis](./docs/http/19-seo.md)** - 250+ rules, site-wide crawling
-- **[Web Scraping](./docs/http/14-scraping.md)** - HTML parsing and Spider crawler
-- **[API Reference](./docs/reference/01-api.md)** - Complete API documentation
-- **[Configuration](./docs/http/05-configuration.md)** - Client options
-- **[Plugins](./docs/http/10-plugins.md)** - Extend functionality
-- **[AI Integration](./docs/ai/01-overview.md)** - OpenAI, Anthropic, and more
-- **[Protocols](./docs/protocols/01-websocket.md)** - WebSocket, DNS, WHOIS
-- **[Mock Servers](./docs/cli/08-mock-servers.md)** - Built-in test servers
-- **[Benchmarks](./docs/benchmarks.md)** - Performance comparisons
+| Topic | Link |
+|:------|:-----|
+| Quick Start | [→ Getting Started](https://forattini-dev.github.io/recker/#/http/01-quickstart) |
+| HTTP Client | [→ HTTP Guide](https://forattini-dev.github.io/recker/#/http/02-fundamentals) |
+| Plugins | [→ 30+ Plugins](https://forattini-dev.github.io/recker/#/http/10-plugins) |
+| Authentication | [→ 15 Auth Methods](https://forattini-dev.github.io/recker/#/http/06-authentication) |
+| AI Integration | [→ AI Providers](https://forattini-dev.github.io/recker/#/ai/01-overview) |
+| CLI | [→ Terminal Client](https://forattini-dev.github.io/recker/#/cli/01-overview) |
+| MCP Server | [→ AI Tools](https://forattini-dev.github.io/recker/#/getting-started/mcp) |
+| SEO Analysis | [→ 250+ Rules](https://forattini-dev.github.io/recker/#/http/19-seo) |
+| Mock Servers | [→ Testing](https://forattini-dev.github.io/recker/#/cli/08-mock-servers) |
+| API Reference | [→ Full API](https://forattini-dev.github.io/recker/#/reference/01-api) |
+
+## Numbers
+
+| Metric | Value |
+|:-------|:------|
+| Protocols | 9 (HTTP, WS, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS) |
+| Plugins | 30+ |
+| Auth Methods | 15 |
+| API Presets | 48 |
+| MCP Tools | 57 |
+| SEO Rules | 250+ |
+| Mock Servers | 9 |
+| Tests | 4200+ |
 
 ## License
 
