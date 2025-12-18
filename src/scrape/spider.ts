@@ -24,6 +24,13 @@ import {
   isPathAllowed,
   type RobotsParseResult,
 } from '../seo/validators/robots.js';
+import { detectBlock, isProtectedDomain } from '../utils/block-detector.js';
+import { hasImpersonate } from '../utils/binary-manager.js';
+import { CurlTransport } from '../transport/curl.js';
+import { HttpRequest } from '../core/request.js';
+
+/** Transport type for HTTP requests */
+export type SpiderTransport = 'auto' | 'undici' | 'curl';
 
 export interface SpiderOptions {
   /** Maximum depth to crawl (default: 5) */
@@ -50,6 +57,13 @@ export interface SpiderOptions {
   useSitemap?: boolean;
   /** Custom sitemap URL (if not at /sitemap.xml) */
   sitemapUrl?: string;
+  /**
+   * Transport mode for HTTP requests (default: 'auto')
+   * - 'auto': Try undici first, fallback to curl-impersonate on block detection
+   * - 'undici': Always use undici (fast, but may be blocked by WAFs)
+   * - 'curl': Always use curl-impersonate (slower, but bypasses TLS fingerprinting)
+   */
+  transport?: SpiderTransport;
   /** Callback for each page crawled */
   onPage?: (result: SpiderPageResult) => void;
   /** Callback for progress updates */
@@ -267,10 +281,11 @@ function sleep(ms: number): Promise<void> {
  * Spider class for crawling websites
  */
 export class Spider {
-  private options: Required<Omit<SpiderOptions, 'onPage' | 'onProgress' | 'exclude' | 'include' | 'sitemapUrl'>> & {
+  private options: Required<Omit<SpiderOptions, 'onPage' | 'onProgress' | 'exclude' | 'include' | 'sitemapUrl' | 'transport'>> & {
     exclude?: RegExp[];
     include?: RegExp[];
     sitemapUrl?: string;
+    transport: SpiderTransport;
     onPage?: (result: SpiderPageResult) => void;
     onProgress?: (progress: SpiderProgress) => void;
   };
@@ -284,6 +299,11 @@ export class Spider {
   private running: boolean = false;
   private aborted: boolean = false;
   private pendingCount: number = 0;
+
+  // Transport fallback state
+  private blockedDomains: Set<string> = new Set();
+  private curlTransport: CurlTransport | null = null;
+  private curlAvailable: boolean = false;
 
   // Sitemap & Robots data
   private sitemapUrls: SitemapUrl[] = [];
@@ -303,6 +323,7 @@ export class Spider {
       userAgent: options.userAgent ?? 'Recker Spider/1.0',
       respectRobotsTxt: options.respectRobotsTxt ?? true,
       useSitemap: options.useSitemap ?? false,
+      transport: options.transport ?? 'auto',
       sitemapUrl: options.sitemapUrl,
       exclude: options.exclude,
       include: options.include,
@@ -317,6 +338,11 @@ export class Spider {
         'User-Agent': this.options.userAgent,
       },
     } as any);
+
+    // Initialize curl transport if needed (auto or curl mode)
+    if (this.options.transport !== 'undici') {
+      this.curlTransport = new CurlTransport();
+    }
 
     // Initialize request pool for concurrency control
     // Also supports rate limiting via delay (requestsPerInterval)
@@ -359,6 +385,16 @@ export class Spider {
     this.robotsData = null;
     this.sitemapValidation = null;
     this.robotsValidation = null;
+    this.blockedDomains.clear();
+
+    // Check if curl-impersonate is available (for auto/curl modes)
+    if (this.options.transport !== 'undici') {
+      this.curlAvailable = await hasImpersonate();
+      // Pre-mark protected domains if in auto mode
+      if (this.options.transport === 'auto' && this.curlAvailable && isProtectedDomain(this.baseHost)) {
+        this.blockedDomains.add(this.baseHost);
+      }
+    }
 
     // Fetch robots.txt first (for respecting rules and finding sitemaps)
     if (this.options.respectRobotsTxt || this.options.useSitemap) {
@@ -652,6 +688,55 @@ export class Spider {
   }
 
   /**
+   * Fetch a page using the appropriate transport (undici or curl-impersonate)
+   * Implements auto-detection and fallback for blocked requests.
+   */
+  private async fetchPage(url: string): Promise<{ response: Response; body: string; usedCurl: boolean }> {
+    const hostname = new URL(url).hostname;
+
+    // Determine if we should use curl directly
+    const useCurlDirectly =
+      this.options.transport === 'curl' ||
+      (this.curlAvailable && this.blockedDomains.has(hostname));
+
+    // If curl mode or domain known to be blocked, use curl directly
+    if (useCurlDirectly && this.curlTransport) {
+      const req = new HttpRequest(url, {
+        method: 'GET',
+        headers: { 'User-Agent': this.options.userAgent }
+      });
+      const response = await this.curlTransport.dispatch(req);
+      const body = await response.text();
+      return { response: response as unknown as Response, body, usedCurl: true };
+    }
+
+    // Try with undici first
+    const response = await this.client.get(url);
+    const body = await response.text();
+
+    // If in auto mode, check if we were blocked
+    if (this.options.transport === 'auto' && this.curlAvailable && this.curlTransport) {
+      const detection = detectBlock(response, body);
+
+      if (detection.blocked && detection.confidence > 0.7) {
+        // Mark domain as blocked for future requests
+        this.blockedDomains.add(hostname);
+
+        // Retry with curl-impersonate
+        const req = new HttpRequest(url, {
+          method: 'GET',
+          headers: { 'User-Agent': this.options.userAgent }
+        });
+        const curlResponse = await this.curlTransport.dispatch(req);
+        const curlBody = await curlResponse.text();
+        return { response: curlResponse as unknown as Response, body: curlBody, usedCurl: true };
+      }
+    }
+
+    return { response: response as unknown as Response, body, usedCurl: false };
+  }
+
+  /**
    * Crawl a single page
    */
   private async crawlPage(item: QueueItem): Promise<void> {
@@ -667,7 +752,7 @@ export class Spider {
     });
 
     try {
-      const response = await this.client.get(item.url);
+      const { response, body: html } = await this.fetchPage(item.url);
       const status = response.status;
 
       // Skip non-HTML responses
@@ -676,7 +761,6 @@ export class Spider {
         return;
       }
 
-      const html = await response.text();
       const doc = await ScrapeDocument.create(html, { baseUrl: item.url });
 
       // Extract title

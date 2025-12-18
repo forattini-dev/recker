@@ -247,6 +247,7 @@ async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolRes
   const maxPages = Number(args.maxPages) || 100;
   const maxDepth = Number(args.maxDepth) || 5;
   const concurrency = Number(args.concurrency) || 3;
+  const transport = (args.transport as 'auto' | 'undici' | 'curl') || 'auto';
 
   if (!url) {
     return {
@@ -262,6 +263,7 @@ async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolRes
       maxDepth,
       concurrency,
       delay: 200, // Be respectful to servers
+      transport,
     });
 
     // Build output
@@ -501,6 +503,12 @@ Returns per-page scores and prioritized recommendations for improving overall si
           type: 'number',
           description: 'Parallel requests (be respectful to servers)',
           default: 3,
+        },
+        transport: {
+          type: 'string',
+          enum: ['auto', 'undici', 'curl'],
+          description: 'HTTP transport: auto (try undici, fallback to curl on WAF block), undici (fast), curl (curl-impersonate for protected sites)',
+          default: 'auto',
         },
       },
       required: ['url'],

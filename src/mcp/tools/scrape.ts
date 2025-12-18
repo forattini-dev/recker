@@ -10,7 +10,57 @@
 
 import { createClient } from '../../core/client.js';
 import { ScrapeDocument } from '../../scrape/document.js';
+import { CurlTransport } from '../../transport/curl.js';
+import { HttpRequest } from '../../core/request.js';
+import { detectBlock } from '../../utils/block-detector.js';
+import { hasImpersonate } from '../../utils/binary-manager.js';
 import type { MCPTool, MCPToolResult } from '../types.js';
+
+type ScrapeTransport = 'auto' | 'undici' | 'curl';
+
+/**
+ * Fetch page with transport fallback support
+ */
+async function fetchWithTransport(
+  url: string,
+  transport: ScrapeTransport
+): Promise<{ html: string; status: number }> {
+  const curlAvailable = transport !== 'undici' && (await hasImpersonate());
+
+  // If curl mode, use curl directly
+  if (transport === 'curl' && curlAvailable) {
+    const curlTransport = new CurlTransport();
+    const req = new HttpRequest(url, {
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ReckerBot/1.0)' }
+    });
+    const response = await curlTransport.dispatch(req);
+    const html = await response.text();
+    return { html, status: response.status };
+  }
+
+  // Try with undici first
+  const client = createClient({ timeout: 30000 });
+  const response = await client.get(url);
+  const html = await response.text();
+
+  // If auto mode, check for blocking and retry with curl
+  if (transport === 'auto' && curlAvailable) {
+    const detection = detectBlock(response, html);
+    if (detection.blocked && detection.confidence > 0.7) {
+      const curlTransport = new CurlTransport();
+      const req = new HttpRequest(url, {
+        method: 'GET',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ReckerBot/1.0)' }
+      });
+      const curlResponse = await curlTransport.dispatch(req);
+      const curlHtml = await curlResponse.text();
+      return { html: curlHtml, status: curlResponse.status };
+    }
+  }
+
+  return { html, status: response.status };
+}
 
 /**
  * Scrape a web page and extract data
@@ -20,6 +70,7 @@ async function scrapeUrl(args: Record<string, unknown>): Promise<MCPToolResult> 
   const selectors = args.selectors as Record<string, string> | undefined;
   const extract = args.extract as string[] | undefined;
   const selector = args.selector as string | undefined;
+  const transport = (args.transport as ScrapeTransport) || 'auto';
 
   if (!url) {
     return {
@@ -29,10 +80,8 @@ async function scrapeUrl(args: Record<string, unknown>): Promise<MCPToolResult> 
   }
 
   try {
-    // Fetch the page
-    const client = createClient({ timeout: 30000 });
-    const response = await client.get(url);
-    const html = await response.text();
+    // Fetch the page with transport fallback support
+    const { html } = await fetchWithTransport(url, transport);
 
     // Parse HTML
     const doc = await ScrapeDocument.create(html, { baseUrl: url });
@@ -183,6 +232,12 @@ Examples:
           type: 'array',
           items: { type: 'string' },
           description: 'Built-in extractors to run: links, images, meta, og, twitter, jsonld, tables, forms, headings, all',
+        },
+        transport: {
+          type: 'string',
+          enum: ['auto', 'undici', 'curl'],
+          description: 'HTTP transport: auto (try undici, fallback to curl on WAF block), undici (fast), curl (curl-impersonate for protected sites)',
+          default: 'auto',
         },
       },
       required: ['url'],

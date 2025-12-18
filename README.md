@@ -137,9 +137,33 @@ console.log(`Score: ${report.score}/100 (Grade: ${report.grade})`);
 ### Web Scraping
 
 ```typescript
+import { Spider } from 'recker/scrape';
+
+// Simple scraping
 const doc = await client.scrape('https://news.ycombinator.com');
 const headlines = doc.selectAll('.titleline > a').map(el => el.text());
+
+// Full site crawling
+const spider = new Spider({ maxPages: 100 });
+const results = await spider.crawl('https://example.com');
 ```
+
+#### Scraping Protected Sites
+
+Some sites use bot protection (Cloudflare, Akamai). Recker handles this automatically:
+
+```bash
+# One-time setup (downloads curl-impersonate)
+npx recker setup
+```
+
+```typescript
+const spider = new Spider({ maxPages: 50 });
+await spider.crawl('https://protected-site.com');
+// Automatically retries with curl-impersonate if blocked
+```
+
+[📖 Anti-blocking docs](https://forattini-dev.github.io/recker/#/scraping/06-anti-blocking)
 
 ### 48 API Presets
 
