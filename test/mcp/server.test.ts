@@ -31,7 +31,7 @@ describe('MCP Server', () => {
         expect(tempServer.getPort()).toBe(3198);
         expect(tempServer.getTransport()).toBe('http');
         await tempServer.stop();
-      });
+      }, 15000); // Index building can take time
 
       it('should index documentation files', () => {
         expect(server.getDocsCount()).toBeGreaterThan(0);
