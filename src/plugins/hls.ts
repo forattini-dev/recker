@@ -34,6 +34,40 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Writable } from 'node:stream';
 import { createDecipheriv } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
+
+/**
+ * Helper to fetch text content and auto-decompress gzip if needed
+ * (Some CDNs ignore Accept-Encoding: identity)
+ */
+async function fetchText(
+  client: Client,
+  url: string,
+  options: { signal?: AbortSignal; headers?: Record<string, string>; useCurl?: boolean }
+): Promise<string> {
+  const response = await client.get(url, {
+    signal: options.signal,
+    headers: options.headers,
+    useCurl: options.useCurl,
+  });
+
+  // Get raw bytes
+  const blob = await response.blob();
+  const buffer = Buffer.from(await blob.arrayBuffer());
+
+  // Check if content is gzip compressed
+  // Gzip magic bytes: 0x1f 0x8b
+  if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) {
+    try {
+      const decompressed = gunzipSync(buffer);
+      return decompressed.toString('utf-8');
+    } catch {
+      // Not actually gzip, return as-is
+    }
+  }
+
+  return buffer.toString('utf-8');
+}
 
 // ============================================
 // Types
@@ -132,6 +166,9 @@ export interface HlsOptions {
 
   /** Custom headers for segment requests */
   headers?: Record<string, string>;
+
+  /** Use curl transport to bypass TLS fingerprinting */
+  useCurl?: boolean;
 }
 
 type DownloadDest = string | ((segment: HlsSegment) => string);
@@ -639,16 +676,21 @@ export class HlsPromise implements Promise<void> {
     isLive: boolean;
     totalDuration?: number;
   }> {
-    const content = await this.client.get(this.manifestUrl, {
+    // Use fetchText helper which auto-decompresses gzip
+    const content = await fetchText(this.client, this.manifestUrl, {
       signal: this.abortController.signal,
-    }).text();
+      headers: this.options.headers,
+      useCurl: this.options.useCurl,
+    });
 
     if (isMasterPlaylist(content)) {
       const master = parseMasterPlaylist(content, this.manifestUrl);
       const selectedVariant = selectVariant(master.variants, this.options.quality);
-      const playlistContent = await this.client.get(selectedVariant.url, {
+      const playlistContent = await fetchText(this.client, selectedVariant.url, {
         signal: this.abortController.signal,
-      }).text();
+        headers: this.options.headers,
+        useCurl: this.options.useCurl,
+      });
       const playlist = parseMediaPlaylist(playlistContent, selectedVariant.url);
 
       const totalDuration = playlist.endList
@@ -681,9 +723,16 @@ export class HlsPromise implements Promise<void> {
   // ============================================
 
   private async resolveMediaPlaylist(): Promise<string> {
-    const content = await this.client.get(this.manifestUrl, {
+    const headers = {
+      ...this.options.headers,
+    };
+
+    // Use fetchText helper which auto-decompresses gzip
+    const content = await fetchText(this.client, this.manifestUrl, {
       signal: this.abortController.signal,
-    }).text();
+      headers,
+      useCurl: this.options.useCurl,
+    });
 
     if (!isMasterPlaylist(content)) {
       return this.manifestUrl;
@@ -696,9 +745,12 @@ export class HlsPromise implements Promise<void> {
   }
 
   private async fetchMediaPlaylist(url: string): Promise<HlsPlaylist> {
-    const content = await this.client.get(url, {
+    // Use fetchText helper which auto-decompresses gzip
+    const content = await fetchText(this.client, url, {
       signal: this.abortController.signal,
-    }).text();
+      headers: this.options.headers,
+      useCurl: this.options.useCurl,
+    });
     return parseMediaPlaylist(content, url);
   }
 
@@ -717,6 +769,7 @@ export class HlsPromise implements Promise<void> {
     const response = await this.client.get(uri, {
       headers: this.options.headers,
       signal: this.abortController.signal,
+      useCurl: this.options.useCurl,
     });
 
     const blob = await response.blob();
@@ -785,6 +838,7 @@ export class HlsPromise implements Promise<void> {
     const response = await this.client.get(init.url, {
       headers,
       signal: this.abortController.signal,
+      useCurl: this.options.useCurl,
     });
 
     const blob = await response.blob();
@@ -807,6 +861,7 @@ export class HlsPromise implements Promise<void> {
     const response = await this.client.get(segment.url, {
       headers,
       signal: this.abortController.signal,
+      useCurl: this.options.useCurl,
     });
 
     const blob = await response.blob();

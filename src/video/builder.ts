@@ -213,6 +213,7 @@ export class VideoBuilder {
     if (format.protocol === 'm3u8' || format.ext === 'm3u8' || format.url.includes('.m3u8')) {
       const hlsOptions: Parameters<Client['hls']>[1] = {
         concurrency: this.downloadOptions.concurrency,
+        useCurl: format.useCurl,
       };
 
       if (this.liveOptions) {
@@ -321,6 +322,7 @@ export class VideoBuilder {
   ): Promise<void> {
     const hlsOptions: Parameters<Client['hls']>[1] = {
       concurrency: this.downloadOptions.concurrency,
+      useCurl: format.useCurl,
     };
 
     if (this.liveOptions) {
