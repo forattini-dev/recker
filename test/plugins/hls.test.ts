@@ -126,11 +126,12 @@ https://cdn.example.com/segment.ts
                 transport: {
                     dispatch: async (req: any) => {
                         requestedUrls.push(req.url);
+                        const body = req.url.includes('.m3u8') ? playlist : 'segment-data';
                         return {
                             ok: true,
                             status: 200,
-                            text: async () => playlist,
-                            blob: async () => new Blob(['data']),
+                            text: async () => body,
+                            blob: async () => new Blob([body]),
                             headers: new Headers()
                         } as any;
                     }
@@ -155,11 +156,12 @@ https://cdn.example.com/segment.ts
                 transport: {
                     dispatch: async (req: any) => {
                         requestedUrls.push(req.url);
+                        const body = req.url.includes('.m3u8') ? playlist : 'segment-data';
                         return {
                             ok: true,
                             status: 200,
-                            text: async () => playlist,
-                            blob: async () => new Blob(['data']),
+                            text: async () => body,
+                            blob: async () => new Blob([body]),
                             headers: new Headers()
                         } as any;
                     }
@@ -192,12 +194,16 @@ segment.ts
                 transport: {
                     dispatch: async (req: any) => {
                         requestedUrls.push(req.url);
-                        const body = req.url.includes('master') ? masterPlaylist : variantPlaylist;
+                        const body = req.url.includes('.ts')
+                            ? 'segment-data'
+                            : req.url.includes('master')
+                            ? masterPlaylist
+                            : variantPlaylist;
                         return {
                             ok: true,
                             status: 200,
                             text: async () => body,
-                            blob: async () => new Blob(['data']),
+                            blob: async () => new Blob([body]),
                             headers: new Headers()
                         } as any;
                     }
@@ -229,12 +235,16 @@ segment.ts
                 transport: {
                     dispatch: async (req: any) => {
                         requestedUrls.push(req.url);
-                        const body = req.url.includes('master') ? masterPlaylist : variantPlaylist;
+                        const body = req.url.includes('.ts')
+                            ? 'segment-data'
+                            : req.url.includes('master')
+                            ? masterPlaylist
+                            : variantPlaylist;
                         return {
                             ok: true,
                             status: 200,
                             text: async () => body,
-                            blob: async () => new Blob(['data']),
+                            blob: async () => new Blob([body]),
                             headers: new Headers()
                         } as any;
                     }
@@ -267,12 +277,16 @@ segment.ts
                 transport: {
                     dispatch: async (req: any) => {
                         requestedUrls.push(req.url);
-                        const body = req.url.includes('master') ? masterPlaylist : variantPlaylist;
+                        const body = req.url.includes('.ts')
+                            ? 'segment-data'
+                            : req.url.includes('master')
+                            ? masterPlaylist
+                            : variantPlaylist;
                         return {
                             ok: true,
                             status: 200,
                             text: async () => body,
-                            blob: async () => new Blob(['data']),
+                            blob: async () => new Blob([body]),
                             headers: new Headers()
                         } as any;
                     }
@@ -473,11 +487,12 @@ segment.ts
                 transport: {
                     dispatch: async (req: any) => {
                         if (req.url.includes('.m3u8')) manifestFetchCount++;
+                        const body = req.url.includes('.m3u8') ? playlist : 'segment-data';
                         return {
                             ok: true,
                             status: 200,
-                            text: async () => playlist,
-                            blob: async () => new Blob(['data']),
+                            text: async () => body,
+                            blob: async () => new Blob([body]),
                             headers: new Headers()
                         } as any;
                     }
@@ -583,6 +598,7 @@ segment.ts
                             ok: true,
                             status: 200,
                             text: async () => body,
+                            blob: async () => new Blob([body]),
                             headers: new Headers()
                         } as any;
                     }
