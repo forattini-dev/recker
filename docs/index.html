@@ -103,6 +103,22 @@
       scroll-behavior: smooth;
     }
 
+    /* Hide navbar items when they leak into content area */
+    .content .markdown-section > nav,
+    .content .markdown-section > .reading-time,
+    .markdown-section > p > a > img[src*="shields.io"],
+    .markdown-section > p > a > img[src*="github"],
+    .app-nav {
+      display: none !important;
+    }
+
+    /* Hide reading time badge in playground */
+    #mode-seo .reading-time,
+    #mode-terminal .reading-time,
+    #mode-chat .reading-time {
+      display: none !important;
+    }
+
     /* Better sidebar collapse */
     .sidebar-nav li.collapse > ul {
       display: none;
@@ -524,7 +540,7 @@
       <!-- All Checks by Category -->
       <div id="seo-all-checks" style="background: var(--code-background-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color);"><div style="font-weight: 600; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">📋 All Checks by Category</div><div id="checks-by-category"></div></div>
       <!-- Rules Engine Info -->
-      <div id="seo-engine-info" style="background: rgba(255,138,0,0.05); border-radius: 8px; padding: 12px 15px; border: 1px solid rgba(255,138,0,0.2);"><div style="font-size: 12px; opacity: 0.8;"><span style="color: #ff8a00; font-weight: 600;">Recker SEO Engine</span> — Powered by 400+ SEO rules across 25+ categories. Only applicable rules are shown for each page. <a href="#/seo/overview" style="color: #60a5fa;">Learn more</a></div></div>
+      <div id="seo-engine-info" style="background: rgba(255,138,0,0.05); border-radius: 8px; padding: 12px 15px; border: 1px solid rgba(255,138,0,0.2);"><div style="font-size: 12px; opacity: 0.8;"><span style="color: #ff8a00; font-weight: 600;">Recker SEO Engine</span> — Powered by 400+ SEO rules across 25+ categories. Only applicable rules are shown for each page. <a href="#/seo/01-overview" style="color: #60a5fa;">Learn more</a></div></div>
     </div>
     <div id="seo-placeholder" style="text-align: center; padding: 60px 20px; color: var(--text-color); opacity: 0.5;"><div style="font-size: 48px; margin-bottom: 15px;">🔍</div><div>Enter a URL above to analyze its SEO</div></div>
   </div>
@@ -1358,6 +1374,7 @@
             if (!categories[cat]) categories[cat] = [];
             categories[cat].push(c);
           });
+          console.log('Categories found:', Object.keys(categories), 'Total categories:', Object.keys(categories).length);
           const sortedCats = Object.keys(categories).sort((a, b) => {
             // Put 'General' at the end
             if (a === 'General') return 1;

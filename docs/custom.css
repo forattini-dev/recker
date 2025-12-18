@@ -1,3 +1,14 @@
+/* Hide Docsify navbar when on homepage/playground */
+body.ready .app-nav {
+  display: none !important;
+}
+
+/* Hide reading time and word count that might leak */
+.markdown-section .reading-time,
+.content .reading-time {
+  display: none !important;
+}
+
 /* Cover Page - Hero Background */
 section.cover {
   background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.7)), url('./assets/hero-lightning.png') center center / cover no-repeat #0a0d12 !important;
