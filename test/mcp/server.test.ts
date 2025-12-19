@@ -26,9 +26,11 @@ describe('MCP Server', () => {
 
     describe('Server Lifecycle', () => {
       it('should start and stop', async () => {
-        const tempServer = createMCPServer({ transport: 'http', port: 3198 });
+        // Use port 0 to let OS assign an available port
+        const tempServer = createMCPServer({ transport: 'http', port: 0 });
         await tempServer.start();
-        expect(tempServer.getPort()).toBe(3198);
+        const assignedPort = tempServer.getPort();
+        expect(assignedPort).toBeGreaterThan(0);
         expect(tempServer.getTransport()).toBe('http');
         await tempServer.stop();
       }, 15000); // Index building can take time

@@ -312,21 +312,20 @@ export class HybridSearch {
           }
         }
 
-        // Map to results
+        // Map to results - only include docs that are in this.docs
         const results: SearchResult[] = [];
         for (const s of scores.sort((a, b) => b.score - a.score).slice(0, limit)) {
           const doc = this.docs.find((d) => d.id === s.id);
-          const entry = this.embeddingsData.documents.find((e) => e.id === s.id);
 
-          if (!doc && !entry) continue;
+          // Skip documents that aren't in our initialized docs list
+          if (!doc) continue;
 
-          const content = doc?.content || '';
           results.push({
             id: s.id,
-            path: doc?.path || entry?.path || '',
-            title: doc?.title || entry?.title || 'Unknown',
-            content,
-            snippet: this.extractSnippet(content, query),
+            path: doc.path,
+            title: doc.title,
+            content: doc.content,
+            snippet: this.extractSnippet(doc.content, query),
             score: s.score,
             source: 'semantic',
           });
@@ -412,27 +411,25 @@ export class HybridSearch {
       }
     }
 
-    // Return top results
+    // Return top results - only include docs that are in this.docs
+    // This ensures tests with sample docs don't get polluted by production embeddings
     const results: SearchResult[] = [];
 
     for (const s of scores.sort((a, b) => b.score - a.score).slice(0, limit)) {
       const doc = this.docs.find((d) => d.id === s.id);
-      const entry = this.embeddingsData!.documents.find((e) => e.id === s.id);
 
-      if (!doc && !entry) {
+      // Skip documents that aren't in our initialized docs list
+      // This prevents production embeddings from affecting test results
+      if (!doc) {
         continue;
       }
 
-      const title = doc?.title || entry?.title || 'Unknown';
-      const path = doc?.path || entry?.path || '';
-      const content = doc?.content || '';
-
       results.push({
         id: s.id,
-        path,
-        title,
-        content,
-        snippet: this.extractSnippet(content, query),
+        path: doc.path,
+        title: doc.title,
+        content: doc.content,
+        snippet: this.extractSnippet(doc.content, query),
         score: s.score,
         source: 'semantic',
       });
