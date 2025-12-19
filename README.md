@@ -26,17 +26,9 @@ AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 57 tools.
 
 ## Why Recker?
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  HTTP    WebSocket    DNS    FTP/SFTP    Telnet    HLS    AI   │
-│    ↓         ↓         ↓        ↓          ↓        ↓      ↓   │
-│                         RECKER                                  │
-│    ↓                       ↓                        ↓          │
-│  Node.js                Browser                    CLI          │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-One import. Nine protocols. Zero config. Works everywhere.
+> **HTTP** · **WebSocket** · **DNS** · **FTP/SFTP** · **Telnet** · **HLS** · **AI**
+>
+> One SDK. Nine protocols. Zero config.
 
 ## Quick Start
 
