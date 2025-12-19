@@ -29,6 +29,56 @@ import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
 import { parseEnhancerPresets } from '../helpers.js';
 import { expandShortcut, isShortcut, listShortcuts } from '../utils/shortcut-expander.js';
+import { join } from 'node:path';
+
+/**
+ * Generate a unique filename for live stream recording
+ * Format: {provider}--{username}--{YYYY-MM-DD-HH-mm-ss}.ts
+ */
+function generateLiveFilename(
+  url: string,
+  extractorName: string | null,
+  uploader: string | null
+): string {
+  // Get provider name
+  let provider = extractorName || 'live';
+
+  // Try to extract username from URL if uploader not available
+  let username = uploader;
+  if (!username) {
+    try {
+      const urlObj = new URL(url);
+      // Common patterns: /username, /u/username, /channel/username
+      const pathParts = urlObj.pathname.split('/').filter(Boolean);
+      if (pathParts.length > 0) {
+        // Skip common path segments
+        const skipSegments = ['u', 'channel', 'c', 'user', 'live', 'video', 'watch', 'embed'];
+        username = pathParts.find(p => !skipSegments.includes(p.toLowerCase())) || pathParts[0];
+      }
+    } catch {
+      username = 'unknown';
+    }
+  }
+
+  // Sanitize username for filesystem
+  username = (username || 'unknown')
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replace(/\s+/g, '_')
+    .slice(0, 50); // Limit length
+
+  // Generate timestamp: YYYY-MM-DD-HH-mm-ss
+  const now = new Date();
+  const timestamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+    String(now.getSeconds()).padStart(2, '0'),
+  ].join('-');
+
+  return `${provider}--${username}--${timestamp}.ts`;
+}
 
 export function registerLiveCommand(program: Command) {
   const liveCmd = program
@@ -101,9 +151,14 @@ export function registerLiveCommand(program: Command) {
     .option('output', {
       type: 'string',
       short: 'o',
-      default: 'live.ts',
-      description: 'Output file path',
+      description: 'Output file path (if not set, auto-generates unique name)',
       example: 'stream.ts',
+    })
+    .option('outputDir', {
+      type: 'string',
+      short: 'O',
+      description: 'Output directory (auto-generates filename)',
+      example: '/mnt/recordings',
     })
     .option('quality', {
       type: 'string',
@@ -146,18 +201,21 @@ export function registerLiveCommand(program: Command) {
       const options = cmdObj.opts ? cmdObj.opts() : {};
       const { Client } = await import('../../core/client.js');
       const { createVideoBuilder } = await import('../../video/builder.js');
+      const { getExtractorName } = await import('../../extractors/index.js');
 
       // Process presets (for +proxy, +cache, etc)
       const { clientOptions, remainingArgs } = await parseEnhancerPresets(rawArgs);
 
       // Get options from SmartOption parser
-      const output = options.output || 'live.ts';
+      const userOutput = options.output;
+      const outputDir = options.outputDir;
       const verbose = options.verbose;
       const concurrency = options.concurrency || 4;
 
       // Quality and duration can come from --option or key=value
       let quality: string | undefined = options.quality;
       let duration: number | undefined = options.duration;
+      let parsedOutputDir: string | undefined = outputDir;
 
       // Parse headers (Header:Value) and legacy key=value from remaining args
       const headers: Record<string, string> = {
@@ -171,6 +229,8 @@ export function registerLiveCommand(program: Command) {
           const [key, value] = arg.split('=');
           if (key === 'quality' && !quality) quality = value;
           else if (key === 'duration' && !duration) duration = parseInt(value, 10);
+          else if (key === 'outputDir' && !parsedOutputDir) parsedOutputDir = value;
+          else if (key === 'output' && !userOutput) options.output = value;
         } else if (arg.includes(':') && !arg.startsWith('http')) {
           const colonIndex = arg.indexOf(':');
           const headerName = arg.slice(0, colonIndex).trim();
@@ -187,6 +247,14 @@ export function registerLiveCommand(program: Command) {
         console.log(colors.gray(`Shortcut: ${rawUrl} → ${url}`));
       }
       console.log(colors.gray(`Connecting to live stream: ${url}`));
+
+      // Determine output path (declared early for catch block access)
+      const finalUserOutput = options.output || userOutput;
+      // Initialize with fallback in case we fail before getting stream info
+      let output: string = finalUserOutput || generateLiveFilename(url, null, null);
+      if (parsedOutputDir && !finalUserOutput) {
+        output = join(parsedOutputDir, output);
+      }
 
       try {
         // Create video builder with live mode
@@ -211,6 +279,23 @@ export function registerLiveCommand(program: Command) {
 
         // Get info first
         const info = await videoBuilder.info();
+
+        if (finalUserOutput) {
+          // User specified explicit output path
+          output = finalUserOutput;
+        } else {
+          // Auto-generate unique filename
+          const extractorName = await getExtractorName(url);
+          const generatedFilename = generateLiveFilename(url, extractorName, info.uploader || null);
+
+          if (parsedOutputDir) {
+            // Use specified directory with auto-generated name
+            output = join(parsedOutputDir, generatedFilename);
+          } else {
+            // Use current directory with auto-generated name
+            output = generatedFilename;
+          }
+        }
 
         console.log(colors.gray(`Channel: ${info.uploader || 'Unknown'}`));
         console.log(colors.gray(`Title: ${info.title}`));

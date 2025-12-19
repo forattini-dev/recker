@@ -550,6 +550,124 @@ segment${seq + 2}.ts`;
             const uniqueUrls = new Set(downloadedSegments);
             expect(uniqueUrls.size).toBe(downloadedSegments.length);
         });
+
+        it('should retry on transient errors and continue recording', async () => {
+            let callCount = 0;
+            let segmentAttempts = 0;
+            let successfulSegments = 0;
+
+            const playlist = () => {
+                callCount++;
+                return `#EXTM3U
+#EXT-X-TARGETDURATION:1
+#EXT-X-MEDIA-SEQUENCE:${callCount}
+#EXTINF:1.0,
+segment${callCount}.ts`;
+            };
+
+            const client = createClient({
+                transport: {
+                    dispatch: async (req: any) => {
+                        if (req.url.includes('.m3u8')) {
+                            return {
+                                ok: true,
+                                status: 200,
+                                text: async () => playlist(),
+                                blob: async () => new Blob([playlist()]),
+                                headers: new Headers()
+                            } as any;
+                        }
+
+                        // Segments - fail first attempt with 504, succeed on retry
+                        segmentAttempts++;
+                        if (segmentAttempts % 2 === 1) {
+                            const error = new Error('Request failed with status code 504') as any;
+                            error.status = 504;
+                            throw error;
+                        }
+
+                        successfulSegments++;
+                        return {
+                            ok: true,
+                            status: 200,
+                            text: async () => 'segment-data',
+                            blob: async () => new Blob(['segment-data']),
+                            headers: new Headers()
+                        } as any;
+                    }
+                }
+            });
+
+            const outputPath = join(testDir, 'live-retry.ts');
+
+            // Should complete despite transient errors (retries work)
+            await client.hls('http://test.com/live.m3u8', {
+                live: { duration: 50 },
+                retry: {
+                    maxAttempts: 3,
+                    delay: 10, // Fast retry for test
+                    maxDelay: 100,
+                },
+            }).download(outputPath);
+
+            // Should have more attempts than successful segments (due to retries)
+            expect(segmentAttempts).toBeGreaterThan(successfulSegments);
+            // Should have downloaded at least one segment
+            expect(successfulSegments).toBeGreaterThanOrEqual(1);
+        });
+
+        it('should call onError for transient failures during live recording', async () => {
+            let callCount = 0;
+            const errors: Error[] = [];
+
+            const playlist = `#EXTM3U
+#EXT-X-TARGETDURATION:1
+#EXT-X-MEDIA-SEQUENCE:1
+#EXTINF:1.0,
+segment1.ts
+#EXT-X-ENDLIST`;
+
+            const client = createClient({
+                transport: {
+                    dispatch: async (req: any) => {
+                        callCount++;
+                        if (req.url.includes('.m3u8')) {
+                            return {
+                                ok: true,
+                                status: 200,
+                                text: async () => playlist,
+                                blob: async () => new Blob([playlist]),
+                                headers: new Headers()
+                            } as any;
+                        }
+
+                        // Segment download fails with retryable error
+                        const error = new Error('Request failed with status code 504') as any;
+                        error.status = 504;
+                        throw error;
+                    }
+                }
+            });
+
+            const outputPath = join(testDir, 'live-errors.ts');
+
+            // Should throw after exhausting retries (since ENDLIST makes it VOD-like)
+            try {
+                await client.hls('http://test.com/live.m3u8', {
+                    retry: {
+                        maxAttempts: 2,
+                        delay: 5,
+                    },
+                    onError: (err) => errors.push(err),
+                }).download(outputPath);
+            } catch {
+                // Expected to throw
+            }
+
+            // Should have recorded errors via onError callback
+            expect(errors.length).toBeGreaterThan(0);
+            expect(errors.some(e => e.message.includes('504') || e.message.includes('Retrying'))).toBe(true);
+        });
     });
 
     describe('Info method', () => {

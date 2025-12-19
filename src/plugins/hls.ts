@@ -139,6 +139,26 @@ export interface HlsProgress {
   elapsed: number;
 }
 
+export interface HlsRetryOptions {
+  /** Maximum retry attempts per segment/playlist fetch (default: 5 for live, 3 for VOD) */
+  maxAttempts?: number;
+
+  /** Initial delay in ms before first retry (default: 1000) */
+  delay?: number;
+
+  /** Maximum delay in ms (default: 30000) */
+  maxDelay?: number;
+
+  /** Backoff multiplier (default: 2) */
+  backoff?: number;
+
+  /** Add random jitter to prevent thundering herd (default: true) */
+  jitter?: boolean;
+
+  /** HTTP status codes to retry (default: [408, 429, 500, 502, 503, 504]) */
+  statusCodes?: number[];
+}
+
 export interface HlsOptions {
   /** Output mode: 'merge' concatenates all segments, 'chunks' saves separately */
   mode?: 'merge' | 'chunks';
@@ -169,6 +189,15 @@ export interface HlsOptions {
 
   /** Use curl transport to bypass TLS fingerprinting */
   useCurl?: boolean;
+
+  /** Retry configuration for transient errors (critical for live streams) */
+  retry?: HlsRetryOptions;
+
+  /**
+   * Maximum consecutive errors before giving up (default: 10 for live, 3 for VOD)
+   * For live streams, individual segment failures are tolerated up to this limit
+   */
+  maxConsecutiveErrors?: number;
 }
 
 type DownloadDest = string | ((segment: HlsSegment) => string);
@@ -407,6 +436,12 @@ export class HlsPromise implements Promise<void> {
   private initSegmentCache = new Map<string, Buffer>();
   private initSegmentPrepended = new Set<string>();
 
+  // Retry defaults based on mode
+  private readonly defaultRetryStatusCodes = [403, 404, 408, 429, 500, 502, 503, 504];
+
+  // Consecutive errors tracking
+  private consecutiveErrors = 0;
+
   constructor(client: Client, manifestUrl: string, options: HlsOptions = {}) {
     this.client = client;
     this.manifestUrl = manifestUrl;
@@ -525,8 +560,36 @@ export class HlsPromise implements Promise<void> {
     const maxDuration = this.getMaxDuration();
     const concurrency = this.options.concurrency ?? 5;
 
+    // Default poll interval (will be updated from playlist)
+    let pollInterval = 2000;
+
     while (!this.aborted) {
-      const playlist = await this.fetchMediaPlaylist(mediaPlaylistUrl);
+      // Check consecutive errors limit before fetching
+      if (this.consecutiveErrors >= this.getMaxConsecutiveErrors()) {
+        throw new Error(
+          `Too many consecutive errors (${this.consecutiveErrors}). ` +
+          `Limit: ${this.getMaxConsecutiveErrors()}. Stopping download.`
+        );
+      }
+
+      let playlist: HlsPlaylist;
+      try {
+        playlist = await this.fetchMediaPlaylist(mediaPlaylistUrl);
+      } catch (err: any) {
+        // For live streams, we can tolerate temporary playlist fetch failures
+        if (isLive && this.consecutiveErrors < this.getMaxConsecutiveErrors()) {
+          if (this.options.onError) {
+            this.options.onError(new Error(`Playlist fetch failed: ${err.message}. Retrying...`));
+          }
+          await this.sleep(pollInterval);
+          continue;
+        }
+        throw err;
+      }
+
+      // Update poll interval from playlist
+      pollInterval = Math.max(1000, (playlist.targetDuration * 1000) / 2);
+
       const newSegments = playlist.segments.filter(
         (s) => !this.seenSequences.has(s.sequence)
       );
@@ -550,8 +613,6 @@ export class HlsPromise implements Promise<void> {
         break;
       }
 
-      // Poll interval for live streams
-      const pollInterval = Math.max(1000, (playlist.targetDuration * 1000) / 2);
       await this.sleep(pollInterval);
     }
   }
@@ -567,8 +628,9 @@ export class HlsPromise implements Promise<void> {
     maxDuration?: number
   ): AsyncGenerator<SegmentData> {
     // Results buffer: index -> data (filled out of order, yielded in order)
-    const results = new Map<number, SegmentData>();
-    const pending = new Map<number, Promise<{ index: number; data: SegmentData }>>();
+    // null means segment was skipped (failed after retries)
+    const results = new Map<number, SegmentData | null>();
+    const pending = new Map<number, Promise<{ index: number; data: SegmentData | null }>>();
     let nextToYield = 0;
     let nextToStart = 0;
 
@@ -577,13 +639,13 @@ export class HlsPromise implements Promise<void> {
       const segment = segments[index];
       const promise = this.downloadSegment(segment).then((data) => ({
         index,
-        data: {
+        data: data ? {
           sequence: segment.sequence,
           duration: segment.duration,
           data,
           url: segment.url,
           downloadedAt: new Date(),
-        } as SegmentData,
+        } as SegmentData : null,
       }));
       pending.set(index, promise);
     };
@@ -600,6 +662,14 @@ export class HlsPromise implements Promise<void> {
         break;
       }
 
+      // Check consecutive errors limit
+      if (this.consecutiveErrors >= this.getMaxConsecutiveErrors()) {
+        throw new Error(
+          `Too many consecutive errors (${this.consecutiveErrors}). ` +
+          `Limit: ${this.getMaxConsecutiveErrors()}. Stopping download.`
+        );
+      }
+
       // Wait for any download to complete
       if (pending.size > 0) {
         const completed = await Promise.race(pending.values());
@@ -612,11 +682,16 @@ export class HlsPromise implements Promise<void> {
         }
       }
 
-      // Yield results in order
+      // Yield results in order (skip null/failed segments)
       while (results.has(nextToYield)) {
-        const segmentData = results.get(nextToYield)!;
+        const segmentData = results.get(nextToYield);
         results.delete(nextToYield);
         nextToYield++;
+
+        // Skip null/undefined segments (failed downloads in live mode)
+        if (!segmentData) {
+          continue;
+        }
 
         this.downloadedSegments++;
         this.downloadedBytes += segmentData.data.byteLength;
@@ -745,12 +820,23 @@ export class HlsPromise implements Promise<void> {
   }
 
   private async fetchMediaPlaylist(url: string): Promise<HlsPlaylist> {
-    // Use fetchText helper which auto-decompresses gzip
-    const content = await fetchText(this.client, url, {
-      signal: this.abortController.signal,
-      headers: this.options.headers,
-      useCurl: this.options.useCurl,
-    });
+    // Use retry logic for playlist fetches (critical for live streams)
+    const content = await this.withRetry(
+      async () => {
+        return fetchText(this.client, url, {
+          signal: this.abortController.signal,
+          headers: this.options.headers,
+          useCurl: this.options.useCurl,
+        });
+      },
+      'Fetch playlist',
+      false // Playlist fetch is critical, don't skip
+    );
+
+    if (!content) {
+      throw new Error('Failed to fetch media playlist');
+    }
+
     return parseMediaPlaylist(content, url);
   }
 
@@ -849,62 +935,73 @@ export class HlsPromise implements Promise<void> {
     return data;
   }
 
-  private async downloadSegment(segment: HlsSegment): Promise<Uint8Array> {
-    const headers: Record<string, string> = { ...this.options.headers };
+  private async downloadSegment(segment: HlsSegment): Promise<Uint8Array | null> {
+    // Use retry logic for segment downloads - skipOnFail=true for live streams
+    const result = await this.withRetry(
+      async () => {
+        const headers: Record<string, string> = { ...this.options.headers };
 
-    // Add Range header if byte range specified
-    if (segment.byteRange) {
-      const { offset, length } = segment.byteRange;
-      headers['Range'] = `bytes=${offset}-${offset + length - 1}`;
-    }
+        // Add Range header if byte range specified
+        if (segment.byteRange) {
+          const { offset, length } = segment.byteRange;
+          headers['Range'] = `bytes=${offset}-${offset + length - 1}`;
+        }
 
-    const response = await this.client.get(segment.url, {
-      headers,
-      signal: this.abortController.signal,
-      useCurl: this.options.useCurl,
-    });
+        const response = await this.client.get(segment.url, {
+          headers,
+          signal: this.abortController.signal,
+          useCurl: this.options.useCurl,
+        });
 
-    const blob = await response.blob();
-    const arrayBuffer = await blob.arrayBuffer();
-    let data: Buffer = Buffer.from(arrayBuffer);
+        const blob = await response.blob();
+        const arrayBuffer = await blob.arrayBuffer();
+        let data: Buffer = Buffer.from(arrayBuffer);
 
-    // Handle AES-128 decryption
-    if (segment.key && segment.key.method === 'AES-128') {
-      if (!segment.key.uri) {
-        throw new Error('AES-128 encryption specified but no key URI provided');
-      }
+        // Handle AES-128 decryption
+        if (segment.key && segment.key.method === 'AES-128') {
+          if (!segment.key.uri) {
+            throw new Error('AES-128 encryption specified but no key URI provided');
+          }
 
-      const key = await this.getKey(segment.key.uri);
-      const iv = segment.key.iv
-        ? this.parseIV(segment.key.iv)
-        : this.generateIV(segment.sequence);
+          const key = await this.getKey(segment.key.uri);
+          const iv = segment.key.iv
+            ? this.parseIV(segment.key.iv)
+            : this.generateIV(segment.sequence);
 
-      data = this.decryptSegment(data, key, iv);
-    } else if (segment.key && segment.key.method === 'SAMPLE-AES') {
-      throw new Error(
-        'SAMPLE-AES encryption is not supported. This typically requires DRM handling.'
-      );
-    }
+          data = this.decryptSegment(data, key, iv);
+        } else if (segment.key && segment.key.method === 'SAMPLE-AES') {
+          throw new Error(
+            'SAMPLE-AES encryption is not supported. This typically requires DRM handling.'
+          );
+        }
 
-    // Prepend init segment for fMP4 (only once per init segment)
-    if (segment.initSegment) {
-      const initKey = `${segment.initSegment.url}:${segment.initSegment.byteRange?.offset ?? 0}`;
+        // Prepend init segment for fMP4 (only once per init segment)
+        if (segment.initSegment) {
+          const initKey = `${segment.initSegment.url}:${segment.initSegment.byteRange?.offset ?? 0}`;
 
-      if (!this.initSegmentPrepended.has(initKey)) {
-        const initData = await this.getInitSegment(segment.initSegment);
-        data = Buffer.concat([initData, data]);
-        this.initSegmentPrepended.add(initKey);
-      }
-    }
+          if (!this.initSegmentPrepended.has(initKey)) {
+            const initData = await this.getInitSegment(segment.initSegment);
+            data = Buffer.concat([initData, data]);
+            this.initSegmentPrepended.add(initKey);
+          }
+        }
 
-    return new Uint8Array(data);
+        return new Uint8Array(data);
+      },
+      `Segment ${segment.sequence}`,
+      true // Skip failed segments for live streams
+    );
+
+    return result;
   }
 
   private async downloadMerged(playlistUrl: string, outputPath: string): Promise<void> {
     // Ensure output directory exists
     await mkdir(dirname(outputPath), { recursive: true });
 
-    const output = createWriteStream(outputPath);
+    // Use append mode ('a') to concatenate if file exists
+    // This allows resuming/continuing recordings to the same file
+    const output = createWriteStream(outputPath, { flags: 'a' });
 
     try {
       await this.pipe(output);
@@ -982,6 +1079,145 @@ export class HlsPromise implements Promise<void> {
         resolve();
       }, { once: true });
     });
+  }
+
+  /**
+   * Get retry configuration with sensible defaults
+   */
+  private getRetryConfig(): Required<HlsRetryOptions> {
+    const isLive = this.isLiveMode();
+    const userConfig = this.options.retry || {};
+
+    return {
+      maxAttempts: userConfig.maxAttempts ?? (isLive ? 5 : 3),
+      delay: userConfig.delay ?? 1000,
+      maxDelay: userConfig.maxDelay ?? 30000,
+      backoff: userConfig.backoff ?? 2,
+      jitter: userConfig.jitter ?? true,
+      statusCodes: userConfig.statusCodes ?? this.defaultRetryStatusCodes,
+    };
+  }
+
+  /**
+   * Get maximum consecutive errors allowed
+   */
+  private getMaxConsecutiveErrors(): number {
+    const isLive = this.isLiveMode();
+    return this.options.maxConsecutiveErrors ?? (isLive ? 10 : 3);
+  }
+
+  /**
+   * Calculate delay with exponential backoff and optional jitter
+   */
+  private calculateRetryDelay(attempt: number, config: Required<HlsRetryOptions>): number {
+    // Exponential backoff: delay * backoff^attempt
+    let delay = config.delay * Math.pow(config.backoff, attempt);
+
+    // Cap at max delay
+    delay = Math.min(delay, config.maxDelay);
+
+    // Add jitter (±25%) to prevent thundering herd
+    if (config.jitter) {
+      const jitterRange = delay * 0.25;
+      delay = delay - jitterRange + (Math.random() * jitterRange * 2);
+    }
+
+    return Math.round(delay);
+  }
+
+  /**
+   * Check if an error is retryable based on status code
+   */
+  private isRetryableError(error: any, config: Required<HlsRetryOptions>): boolean {
+    // Network errors are always retryable
+    if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+      return true;
+    }
+
+    // Check HTTP status code
+    const status = error.status || error.statusCode || (error.response?.status);
+    if (status && config.statusCodes.includes(status)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Execute an async function with retry logic
+   */
+  private async withRetry<T>(
+    fn: () => Promise<T>,
+    context: string,
+    skipOnFail = false
+  ): Promise<T | null> {
+    const config = this.getRetryConfig();
+    const isLive = this.isLiveMode();
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= config.maxAttempts; attempt++) {
+      if (this.aborted) {
+        throw new Error('Aborted');
+      }
+
+      try {
+        const result = await fn();
+
+        // Success - reset consecutive error counter
+        this.consecutiveErrors = 0;
+
+        return result;
+      } catch (error: any) {
+        lastError = error;
+
+        // Check if this error is retryable
+        if (!this.isRetryableError(error, config)) {
+          // Not retryable - emit error and throw/skip
+          if (this.options.onError) {
+            this.options.onError(error);
+          }
+
+          if (skipOnFail && isLive) {
+            // For live streams, we can skip failed segments
+            this.consecutiveErrors++;
+            return null;
+          }
+
+          throw error;
+        }
+
+        // Retryable error
+        if (attempt < config.maxAttempts) {
+          const delay = this.calculateRetryDelay(attempt, config);
+
+          // Emit non-fatal error notification
+          if (this.options.onError) {
+            const retryError = new Error(
+              `${context}: ${error.message}. Retrying in ${delay}ms (attempt ${attempt + 1}/${config.maxAttempts})`
+            );
+            (retryError as any).cause = error;
+            (retryError as any).isRetry = true;
+            this.options.onError(retryError);
+          }
+
+          await this.sleep(delay);
+        }
+      }
+    }
+
+    // All retries exhausted
+    this.consecutiveErrors++;
+
+    if (this.options.onError && lastError) {
+      this.options.onError(lastError);
+    }
+
+    // For live streams, allow skipping if configured
+    if (skipOnFail && isLive) {
+      return null;
+    }
+
+    throw lastError || new Error(`${context}: All retry attempts failed`);
   }
 }
 
