@@ -24,12 +24,6 @@ AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 57 tools.
 
 ---
 
-## Why Recker?
-
-> **HTTP** · **WebSocket** · **DNS** · **FTP/SFTP** · **Telnet** · **HLS** · **AI**
->
-> One SDK. Nine protocols. Zero config.
-
 ## Quick Start
 
 ```bash
