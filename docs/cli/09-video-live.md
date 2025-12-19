@@ -23,8 +23,12 @@ rek video @youtube/dQw4w9WgXcQ -s pt-BR -o legendas.vtt
 # Check if live stream is active
 rek live @twitch/shroud
 
-# Record a live stream
-rek live download @twitch/shroud -o shroud.ts
+# Record a live stream (auto-generates unique filename!)
+rek live download @twitch/shroud
+# → twitch--shroud--2025-12-19-14-30-00.ts
+
+# Record to specific directory
+rek live download @twitch/shroud -O ~/streams
 ```
 
 ## URL Shortcuts
@@ -245,29 +249,54 @@ To record this stream:
 Record a live stream to disk.
 
 ```bash
-# Record indefinitely (Ctrl+C to stop)
+# Record indefinitely (Ctrl+C to stop) - auto-generates unique filename
 rek live download @twitch/streamer
+# → twitch--streamer--2025-12-19-14-30-00.ts
+
+# Specify output directory (auto-generates filename there)
+rek live download @chaturbate/room -O /mnt/recordings
+# → /mnt/recordings/chaturbate--room--2025-12-19-14-30-00.ts
 
 # Record for specific duration
-rek live download @kick/streamer duration=3600
+rek live download @kick/streamer --duration=3600
 
-# Specify output file
+# Specify exact output file
 rek live download @youtube/xxx -o stream.ts
 
 # With custom quality
-rek live download @chaturbate/room quality=highest
+rek live download @chaturbate/room --quality=highest
 ```
+
+**Auto-Generated Filenames:**
+
+When no `-o` output is specified, Recker generates unique filenames:
+
+```
+{provider}--{username}--{YYYY-MM-DD-HH-mm-ss}.ts
+```
+
+Examples:
+- `twitch--shroud--2025-12-19-14-30-00.ts`
+- `chaturbate--_keti_--2025-12-19-22-15-30.ts`
+- `kick--xqc--2025-12-19-18-45-12.ts`
 
 **Options:**
 
 | Option | Description |
 |--------|-------------|
-| `-o, --output <file>` | Output file (default: `live.ts`) |
+| `-o, --output <file>` | Output file path (exact name) |
+| `-O, --outputDir <dir>` | Output directory (auto-generates filename) |
 | `-v, --verbose` | Show detailed information |
 | `-d, --duration <sec>` | Recording duration in seconds |
-| `quality=<q>` | Quality selection |
-| `concurrency=<n>` | Parallel segment downloads |
+| `-Q, --quality <q>` | Quality: `highest`, `lowest`, `720p`, `1080p` |
+| `-c, --concurrency <n>` | Parallel segment downloads (default: 4) |
 | `Header:Value` | Custom HTTP headers |
+
+**Resilience:**
+
+- Automatic retry with exponential backoff on transient errors (404, 503, etc.)
+- Skips failed segments instead of stopping the entire recording
+- Appends to existing files (safe to resume interrupted recordings)
 
 ## Examples
 
@@ -306,11 +335,16 @@ rek video @youtube/dQw4w9WgXcQ --sub en --sub-format srv3
 # Check if live first
 rek live @twitch/shroud
 
-# Record if live
-rek live download @twitch/shroud -o shroud-$(date +%Y%m%d).ts
+# Record with auto-generated unique filename
+rek live download @twitch/shroud
+# → twitch--shroud--2025-12-19-14-30-00.ts
+
+# Record to specific directory
+rek live download @twitch/shroud -O ~/streams
+# → ~/streams/twitch--shroud--2025-12-19-14-30-00.ts
 
 # Record 1 hour
-rek live download @twitch/shroud duration=3600
+rek live download @twitch/shroud --duration=3600
 ```
 
 ### Download TikTok Video
@@ -342,11 +376,15 @@ rek video download @x/user/status/123456789
 # Chaturbate - check status
 rek live @chaturbate/username
 
-# Record
-rek live download @chaturbate/username -o recording.ts
+# Record (auto-generates unique filename)
+rek live download @chaturbate/username
+# → chaturbate--username--2025-12-19-22-15-30.ts
 
-# With duration limit
-rek live download @chaturbate/username duration=1800
+# Record to specific directory
+rek live download @chaturbate/username -O /mnt/recordings
+
+# With duration limit (30 minutes)
+rek live download @chaturbate/username --duration=1800
 ```
 
 ### Generic Site (Auto-detect)
@@ -463,7 +501,9 @@ echo "rek live download @twitch/streamer duration=7200 -o stream.ts" | at 20:00
 | `rek video check <url>` | Check URL support |
 | `rek live <url>` | Show live stream info (default) |
 | `rek live @site/path` | Show live info using shortcut |
-| `rek live download <url>` | Record live stream |
+| `rek live download <url>` | Record live stream (auto-filename) |
+| `rek live download <url> -O <dir>` | Record to directory (auto-filename) |
+| `rek live download <url> -o <file>` | Record to specific file |
 | `rek live shortcuts` | List live shortcuts |
 
 ## Troubleshooting
