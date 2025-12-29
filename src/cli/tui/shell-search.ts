@@ -374,6 +374,33 @@ const { results, stats } = await client.batch([
     };
   }
 
+  /**
+   * Get full document content by path.
+   * Used by the help panel for preview.
+   */
+  async getDocContent(path: string): Promise<string | null> {
+    await this.ensureInitialized();
+
+    // Find document in index
+    const doc = this.docsIndex.find(d => d.path === path || d.id === path);
+
+    if (doc && doc.content) {
+      return doc.content;
+    }
+
+    // Try to load from filesystem as fallback
+    try {
+      const fullPath = join(this.docsPath, path);
+      if (existsSync(fullPath)) {
+        return readFileSync(fullPath, 'utf-8');
+      }
+    } catch {
+      // Ignore errors
+    }
+
+    return null;
+  }
+
   // ============ Path Finding ============
 
   private findDocsPath(): string {
