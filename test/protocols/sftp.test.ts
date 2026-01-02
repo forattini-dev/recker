@@ -2,32 +2,32 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SFTP, createSFTP, sftp } from '../../src/protocols/sftp.js';
 import { clearModuleCache } from '../../src/utils/optional-require.js';
 
-// Mock ssh2-sftp-client
+// Mock ssh2-sftp-client with a class that can be instantiated with `new`
 vi.mock('ssh2-sftp-client', () => {
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      connect: vi.fn().mockResolvedValue(undefined),
-      end: vi.fn().mockResolvedValue(undefined),
-      list: vi.fn().mockResolvedValue([
-        { name: 'file.txt', type: '-', size: 1024, modifyTime: 1700000000, accessTime: 1700000000, rights: { user: 'rwx', group: 'rx', other: 'rx' }, owner: 1000, group: 1000 },
-        { name: 'folder', type: 'd', size: 4096, modifyTime: 1700000000, accessTime: 1700000000, rights: { user: 'rwx', group: 'rx', other: 'rx' }, owner: 1000, group: 1000 },
-        { name: 'link', type: 'l', size: 0, modifyTime: 1700000000, accessTime: 1700000000, rights: { user: 'rwx', group: 'rx', other: 'rx' }, owner: 1000, group: 1000 }
-      ]),
-      exists: vi.fn().mockResolvedValue('-'),
-      stat: vi.fn().mockResolvedValue({ size: 2048, isDirectory: false, isFile: true }),
-      fastGet: vi.fn().mockResolvedValue(undefined),
-      fastPut: vi.fn().mockResolvedValue(undefined),
-      get: vi.fn().mockResolvedValue(Buffer.from('file content')),
-      put: vi.fn().mockResolvedValue(undefined),
-      delete: vi.fn().mockResolvedValue(undefined),
-      mkdir: vi.fn().mockResolvedValue(undefined),
-      rmdir: vi.fn().mockResolvedValue(undefined),
-      rename: vi.fn().mockResolvedValue(undefined),
-      chmod: vi.fn().mockResolvedValue(undefined),
-      cwd: vi.fn().mockResolvedValue('/home/user'),
-      append: vi.fn().mockResolvedValue(undefined)
-    }))
-  };
+  // Use a class so it can be used with `new` keyword
+  const MockSFTPClient = vi.fn(function(this: any) {
+    this.connect = vi.fn().mockResolvedValue(undefined);
+    this.end = vi.fn().mockResolvedValue(undefined);
+    this.list = vi.fn().mockResolvedValue([
+      { name: 'file.txt', type: '-', size: 1024, modifyTime: 1700000000, accessTime: 1700000000, rights: { user: 'rwx', group: 'rx', other: 'rx' }, owner: 1000, group: 1000 },
+      { name: 'folder', type: 'd', size: 4096, modifyTime: 1700000000, accessTime: 1700000000, rights: { user: 'rwx', group: 'rx', other: 'rx' }, owner: 1000, group: 1000 },
+      { name: 'link', type: 'l', size: 0, modifyTime: 1700000000, accessTime: 1700000000, rights: { user: 'rwx', group: 'rx', other: 'rx' }, owner: 1000, group: 1000 }
+    ]);
+    this.exists = vi.fn().mockResolvedValue('-');
+    this.stat = vi.fn().mockResolvedValue({ size: 2048, isDirectory: false, isFile: true });
+    this.fastGet = vi.fn().mockResolvedValue(undefined);
+    this.fastPut = vi.fn().mockResolvedValue(undefined);
+    this.get = vi.fn().mockResolvedValue(Buffer.from('file content'));
+    this.put = vi.fn().mockResolvedValue(undefined);
+    this.delete = vi.fn().mockResolvedValue(undefined);
+    this.mkdir = vi.fn().mockResolvedValue(undefined);
+    this.rmdir = vi.fn().mockResolvedValue(undefined);
+    this.rename = vi.fn().mockResolvedValue(undefined);
+    this.chmod = vi.fn().mockResolvedValue(undefined);
+    this.cwd = vi.fn().mockResolvedValue('/home/user');
+    this.append = vi.fn().mockResolvedValue(undefined);
+  });
+  return { default: MockSFTPClient };
 });
 
 describe('SFTP Protocol Utility', () => {
@@ -66,10 +66,10 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle connection errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockRejectedValue(new Error('Authentication failed')),
         end: vi.fn()
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'bad.host' });
       const result = await client.connect();
@@ -248,10 +248,10 @@ describe('SFTP Protocol Utility', () => {
 
     it('should throw when connection fails', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockRejectedValue(new Error('Connection refused')),
         end: vi.fn()
-      } as any));
+      }); });
 
       await expect(
         sftp({ host: 'bad.host' }, async () => {
@@ -275,11 +275,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle download stream errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         get: vi.fn().mockRejectedValue(new Error('Stream download failed'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -304,11 +304,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should convert string to buffer', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         get: vi.fn().mockResolvedValue('string content')
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -321,11 +321,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle buffer download errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         get: vi.fn().mockRejectedValue(new Error('Buffer download failed'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -350,11 +350,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle upload stream errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         put: vi.fn().mockRejectedValue(new Error('Stream upload failed'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -386,11 +386,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle buffer upload errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         put: vi.fn().mockRejectedValue(new Error('Buffer upload failed'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -404,11 +404,11 @@ describe('SFTP Protocol Utility', () => {
   describe('error handling', () => {
     it('should handle list errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         list: vi.fn().mockRejectedValue(new Error('List failed'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -420,11 +420,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle stat errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         stat: vi.fn().mockRejectedValue(new Error('Stat failed'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -436,11 +436,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle download errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         fastGet: vi.fn().mockRejectedValue(new Error('Download error'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -452,11 +452,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle upload errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         fastPut: vi.fn().mockRejectedValue(new Error('Upload error'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -468,11 +468,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle delete errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         delete: vi.fn().mockRejectedValue(new Error('Delete error'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -484,11 +484,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle mkdir errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         mkdir: vi.fn().mockRejectedValue(new Error('Mkdir error'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -500,11 +500,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle rmdir errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         rmdir: vi.fn().mockRejectedValue(new Error('Rmdir error'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -516,11 +516,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle rename errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         rename: vi.fn().mockRejectedValue(new Error('Rename error'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -532,11 +532,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle chmod errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         chmod: vi.fn().mockRejectedValue(new Error('Chmod error'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -548,11 +548,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle pwd errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         cwd: vi.fn().mockRejectedValue(new Error('PWD error'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -564,11 +564,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should handle append errors', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         append: vi.fn().mockRejectedValue(new Error('Append error'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -580,11 +580,11 @@ describe('SFTP Protocol Utility', () => {
 
     it('should return false for exists on error', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         exists: vi.fn().mockRejectedValue(new Error('Access denied'))
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();
@@ -597,13 +597,13 @@ describe('SFTP Protocol Utility', () => {
   describe('file type mapping', () => {
     it('should handle unknown file type', async () => {
       const SFTPClient = (await import('ssh2-sftp-client')).default;
-      vi.mocked(SFTPClient).mockImplementationOnce(() => ({
+      vi.mocked(SFTPClient).mockImplementationOnce(function(this: any) { Object.assign(this, {
         connect: vi.fn().mockResolvedValue(undefined),
         end: vi.fn(),
         list: vi.fn().mockResolvedValue([
           { name: 'unknown', type: 'x', size: 0, modifyTime: 1700000000, accessTime: 1700000000, rights: { user: 'rwx', group: 'rx', other: 'rx' }, owner: 1000, group: 1000 }
         ])
-      } as any));
+      }); });
 
       const client = createSFTP({ host: 'test.com' });
       await client.connect();

@@ -13,7 +13,7 @@ describe('MCP Dynamic Tool Loading', () => {
       port: testPort,
       toolPaths: [toolFixturePath],
       debug: false,
-      profile: 'full', // Use full profile to include custom tool
+      category: 'full', // Use full category to include custom tool
     });
     await server.start();
   });

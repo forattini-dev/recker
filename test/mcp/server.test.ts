@@ -15,7 +15,7 @@ describe('MCP Server', () => {
         port: testPort,
         docsPath,
         debug: false,
-        profile: 'full', // Use full profile to test all 57 tools
+        category: 'full', // Use full category to test all 65 tools
       });
       await server.start();
     });
@@ -78,7 +78,7 @@ describe('MCP Server', () => {
         const result = await sendRequest('tools/list');
 
         expect(result.result.tools).toBeDefined();
-                expect(result.result.tools).toHaveLength(57);
+                expect(result.result.tools).toHaveLength(65);
 
         const toolNames = result.result.tools.map((t: any) => t.name);
         expect(toolNames).toContain('rek_search_docs');
@@ -124,11 +124,14 @@ describe('MCP Server', () => {
 
       it('should handle prompts/list', async () => {
         const result = await sendRequest('prompts/list');
-        expect(result.result.prompts).toHaveLength(3);
+        expect(result.result.prompts).toHaveLength(13);
         const names = result.result.prompts.map((p: any) => p.name);
         expect(names).toContain('recker-expert');
         expect(names).toContain('generate-http-client');
         expect(names).toContain('seo-audit');
+        expect(names).toContain('migrate-from-axios');
+        expect(names).toContain('debug-api');
+        expect(names).toContain('api-security-check');
       });
 
       it('should return error for unknown method', async () => {
@@ -362,7 +365,7 @@ describe('MCP Server', () => {
         port: testPort,
         docsPath,
         debug: false,
-        profile: 'full', // Use full profile to test all 57 tools
+        category: 'full', // Use full category to test all 65 tools
       });
       await server.start();
     });
@@ -397,7 +400,7 @@ describe('MCP Server', () => {
       });
 
       const result = await response.json();
-              expect(result.result.tools).toHaveLength(57);
+              expect(result.result.tools).toHaveLength(65);
     });
 
     it('should establish SSE connection', async () => {

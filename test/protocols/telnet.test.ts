@@ -52,7 +52,11 @@ function createMockSocket() {
 let mockSocket: ReturnType<typeof createMockSocket>;
 
 vi.mock('node:net', () => ({
-  Socket: vi.fn().mockImplementation(() => mockSocket)
+  // Use a regular function that returns the mock socket
+  // This allows tests to modify mockSocket after Socket is instantiated
+  Socket: vi.fn(function() {
+    return mockSocket;
+  })
 }));
 
 describe('Telnet Protocol Utility', () => {
