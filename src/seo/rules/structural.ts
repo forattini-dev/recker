@@ -178,7 +178,16 @@ export const structuralRules: SeoRule[] = [
           { id: 'h2-count', name: 'H2 Count', category: 'headings', severity: 'info' },
           'info',
           `Few H2 headings (${ctx.h2Count})`,
-          { value: ctx.h2Count, recommendation: `Consider adding more H2 headings for better structure (${min}-${max} ideal)` }
+          {
+            value: ctx.h2Count,
+            recommendation: `Consider adding more H2 headings for better structure (${min}-${max} ideal)`,
+            evidence: {
+              found: `${ctx.h2Count} H2 headings`,
+              expected: `${min}-${max} H2 headings for optimal content structure`,
+              impact: 'Few H2 headings may indicate lack of content structure. Well-organized content with clear sections improves readability and helps search engines understand topic coverage.',
+              example: '<h2>Introduction</h2>\n<p>...</p>\n<h2>Main Topic</h2>\n<p>...</p>\n<h2>Conclusion</h2>'
+            }
+          }
         );
       }
       if (ctx.h2Count > max) {
@@ -186,7 +195,16 @@ export const structuralRules: SeoRule[] = [
           { id: 'h2-count', name: 'H2 Count', category: 'headings', severity: 'info' },
           'info',
           `Many H2 headings (${ctx.h2Count})`,
-          { value: ctx.h2Count, recommendation: 'Consider consolidating sections' }
+          {
+            value: ctx.h2Count,
+            recommendation: 'Consider consolidating sections or using H3 for subsections',
+            evidence: {
+              found: `${ctx.h2Count} H2 headings`,
+              expected: `${min}-${max} H2 headings for optimal structure`,
+              impact: 'Too many H2 headings can fragment content and make it harder for users and search engines to identify the main topics. Consider grouping related sections.',
+              example: '<h2>Main Section</h2>\n<h3>Subsection A</h3>\n<h3>Subsection B</h3>'
+            }
+          }
         );
       }
       return createResult(
@@ -209,7 +227,15 @@ export const structuralRules: SeoRule[] = [
           { id: 'html5-header-exists', name: 'HTML5 Header', category: 'technical', severity: 'info' },
           'info',
           'Missing <header> element',
-          { recommendation: 'Use <header> for site-wide or page-specific introductory content' }
+          {
+            recommendation: 'Use <header> for site-wide or page-specific introductory content',
+            evidence: {
+              found: 'No <header> element detected',
+              expected: '<header> element wrapping logo, navigation, and intro content',
+              impact: 'The <header> element provides semantic meaning to screen readers and search engines. It clearly identifies the introductory content area, improving accessibility and document structure.',
+              example: '<header>\n  <nav>...</nav>\n  <h1>Site Title</h1>\n</header>'
+            }
+          }
         );
       }
       return createResult(
@@ -231,7 +257,15 @@ export const structuralRules: SeoRule[] = [
           { id: 'html5-nav-exists', name: 'HTML5 Navigation', category: 'technical', severity: 'info' },
           'info',
           'Missing <nav> element',
-          { recommendation: 'Use <nav> to define a block of navigation links' }
+          {
+            recommendation: 'Use <nav> to define a block of navigation links',
+            evidence: {
+              found: 'No <nav> element detected',
+              expected: '<nav> element wrapping main navigation links',
+              impact: 'The <nav> element helps screen readers identify navigation sections and allows users to skip directly to content. It also helps search engines understand site structure.',
+              example: '<nav aria-label="Main navigation">\n  <ul>\n    <li><a href="/">Home</a></li>\n    <li><a href="/about">About</a></li>\n  </ul>\n</nav>'
+            }
+          }
         );
       }
       return createResult(
@@ -253,7 +287,15 @@ export const structuralRules: SeoRule[] = [
           { id: 'html5-main-exists', name: 'HTML5 Main Content', category: 'technical', severity: 'info' },
           'info',
           'Missing <main> element',
-          { recommendation: 'Use <main> to enclose the dominant content of the <body>' }
+          {
+            recommendation: 'Use <main> to enclose the dominant content of the <body>',
+            evidence: {
+              found: 'No <main> element detected',
+              expected: 'Single <main> element containing the primary page content',
+              impact: 'The <main> element is crucial for accessibility. Screen readers use it to skip directly to content. There should be only one visible <main> per page.',
+              example: '<main>\n  <h1>Page Title</h1>\n  <article>...</article>\n</main>'
+            }
+          }
         );
       }
       return createResult(
@@ -275,7 +317,15 @@ export const structuralRules: SeoRule[] = [
           { id: 'html5-article-exists', name: 'HTML5 Article', category: 'technical', severity: 'info' },
           'info',
           'Missing <article> element for substantial content',
-          { recommendation: 'Consider using <article> for blog posts, news articles, etc.' }
+          {
+            recommendation: 'Consider using <article> for blog posts, news articles, etc.',
+            evidence: {
+              found: `${ctx.wordCount} words of content without <article> wrapper`,
+              expected: '<article> element for self-contained, distributable content',
+              impact: 'The <article> element indicates content that could stand alone (like a blog post or product). It helps search engines identify the main content and can improve rich snippet eligibility.',
+              example: '<article>\n  <h2>Article Title</h2>\n  <time datetime="2024-01-15">January 15, 2024</time>\n  <p>Article content...</p>\n</article>'
+            }
+          }
         );
       }
       return createResult(
@@ -297,7 +347,15 @@ export const structuralRules: SeoRule[] = [
           { id: 'html5-section-exists', name: 'HTML5 Section', category: 'technical', severity: 'info' },
           'info',
           'Missing <section> element for content grouping',
-          { recommendation: 'Consider using <section> to group related content, usually with a heading' }
+          {
+            recommendation: 'Consider using <section> to group related content, usually with a heading',
+            evidence: {
+              found: `${ctx.h2Count} H2 headings without <section> wrappers`,
+              expected: '<section> elements to group thematically related content',
+              impact: 'Using <section> elements creates a clear document outline and helps assistive technologies understand content organization. Each section should typically have a heading.',
+              example: '<section>\n  <h2>Features</h2>\n  <p>Feature description...</p>\n</section>\n<section>\n  <h2>Pricing</h2>\n  <p>Pricing info...</p>\n</section>'
+            }
+          }
         );
       }
       return createResult(
@@ -319,7 +377,15 @@ export const structuralRules: SeoRule[] = [
           { id: 'html5-footer-exists', name: 'HTML5 Footer', category: 'technical', severity: 'info' },
           'info',
           'Missing <footer> element',
-          { recommendation: 'Use <footer> for site-wide or page-specific footer content' }
+          {
+            recommendation: 'Use <footer> for site-wide or page-specific footer content',
+            evidence: {
+              found: 'No <footer> element detected',
+              expected: '<footer> element containing copyright, links, and contact info',
+              impact: 'The <footer> element provides semantic meaning for the closing content area. It helps screen readers identify footer regions and is commonly used for legal links, contact info, and copyright.',
+              example: '<footer>\n  <p>&copy; 2024 Company Name</p>\n  <nav>\n    <a href="/privacy">Privacy</a>\n    <a href="/terms">Terms</a>\n  </nav>\n</footer>'
+            }
+          }
         );
       }
       return createResult(

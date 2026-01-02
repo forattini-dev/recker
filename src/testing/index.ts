@@ -167,3 +167,31 @@ export type {
   FtpSession,
   MockFtpStats,
 } from './mock-ftp-server.js';
+
+// Proxy Testing
+export {
+  MockProxyServer,
+  createForwardProxy,
+  createInterceptProxy,
+} from './mock-proxy-server.js';
+
+export type {
+  ProxyServerOptions,
+  ProxyMode,
+  ProxyRequest,
+  ProxyResponse,
+  ProxyError,
+  ProxyStats,
+} from './mock-proxy-server.js';
+
+// Proxy Certificate Utils
+export {
+  generateCertificate,
+  generateCA,
+  getDefaultCA,
+} from './proxy-certs.js';
+
+export type {
+  CertificateInfo,
+  CertificateOptions,
+} from './proxy-certs.js';

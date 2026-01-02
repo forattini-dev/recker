@@ -9,14 +9,14 @@
  * # Start with stdio (for Claude Code)
  * recker-mcp
  *
- * # Start with minimal profile (recommended)
- * recker-mcp --profile=minimal
+ * # Start with minimal category (recommended)
+ * recker-mcp --category=minimal
  *
- * # Combine profiles
- * recker-mcp --profile=minimal,seo,security
+ * # Combine categories
+ * recker-mcp --category=minimal,seo,security
  *
- * # List available profiles
- * recker-mcp --list-profiles
+ * # List available categories
+ * recker-mcp --list-categories
  *
  * # Start with HTTP transport
  * recker-mcp --transport http --port 3100
@@ -29,10 +29,10 @@
 import { RekCommand as Command } from '../cli/router.js';
 import { MCPServer, type MCPTransportMode } from './server.js';
 import {
-  listProfiles,
-  validateProfiles,
-  estimateProfileTokens,
-  type ProfileName,
+  listCategories,
+  validateCategories,
+  estimateCategoryTokens,
+  type CategoryName,
 } from './profiles.js';
 
 const program = new Command('recker-mcp');
@@ -70,9 +70,9 @@ program
   .option('--docs-path <path>', 'Path to documentation directory')
   .option('--examples-path <path>', 'Path to examples directory')
   .option('--src-path <path>', 'Path to source directory')
-  // Profile-based filtering (recommended)
-  .option('--profile <profiles>', 'Tool profiles to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, full')
-  .option('--list-profiles', 'List available profiles and exit')
+  // Category-based filtering (recommended)
+  .option('-c, --category <categories>', 'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, full')
+  .option('--list-categories', 'List available categories and exit')
   // Legacy tool filtering flags
   .option('--no-docs', 'Disable documentation tools (search, get, examples, schema, suggest)')
   .option('--no-http', 'Disable HTTP request tool')
@@ -91,37 +91,39 @@ program
     opts.transport = opts.transport || 'stdio';
     opts.port = opts.port || '3100';
 
-    // Handle --list-profiles
-    if (opts.listProfiles) {
+    // Handle --list-categories
+    if (opts.listCategories) {
       console.log('╔═══════════════════════════════════════════════════════════════════╗');
-      console.log('║                    Recker MCP Profiles                            ║');
+      console.log('║                    Recker MCP Categories                          ║');
       console.log('╚═══════════════════════════════════════════════════════════════════╝');
       console.log('');
-      console.log('Available profiles:');
+      console.log('Available categories:');
       console.log('');
 
-      for (const profile of listProfiles()) {
-        const toolCount = profile.toolCount === -1 ? 'all' : profile.toolCount;
-        console.log(`  ${profile.name.padEnd(12)} ${profile.description}`);
-        console.log(`               Tools: ${toolCount}, ~${profile.estimatedTokens} tokens`);
+      for (const category of listCategories()) {
+        const toolCount = category.toolCount === -1 ? 'all' : category.toolCount;
+        const icon = category.icon || '📦';
+        console.log(`  ${icon} ${category.name.padEnd(12)} ${category.description}`);
+        console.log(`               Tools: ${toolCount}, ~${category.estimatedTokens} tokens`);
         console.log('');
       }
 
       console.log('Usage examples:');
-      console.log('  recker-mcp                                # Default: minimal profile');
-      console.log('  recker-mcp --profile=minimal,seo          # Combine profiles');
-      console.log('  recker-mcp --profile=full                 # All 57 tools (high context)');
+      console.log('  recker-mcp                                # Default: minimal category');
+      console.log('  recker-mcp --category=minimal,seo         # Combine categories');
+      console.log('  recker-mcp -c seo,security                # Short form');
+      console.log('  recker-mcp --category=full                # All tools (high context)');
       console.log('');
       process.exit(0);
     }
 
-    // Validate profile names if provided
-    if (opts.profile) {
-      const profileNames = opts.profile.split(',').map((p: string) => p.trim());
-      const validation = validateProfiles(profileNames);
+    // Validate category names if provided
+    if (opts.category) {
+      const categoryNames = opts.category.split(',').map((p: string) => p.trim());
+      const validation = validateCategories(categoryNames);
       if (!validation.valid) {
-        console.error(`Invalid profile(s): ${validation.invalid.join(', ')}`);
-        console.error('Use --list-profiles to see available profiles');
+        console.error(`Invalid category(s): ${validation.invalid.join(', ')}`);
+        console.error('Use --list-categories to see available categories');
         process.exit(1);
       }
     }
@@ -179,7 +181,7 @@ program
       process.exit(1);
     }
 
-    // Create server with profile or legacy toolsFilter
+    // Create server with category or legacy toolsFilter
     const server = new MCPServer({
       transport,
       port,
@@ -187,8 +189,8 @@ program
       docsPath: opts.docsPath,
       examplesPath: opts.examplesPath,
       srcPath: opts.srcPath,
-      profile: opts.profile, // Profile takes precedence
-      toolsFilter: !opts.profile && toolsFilter.length > 0 ? toolsFilter : undefined,
+      category: opts.category, // Category takes precedence
+      toolsFilter: !opts.category && toolsFilter.length > 0 ? toolsFilter : undefined,
     });
 
     // Log startup info (not in stdio mode to avoid polluting the protocol)
@@ -201,13 +203,13 @@ program
       console.log(`  Port:      ${port}`);
       console.log(`  Debug:     ${opts.debug ? 'enabled' : 'disabled'}`);
 
-      if (opts.profile) {
-        const tokens = estimateProfileTokens(opts.profile);
-        console.log(`  Profile:   ${opts.profile} (~${tokens} tokens)`);
+      if (opts.category) {
+        const tokens = estimateCategoryTokens(opts.category);
+        console.log(`  Category:  ${opts.category} (~${tokens} tokens)`);
       } else if (toolsFilter.length > 0) {
         console.log(`  Filters:   ${toolsFilter.join(', ')}`);
       } else {
-        console.log(`  Profile:   full (all tools enabled)`);
+        console.log(`  Category:  full (all tools enabled)`);
       }
       console.log('');
       console.log('  Available tools:');

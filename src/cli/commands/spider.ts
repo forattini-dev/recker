@@ -13,11 +13,20 @@ export interface SpiderOptions {
   seo?: boolean;
   robots?: boolean;
   json?: boolean;
+  /** Stream output as JSONL (one JSON per line) */
+  jsonl?: boolean;
+  /** CSS selectors to extract (comma-separated string or array) */
+  extract?: string | string[];
+  /** URL patterns to include (comma-separated string or array) */
+  include?: string | string[];
+  /** URL patterns to exclude (comma-separated string or array) */
+  exclude?: string | string[];
 }
 
 export async function runSpider(opts: SpiderOptions) {
   const url = opts.url;
   const formatJson = !!opts.json;
+  const formatJsonl = !!opts.jsonl;
   const outputFile = opts.output;
   const seoEnabled = !!opts.seo;
   const focusMode = opts.focus || 'all';
@@ -28,14 +37,48 @@ export async function runSpider(opts: SpiderOptions) {
   const limit = opts.limit || 100;
   const concurrency = opts.concurrency || 5;
 
+  // Parse comma-separated options into arrays
+  const parseList = (val: string | string[] | undefined): string[] | undefined => {
+    if (!val) return undefined;
+    if (Array.isArray(val)) return val;
+    return val.split(',').map(s => s.trim()).filter(Boolean);
+  };
+  const extractSelectors = parseList(opts.extract);
+  const includePatterns = parseList(opts.include);
+  const excludePatterns = parseList(opts.exclude);
+
+  // JSONL streaming mode - uses event-based runner for real-time output
+  if (formatJsonl) {
+    const { runSpiderWithEvents } = await import('./spider-runner.js');
+    try {
+      await runSpiderWithEvents(url, {
+        depth,
+        limit,
+        concurrency,
+        robots: respectRobotsTxt,
+        seo: seoEnabled,
+        focus: focusMode as any,
+        extract: extractSelectors,
+        include: includePatterns,
+        exclude: excludePatterns,
+        jsonl: true,
+        jsonlOutput: outputFile, // If -o is specified, write to file
+      });
+      return;
+    } catch (error: any) {
+      console.error(colors.red(`\nSpider failed: ${error.message}`));
+      process.exit(1);
+    }
+  }
+
   // Focus mode categories
   const focusCategories: Record<string, string[]> = {
     links: ['links'],
-    duplicates: ['title', 'meta', 'content'], 
+    duplicates: ['title', 'meta', 'content'],
     security: ['security'],
     ai: ['ai-search'],
     resources: ['resources', 'performance'],
-    all: [], 
+    all: [],
   };
 
   let startUrl = url;
@@ -385,6 +428,9 @@ Spider starting: ${startUrl}`));
         sameDomain: true,
         delay: 100,
         respectRobotsTxt,
+        extract: extractSelectors,
+        include: includePatterns?.map(p => new RegExp(p)),
+        exclude: excludePatterns?.map(p => new RegExp(p)),
         onProgress: formatJson ? undefined : (progress) => {
           process.stdout.write(`\r${colors.gray('  Crawling:')} ${colors.cyan(progress.crawled.toString())} pages | ${colors.gray('Queue:')} ${progress.queued} | ${colors.gray('Depth:')} ${progress.depth}   `);
         },
@@ -409,23 +455,38 @@ Spider starting: ${startUrl}`));
             errorCount: result.errors.length,
             uniqueUrls: result.visited.size,
           },
-                                      pages: result.pages.map(p => ({
-                                        url: p.url,
-                                        status: p.status,
-                                        title: p.title,
-                                        depth: p.depth,
-                                        linksCount: p.links.length,
-                                        duration: p.duration,
-                                        error: p.error,
-                                        meta: p.meta,
-                                        metrics: p.metrics,
-                                        social: p.social,
-                                      })),                        errors: result.pages.filter(p => p.error).map(p => ({
-                          url: p.url,
-                          status: p.status,
-                          error: p.error
-                        })),
-                      };        console.log(JSON.stringify(jsonOutput, null, 2));
+          pages: result.pages.map(p => ({
+            url: p.url,
+            status: p.status,
+            title: p.title,
+            depth: p.depth,
+            linksCount: p.links.length,
+            duration: p.duration,
+            error: p.error,
+            meta: p.meta,
+            metrics: p.metrics,
+            social: p.social,
+            extracted: p.extracted,
+          })),
+          errors: result.pages.filter(p => p.error).map(p => ({
+            url: p.url,
+            status: p.status,
+            error: p.error
+          })),
+          extraction: extractSelectors ? {
+            schema: Object.fromEntries(extractSelectors.map(s => {
+              const [sel, attr] = s.split(':');
+              return [sel, attr || 'text'];
+            })),
+            totalItems: result.pages.reduce((acc: number, p) => {
+              if (!p.extracted) return acc;
+              return acc + Object.values(p.extracted).reduce((sum: number, val) => {
+                return sum + (Array.isArray(val) ? val.length : val ? 1 : 0);
+              }, 0);
+            }, 0),
+          } : undefined,
+        };
+        console.log(JSON.stringify(jsonOutput, null, 2));
         return;
       }
 
@@ -469,6 +530,50 @@ Spider starting: ${startUrl}`));
         console.log(formatErrorSummary(errorSummary));
       }
 
+      // Show extraction results if --extract was used
+      if (extractSelectors && extractSelectors.length > 0) {
+        const pagesWithData = result.pages.filter(p => p.extracted && Object.keys(p.extracted).length > 0);
+        if (pagesWithData.length > 0) {
+          console.log(colors.bold('\n  Extraction Results:'));
+          console.log(`    ${colors.gray('Selectors:')} ${extractSelectors.join(', ')}`);
+          console.log(`    ${colors.gray('Pages with data:')} ${pagesWithData.length}/${result.pages.length}`);
+
+          // Count total items extracted
+          let totalItems = 0;
+          for (const page of pagesWithData) {
+            for (const values of Object.values(page.extracted!)) {
+              if (Array.isArray(values)) {
+                totalItems += values.length;
+              } else if (values !== undefined) {
+                totalItems++;
+              }
+            }
+          }
+          console.log(`    ${colors.gray('Total items:')} ${totalItems}`);
+
+          // Show sample from first few pages
+          console.log(colors.gray('\n    Sample:'));
+          for (const page of pagesWithData.slice(0, 3)) {
+            const path = new URL(page.url).pathname;
+            console.log(`      ${colors.cyan(path)}`);
+            for (const [key, values] of Object.entries(page.extracted!)) {
+              if (Array.isArray(values) && values.length > 0) {
+                const sample = values.slice(0, 2).map(v => String(v).slice(0, 40));
+                const more = values.length > 2 ? ` (+${values.length - 2} more)` : '';
+                console.log(`        ${colors.gray(key + ':')} ${sample.join(', ')}${more}`);
+              } else if (values) {
+                console.log(`        ${colors.gray(key + ':')} ${String(values).slice(0, 50)}`);
+              }
+            }
+          }
+          if (pagesWithData.length > 3) {
+            console.log(colors.gray(`      ... and ${pagesWithData.length - 3} more pages`));
+          }
+        } else {
+          console.log(colors.yellow('\n  No data extracted (selectors found no matches)'));
+        }
+      }
+
       // Save to file if requested
       if (outputFile) {
         const jsonOutput = {
@@ -481,23 +586,38 @@ Spider starting: ${startUrl}`));
             errorCount: result.errors.length,
             uniqueUrls: result.visited.size,
           },
-                                      pages: result.pages.map(p => ({
-                                        url: p.url,
-                                        status: p.status,
-                                        title: p.title,
-                                        depth: p.depth,
-                                        linksCount: p.links.length,
-                                        duration: p.duration,
-                                        error: p.error,
-                                        meta: p.meta,
-                                        metrics: p.metrics,
-                                        social: p.social,
-                                      })),                        errors: result.pages.filter(p => p.error).map(p => ({
-                          url: p.url,
-                          status: p.status,
-                          error: p.error
-                        })),
-                      };        await fs.writeFile(outputFile, JSON.stringify(jsonOutput, null, 2));
+          pages: result.pages.map(p => ({
+            url: p.url,
+            status: p.status,
+            title: p.title,
+            depth: p.depth,
+            linksCount: p.links.length,
+            duration: p.duration,
+            error: p.error,
+            meta: p.meta,
+            metrics: p.metrics,
+            social: p.social,
+            extracted: p.extracted,
+          })),
+          errors: result.pages.filter(p => p.error).map(p => ({
+            url: p.url,
+            status: p.status,
+            error: p.error
+          })),
+          extraction: extractSelectors ? {
+            schema: Object.fromEntries(extractSelectors.map(s => {
+              const [sel, attr] = s.split(':');
+              return [sel, attr || 'text'];
+            })),
+            totalItems: result.pages.reduce((acc: number, p) => {
+              if (!p.extracted) return acc;
+              return acc + Object.values(p.extracted).reduce((sum: number, val) => {
+                return sum + (Array.isArray(val) ? val.length : val ? 1 : 0);
+              }, 0);
+            }, 0),
+          } : undefined,
+        };
+        await fs.writeFile(outputFile, JSON.stringify(jsonOutput, null, 2));
         console.log(colors.green(`\n  Report saved to: ${outputFile}`));
       }
     }
@@ -561,11 +681,39 @@ export function registerSpiderCommand(program: Command) {
       short: 'r',
       description: 'Respect robots.txt rules',
     })
+    .option('extract', {
+      type: 'string',
+      short: 'E',
+      description: 'CSS selectors to extract (comma-separated)',
+      example: '--extract "h1,a:href,.price"',
+    })
+    .option('include', {
+      type: 'string',
+      short: 'i',
+      description: 'URL patterns to include (comma-separated regex)',
+      example: '--include "^/blog/,^/docs/"',
+    })
+    .option('exclude', {
+      type: 'string',
+      short: 'x',
+      description: 'URL patterns to exclude (comma-separated regex)',
+      example: '--exclude "/admin/,/private/"',
+    })
+    .option('jsonl', {
+      short: 'L',
+      description: 'Stream output as JSONL (one JSON object per line)',
+    })
     .example('rek spider example.com', 'Basic crawl')
     .example('rek spider example.com -d 3 -l 50', 'Depth 3, max 50 pages')
     .example('rek spider example.com --seo', 'Enable SEO analysis')
     .example('rek spider example.com --seo -f security', 'Focus on security issues')
     .example('rek spider example.com --seo -o report.json', 'Save SEO report')
+    .example('rek spider example.com -E h1 -E h2', 'Extract all h1 and h2 tags')
+    .example('rek spider example.com -E "a:href" --json', 'Extract all links as JSON')
+    .example('rek spider example.com --include "^/blog/"', 'Only crawl /blog/ paths')
+    .example('rek spider example.com --exclude "/admin/"', 'Skip /admin/ paths')
+    .example('rek spider example.com --jsonl -o crawl.jsonl', 'Stream to JSONL file')
+    .example('rek spider example.com -L | jq -c', 'Stream and process with jq')
     .action(async (url: string, args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
       await runSpider({
@@ -578,6 +726,10 @@ export function registerSpiderCommand(program: Command) {
         seo: options.seo,
         robots: options.robots,
         json: options.json,
+        jsonl: options.jsonl,
+        extract: options.extract,
+        include: options.include,
+        exclude: options.exclude,
       });
     });
 }

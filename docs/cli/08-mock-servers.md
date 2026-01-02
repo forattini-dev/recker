@@ -1,6 +1,6 @@
 # Mock Servers (`rek serve`)
 
-Recker includes built-in mock servers for all supported protocols. These are perfect for:
+Recker includes **10 built-in mock servers** for all supported protocols. These are perfect for:
 
 - **Integration testing** - Test your client code against predictable servers
 - **Development** - Work offline with realistic mock responses
@@ -429,6 +429,8 @@ All mock servers are also available as a library:
 ```typescript
 import {
   MockHttpServer,
+  MockProxyServer,
+  createForwardProxy,
   MockWebSocketServer,
   MockSSEServer,
   MockHlsServer,
@@ -441,6 +443,7 @@ import {
 
 // Create and start servers
 const http = await MockHttpServer.create({ port: 3000 });
+const proxy = await createForwardProxy(8888);
 const ws = await MockWebSocketServer.create({ port: 8080 });
 const hls = await MockHlsServer.create({ mode: 'live' });
 const dns = await MockDnsServer.create({ port: 5353 });
@@ -450,12 +453,17 @@ const ftp = await MockFtpServer.create({ port: 2121 });
 dns.addRecord('myapp.local', 'A', '192.168.1.50');
 ftp.addFile('/custom.txt', 'Custom content');
 
+// Listen to proxy events
+proxy.on('request', (req) => console.log(req.method, req.url));
+proxy.on('response', (res) => console.log(res.statusCode, res.latency));
+
 // Use in tests
 const response = await fetch('http://localhost:3000/test');
 await ws.broadcast('Hello from test!');
 
 // Clean up
 await http.stop();
+await proxy.stop();
 await ws.stop();
 await hls.stop();
 await dns.stop();
@@ -464,11 +472,69 @@ await ftp.stop();
 
 See [Testing Reference](/reference/03-testing.md) for more details on programmatic usage.
 
+## Proxy Server
+
+A full HTTP/HTTPS forward and intercept proxy server.
+
+```bash
+# Basic forward proxy on port 8888
+rek serve proxy
+
+# Custom port
+rek serve proxy --port 3128
+
+# Intercept mode (MITM - can read HTTPS traffic)
+rek serve proxy --intercept
+
+# Verbose logging
+rek serve proxy --verbose
+
+# Allow external connections
+rek serve proxy --host 0.0.0.0
+```
+
+### Modes
+
+| Mode | Description |
+|------|-------------|
+| `forward` | Tunnels HTTPS (default) - cannot see encrypted content |
+| `intercept` | MITM mode - decrypts and can modify HTTPS traffic |
+
+### Using the Proxy
+
+```bash
+# curl
+curl -x http://localhost:8888 https://api.github.com/users
+
+# Environment variables
+export HTTP_PROXY=http://localhost:8888
+export HTTPS_PROXY=http://localhost:8888
+curl https://api.github.com/users
+```
+
+### Sharing with Others
+
+```bash
+# Start proxy accessible from any IP
+rek serve proxy --host 0.0.0.0 --port 8888
+
+# Other users connect with:
+curl -x http://YOUR_IP:8888 https://example.com
+```
+
+See [Proxy Server documentation](/cli/10-proxy.md) for complete details including:
+- Stats & monitoring
+- mTLS support
+- Request/response modification
+- Certificate generation
+- Programmatic API
+
 ## Command Reference
 
 | Command | Description | Default Port |
 |---------|-------------|--------------|
 | `rek serve http` | HTTP mock server | 3000 |
+| `rek serve proxy` | HTTP/HTTPS proxy | 8888 |
 | `rek serve ws` | WebSocket server | 8080 |
 | `rek serve websocket` | WebSocket server (alias) | 8080 |
 | `rek serve sse` | SSE server | 8081 |

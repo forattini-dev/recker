@@ -14,7 +14,8 @@ const schema: CommandSchema = {
   flags: {
     all: { description: 'Show all checks', alias: 'a' },
     evidence: { description: 'Show detailed evidence', alias: 'e' },
-    compact: { description: 'Compact output', alias: 'c' }
+    compact: { description: 'Compact output', alias: 'c' },
+    verbose: { description: 'Show detailed technical sections', alias: 'v' }
   }
 };
 
@@ -25,12 +26,16 @@ export async function runSeo(ctx: ShellContext, rawArgs: string[]) {
     let url = args[0] as string;
     const jsonOutput = data.format === 'json';
 
+    // Default to verbose=true in shell for richer output (matches CLI behavior)
+    const isVerbose = options.verbose !== false;
+
     const formatOptions: SeoFormatOptions = {
       showAll: !!options.all,
       showEvidence: !!options.evidence,
       compact: !!options.compact,
       showKeywords: true,
       showTiming: true,
+      verbose: isVerbose,
     };
 
     if (!url) {
@@ -102,6 +107,9 @@ export async function runSeo(ctx: ShellContext, rawArgs: string[]) {
         }
       }
 
+      // Capture response headers for security analysis
+      const responseHeaders = Object.fromEntries(res.headers.entries());
+
       // Inject timing data from undici's diagnostics
       const t = res.timings;
       report.timing = {
@@ -113,9 +121,12 @@ export async function runSeo(ctx: ShellContext, rawArgs: string[]) {
         download: t?.content ? Math.round(t.content) : undefined,
       };
 
+      // Add responseHeaders to format options for verbose sections
+      formatOptions.responseHeaders = responseHeaders;
+
       // JSON output mode for programmatic use
       if (jsonOutput) {
-        const jsonResult = formatSeoReportJson(report, url);
+        const jsonResult = formatSeoReportJson(report, url, { responseHeaders });
         console.log(JSON.stringify(jsonResult, null, 2));
         ctx.lastResponse = jsonResult;
         return;

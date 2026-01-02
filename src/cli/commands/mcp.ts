@@ -28,13 +28,14 @@ export function registerMcpCommand(program: Command) {
       short: 'O',
       description: 'Offline mode - skip network downloads, use only cached/bundled data',
     })
-    .option('profile', {
+    .option('category', {
       type: 'string',
-      description: 'Tool profiles to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, full',
+      short: 'c',
+      description: 'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, full',
     })
-    .option('list-profiles', {
+    .option('list-categories', {
       type: 'boolean',
-      description: 'List available profiles and exit',
+      description: 'List available categories and exit',
     })
     .option('docs-path', {
       type: 'string',
@@ -86,47 +87,50 @@ export function registerMcpCommand(program: Command) {
     })
     .example('rek mcp', 'Start MCP server in stdio mode (for Claude Code)')
     .example('rek mcp --offline', 'Start in offline mode (no downloads)')
-    .example('rek mcp --profile=minimal', 'Start with minimal profile')
+    .example('rek mcp --category=minimal', 'Start with minimal category')
+    .example('rek mcp -c seo,security', 'Combine categories')
     .example('rek mcp --transport=http --port=3100', 'Start HTTP server')
-    .example('rek mcp --list-profiles', 'List available profiles')
+    .example('rek mcp --list-categories', 'List available categories')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
 
       // Import MCP server components
       const { MCPServer } = await import('../../mcp/server.js');
-      const { listProfiles, validateProfiles, estimateProfileTokens } = await import('../../mcp/profiles.js');
+      const { listCategories, validateCategories, estimateCategoryTokens } = await import('../../mcp/profiles.js');
 
-      // Handle --list-profiles
-      if (options.listProfiles) {
+      // Handle --list-categories
+      if (options.listCategories) {
         console.log('╔═══════════════════════════════════════════════════════════════════╗');
-        console.log('║                    Recker MCP Profiles                            ║');
+        console.log('║                    Recker MCP Categories                          ║');
         console.log('╚═══════════════════════════════════════════════════════════════════╝');
         console.log('');
-        console.log('Available profiles:');
+        console.log('Available categories:');
         console.log('');
 
-        for (const profile of listProfiles()) {
-          const toolCount = profile.toolCount === -1 ? 'all' : profile.toolCount;
-          console.log(`  ${profile.name.padEnd(12)} ${profile.description}`);
-          console.log(`               Tools: ${toolCount}, ~${profile.estimatedTokens} tokens`);
+        for (const category of listCategories()) {
+          const toolCount = category.toolCount === -1 ? 'all' : category.toolCount;
+          const icon = category.icon || '📦';
+          console.log(`  ${icon} ${category.name.padEnd(12)} ${category.description}`);
+          console.log(`               Tools: ${toolCount}, ~${category.estimatedTokens} tokens`);
           console.log('');
         }
 
         console.log('Usage examples:');
-        console.log('  rek mcp                                # Default: minimal profile');
-        console.log('  rek mcp --profile=minimal,seo          # Combine profiles');
-        console.log('  rek mcp --profile=full                 # All 57 tools (high context)');
+        console.log('  rek mcp                                # Default: minimal category');
+        console.log('  rek mcp --category=minimal,seo         # Combine categories');
+        console.log('  rek mcp -c seo,security                # Short form');
+        console.log('  rek mcp --category=full                # All tools (high context)');
         console.log('');
         return;
       }
 
-      // Validate profile names if provided
-      if (options.profile) {
-        const profileNames = options.profile.split(',').map((p: string) => p.trim());
-        const validation = validateProfiles(profileNames);
+      // Validate category names if provided
+      if (options.category) {
+        const categoryNames = options.category.split(',').map((p: string) => p.trim());
+        const validation = validateCategories(categoryNames);
         if (!validation.valid) {
-          console.error(colors.red(`Invalid profile(s): ${validation.invalid.join(', ')}`));
-          console.error('Use --list-profiles to see available profiles');
+          console.error(colors.red(`Invalid category(s): ${validation.invalid.join(', ')}`));
+          console.error('Use --list-categories to see available categories');
           process.exit(1);
         }
       }
@@ -145,7 +149,7 @@ export function registerMcpCommand(program: Command) {
         toolsFilter.push(...patterns);
       }
 
-      // Tool categories
+      // Tool categories for legacy disable flags
       const TOOL_CATEGORIES = {
         docs: [
           'rek_search_docs',
@@ -204,7 +208,7 @@ export function registerMcpCommand(program: Command) {
         process.exit(1);
       }
 
-      // Create server
+      // Create server with category or legacy toolsFilter
       const server = new MCPServer({
         transport,
         port,
@@ -213,8 +217,8 @@ export function registerMcpCommand(program: Command) {
         docsPath: options.docsPath,
         examplesPath: options.examplesPath,
         srcPath: options.srcPath,
-        profile: options.profile,
-        toolsFilter: !options.profile && toolsFilter.length > 0 ? toolsFilter : undefined,
+        category: options.category, // Category takes precedence
+        toolsFilter: !options.category && toolsFilter.length > 0 ? toolsFilter : undefined,
       });
 
       // Log startup info (not in stdio mode to avoid polluting the protocol)
@@ -227,13 +231,13 @@ export function registerMcpCommand(program: Command) {
 │  Port:      ${colors.cyan(String(port).padEnd(30))}│
 │  Debug:     ${colors.yellow((options.debug ? 'enabled' : 'disabled').padEnd(30))}│`));
 
-        if (options.profile) {
-          const tokens = estimateProfileTokens(options.profile);
-          console.log(`│  Profile:   ${colors.cyan((options.profile + ' (~' + tokens + ' tokens)').padEnd(30))}│`);
+        if (options.category) {
+          const tokens = estimateCategoryTokens(options.category);
+          console.log(`│  Category:  ${colors.cyan((options.category + ' (~' + tokens + ' tokens)').padEnd(30))}│`);
         } else if (toolsFilter.length > 0) {
           console.log(`│  Filters:   ${colors.gray((toolsFilter.slice(0, 3).join(', ') + (toolsFilter.length > 3 ? '...' : '')).padEnd(30))}│`);
         } else {
-          console.log(`│  Profile:   ${colors.cyan('minimal (default)'.padEnd(30))}│`);
+          console.log(`│  Category:  ${colors.cyan('minimal (default)'.padEnd(30))}│`);
         }
 
         console.log(`├─────────────────────────────────────────────┤

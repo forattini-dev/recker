@@ -10,6 +10,7 @@ export interface LoadConfig {
   mode: LoadMode;
   http2?: boolean;
   rampUp?: number; // seconds to reach full concurrency
+  insecure?: boolean; // Allow self-signed certificates
 }
 
 export class LoadGenerator {
@@ -43,6 +44,7 @@ export class LoadGenerator {
       baseUrl: new URL(this.config.url).origin,
       observability: false, // Disable logging overhead
       http2: this.config.http2, // Enable HTTP/2 if requested
+      tls: this.config.insecure ? { rejectUnauthorized: false } : undefined, // Allow self-signed certs if insecure mode
       concurrency: {
         max: this.config.users * 2,
         requestsPerInterval: Infinity,

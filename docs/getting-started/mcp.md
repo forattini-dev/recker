@@ -1,6 +1,6 @@
 # MCP Server Overview
 
-Recker includes a built-in MCP (Model Context Protocol) server that exposes **57 tools** across 12 categories to AI assistants like Claude Code, Cursor, and other AI-powered tools.
+Recker includes a built-in MCP (Model Context Protocol) server that exposes **65 tools** across 12 categories to AI assistants like Claude Code, Cursor, and other AI-powered tools.
 
 ## What is MCP?
 
@@ -26,9 +26,9 @@ MCP is a standard protocol for connecting AI models to external tools and data s
 claude mcp add recker npx recker@latest mcp
 ```
 
-That's it! Claude Code now has access to the **minimal** profile (6 core tools) by default.
+That's it! Claude Code now has access to the **minimal** category (7 core tools) by default.
 
-To enable all 57 tools, use `--profile=full`.
+To enable all 65 tools, use `--category=full`.
 
 ### Manual Configuration
 
@@ -50,57 +50,57 @@ Add to your AI tool's MCP configuration:
 - Cursor: MCP settings panel
 - Windsurf/Codeium: MCP configuration
 
-## Profiles
+## Categories
 
-Use profiles to control which tools are available. This helps reduce context size and focus on specific tasks.
+Use categories to control which tools are available. This helps reduce context size and focus on specific tasks.
 
-### Available Profiles
+### Available Categories
 
-| Profile | Tools | Tokens | Description |
-|---------|-------|--------|-------------|
-| `minimal` | 6 | ~1800 | Core docs + basic network (search, http, dns, ping) |
-| `docs` | 5 | ~1500 | Documentation only |
-| `network` | 4 | ~1200 | HTTP, DNS, WHOIS, Ping |
-| `dns` | 9 | ~2700 | All DNS tools (propagation, health, SPF, DMARC, DKIM) |
-| `security` | 5 | ~1500 | TLS, RDAP, GeoIP, security headers, DNS toolkit |
-| `seo` | 3 | ~900 | SEO analysis, spider, quick wins |
-| `scrape` | 1 | ~300 | Web scraping |
+| Category | Tools | Tokens | Description |
+|----------|-------|--------|-------------|
+| `minimal` | 7 | ~2500 | Core docs + basic network + site audit |
+| `docs` | 6 | ~1800 | Documentation and migration tools |
+| `network` | 11 | ~3500 | HTTP, DNS, TLS, WHOIS, ping, API tools |
+| `dns` | 9 | ~3000 | All DNS tools (propagation, health, SPF, DMARC, DKIM) |
+| `security` | 6 | ~2200 | TLS inspection, security headers, GeoIP, domain audit |
+| `seo` | 7 | ~2800 | SEO analysis, spider, quick wins, sitemap, schema |
+| `scrape` | 2 | ~800 | Web scraping with CSS selectors |
 | `video` | 5 | ~1500 | Video/audio extraction (1800+ sites) |
-| `ai` | 4 | ~1200 | AI providers (chat, embed, tokens) |
+| `ai` | 5 | ~1500 | AI providers (chat, embed, tokens, compare) |
 | `protocols` | 7 | ~2100 | FTP, SFTP, Telnet, WebSocket |
 | `parsing` | 10 | ~3000 | GraphQL, JSON-RPC, CSV, YAML, XML |
 | `streaming` | 3 | ~900 | HLS streaming |
-| `full` | 57 | ~18000 | All tools |
+| `full` | 65 | ~18000 | All tools |
 
-### Using Profiles
+### Using Categories
 
 ```bash
-# Use a single profile
-rek mcp --profile=minimal
+# Use a single category
+rek mcp --category=minimal
 
-# Combine multiple profiles
-rek mcp --profile=minimal,video,ai
+# Combine multiple categories
+rek mcp --category=minimal,video,ai
 
-# Full profile (all 57 tools)
-rek mcp --profile=full
+# Full category (all 65 tools)
+rek mcp --category=full
 ```
 
-### Claude Code with Profile
+### Claude Code with Category
 
 ```json
 {
   "mcpServers": {
     "recker": {
       "command": "npx",
-      "args": ["recker@latest", "mcp", "--profile=minimal,video"]
+      "args": ["recker@latest", "mcp", "--category=minimal,video"]
     }
   }
 }
 ```
 
-## Available Tools (57)
+## Available Tools (65)
 
-### Documentation (5 tools)
+### Documentation (6 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -109,12 +109,13 @@ rek mcp --profile=full
 | `rek_code_examples` | Get runnable code examples |
 | `rek_api_schema` | Get TypeScript types and interfaces |
 | `rek_suggest` | Get implementation suggestions |
+| `rek_curl_convert` | Convert curl commands to Recker TypeScript/CLI |
 
 ### Network (13 tools)
 
 | Tool | Description |
 |------|-------------|
-| `rek_http_request` | Make HTTP requests (GET, POST, PUT, DELETE, etc.) |
+| `rek_http_request` | Make HTTP requests (supports `headersOnly` for lightweight HEAD requests) |
 | `rek_ip_lookup` | Get public IP information |
 | `rek_dns` | Resolve DNS records (A, AAAA, MX, TXT, NS, ALL) |
 | `rek_dns_propagate` | Check DNS propagation globally |
@@ -124,11 +125,19 @@ rek mcp --profile=full
 | `rek_dns_dkim` | Check DKIM record |
 | `rek_dns_dig` | Advanced DNS lookup (like dig) |
 | `rek_dns_system` | Get system DNS configuration |
-| `rek_dns_toolkit` | Complete DNS security toolkit |
 | `rek_whois` | WHOIS domain/IP lookup |
 | `rek_ping` | TCP ping with latency measurement |
+| `rek_api_compare` | Compare responses from two API endpoints |
 
-### Security (5 tools)
+### Utility (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `rek_site_audit` | **Quick website audit** - connectivity, SEO, security, TLS, DNS, WHOIS in one call |
+| `rek_domain_audit` | Comprehensive domain audit (DNS, TLS, HTTP headers, WHOIS) |
+| `rek_load_test` | Simple load test for an API endpoint (max 100 requests) |
+
+### Security (7 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -138,6 +147,7 @@ rek mcp --profile=full
 | `rek_rdap_lookup` | RDAP lookup with detailed info |
 | `rek_geoip_lookup` | IP geolocation with bogon detection (MaxMind) |
 | `rek_security_headers` | Analyze HTTP security headers (grade A+ to F) |
+| `rek_dns_toolkit` | Complete DNS security toolkit (SPF, DMARC, DKIM, CAA) |
 
 ### Scraping (1 tool)
 
@@ -145,13 +155,15 @@ rek mcp --profile=full
 |------|-------------|
 | `rek_scrape` | Web scraping with CSS selectors, tables, forms, JSON-LD |
 
-### SEO (3 tools)
+### SEO (5 tools)
 
 | Tool | Description |
 |------|-------------|
 | `rek_seo_analyze` | Analyze page SEO with 400+ rules (score 0-100, grade A-F) |
 | `rek_seo_spider` | Crawl site and detect duplicates, orphan pages |
 | `rek_seo_quick_wins` | Get prioritized SEO fixes (high/medium/low) |
+| `rek_seo_sitemap` | Analyze sitemap.xml for SEO issues |
+| `rek_seo_schema` | Extract and validate JSON-LD structured data |
 
 ### Video (5 tools)
 
@@ -163,7 +175,7 @@ rek mcp --profile=full
 | `rek_video_extractors` | List all 1800+ supported sites |
 | `rek_video_url` | Get direct download URL |
 
-### AI (4 tools)
+### AI (5 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -171,6 +183,7 @@ rek mcp --profile=full
 | `rek_ai_embed` | Generate text embeddings |
 | `rek_ai_providers` | List available AI providers |
 | `rek_ai_tokens` | Count tokens for text |
+| `rek_ai_compare` | Compare responses from multiple AI providers |
 
 ### Protocols (7 tools)
 
@@ -211,11 +224,41 @@ rek mcp --profile=full
 
 Once configured, your AI assistant can help like this:
 
+### Quick Site Audit
+
+```
+You: Audit my website https://example.com
+
+AI: [Uses rek_site_audit]
+
+🔍 Site Audit: example.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Grade: B (78/100)
+
+✅ Connectivity: 145ms latency, HTTP 200
+✅ TLS: Valid certificate (89 days remaining)
+✅ DNS: Cloudflare (A: 104.21.x.x)
+
+⚠️ SEO Issues:
+  - Missing meta description
+  - H1 tag missing
+
+⚠️ Security:
+  - Missing Content-Security-Policy header
+  - Missing X-Frame-Options header
+
+📁 Discovery:
+  ✅ robots.txt
+  ✅ sitemap.xml
+  ❌ security.txt (recommended)
+```
+
+### Documentation Search
+
 ```
 You: How do I implement retry logic with recker?
 
-AI: Let me search the documentation...
-[Uses rek_search_docs]
+AI: [Uses rek_search_docs]
 
 Based on the docs, here's how to implement retry:
 
@@ -229,6 +272,8 @@ const client = createClient({
 });
 ```
 
+### Video Extraction
+
 ```
 You: Get video info for this YouTube link
 
@@ -237,6 +282,26 @@ AI: [Uses rek_video_info]
 Video: "How to Build APIs"
 Duration: 12:34
 Available formats: 1080p, 720p, 480p, 360p
+```
+
+### Compare AI Providers
+
+```
+You: Compare how OpenAI and Anthropic answer this question
+
+AI: [Uses rek_ai_compare]
+
+Prompt: "What is machine learning?"
+
+OpenAI (gpt-4o):
+  - Latency: 1.2s
+  - Tokens: 156
+  - Response: "Machine learning is a subset of AI..."
+
+Anthropic (claude-sonnet-4-20250514):
+  - Latency: 0.9s
+  - Tokens: 142
+  - Response: "Machine learning refers to..."
 ```
 
 ## Transport Modes

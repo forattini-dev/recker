@@ -1,11 +1,21 @@
 import type { MCPTool, MCPToolResult } from '../types.js';
 import { matchesPattern } from '../profiles.js';
+import { getToolCategory, listCategories, type ToolCategory, type CategoryInfo } from './categories.js';
 
 export type MCPToolHandler = (args: Record<string, unknown>) => Promise<MCPToolResult>;
 
 export interface ToolModule {
   tools: MCPTool[];
   handlers: Record<string, MCPToolHandler>;
+}
+
+export interface ToolListOptions {
+  /** Filter by category */
+  category?: ToolCategory | string;
+  /** Filter by tags (tool must have all specified tags) */
+  tags?: string[];
+  /** Search in name and description */
+  search?: string;
 }
 
 /**
@@ -65,25 +75,93 @@ export class ToolRegistry {
   }
 
   /**
-   * Get all registered tools (respects enabled patterns).
+   * Get all registered tools with optional filtering.
    */
-  listTools(): MCPTool[] {
-    const allTools = Array.from(this.tools.values());
+  listTools(options?: ToolListOptions): MCPTool[] {
+    let tools = Array.from(this.tools.values());
 
-    // If no patterns set, return all tools
-    if (this.enabledPatterns.length === 0) {
-      return allTools;
+    // Apply profile-based pattern filtering
+    if (this.enabledPatterns.length > 0) {
+      tools = tools.filter(tool => this.isToolEnabled(tool.name));
     }
 
-    // Filter by enabled patterns
-    return allTools.filter(tool => this.isToolEnabled(tool.name));
+    // Apply category filter
+    if (options?.category) {
+      tools = tools.filter(tool => {
+        const toolCategory = tool.category || getToolCategory(tool.name);
+        return toolCategory === options.category;
+      });
+    }
+
+    // Apply tags filter
+    if (options?.tags && options.tags.length > 0) {
+      tools = tools.filter(tool => {
+        if (!tool.tags) return false;
+        return options.tags!.every(tag => tool.tags!.includes(tag));
+      });
+    }
+
+    // Apply search filter
+    if (options?.search) {
+      const searchLower = options.search.toLowerCase();
+      tools = tools.filter(tool => {
+        const nameMatch = tool.name.toLowerCase().includes(searchLower);
+        const descMatch = tool.description?.toLowerCase().includes(searchLower);
+        return nameMatch || descMatch;
+      });
+    }
+
+    // Enrich tools with category if not set
+    return tools.map(tool => ({
+      ...tool,
+      category: tool.category || getToolCategory(tool.name),
+    }));
   }
 
   /**
    * Get all registered tools without filtering.
    */
   listAllTools(): MCPTool[] {
-    return Array.from(this.tools.values());
+    return Array.from(this.tools.values()).map(tool => ({
+      ...tool,
+      category: tool.category || getToolCategory(tool.name),
+    }));
+  }
+
+  /**
+   * List all available categories with tool counts.
+   */
+  listCategories(): CategoryInfo[] {
+    const enabledTools = this.listTools();
+    const counts: Record<string, number> = {};
+
+    for (const tool of enabledTools) {
+      const category = tool.category || getToolCategory(tool.name);
+      counts[category] = (counts[category] || 0) + 1;
+    }
+
+    return listCategories().map(cat => ({
+      ...cat,
+      toolCount: counts[cat.name] || 0,
+    }));
+  }
+
+  /**
+   * Get tools grouped by category.
+   */
+  listToolsByCategory(): Record<string, MCPTool[]> {
+    const tools = this.listTools();
+    const grouped: Record<string, MCPTool[]> = {};
+
+    for (const tool of tools) {
+      const category = tool.category || getToolCategory(tool.name);
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+      grouped[category].push(tool);
+    }
+
+    return grouped;
   }
 
   /**

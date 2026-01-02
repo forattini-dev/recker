@@ -75,7 +75,16 @@ export const contentRules: SeoRule[] = [
           { id: 'content-depth-word-count', name: 'Content Depth', category: 'content', severity: 'info' },
           'info',
           `Content is not authority-level (${ctx.wordCount} words, min for authority: ${minWordsAuthority})`,
-          { recommendation: `For authority content, aim for ${minWordsAuthority} words or more.` }
+          {
+            value: ctx.wordCount,
+            recommendation: `For authority content, aim for ${minWordsAuthority} words or more.`,
+            evidence: {
+              found: `${ctx.wordCount} words on page`,
+              expected: `${minWordsAuthority}+ words for authority-level content`,
+              impact: 'Authority content (comprehensive guides, pillar pages) typically needs 1,500-3,000+ words to rank for competitive keywords and establish topical authority.',
+              example: 'Pillar content covering a topic comprehensively tends to attract more backlinks and rank for long-tail keywords.'
+            }
+          }
         );
       }
       return createResult(
@@ -199,7 +208,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-lists-presence', name: 'Lists Usage', category: 'content', severity: 'info' },
           'info',
           'No lists (ul/ol) found',
-          { recommendation: 'Consider using bullet points or numbered lists for better scannability and AI summarization.' }
+          {
+            recommendation: 'Consider using bullet points or numbered lists for better scannability and AI summarization.',
+            evidence: {
+              found: 'No <ul> or <ol> lists detected',
+              expected: 'At least one list for scannable content',
+              impact: 'Lists improve readability, featured snippet eligibility, and AI Overview compatibility. Users can quickly scan key points.',
+              example: '<ul>\n  <li>Key benefit 1</li>\n  <li>Key benefit 2</li>\n  <li>Key benefit 3</li>\n</ul>'
+            }
+          }
         );
       }
       return createResult(
@@ -256,7 +273,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-emphasis-tags', name: 'Emphasis Tags Usage', category: 'content', severity: 'info' },
           'info',
           'No strong/em tags found in substantial content',
-          { recommendation: 'Use <strong> or <em> tags to highlight important keywords or phrases.' }
+          {
+            recommendation: 'Use <strong> or <em> tags to highlight important keywords or phrases.',
+            evidence: {
+              found: 'No <strong> or <em> tags in content',
+              expected: 'Key terms and phrases should be emphasized',
+              impact: 'Emphasis tags help readers scan content and can provide minor SEO signals for important terms.',
+              example: '<p>Our <strong>premium service</strong> offers <em>24/7 support</em> and guaranteed uptime.</p>'
+            }
+          }
         );
       }
       const emphasisRatio = totalEmphasisTags / (ctx.wordCount || 1);
@@ -298,7 +323,15 @@ export const contentRules: SeoRule[] = [
           { id: 'multimedia-video-audio', name: 'Multimedia Content', category: 'content', severity: 'info' },
           'info',
           'No video or audio elements found for substantial content',
-          { recommendation: 'Consider adding relevant videos, audio, or other rich media to engage users.' }
+          {
+            recommendation: 'Consider adding relevant videos, audio, or other rich media to engage users.',
+            evidence: {
+              found: 'No <video> or <audio> elements detected',
+              expected: 'Rich media for substantial content (500+ words)',
+              impact: 'Multimedia increases time on page, user engagement, and can help with video search rankings. Pages with video have 41% more organic traffic on average.',
+              example: '<video controls>\n  <source src="demo.mp4" type="video/mp4">\n</video>\n<!-- Or embed from YouTube/Vimeo -->'
+            }
+          }
         );
       }
       return createResult(
@@ -334,7 +367,15 @@ export const contentRules: SeoRule[] = [
             { id: 'content-sge-optimization', name: 'AI Overview Optimization', category: 'content', severity: 'info' },
             'info',
             `Content could be better optimized for AI Overviews: ${messages.join(' ')}`,
-            { recommendation: recommendation.trim() }
+            {
+              recommendation: recommendation.trim(),
+              evidence: {
+                found: messages.join(' '),
+                expected: 'Question-based headings (H2/H3) and clear lists for AI parsing',
+                impact: 'Google AI Overviews (SGE) prefer content with clear structure, question headings, and summarizable lists. Optimizing for AI can increase visibility in search results.',
+                example: '<h2>What is SEO?</h2>\n<p>SEO is...</p>\n<h2>How to improve SEO?</h2>\n<ol>\n  <li>Optimize titles</li>\n  <li>Add meta descriptions</li>\n</ol>'
+              }
+            }
           );
         }
       }
@@ -546,7 +587,15 @@ export const contentRules: SeoRule[] = [
           { id: 'content-freshness', name: 'Content Freshness', category: 'content', severity: 'info' },
           'info',
           'No content freshness information found (Last-Modified, og:updated_time)',
-          { recommendation: 'Keep content updated and ensure dates are visible to crawlers (meta tags, sitemap, or headers).' }
+          {
+            recommendation: 'Keep content updated and ensure dates are visible to crawlers (meta tags, sitemap, or headers).',
+            evidence: {
+              found: 'No Last-Modified header or og:article:published_time meta tag',
+              expected: 'Freshness signals for content dating',
+              impact: 'Search engines use freshness signals to rank time-sensitive content. For evergreen content, showing update dates builds trust.',
+              example: '<meta property="article:published_time" content="2024-01-15T10:00:00Z">\n<meta property="article:modified_time" content="2024-06-20T14:30:00Z">'
+            }
+          }
         );
       }
       return createResult(

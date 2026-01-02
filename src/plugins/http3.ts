@@ -153,7 +153,6 @@ export class Http3Manager extends EventEmitter {
       }
 
       // Try to import QUIC module (requires --experimental-quic flag)
-      // @ts-expect-error - Experimental module
       await import('node:quic').catch(() => null);
       this.quicAvailable = true;
       this.emit('quicAvailable');

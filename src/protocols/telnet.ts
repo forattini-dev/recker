@@ -286,7 +286,7 @@ export class Telnet extends EventEmitter {
         }
       });
 
-      this.socket.on('data', (data) => this.handleData(data));
+      this.socket.on('data', (data) => this.handleData(Buffer.isBuffer(data) ? data : Buffer.from(data)));
 
       this.socket.on('close', () => {
         this.debug('Connection closed');

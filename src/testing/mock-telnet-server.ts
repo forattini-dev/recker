@@ -346,8 +346,9 @@ export class MockTelnetServer extends EventEmitter {
 
     let inputBuffer = '';
 
-    socket.on('data', async (data) => {
+    socket.on('data', async (rawData) => {
       session.lastActivity = new Date();
+      const data = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData);
 
       // Handle telnet negotiation bytes (IAC commands)
       const filtered = this.filterTelnetCommands(data);

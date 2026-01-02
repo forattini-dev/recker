@@ -1,6 +1,6 @@
 # Spider - Web Crawler
 
-The Spider class crawls websites following internal links, with support for robots.txt, sitemaps, and concurrency control.
+The Spider class crawls websites following internal links, with support for robots.txt, sitemaps, data extraction, and concurrent crawling. It's designed for both quick site mapping and comprehensive data harvesting.
 
 ## Quick Start
 
@@ -17,9 +17,295 @@ for (const page of result.pages) {
 }
 ```
 
+### CLI Quick Start
+
+```bash
+# Basic crawl
+rek spider example.com
+
+# With options
+rek spider example.com --depth 3 --limit 50
+
+# Extract data from all pages
+rek spider example.com --extract "h1,a:href,.price"
+
+# Stream as JSONL for large crawls
+rek spider example.com --jsonl -o crawl.jsonl
+```
+
+## Data Extraction
+
+One of Spider's most powerful features is **declarative data extraction**. Extract specific elements from every crawled page using CSS selectors.
+
+### CLI Extraction
+
+```bash
+# Extract headings from all pages
+rek spider example.com --extract "h1"
+
+# Extract multiple selectors (comma-separated)
+rek spider example.com --extract "h1,h2,p.intro"
+
+# Extract attributes with selector:attribute syntax
+rek spider example.com --extract "a:href"           # Link URLs
+rek spider example.com --extract "img:src"          # Image sources
+rek spider example.com --extract "meta[name='description']:content"
+
+# Complex extraction
+rek spider example.com --extract "h1,.product-title,.price,a.buy-button:href"
+
+# Save extracted data to JSON
+rek spider example.com --extract "h1,a:href" --json -o data.json
+```
+
+### Extraction Syntax
+
+| Syntax | Description | Example Output |
+|--------|-------------|----------------|
+| `h1` | Text content of `<h1>` elements | `["Welcome", "About Us"]` |
+| `a:href` | `href` attribute from `<a>` elements | `["https://...", "/page"]` |
+| `img:src` | `src` attribute from `<img>` elements | `["/logo.png", "/hero.jpg"]` |
+| `.price` | Text from `.price` class elements | `["$19.99", "$29.99"]` |
+| `[data-id]:data-id` | `data-id` attribute value | `["123", "456"]` |
+
+### Programmatic Extraction
+
+```typescript
+import { Spider } from 'recker/scrape';
+
+const spider = new Spider({
+  maxPages: 100,
+  extract: ['h1', 'a:href', '.product-price']
+});
+
+const result = await spider.crawl('https://shop.example.com');
+
+// Each page now has extracted data
+for (const page of result.pages) {
+  if (page.extracted) {
+    console.log(`Page: ${page.url}`);
+    console.log(`  H1s: ${page.extracted.h1}`);
+    console.log(`  Links: ${page.extracted.a_href?.length || 0}`);
+    console.log(`  Prices: ${page.extracted.product_price}`);
+  }
+}
+```
+
+### Extraction Schema (Advanced)
+
+For more control, use the declarative schema format:
+
+```typescript
+import { Spider } from 'recker/scrape';
+import type { ExtractionSchema } from 'recker/scrape';
+
+const schema: ExtractionSchema = {
+  title: { selector: 'h1', multiple: false },
+  prices: { selector: '.price', multiple: true },
+  links: { selector: 'a', attribute: 'href', multiple: true },
+  images: { selector: 'img', attribute: 'src', multiple: true },
+  description: { selector: 'meta[name="description"]', attribute: 'content' }
+};
+
+const spider = new Spider({
+  maxPages: 50,
+  extract: schema
+});
+
+const result = await spider.crawl('https://example.com');
+```
+
+### Practical Extraction Examples
+
+#### E-commerce Product Scraping
+
+```bash
+# Extract product data
+rek spider shop.example.com \
+  --extract ".product-title,.price,.sku,img.product-image:src" \
+  --include "^/products/" \
+  --json -o products.json
+```
+
+```typescript
+// Programmatic
+const spider = new Spider({
+  include: [/\/products\//],
+  extract: [
+    '.product-title',
+    '.price',
+    '.sku',
+    'img.product-image:src',
+    '.description'
+  ]
+});
+
+const result = await spider.crawl('https://shop.example.com');
+
+const products = result.pages
+  .filter(p => p.extracted?.product_title)
+  .map(p => ({
+    url: p.url,
+    title: p.extracted!.product_title?.[0],
+    price: p.extracted!.price?.[0],
+    sku: p.extracted!.sku?.[0],
+    image: p.extracted!.img_product_image_src?.[0]
+  }));
+```
+
+#### Blog Post Extraction
+
+```bash
+# Extract blog metadata
+rek spider blog.example.com \
+  --extract "h1,.author,.date,article p" \
+  --include "^/posts/" \
+  --limit 100 \
+  --json
+```
+
+#### Link Audit
+
+```bash
+# Extract all links for analysis
+rek spider example.com \
+  --extract "a:href" \
+  --depth 5 \
+  --jsonl -o links.jsonl
+```
+
+## JSONL Streaming Output
+
+For large crawls, use **JSONL (JSON Lines)** format for streaming output. Each line is a valid JSON object, making it perfect for:
+
+- **Real-time processing** - Process data as it streams
+- **Large datasets** - No memory issues with big crawls
+- **Unix pipelines** - Works with `grep`, `jq`, `head`, etc.
+- **Resumable processing** - Easy to restart from any point
+
+### CLI JSONL Usage
+
+```bash
+# Stream to stdout
+rek spider example.com --jsonl
+
+# Stream to file
+rek spider example.com --jsonl -o crawl.jsonl
+
+# With extraction
+rek spider example.com --jsonl --extract "h1,a:href" -o data.jsonl
+
+# With SEO analysis
+rek spider example.com --jsonl --seo -o seo-crawl.jsonl
+
+# Pipe to jq for processing
+rek spider example.com -L | jq -c 'select(.type=="page")'
+
+# Filter pages with errors
+rek spider example.com -L | jq 'select(.status >= 400)'
+```
+
+### JSONL Record Types
+
+The JSONL output contains different record types:
+
+```jsonl
+{"type":"start","url":"https://example.com","startedAt":"...","config":{...}}
+{"type":"page","url":"https://example.com/","status":200,"depth":0,"title":"...","links":5,"duration":234}
+{"type":"page","url":"https://example.com/about","status":200,"depth":1,...}
+{"type":"page-full","url":"https://example.com/","status":200,"seoScore":85,"extracted":{...}}
+{"type":"complete","url":"...","pagesVisited":50,"duration":12345,"seo":{...}}
+```
+
+| Record Type | When Emitted | Contains |
+|-------------|--------------|----------|
+| `start` | Beginning | Config, start time, options |
+| `page` | Real-time per page | Basic info (status, depth, links) |
+| `page-full` | After crawl | Complete data (SEO, extraction) |
+| `complete` | End | Summary, site-wide SEO, totals |
+
+### Processing JSONL
+
+```bash
+# Count pages by status code
+cat crawl.jsonl | jq -r 'select(.type=="page") | .status' | sort | uniq -c
+
+# Extract URLs with errors
+cat crawl.jsonl | jq -r 'select(.type=="page" and .status >= 400) | .url'
+
+# Get SEO scores
+cat crawl.jsonl | jq 'select(.type=="page-full") | {url, score: .seoScore}'
+
+# Find pages with specific extraction
+cat data.jsonl | jq 'select(.extracted.price != null)'
+```
+
+### JSONL vs JSON Output
+
+| Feature | JSON (`-o file.json`) | JSONL (`--jsonl`) |
+|---------|----------------------|-------------------|
+| Write timing | After crawl completes | Real-time streaming |
+| Memory usage | Holds all in RAM | Line-by-line, low memory |
+| File processing | Parse entire file | Process line-by-line |
+| Unix tools | Limited | `grep`, `jq`, `head`, `tail` |
+| Resumability | Restart from scratch | Can resume/append |
+| Best for | Small crawls, reports | Large crawls, pipelines |
+
+## URL Filtering
+
+Control which URLs are crawled with include/exclude patterns.
+
+### Exclude Patterns
+
+Skip URLs matching patterns:
+
+```bash
+# CLI
+rek spider example.com --exclude "/admin/,/api/,\\.pdf$"
+```
+
+```typescript
+const crawler = new Spider({
+  exclude: [
+    /\/admin\//,         // Skip admin pages
+    /\/api\//,           // Skip API routes
+    /\?.*page=/,         // Skip pagination
+    /\/tag\//,           // Skip tag pages
+    /\.(pdf|zip)$/,      // Skip file downloads
+  ]
+});
+```
+
+### Include Patterns
+
+Only crawl URLs matching patterns:
+
+```bash
+# CLI - only crawl blog posts
+rek spider example.com --include "^/blog/,^/posts/"
+```
+
+```typescript
+const crawler = new Spider({
+  include: [
+    /\/blog\//,          // Only blog posts
+    /\/products\//,      // Only product pages
+  ]
+});
+```
+
+### Combined Filtering
+
+```bash
+# Crawl products, but skip out-of-stock
+rek spider shop.example.com \
+  --include "^/products/" \
+  --exclude "/out-of-stock/,/discontinued/"
+```
+
 ## Spider Class
 
-For more control, use the `Spider` class directly:
+For full control, use the `Spider` class directly:
 
 ```typescript
 import { Spider } from 'recker/scrape';
@@ -29,8 +315,14 @@ const crawler = new Spider({
   maxPages: 50,
   concurrency: 10,
   delay: 200,
+  extract: ['h1', '.price', 'a:href'],
+  include: [/\/products\//],
+  exclude: [/\/admin\//],
   onPage: (page) => {
     console.log(`Crawled: ${page.url}`);
+    if (page.extracted) {
+      console.log(`  Found ${page.extracted.price?.length || 0} prices`);
+    }
   }
 });
 
@@ -65,6 +357,9 @@ interface SpiderOptions {
   /** URL patterns to include only (regex) */
   include?: RegExp[];
 
+  /** CSS selectors to extract from each page */
+  extract?: string[] | ExtractionSchema;
+
   /** Custom user agent */
   userAgent?: string;
 
@@ -85,137 +380,6 @@ interface SpiderOptions {
 }
 ```
 
-## Filtering URLs
-
-### Exclude Patterns
-
-Skip URLs matching certain patterns:
-
-```typescript
-const crawler = new Spider({
-  exclude: [
-    /\/admin\//,         // Skip admin pages
-    /\/api\//,           // Skip API routes
-    /\?.*page=/,         // Skip pagination
-    /\/tag\//,           // Skip tag pages
-    /\.(pdf|zip)$/,      // Skip file downloads
-  ]
-});
-```
-
-### Include Patterns
-
-Only crawl URLs matching patterns:
-
-```typescript
-const crawler = new Spider({
-  include: [
-    /\/blog\//,          // Only blog posts
-    /\/products\//,      // Only product pages
-  ]
-});
-```
-
-## Robots.txt Support
-
-By default, the Spider respects `robots.txt`:
-
-```typescript
-const crawler = new Spider({
-  respectRobotsTxt: true,  // Default
-  userAgent: 'MyBot/1.0'
-});
-
-const result = await crawler.crawl('https://example.com');
-
-// Check robots.txt analysis
-console.log(result.robots);
-// {
-//   found: true,
-//   sitemaps: ['https://example.com/sitemap.xml'],
-//   blocksAll: false,
-//   issues: []
-// }
-```
-
-To ignore robots.txt (not recommended):
-
-```typescript
-const crawler = new Spider({
-  respectRobotsTxt: false
-});
-```
-
-## Sitemap Discovery
-
-Use sitemaps to discover URLs that might not be linked:
-
-```typescript
-const crawler = new Spider({
-  useSitemap: true
-});
-
-const result = await crawler.crawl('https://example.com');
-
-// Check sitemap analysis
-console.log(result.sitemap);
-// {
-//   found: true,
-//   totalUrls: 150,
-//   crawledFromSitemap: 50,
-//   orphanUrls: ['...'],        // URLs only in sitemap, not linked
-//   missingFromSitemap: ['...'], // URLs found but not in sitemap
-//   blockedBySitemapRobots: [],
-//   validationIssues: []
-// }
-```
-
-### Custom Sitemap URL
-
-```typescript
-const crawler = new Spider({
-  useSitemap: true,
-  sitemapUrl: 'https://example.com/custom-sitemap.xml'
-});
-```
-
-## Progress Tracking
-
-### onPage Callback
-
-Called for each page crawled:
-
-```typescript
-const crawler = new Spider({
-  onPage: (page) => {
-    if (page.error) {
-      console.error(`Error: ${page.url} - ${page.error}`);
-    } else {
-      console.log(`${page.status} ${page.url}`);
-      console.log(`  Title: ${page.title}`);
-      console.log(`  Links: ${page.links.length}`);
-      console.log(`  Time: ${page.duration}ms`);
-    }
-  }
-});
-```
-
-### onProgress Callback
-
-Called periodically with progress updates:
-
-```typescript
-const crawler = new Spider({
-  onProgress: (progress) => {
-    const percent = Math.round((progress.crawled / progress.total) * 100);
-    console.log(`Progress: ${percent}% (${progress.crawled}/${progress.total})`);
-    console.log(`  Current: ${progress.currentUrl}`);
-    console.log(`  Depth: ${progress.depth}`);
-    console.log(`  Queued: ${progress.queued}`);
-  }
-});
-```
-
 ## Page Result Structure
 
 Each crawled page returns:
@@ -229,6 +393,10 @@ interface SpiderPageResult {
   links: ExtractedLink[];
   duration: number;
   error?: string;
+
+  /** Extracted data (when extract option is used) */
+  extracted?: Record<string, unknown>;
+
   meta?: {
     description?: string;
     keywords?: string[];
@@ -262,7 +430,239 @@ interface SpiderResult {
   errors: Array<{ url: string; error: string }>;
   sitemap?: SitemapAnalysis;
   robots?: RobotsAnalysis;
+
+  /** Extraction summary (when extract option is used) */
+  extraction?: {
+    schema: Record<string, string>;
+    totalItems: number;
+    byPage: Record<string, Record<string, unknown>>;
+  };
 }
+```
+
+## Robots.txt Support
+
+By default, the Spider respects `robots.txt`:
+
+```typescript
+const crawler = new Spider({
+  respectRobotsTxt: true,  // Default
+  userAgent: 'MyBot/1.0'
+});
+
+const result = await crawler.crawl('https://example.com');
+
+// Check robots.txt analysis
+console.log(result.robots);
+// {
+//   found: true,
+//   sitemaps: ['https://example.com/sitemap.xml'],
+//   blocksAll: false,
+//   issues: []
+// }
+```
+
+To ignore robots.txt (not recommended):
+
+```bash
+# CLI
+rek spider example.com --no-robots
+```
+
+```typescript
+const crawler = new Spider({
+  respectRobotsTxt: false
+});
+```
+
+## Sitemap Discovery
+
+Use sitemaps to discover URLs that might not be linked:
+
+```typescript
+const crawler = new Spider({
+  useSitemap: true
+});
+
+const result = await crawler.crawl('https://example.com');
+
+// Check sitemap analysis
+console.log(result.sitemap);
+// {
+//   found: true,
+//   totalUrls: 150,
+//   crawledFromSitemap: 50,
+//   orphanUrls: ['...'],        // URLs only in sitemap, not linked
+//   missingFromSitemap: ['...'], // URLs found but not in sitemap
+//   blockedBySitemapRobots: [],
+//   validationIssues: []
+// }
+```
+
+## Progress Tracking
+
+### onPage Callback
+
+Called for each page crawled:
+
+```typescript
+const crawler = new Spider({
+  extract: ['h1', '.price'],
+  onPage: (page) => {
+    if (page.error) {
+      console.error(`Error: ${page.url} - ${page.error}`);
+    } else {
+      console.log(`${page.status} ${page.url}`);
+      console.log(`  Title: ${page.title}`);
+      console.log(`  Links: ${page.links.length}`);
+      if (page.extracted) {
+        console.log(`  H1: ${page.extracted.h1?.[0]}`);
+        console.log(`  Prices: ${page.extracted.price?.length || 0}`);
+      }
+    }
+  }
+});
+```
+
+### onProgress Callback
+
+Called periodically with progress updates:
+
+```typescript
+const crawler = new Spider({
+  onProgress: (progress) => {
+    const percent = Math.round((progress.crawled / progress.total) * 100);
+    console.log(`Progress: ${percent}% (${progress.crawled}/${progress.total})`);
+    console.log(`  Current: ${progress.currentUrl}`);
+    console.log(`  Depth: ${progress.depth}`);
+    console.log(`  Queued: ${progress.queued}`);
+  }
+});
+```
+
+## Common Use Cases
+
+### Price Monitoring
+
+```bash
+# Extract and save prices
+rek spider shop.example.com \
+  --extract ".product-name,.price,.sku" \
+  --include "^/products/" \
+  --limit 500 \
+  --jsonl -o prices.jsonl
+```
+
+```typescript
+const spider = new Spider({
+  maxPages: 500,
+  include: [/\/products\//],
+  extract: ['.product-name', '.price', '.sku']
+});
+
+const result = await spider.crawl('https://shop.example.com');
+
+const prices = result.pages
+  .filter(p => p.extracted?.price)
+  .map(p => ({
+    url: p.url,
+    product: p.extracted!.product_name?.[0],
+    price: p.extracted!.price?.[0],
+    sku: p.extracted!.sku?.[0],
+    crawledAt: new Date().toISOString()
+  }));
+
+// Save for price tracking
+await fs.writeFile('prices.json', JSON.stringify(prices, null, 2));
+```
+
+### Content Audit
+
+```bash
+# Audit all blog posts
+rek spider blog.example.com \
+  --extract "h1,h2,h3,.author,.date,article" \
+  --include "^/posts/" \
+  --seo \
+  --json -o audit.json
+```
+
+### Link Extraction
+
+```bash
+# Get all external links
+rek spider example.com --extract "a:href" --depth 5 --jsonl | \
+  jq -r '.extracted.a_href[]?' | \
+  grep -v "example.com" | \
+  sort -u > external-links.txt
+```
+
+### Image Inventory
+
+```bash
+# List all images on a site
+rek spider example.com \
+  --extract "img:src,img:alt" \
+  --jsonl | \
+  jq 'select(.type=="page-full") | {url, images: .extracted.img_src}'
+```
+
+### Blog Crawler
+
+```typescript
+const crawler = new Spider({
+  maxDepth: 2,
+  maxPages: 100,
+  include: [/\/blog\//, /\/posts\//],
+  exclude: [/\/tag\//, /\/author\//, /\?page=/],
+  extract: ['h1', '.author', '.date', 'article p']
+});
+
+const result = await crawler.crawl('https://example.com/blog');
+
+const posts = result.pages
+  .filter(p => p.status === 200 && !p.error)
+  .map(p => ({
+    url: p.url,
+    title: p.extracted?.h1?.[0] || p.title,
+    author: p.extracted?.author?.[0],
+    date: p.extracted?.date?.[0],
+    excerpt: p.meta?.description
+  }));
+```
+
+### Site Audit
+
+```typescript
+const crawler = new Spider({
+  maxPages: 500,
+  useSitemap: true,
+  respectRobotsTxt: true,
+  onPage: (page) => {
+    // Check for issues
+    if (page.status >= 400) {
+      console.warn(`Broken: ${page.url} (${page.status})`);
+    }
+    if (!page.meta?.description) {
+      console.warn(`Missing meta description: ${page.url}`);
+    }
+    if (!page.title) {
+      console.warn(`Missing title: ${page.url}`);
+    }
+  }
+});
+
+const result = await crawler.crawl('https://example.com');
+
+// Summary
+const broken = result.pages.filter(p => p.status >= 400);
+const noDescription = result.pages.filter(p => !p.meta?.description);
+const noTitle = result.pages.filter(p => !p.title);
+
+console.log(`Total pages: ${result.pages.length}`);
+console.log(`Broken links: ${broken.length}`);
+console.log(`Missing descriptions: ${noDescription.length}`);
+console.log(`Missing titles: ${noTitle.length}`);
 ```
 
 ## Controlling the Crawler
@@ -316,119 +716,6 @@ https://Example.com/Page/?utm_source=twitter&b=2&a=1#section
 → https://example.com/Page?a=1&b=2
 ```
 
-## Common Use Cases
-
-### Blog Crawler
-
-```typescript
-const crawler = new Spider({
-  maxDepth: 2,
-  maxPages: 100,
-  include: [/\/blog\//, /\/posts\//],
-  exclude: [/\/tag\//, /\/author\//, /\?page=/]
-});
-
-const result = await crawler.crawl('https://example.com/blog');
-
-const posts = result.pages
-  .filter(p => p.status === 200 && !p.error)
-  .map(p => ({
-    url: p.url,
-    title: p.title,
-    description: p.meta?.description
-  }));
-```
-
-### Site Audit
-
-```typescript
-const crawler = new Spider({
-  maxPages: 500,
-  useSitemap: true,
-  respectRobotsTxt: true,
-  onPage: (page) => {
-    // Check for issues
-    if (page.status >= 400) {
-      console.warn(`Broken: ${page.url} (${page.status})`);
-    }
-    if (!page.meta?.description) {
-      console.warn(`Missing meta description: ${page.url}`);
-    }
-    if (!page.title) {
-      console.warn(`Missing title: ${page.url}`);
-    }
-  }
-});
-
-const result = await crawler.crawl('https://example.com');
-
-// Summary
-const broken = result.pages.filter(p => p.status >= 400);
-const noDescription = result.pages.filter(p => !p.meta?.description);
-const noTitle = result.pages.filter(p => !p.title);
-
-console.log(`Total pages: ${result.pages.length}`);
-console.log(`Broken links: ${broken.length}`);
-console.log(`Missing descriptions: ${noDescription.length}`);
-console.log(`Missing titles: ${noTitle.length}`);
-```
-
-### Link Discovery
-
-```typescript
-const crawler = new Spider({
-  maxDepth: 3,
-  maxPages: 200
-});
-
-const result = await crawler.crawl('https://example.com');
-
-// Find all external links
-const externalLinks = new Set<string>();
-for (const page of result.pages) {
-  for (const link of page.links) {
-    if (link.type === 'external') {
-      externalLinks.add(link.href);
-    }
-  }
-}
-
-console.log('External links found:');
-for (const link of externalLinks) {
-  console.log(`  ${link}`);
-}
-```
-
-### Sitemap vs Reality Check
-
-```typescript
-const crawler = new Spider({
-  useSitemap: true,
-  maxPages: 500
-});
-
-const result = await crawler.crawl('https://example.com');
-
-if (result.sitemap) {
-  console.log(`Sitemap URLs: ${result.sitemap.totalUrls}`);
-  console.log(`Crawled from sitemap: ${result.sitemap.crawledFromSitemap}`);
-
-  if (result.sitemap.orphanUrls.length > 0) {
-    console.warn('Orphan pages (in sitemap but not linked):');
-    for (const url of result.sitemap.orphanUrls) {
-      console.warn(`  ${url}`);
-    }
-  }
-
-  if (result.sitemap.missingFromSitemap.length > 0) {
-    console.warn('Missing from sitemap:');
-    for (const url of result.sitemap.missingFromSitemap) {
-      console.warn(`  ${url}`);
-    }
-  }
-}
-```
-
 ## Performance Tips
 
 ### 1. Adjust Concurrency Based on Target
@@ -459,14 +746,43 @@ const crawler = new Spider({
 
 ### 3. Skip Unnecessary Content
 
-```typescript
-const crawler = new Spider({
-  exclude: [
-    /\/search\?/,       // Skip search results
-    /\/page\/\d+/,      // Skip pagination
-    /\/(tag|category)\// // Skip taxonomies
-  ]
-});
+```bash
+rek spider example.com \
+  --exclude "/search/,/page/\\d+,/(tag|category)/"
+```
+
+### 4. Use JSONL for Large Crawls
+
+```bash
+# For 1000+ pages, always use JSONL
+rek spider example.com --limit 5000 --jsonl -o crawl.jsonl
+```
+
+## CLI Reference
+
+```bash
+rek spider <url> [options]
+
+Options:
+  -d, --depth <n>       Max link depth (default: 5)
+  -l, --limit <n>       Max pages to crawl (default: 100)
+  -c, --concurrency <n> Parallel requests (default: 5)
+  -o, --output <file>   Save report to file
+  -E, --extract <sel>   CSS selectors to extract (comma-separated)
+  -i, --include <pat>   URL patterns to include (comma-separated regex)
+  -x, --exclude <pat>   URL patterns to exclude (comma-separated regex)
+  -S, --seo             Enable SEO analysis
+  -L, --jsonl           Stream output as JSONL
+  -r, --robots          Respect robots.txt (default: true)
+  --json                Output as JSON
+
+Examples:
+  rek spider example.com
+  rek spider example.com -d 3 -l 50
+  rek spider example.com -E "h1,a:href,.price"
+  rek spider example.com --jsonl -o crawl.jsonl
+  rek spider example.com --seo -o report.json
+  rek spider example.com --include "^/products/" -E ".price"
 ```
 
 ## TypeScript Support
@@ -479,12 +795,14 @@ import type {
   SpiderPageResult,
   SpiderProgress,
   SitemapAnalysis,
-  RobotsAnalysis
+  RobotsAnalysis,
+  ExtractionSchema
 } from 'recker/scrape';
 ```
 
 ## Next Steps
 
-- **[Overview](01-overview.md)** - Getting started with scraping
+- **[Schemas](04-schemas.md)** - Advanced declarative extraction
 - **[Selectors](02-selectors.md)** - CSS selectors and traversal
 - **[SEO Spider](/seo/03-spider.md)** - Site-wide SEO analysis
+- **[Anti-Blocking](06-anti-blocking.md)** - Avoid detection

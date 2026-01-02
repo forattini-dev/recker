@@ -91,6 +91,7 @@
   - [Presets](/cli/07-presets.md)
   - [Mock Servers](/cli/08-mock-servers.md)
   - [Video & Live](/cli/09-video-live.md)
+  - [Proxy Server](/cli/10-proxy.md)
 
 - **Media**
   - [Video Extractors](/media/01-video-extractors.md)

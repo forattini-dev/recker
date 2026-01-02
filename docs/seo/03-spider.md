@@ -405,26 +405,115 @@ const report = {
 await fs.writeFile('custom-report.json', JSON.stringify(report, null, 2));
 ```
 
+## Data Extraction with SEO
+
+Combine SEO analysis with data extraction to get both SEO scores and custom data:
+
+```bash
+# Extract headings while analyzing SEO
+rek spider example.com --seo --extract "h1,h2,h3"
+
+# Product catalog with SEO audit
+rek spider shop.example.com \
+  --seo \
+  --extract ".product-title,.price" \
+  --include "^/products/" \
+  --json -o catalog-audit.json
+```
+
+```typescript
+const spider = new SeoSpider({
+  seo: true,
+  maxPages: 100,
+  extract: ['h1', '.price', 'a:href'],
+  include: [/\/products\//]
+});
+
+const result = await spider.crawl('https://shop.example.com');
+
+// Each page now has both SEO scores AND extracted data
+for (const page of result.pages) {
+  console.log(`${page.url}`);
+  console.log(`  SEO: ${page.seoReport?.grade} (${page.seoReport?.score})`);
+  console.log(`  H1: ${page.extracted?.h1?.[0]}`);
+  console.log(`  Prices: ${page.extracted?.price?.length || 0}`);
+}
+```
+
+## JSONL Streaming for Large SEO Crawls
+
+For large sites, use JSONL streaming to avoid memory issues and get real-time progress:
+
+```bash
+# Stream SEO crawl to JSONL file
+rek spider example.com --seo --jsonl -o seo-crawl.jsonl
+
+# With extraction
+rek spider example.com --seo --extract "h1" --jsonl -o audit.jsonl
+
+# Process in real-time with jq
+rek spider example.com --seo -L | jq 'select(.seoScore < 50)'
+```
+
+### JSONL Record Format with SEO
+
+```jsonl
+{"type":"start","url":"https://example.com","config":{"seo":true,...}}
+{"type":"page","url":"https://example.com/","status":200,"depth":0,"title":"..."}
+{"type":"page-full","url":"...","seoScore":85,"seoGrade":"B","seoErrors":3,"seoWarnings":12,"extracted":{...}}
+{"type":"complete","url":"...","seo":{"avgScore":78,"duplicateTitles":2,"orphanPages":5,...}}
+```
+
+The `complete` record includes site-wide SEO analysis:
+- `avgScore` - Average SEO score across all pages
+- `duplicateTitles` - Pages sharing the same title
+- `duplicateDescriptions` - Pages sharing meta descriptions
+- `duplicateH1s` - Pages sharing H1 headings
+- `orphanPages` - Pages with no internal links
+- `siteWideIssues` - Array of site-wide problems
+
+### Processing Large SEO Crawls
+
+```bash
+# Find pages with low SEO scores
+cat seo-crawl.jsonl | jq -r 'select(.type=="page-full" and .seoScore < 60) | .url'
+
+# Get duplicate titles
+cat seo-crawl.jsonl | jq 'select(.type=="complete") | .seo.duplicateTitles'
+
+# Extract pages with SEO errors
+cat seo-crawl.jsonl | jq 'select(.seoErrors > 0) | {url, errors: .seoErrors}'
+```
+
 ## CLI Usage
 
 ```bash
 # Basic spider (rich base report)
-rek spider https://example.com
+rek spider example.com
 
 # With SEO analysis (even richer)
-rek spider https://example.com seo=true
+rek spider example.com --seo
 
 # With depth and limit
-rek spider https://example.com seo=true depth=3 maxPages=50
+rek spider example.com --seo -d 3 -l 50
 
 # Focus on specific checks
-rek spider https://example.com seo=true --focus ai
+rek spider example.com --seo -f ai
 
 # Save to file
-rek spider https://example.com seo=true -o report.json
+rek spider example.com --seo -o report.json
 
-# JSON output
-rek spider https://example.com seo=true --format json
+# Stream as JSONL (for large sites)
+rek spider example.com --seo --jsonl -o seo-crawl.jsonl
+
+# Combine SEO with extraction
+rek spider example.com --seo --extract "h1,.price" -o audit.json
+
+# Focus modes
+rek spider example.com --seo -f links      # Link analysis
+rek spider example.com --seo -f duplicates # Find duplicate content
+rek spider example.com --seo -f security   # Security issues
+rek spider example.com --seo -f ai         # AI-search readiness
 ```
 
 ## Progress Tracking
@@ -453,6 +542,8 @@ console.log('Done!');
 4. **Focus When Possible** - Use `focusCategories` to reduce analysis time
 5. **Monitor Progress** - Use `onSeoAnalysis` callback for real-time feedback
 6. **Use Base Spider First** - Start without `seo: true` to map site structure quickly
+7. **Use JSONL for Large Sites** - For 100+ pages, use `--jsonl` to stream results
+8. **Combine with Extraction** - Get custom data alongside SEO scores
 
 ## When to Use Each Mode
 
@@ -461,9 +552,12 @@ console.log('Done!');
 | Quick site structure check | Base spider (`spider()`) |
 | Find broken links | Base spider |
 | Sitemap validation | Base spider |
-| Full SEO audit | SEO spider (`seo: true`) |
-| Duplicate content detection | SEO spider |
+| Full SEO audit | SEO spider (`--seo`) |
+| Duplicate content detection | SEO spider + focus duplicates |
 | CI/CD quality gates | SEO spider with thresholds |
+| Large sites (500+ pages) | SEO spider + JSONL (`--jsonl`) |
+| Product catalog audit | SEO spider + extraction (`--extract`) |
+| Content inventory | Spider + extraction |
 
 ## Next Steps
 

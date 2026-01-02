@@ -36,6 +36,10 @@ import {
   runDnsSpf, runDnsDmarc, runDnsDkim, runDnsDig, runDnsGenerate
 } from './commands/dns.js';
 import { runFtp, runTelnet, runGraphQL, runJsonRpc, runHar } from './commands/protocols.js';
+import { JobManager, type Job } from './job-manager.js';
+import { DownloadJob } from './jobs/download-job.js';
+import { WatchJob } from './jobs/watch-job.js';
+import { SpiderJob } from './jobs/spider-job.js';
 
 // Lazy-loaded optional dependency (syntax highlighting only)
 let highlight: (code: string, opts?: any) => string;
@@ -58,11 +62,15 @@ interface HistoryItem {
   meta?: any;
 }
 
+// Header height in lines (logo+status, hotkeys, separator)
+const HEADER_HEIGHT = 3;
+
 export class RekShell {
   public rl!: readline.Interface;
   public client: any;
   private history: HistoryItem[] = [];
   public baseUrl: string = '';
+  public outputDir: string = '';
   public lastResponse: any = null;
   public variables: Record<string, any> = {};
   private envVars: Record<string, string> = {};
@@ -72,6 +80,7 @@ export class RekShell {
   public currentDocUrl: string = '';
   private scrollBuffer: ScrollBuffer;
   private originalStdoutWrite: typeof process.stdout.write | null = null;
+  private scrollRegionSet: boolean = false;
 
   public printResponse(res: any) {
     console.log(JSON.stringify(res, null, 2));
@@ -83,6 +92,11 @@ export class RekShell {
   private inScrollMode: boolean = false;
   // AI clients per preset for memory persistence across messages
   private aiClients: Map<string, Client> = new Map();
+  // Background job manager for live downloads and watchers
+  private jobManager: JobManager;
+  // Status bar for job monitoring
+  private statusBarEnabled: boolean = false;
+  private statusBarInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     // We initialize with a placeholder base URL because the Client enforces it.
@@ -96,6 +110,207 @@ export class RekShell {
 
     // Initialize scroll buffer for history navigation
     this.scrollBuffer = new ScrollBuffer({ maxLines: 10000 });
+
+    // Initialize job manager for background downloads
+    this.jobManager = new JobManager();
+    this.setupJobEventHandlers();
+  }
+
+  /**
+   * Set up event handlers for background jobs
+   */
+  private setupJobEventHandlers(): void {
+    this.jobManager.on('job:start', (job: Job) => {
+      const typeLabel = job.type === 'watch' ? 'watch' : 'job';
+      console.log(colors.cyan(`[${typeLabel}:${job.id}] Started: ${job.output || job.target}`));
+    });
+
+    this.jobManager.on('job:complete', (job: Job) => {
+      const bytes = job.progress.bytes;
+      const mb = (bytes / 1024 / 1024).toFixed(1);
+      console.log(colors.green(`[job:${job.id}] Completed: ${job.output || job.target} (${mb} MB)`));
+    });
+
+    this.jobManager.on('job:stopped', (job: Job) => {
+      const bytes = job.progress.bytes;
+      const mb = (bytes / 1024 / 1024).toFixed(1);
+      console.log(colors.yellow(`[job:${job.id}] Stopped: ${job.output || job.target} (${mb} MB saved)`));
+    });
+
+    this.jobManager.on('job:error', (job: Job, error: Error) => {
+      console.log(colors.red(`[job:${job.id}] Failed: ${error.message}`));
+    });
+
+    this.jobManager.on('job:live', (job: Job) => {
+      console.log(colors.green(`[watch:${job.id}] ${job.target} is LIVE!`));
+    });
+
+    // Update status bar on progress
+    this.jobManager.on('job:progress', () => {
+      if (this.statusBarEnabled) {
+        this.renderStatusBar();
+      }
+    });
+  }
+
+  /**
+   * Enable/disable the status bar
+   */
+  public toggleStatusBar(enable?: boolean): void {
+    if (enable === undefined) {
+      this.statusBarEnabled = !this.statusBarEnabled;
+    } else {
+      this.statusBarEnabled = enable;
+    }
+
+    if (this.statusBarEnabled) {
+      // Start periodic updates (every 1 second)
+      this.statusBarInterval = setInterval(() => {
+        if (this.jobManager.hasActiveJobs()) {
+          this.renderStatusBar();
+        }
+      }, 1000);
+      console.log(colors.gray('Status bar enabled. Use "status off" to disable.'));
+      this.renderStatusBar();
+    } else {
+      if (this.statusBarInterval) {
+        clearInterval(this.statusBarInterval);
+        this.statusBarInterval = null;
+      }
+      this.clearStatusBar();
+      console.log(colors.gray('Status bar disabled.'));
+    }
+  }
+
+  /**
+   * Render the status bar at the bottom
+   */
+  private renderStatusBar(): void {
+    const jobs = this.jobManager.listActive();
+    if (jobs.length === 0) return;
+
+    // Build status line
+    const parts: string[] = [];
+    let totalBytes = 0;
+
+    for (const job of jobs) {
+      const status = job.status === 'watching' ? '👁' : '⬇';
+      const mb = (job.progress.bytes / 1024 / 1024).toFixed(1);
+      totalBytes += job.progress.bytes;
+      parts.push(`${status} ${job.target}:${mb}MB`);
+    }
+
+    const totalMb = (totalBytes / 1024 / 1024).toFixed(1);
+    const statusLine = `[${jobs.length} jobs | ${totalMb}MB] ${parts.join(' | ')}`;
+
+    // Save cursor position, move to bottom, write status, restore cursor
+    const cols = process.stdout.columns || 80;
+    const truncated = statusLine.length > cols - 2 ? statusLine.slice(0, cols - 5) + '...' : statusLine;
+
+    // Use ANSI escape sequences to write status bar without disrupting input
+    process.stdout.write(`\x1b[s\x1b[${process.stdout.rows};0H\x1b[2K\x1b[7m ${truncated.padEnd(cols - 1)} \x1b[0m\x1b[u`);
+  }
+
+  /**
+   * Clear the status bar
+   */
+  private clearStatusBar(): void {
+    const rows = process.stdout.rows || 24;
+    process.stdout.write(`\x1b[s\x1b[${rows};0H\x1b[2K\x1b[u`);
+  }
+
+  /**
+   * Toggle jobs panel (F2 hotkey)
+   */
+  private toggleJobsPanel(): void {
+    const jobs = this.jobManager.list();
+
+    console.log(''); // New line to not mess with current input
+
+    if (jobs.length === 0) {
+      console.log(colors.gray('No jobs. Use "live download", "live watch", or "spider bg" to start.'));
+      this.prompt();
+      return;
+    }
+
+    // Header
+    const cols = process.stdout.columns || 80;
+    console.log(colors.bold(colors.cyan('═'.repeat(Math.min(cols, 60)))));
+    console.log(colors.bold(colors.cyan('  JOBS PANEL')) + colors.gray('  (F2 to close)'));
+    console.log(colors.gray('─'.repeat(Math.min(cols, 60))));
+
+    // Table header
+    console.log(
+      colors.gray(' ID ') +
+      colors.gray('Type     ') +
+      colors.gray('Status    ') +
+      colors.gray('Target          ') +
+      colors.gray('Progress')
+    );
+    console.log(colors.gray('─'.repeat(Math.min(cols, 60))));
+
+    // Job rows
+    for (const job of jobs) {
+      const id = String(job.id).padEnd(3);
+      const type = job.type.padEnd(8);
+      const status = this.formatJobStatus(job.status).padEnd(10);
+      const target = job.target.slice(0, 15).padEnd(16);
+      const progress = this.formatJobProgress(job);
+
+      console.log(` ${id} ${type} ${status} ${target} ${progress}`);
+    }
+
+    console.log(colors.cyan('═'.repeat(Math.min(cols, 60))));
+    console.log(colors.gray('Commands: job stop <id> | job stop all'));
+    console.log('');
+
+    this.prompt();
+  }
+
+  /**
+   * Format job status with color
+   */
+  private formatJobStatus(status: string): string {
+    switch (status) {
+      case 'running': return colors.green('⬇ running');
+      case 'watching': return colors.blue('👁 watching');
+      case 'crawling': return colors.magenta('🕷 crawling');
+      case 'completed': return colors.green('✓ done');
+      case 'stopped': return colors.yellow('⏹ stopped');
+      case 'failed': return colors.red('✗ failed');
+      case 'pending': return colors.gray('◌ pending');
+      default: return status;
+    }
+  }
+
+  /**
+   * Format job progress
+   */
+  private formatJobProgress(job: Job): string {
+    if (job.status === 'watching') {
+      return colors.gray('polling...');
+    }
+
+    // Spider jobs: show pages/queued/errors
+    if (job.type === 'spider') {
+      const pages = job.progress.pages || 0;
+      const queued = job.progress.queued || 0;
+      const errors = job.progress.errors || 0;
+      if (errors > 0) {
+        return `${colors.magenta(pages + ' pg')} ${colors.gray(queued + ' queued')} ${colors.red(errors + ' err')}`;
+      }
+      return `${colors.magenta(pages + ' pages')} ${colors.gray(queued + ' queued')}`;
+    }
+
+    // Download jobs: show bytes/segments/time
+    const mb = (job.progress.bytes / 1024 / 1024).toFixed(1);
+    const segs = job.progress.segments;
+    const duration = job.progress.duration || 0;
+    const mins = Math.floor(duration / 60);
+    const secs = duration % 60;
+    const time = mins > 0 ? `${mins}m${secs}s` : `${secs}s`;
+
+    return `${colors.cyan(mb + ' MB')} ${colors.gray(`(${segs} segs, ${time})`)}`;
   }
 
   private async ensureInitialized() {
@@ -106,6 +321,8 @@ export class RekShell {
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
+      terminal: true,
+      historySize: 500,
       completer: this.completer.bind(this),
       prompt: '' // Dynamic prompt handled manually
     });
@@ -113,9 +330,189 @@ export class RekShell {
     this.initialized = true;
   }
 
+  /**
+   * Public init method for external usage (e.g., tuiuiu shell)
+   * Initializes dependencies without starting the readline loop
+   */
+  public async init(): Promise<void> {
+    if (this.initialized) return;
+    await initDependencies();
+    this.initialized = true;
+  }
+
+  /**
+   * Execute a command programmatically
+   * Used by external shells (tuiuiu) for command execution
+   */
+  public async executeCommand(input: string): Promise<void> {
+    await this.init();
+    await this.handleCommand(input);
+  }
+
   private getPrompt() {
     const base = this.baseUrl ? colors.cyan(new URL(this.baseUrl).hostname) : colors.gray('rek');
     return `${base} ${colors.magenta('›')} `;
+  }
+
+  /**
+   * Render the persistent header
+   */
+  private async renderHeader(): Promise<void> {
+    const version = await getVersion();
+    const cols = process.stdout.columns || 80;
+    const line = '─'.repeat(cols);
+
+    // Build status indicators
+    const indicators: string[] = [];
+
+    // Jobs status
+    const activeJobs = this.jobManager.listActive();
+    if (activeJobs.length > 0) {
+      const downloads = activeJobs.filter(j => j.status === 'running').length;
+      const watches = activeJobs.filter(j => j.status === 'watching').length;
+      const parts: string[] = [];
+      if (downloads > 0) parts.push(`${downloads} ⬇`);
+      if (watches > 0) parts.push(`${watches} 👁`);
+      indicators.push(colors.green(`[${parts.join(' ')}]`));
+    }
+
+    // Output dir
+    if (this.outputDir) {
+      const shortDir = this.outputDir.replace(process.env.HOME || '', '~');
+      indicators.push(colors.gray(`📁 ${shortDir}`));
+    }
+
+    // Base URL
+    if (this.baseUrl) {
+      indicators.push(colors.cyan(`🔗 ${new URL(this.baseUrl).hostname}`));
+    }
+
+    // Header line 1: Logo + Version + Status
+    const logo = colors.bold(colors.cyan('⚡ Recker Shell'));
+    const ver = colors.gray(`v${version}`);
+    const statusRight = indicators.length > 0 ? indicators.join('  ') : '';
+
+    console.log(`${logo} ${ver}  ${statusRight}`);
+
+    // Header line 2: Hotkeys
+    const hotkeys = [
+      colors.gray('F2:jobs'),
+      colors.gray('PgUp/Dn:scroll'),
+      colors.gray('help'),
+    ].join('  ');
+    console.log(hotkeys);
+
+    // Separator
+    console.log(colors.gray(line));
+  }
+
+  /**
+   * Set up scroll region below the header
+   * This makes the header "sticky" at the top
+   */
+  private setupScrollRegion(): void {
+    const rows = process.stdout.rows || 24;
+    // Set scroll region from line HEADER_HEIGHT+1 to bottom
+    // \x1b[<top>;<bottom>r sets scroll region (1-indexed)
+    process.stdout.write(`\x1b[${HEADER_HEIGHT + 1};${rows}r`);
+    // Move cursor to start of content area
+    process.stdout.write(`\x1b[${HEADER_HEIGHT + 1};1H`);
+    this.scrollRegionSet = true;
+  }
+
+  /**
+   * Reset scroll region to full screen (cleanup)
+   */
+  private resetScrollRegion(): void {
+    if (!this.scrollRegionSet) return;
+    const rows = process.stdout.rows || 24;
+    // Reset scroll region to full screen
+    process.stdout.write(`\x1b[1;${rows}r`);
+    this.scrollRegionSet = false;
+  }
+
+  /**
+   * Redraw the header in place (without clearing content)
+   */
+  private async redrawHeader(): Promise<void> {
+    // Save cursor position
+    process.stdout.write('\x1b[s');
+    // Move to top-left
+    process.stdout.write('\x1b[1;1H');
+    // Clear the header lines
+    for (let i = 0; i < HEADER_HEIGHT; i++) {
+      process.stdout.write('\x1b[2K'); // Clear line
+      if (i < HEADER_HEIGHT - 1) process.stdout.write('\x1b[1B'); // Move down
+    }
+    // Move back to top
+    process.stdout.write('\x1b[1;1H');
+    // Render header content
+    await this.renderHeaderContent();
+    // Restore cursor position
+    process.stdout.write('\x1b[u');
+  }
+
+  /**
+   * Render header content (without console.log which adds newlines)
+   */
+  private async renderHeaderContent(): Promise<void> {
+    const version = await getVersion();
+    const cols = process.stdout.columns || 80;
+    const line = '─'.repeat(cols);
+
+    // Build status indicators
+    const indicators: string[] = [];
+
+    // Jobs status
+    const activeJobs = this.jobManager.listActive();
+    if (activeJobs.length > 0) {
+      const downloads = activeJobs.filter(j => j.status === 'running').length;
+      const watches = activeJobs.filter(j => j.status === 'watching').length;
+      const spiders = activeJobs.filter(j => j.status === 'crawling').length;
+      const parts: string[] = [];
+      if (downloads > 0) parts.push(`${downloads}⬇`);
+      if (watches > 0) parts.push(`${watches}👁`);
+      if (spiders > 0) parts.push(`${spiders}🕷`);
+      indicators.push(colors.green(`[${parts.join(' ')}]`));
+    }
+
+    // Output dir
+    if (this.outputDir) {
+      const shortDir = this.outputDir.replace(process.env.HOME || '', '~');
+      indicators.push(colors.gray(`📁${shortDir}`));
+    }
+
+    // Base URL
+    if (this.baseUrl) {
+      indicators.push(colors.cyan(`🔗${new URL(this.baseUrl).hostname}`));
+    }
+
+    // Header line 1: Logo + Version + Status
+    const logo = colors.bold(colors.cyan('⚡ Recker Shell'));
+    const ver = colors.gray(`v${version}`);
+    const statusRight = indicators.length > 0 ? indicators.join(' ') : '';
+
+    // Write line 1
+    process.stdout.write(`${logo} ${ver}  ${statusRight}\x1b[K\n`);
+
+    // Header line 2: Hotkeys
+    const hotkeys = [
+      colors.gray('F2:jobs'),
+      colors.gray('F5:refresh'),
+      colors.gray('PgUp/Dn:scroll'),
+    ].join('  ');
+    process.stdout.write(`${hotkeys}\x1b[K\n`);
+
+    // Separator
+    process.stdout.write(`${colors.gray(line)}\x1b[K`);
+  }
+
+  /**
+   * Refresh just the header (for status updates)
+   */
+  private refreshHeader(): void {
+    // Redraw header in place without disrupting content
+    this.redrawHeader().catch(() => {});
   }
 
   /** Extract domain/hostname from baseUrl */
@@ -152,11 +549,11 @@ export class RekShell {
       'ws', 'udp', 'load', 'chat', 'ai',
       '@openai', '@anthropic', '@groq', '@google', '@xai', '@mistral', '@cohere', '@deepseek', '@fireworks', '@together', '@perplexity',
       'ai:clear',
-      'whois', 'tls', 'ssl', 'security', 'ip', 'dns', 'dns:propagate', 'dns:email', 'dns:health', 'dns:spf', 'dns:dmarc', 'dns:dkim', 'dns:dig', 'dns:generate', 'rdap', 'ping', 'ftp', 'sftp', 'telnet', 'graphql', 'jsonrpc', 'hls', 'har', 'har:record', 'har:play', 'har:info', 'har:stop',
+      'whois', 'tls', 'ssl', 'security', 'ip', 'dns', 'dns:propagate', 'dns:email', 'dns:health', 'dns:spf', 'dns:dmarc', 'dns:dkim', 'dns:dig', 'dns:generate', 'rdap', 'ping', 'ftp', 'sftp', 'telnet', 'graphql', 'jsonrpc', 'hls', 'live', 'live:download', 'live:watch', 'job', 'jobs', 'har', 'har:record', 'har:play', 'har:info', 'har:stop',
       'robots', 'sitemap', 'llms', 'sse', 'upload', 'download', 'soap', 'odata', 'proxy',
       'scrap', 'spider', 'seo', '$', '$text', '$attr', '$html', '$links', '$images', '$scripts', '$css', '$sourcemaps', '$unmap', '$unmap:view', '$unmap:save', '$beautify', '$beautify:save', '$table',
       '?', 'search', 'suggest', 'example',
-      'help', 'clear', 'exit', 'set', 'url', 'vars', 'env'
+      'help', 'clear', 'exit', 'set', 'url', 'output', 'dir', 'vars', 'status', 'env'
     ];
 
     const hits = commands.filter((c) => c.startsWith(line));
@@ -169,14 +566,12 @@ export class RekShell {
     // Set up scroll buffer output interception
     this.setupScrollCapture();
 
-    // Get version for display
-    const version = await getVersion();
-
+    // Clear screen and render header
     console.clear();
-    console.log(colors.bold(colors.cyan('Rek Console')) + ' ' + colors.gray(`v${version}`));
-    console.log(colors.gray('Chat with your APIs. Type "help" for magic.'));
-    console.log(colors.gray('Use Page Up/Down to view history.'));
-    console.log(colors.gray('--------------------------------------------\n'));
+    await this.renderHeader();
+
+    // Set up scroll region below header (makes header sticky)
+    this.setupScrollRegion();
 
     this.prompt();
 
@@ -195,14 +590,49 @@ export class RekShell {
     });
 
     this.rl.on('close', () => {
+      // Reset scroll region before exit
+      this.resetScrollRegion();
+      // Always restore cursor visibility
+      process.stdout.write('\x1b[?25h');
+      // Clear status bar
+      if (this.statusBarInterval) {
+        clearInterval(this.statusBarInterval);
+        this.clearStatusBar();
+      }
+      // Stop all background jobs gracefully
+      const stopped = this.jobManager.stopAll();
+      if (stopped > 0) {
+        console.log(colors.gray(`\nStopped ${stopped} background job(s).`));
+      }
       this.cleanupScrollCapture();
       console.log(colors.gray('\nSee ya.'));
       process.exit(0);
     });
 
-    // Handle terminal resize
+    // Handle terminal resize - re-setup scroll region with new dimensions
     process.stdout.on('resize', () => {
       this.scrollBuffer.updateViewport();
+      // Re-setup scroll region with new terminal size
+      if (this.scrollRegionSet) {
+        this.setupScrollRegion();
+        this.redrawHeader().catch(() => {});
+      }
+    });
+
+    // Always restore terminal state on process exit (for any exit path)
+    const restoreTerminal = () => {
+      this.resetScrollRegion();
+      process.stdout.write('\x1b[?25h'); // Show cursor
+    };
+    process.on('exit', restoreTerminal);
+    process.on('SIGTERM', () => {
+      restoreTerminal();
+      process.exit(0);
+    });
+    process.on('uncaughtException', (err) => {
+      restoreTerminal();
+      console.error('Uncaught exception:', err);
+      process.exit(1);
     });
 
     // Set up raw mode key listener for Page Up/Down
@@ -240,6 +670,8 @@ export class RekShell {
    * Clean up stdout interception
    */
   private cleanupScrollCapture(): void {
+    // Always restore cursor visibility
+    process.stdout.write('\x1b[?25h');
     if (this.originalStdoutWrite) {
       process.stdout.write = this.originalStdoutWrite;
       this.originalStdoutWrite = null;
@@ -289,6 +721,18 @@ export class RekShell {
             return true;
           }
 
+          // F2 key: Toggle jobs panel (\x1bOQ or \x1b[12~)
+          if (str === '\x1bOQ' || str === '\x1b[12~') {
+            self.toggleJobsPanel();
+            return true;
+          }
+
+          // F5 key: Refresh header in place (\x1b[15~)
+          if (str === '\x1b[15~') {
+            self.redrawHeader().then(() => self.prompt());
+            return true;
+          }
+
           // Check for scroll keys (Page Up/Down, Home/End, Q to quit)
           // Wrapped in try-catch to prevent crashes from scroll handling errors
           try {
@@ -303,7 +747,18 @@ export class RekShell {
                 // Not in scroll mode - pass 'q' through to readline
                 return originalEmit(event, ...args);
               }
-              // Handle other scroll keys (pageUp, pageDown, home, end, scrollUp, scrollDown)
+
+              // Home/End: only consume for scroll mode, pass through for cursor movement
+              if (scrollKey === 'home' || scrollKey === 'end') {
+                if (self.inScrollMode) {
+                  self.handleScrollKey(scrollKey);
+                  return true;
+                }
+                // Not in scroll mode - pass through to readline for cursor movement
+                return originalEmit(event, ...args);
+              }
+
+              // Handle other scroll keys (pageUp, pageDown, scrollUp, scrollDown)
               self.handleScrollKey(scrollKey);
               return true; // Consume the event
             }
@@ -560,7 +1015,10 @@ export class RekShell {
         }
         return;
       case 'clear':
+        // Clear screen and redraw with sticky header
         console.clear();
+        await this.renderHeader();
+        this.setupScrollRegion();
         return;
       case 'ai:clear':
         this.clearAIMemory(parts[1]);
@@ -572,11 +1030,18 @@ export class RekShell {
       case 'url': // Set Base URL
         this.setBaseUrl(parts[1]);
         return;
+      case 'output': // Set output directory for downloads
+      case 'dir':
+        this.setOutputDir(parts[1]);
+        return;
       case 'set': // Set variable
         this.setVariable(parts.slice(1));
         return;
       case 'vars':
         this.showVars();
+        return;
+      case 'status':
+        this.handleStatusCommand(parts.slice(1));
         return;
       case 'env':
         await this.loadEnvFile(parts[1]);
@@ -652,6 +1117,13 @@ export class RekShell {
       case 'hls':
         await runHls(this, parts.slice(1));
         return;
+      case 'live':
+        await this.runLive(parts.slice(1));
+        return;
+      case 'job':
+      case 'jobs':
+        await this.runJobs(parts.slice(1));
+        return;
       case 'har':
         await runHar(this, parts.slice(1));
         return;
@@ -701,9 +1173,7 @@ export class RekShell {
         await this.runScrap(parts[1]);
         return;
       case 'spider':
-        // Parse spider command: spider [url] [options]
-        const spiderUrl = parts[1] || this.baseUrl || '';
-        await runSpider({ url: spiderUrl });
+        await this.runSpiderCmd(parts.slice(1));
         return;
       case '$':
         await this.runSelect(parts.slice(1).join(' '));
@@ -1056,6 +1526,23 @@ export class RekShell {
     console.log(colors.gray(`Base URL set to: ${colors.cyan(this.baseUrl)}`));
   }
 
+  private setOutputDir(dir: string) {
+    if (!dir) {
+      if (this.outputDir) {
+        console.log(colors.gray(`Output directory: ${colors.cyan(this.outputDir)}`));
+      } else {
+        console.log(colors.gray('No output directory set. Use "output ~/streams" to set one.'));
+      }
+      return;
+    }
+    // Expand ~ to home directory
+    if (dir.startsWith('~')) {
+      dir = dir.replace('~', process.env.HOME || '');
+    }
+    this.outputDir = dir;
+    console.log(colors.gray(`Output directory set to: ${colors.cyan(this.outputDir)}`));
+  }
+
   private setVariable(args: string[]) {
     // set token=123
     const [expr] = args;
@@ -1068,11 +1555,23 @@ export class RekShell {
   private showVars() {
     const hasVars = Object.keys(this.variables).length > 0;
     const hasEnvVars = Object.keys(this.envVars).length > 0;
+    const hasGlobals = this.baseUrl || this.outputDir;
 
-    if (!hasVars && !hasEnvVars) {
+    if (!hasVars && !hasEnvVars && !hasGlobals) {
       console.log(colors.gray('No variables set.'));
       console.log(colors.gray('Use "set key=value" to set variables or "env" to load .env file.'));
       return;
+    }
+
+    // Show global settings first
+    if (hasGlobals) {
+      console.log(colors.bold(colors.yellow('\nGlobal Settings:')));
+      if (this.baseUrl) {
+        console.log(`  ${colors.cyan('url')}    = ${colors.green(this.baseUrl)}`);
+      }
+      if (this.outputDir) {
+        console.log(`  ${colors.cyan('output')} = ${colors.green(this.outputDir)}`);
+      }
     }
 
     if (hasVars) {
@@ -1096,6 +1595,26 @@ export class RekShell {
       }
     }
     console.log('');
+  }
+
+  /**
+   * Handle status command for status bar control
+   */
+  private handleStatusCommand(args: string[]): void {
+    const subCmd = args[0]?.toLowerCase();
+
+    if (!subCmd || subCmd === 'on') {
+      this.toggleStatusBar(true);
+    } else if (subCmd === 'off') {
+      this.toggleStatusBar(false);
+    } else if (subCmd === 'toggle') {
+      this.toggleStatusBar();
+    } else {
+      console.log(colors.yellow('Usage: status [on|off|toggle]'));
+      console.log(colors.gray('  status on     - Enable the job status bar'));
+      console.log(colors.gray('  status off    - Disable the job status bar'));
+      console.log(colors.gray('  status toggle - Toggle the job status bar'));
+    }
   }
 
   /**
@@ -3383,6 +3902,514 @@ export class RekShell {
     } catch (error: any) {
       console.error(colors.red(`Download Error: ${error.message}`));
     }
+    console.log('');
+  }
+
+  /**
+   * Handle `live` command with subcommands: download, watch, info
+   */
+  private async runLive(args: string[]) {
+    if (args.length === 0 || args[0] === 'help') {
+      console.log(colors.bold('Live Stream Recording'));
+      console.log('');
+      console.log(colors.yellow('Commands:'));
+      console.log(`  ${colors.green('live download <url...>')}  Record live streams (background)`);
+      console.log(`  ${colors.green('live watch <url>')}        Monitor and auto-record when live`);
+      console.log(`  ${colors.green('live info <url>')}         Check if stream is live`);
+      console.log('');
+      console.log(colors.yellow('Options:'));
+      console.log('  -O, --outputDir <dir>   Output directory');
+      console.log('  -Q, --quality <q>       Quality: highest, 720p, etc.');
+      console.log('  -d, --duration <sec>    Max recording duration');
+      console.log('  --poll <min-max>        Poll interval for watch (e.g., 30-60)');
+      console.log('');
+      console.log(colors.yellow('Examples:'));
+      console.log(`  ${colors.gray('live download @chaturbate/room1 @chaturbate/room2 -O ~/streams')}`);
+      console.log(`  ${colors.gray('live watch @twitch/shroud --poll=30-60')}`);
+      console.log(`  ${colors.gray('live info @kick/xqc')}`);
+      console.log('');
+      return;
+    }
+
+    const subCmd = args[0].toLowerCase();
+
+    // Handle live:download and live:watch shortcuts
+    if (subCmd === 'download' || subCmd === 'live:download') {
+      await this.runLiveDownload(args.slice(1));
+      return;
+    }
+
+    if (subCmd === 'watch' || subCmd === 'live:watch') {
+      await this.runLiveWatch(args.slice(1));
+      return;
+    }
+
+    if (subCmd === 'info') {
+      await this.runLiveInfo(args.slice(1));
+      return;
+    }
+
+    // Default: treat as URL, show info
+    await this.runLiveInfo(args);
+  }
+
+  /**
+   * Live download - supports multiple URLs, runs in background
+   */
+  private async runLiveDownload(args: string[]) {
+    // Parse URLs and options
+    const urls: string[] = [];
+    let outputDir: string | undefined;
+    let quality: string | undefined;
+    let duration: number | undefined;
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+
+      if (arg === '-O' || arg === '--outputDir') {
+        outputDir = args[++i];
+      } else if (arg.startsWith('-O=') || arg.startsWith('--outputDir=')) {
+        outputDir = arg.split('=')[1];
+      } else if (arg === '-Q' || arg === '--quality') {
+        quality = args[++i];
+      } else if (arg.startsWith('-Q=') || arg.startsWith('--quality=')) {
+        quality = arg.split('=')[1];
+      } else if (arg === '-d' || arg === '--duration') {
+        duration = parseInt(args[++i], 10);
+      } else if (arg.startsWith('-d=') || arg.startsWith('--duration=')) {
+        duration = parseInt(arg.split('=')[1], 10);
+      } else if (arg.includes('=')) {
+        // key=value format
+        const [key, value] = arg.split('=');
+        if (key === 'outputDir') outputDir = value;
+        else if (key === 'quality') quality = value;
+        else if (key === 'duration') duration = parseInt(value, 10);
+      } else if (!arg.startsWith('-')) {
+        // It's a URL
+        urls.push(arg);
+      }
+    }
+
+    if (urls.length === 0) {
+      console.log(colors.yellow('Usage: live download <url...> [-O <dir>] [-Q <quality>] [-d <duration>]'));
+      console.log(colors.gray('Example: live download @chaturbate/room1 @chaturbate/room2 -O ~/streams'));
+      return;
+    }
+
+    // Use global outputDir as fallback
+    const effectiveOutputDir = outputDir || this.outputDir || undefined;
+
+    // Create download jobs for each URL
+    for (const url of urls) {
+      const job = new DownloadJob(this.jobManager, url, {
+        outputDir: effectiveOutputDir,
+        quality,
+        duration,
+      });
+      job.start();
+    }
+  }
+
+  /**
+   * Live watch - monitor stream and auto-record when live
+   */
+  private async runLiveWatch(args: string[]) {
+    // Parse URL and options
+    let url: string | undefined;
+    let outputDir: string | undefined;
+    let quality: string | undefined;
+    let duration: number | undefined;
+    let pollMin = 30;
+    let pollMax = 60;
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+
+      if (arg === '-O' || arg === '--outputDir') {
+        outputDir = args[++i];
+      } else if (arg.startsWith('-O=') || arg.startsWith('--outputDir=')) {
+        outputDir = arg.split('=')[1];
+      } else if (arg === '-Q' || arg === '--quality') {
+        quality = args[++i];
+      } else if (arg.startsWith('-Q=') || arg.startsWith('--quality=')) {
+        quality = arg.split('=')[1];
+      } else if (arg === '-d' || arg === '--duration') {
+        duration = parseInt(args[++i], 10);
+      } else if (arg.startsWith('-d=') || arg.startsWith('--duration=')) {
+        duration = parseInt(arg.split('=')[1], 10);
+      } else if (arg === '--poll') {
+        const poll = args[++i];
+        const [min, max] = poll.split('-').map(Number);
+        pollMin = min || 30;
+        pollMax = max || min || 60;
+      } else if (arg.startsWith('--poll=')) {
+        const poll = arg.split('=')[1];
+        const [min, max] = poll.split('-').map(Number);
+        pollMin = min || 30;
+        pollMax = max || min || 60;
+      } else if (!arg.startsWith('-')) {
+        url = arg;
+      }
+    }
+
+    if (!url) {
+      console.log(colors.yellow('Usage: live watch <url> [--poll=30-60] [-O <dir>] [-Q <quality>]'));
+      console.log(colors.gray('Example: live watch @twitch/shroud --poll=30-60'));
+      return;
+    }
+
+    // Use global outputDir as fallback
+    const effectiveOutputDir = outputDir || this.outputDir || undefined;
+
+    // Create watch job
+    const job = new WatchJob(this.jobManager, url, {
+      pollInterval: [pollMin, pollMax],
+      outputDir: effectiveOutputDir,
+      quality,
+      duration,
+    });
+    job.start();
+
+    console.log(colors.gray(`Monitoring ${url} (polling every ${pollMin}-${pollMax}s)...`));
+  }
+
+  /**
+   * Live info - check if stream is live
+   */
+  private async runLiveInfo(args: string[]) {
+    if (args.length === 0) {
+      console.log(colors.yellow('Usage: live info <url>'));
+      return;
+    }
+
+    const url = args[0];
+
+    try {
+      const { expandShortcut } = await import('../utils/shortcut-expander.js');
+      const { extract } = await import('../../extractors/index.js');
+
+      const fullUrl = expandShortcut(url);
+      if (fullUrl !== url) {
+        console.log(colors.gray(`Shortcut: ${url} → ${fullUrl}`));
+      }
+
+      console.log(colors.gray(`Checking: ${fullUrl}...`));
+
+      const info = await extract(fullUrl, this.client);
+
+      console.log('');
+      console.log(colors.bold('Live Stream Info'));
+      console.log('');
+
+      if (info.isLive) {
+        console.log(`${colors.gray('Status:')} ${colors.green('● LIVE')}`);
+      } else {
+        console.log(`${colors.gray('Status:')} ${colors.red('○ OFFLINE')}`);
+      }
+
+      console.log(`${colors.gray('ID:')} ${info.id}`);
+      console.log(`${colors.gray('Title:')} ${info.title}`);
+      if (info.uploader) console.log(`${colors.gray('Channel:')} ${info.uploader}`);
+      if (info.viewCount) console.log(`${colors.gray('Viewers:')} ${info.viewCount.toLocaleString()}`);
+
+      if (info.isLive) {
+        console.log('');
+        console.log(colors.gray('To record: ') + colors.green(`live download ${url}`));
+      }
+      console.log('');
+    } catch (error: any) {
+      console.log(colors.red(`Error: ${error.message}`));
+      console.log('');
+    }
+  }
+
+  /**
+   * Spider command - crawl websites (foreground or background)
+   *
+   * Subcommands:
+   *   spider <url>          - Run spider in foreground
+   *   spider bg <url>       - Run spider in background
+   *   spider help           - Show help
+   */
+  private async runSpiderCmd(args: string[]) {
+    if (args.length === 0 || args[0] === 'help') {
+      console.log('');
+      console.log(colors.bold('Spider - Web Crawler'));
+      console.log('');
+      console.log(colors.yellow('Usage:'));
+      console.log(`  ${colors.cyan('spider <url>')}           - Crawl in foreground`);
+      console.log(`  ${colors.cyan('spider bg <url>')}        - Crawl in background`);
+      console.log('');
+      console.log(colors.yellow('Options:'));
+      console.log(`  ${colors.gray('--depth=<n>')}           - Max depth (default: 5)`);
+      console.log(`  ${colors.gray('--pages=<n>')}           - Max pages (default: 100)`);
+      console.log(`  ${colors.gray('--concurrency=<n>')}     - Concurrent requests (default: 5)`);
+      console.log(`  ${colors.gray('--delay=<ms>')}          - Delay between requests (default: 100)`);
+      console.log(`  ${colors.gray('--sitemap')}             - Use sitemap.xml for discovery`);
+      console.log(`  ${colors.gray('-o <file>')}             - Save results to JSON file`);
+      console.log('');
+      console.log(colors.yellow('Examples:'));
+      console.log(`  ${colors.gray('spider https://example.com')}`);
+      console.log(`  ${colors.gray('spider bg https://example.com --depth=3 --pages=50')}`);
+      console.log(`  ${colors.gray('spider bg https://example.com -o crawl-results.json')}`);
+      console.log('');
+      return;
+    }
+
+    const subCmd = args[0].toLowerCase();
+
+    // Background mode: spider bg <url> [options]
+    if (subCmd === 'bg' || subCmd === 'background') {
+      await this.runSpiderBg(args.slice(1));
+      return;
+    }
+
+    // Foreground mode: spider <url> [options]
+    const spiderUrl = args[0].startsWith('-') ? (this.baseUrl || '') : args[0];
+    if (!spiderUrl) {
+      console.log(colors.red('No URL specified. Use: spider <url>'));
+      return;
+    }
+
+    // Run foreground spider (existing behavior)
+    await runSpider({ url: spiderUrl });
+  }
+
+  /**
+   * Run spider in background
+   */
+  private async runSpiderBg(args: string[]) {
+    // Parse URL and options
+    let url: string | undefined;
+    let maxDepth = 5;
+    let maxPages = 100;
+    let concurrency = 5;
+    let delay = 100;
+    let useSitemap = false;
+    let outputFile: string | undefined;
+    let sameDomain = true;
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+
+      if (arg === '--depth' || arg === '-d') {
+        maxDepth = parseInt(args[++i], 10);
+      } else if (arg.startsWith('--depth=')) {
+        maxDepth = parseInt(arg.split('=')[1], 10);
+      } else if (arg === '--pages' || arg === '-p') {
+        maxPages = parseInt(args[++i], 10);
+      } else if (arg.startsWith('--pages=')) {
+        maxPages = parseInt(arg.split('=')[1], 10);
+      } else if (arg === '--concurrency' || arg === '-c') {
+        concurrency = parseInt(args[++i], 10);
+      } else if (arg.startsWith('--concurrency=')) {
+        concurrency = parseInt(arg.split('=')[1], 10);
+      } else if (arg === '--delay') {
+        delay = parseInt(args[++i], 10);
+      } else if (arg.startsWith('--delay=')) {
+        delay = parseInt(arg.split('=')[1], 10);
+      } else if (arg === '--sitemap') {
+        useSitemap = true;
+      } else if (arg === '--no-same-domain') {
+        sameDomain = false;
+      } else if (arg === '-o' || arg === '--output') {
+        outputFile = args[++i];
+      } else if (arg.startsWith('-o=') || arg.startsWith('--output=')) {
+        outputFile = arg.split('=')[1];
+      } else if (!arg.startsWith('-')) {
+        url = arg;
+      }
+    }
+
+    if (!url) {
+      // Use baseUrl if set
+      url = this.baseUrl || '';
+    }
+
+    if (!url) {
+      console.log(colors.yellow('Usage: spider bg <url> [--depth=5] [--pages=100] [-o results.json]'));
+      return;
+    }
+
+    // Create spider job
+    const job = new SpiderJob(this.jobManager, url, {
+      maxDepth,
+      maxPages,
+      concurrency,
+      delay,
+      sameDomain,
+      useSitemap,
+      outputFile,
+    });
+
+    job.start();
+
+    console.log(colors.gray(`Spider started crawling: ${url}`));
+    console.log(colors.gray(`Options: depth=${maxDepth}, pages=${maxPages}, concurrency=${concurrency}`));
+    if (outputFile) {
+      console.log(colors.gray(`Results will be saved to: ${outputFile}`));
+    }
+  }
+
+  /**
+   * Handle `jobs` command - list and manage background jobs
+   */
+  private async runJobs(args: string[]) {
+    const subCmd = args[0]?.toLowerCase();
+
+    // jobs stop <id|all>
+    if (subCmd === 'stop') {
+      const target = args[1];
+      if (!target) {
+        console.log(colors.yellow('Usage: jobs stop <id|all>'));
+        return;
+      }
+
+      if (target === 'all') {
+        const stopped = this.jobManager.stopAll();
+        console.log(colors.gray(`Stopped ${stopped} job(s).`));
+      } else {
+        const id = parseInt(target, 10);
+        if (isNaN(id)) {
+          console.log(colors.red(`Invalid job ID: ${target}`));
+          return;
+        }
+        const success = this.jobManager.stop(id);
+        if (!success) {
+          console.log(colors.red(`Job ${id} not found or already stopped.`));
+        }
+      }
+      return;
+    }
+
+    // jobs kill <id> - same as stop for now
+    if (subCmd === 'kill') {
+      const target = args[1];
+      if (!target) {
+        console.log(colors.yellow('Usage: jobs kill <id|all>'));
+        return;
+      }
+
+      if (target === 'all') {
+        const stopped = this.jobManager.stopAll();
+        console.log(colors.gray(`Killed ${stopped} job(s).`));
+      } else {
+        const id = parseInt(target, 10);
+        if (isNaN(id)) {
+          console.log(colors.red(`Invalid job ID: ${target}`));
+          return;
+        }
+        const success = this.jobManager.stop(id);
+        if (!success) {
+          console.log(colors.red(`Job ${id} not found or already stopped.`));
+        }
+      }
+      return;
+    }
+
+    // jobs prune - remove completed/failed jobs
+    if (subCmd === 'prune') {
+      const pruned = this.jobManager.prune();
+      console.log(colors.gray(`Removed ${pruned} completed/failed job(s).`));
+      return;
+    }
+
+    // Default: list jobs
+    const jobs = this.jobManager.list();
+
+    if (jobs.length === 0) {
+      console.log(colors.gray('No background jobs.'));
+      console.log('');
+      console.log(colors.gray('Start a job with:'));
+      console.log(`  ${colors.green('live download @chaturbate/room')}`);
+      console.log(`  ${colors.green('live watch @twitch/shroud')}`);
+      console.log(`  ${colors.green('spider bg https://example.com')}`);
+      console.log('');
+      return;
+    }
+
+    console.log('');
+    console.log(colors.bold(' ID  Type      Status      Target              Progress'));
+    console.log(colors.gray('────────────────────────────────────────────────────────────────────'));
+
+    for (const job of jobs) {
+      const id = String(job.id).padEnd(3);
+
+      // Type indicator
+      let type: string;
+      switch (job.type) {
+        case 'download':
+          type = colors.cyan('⬇ DL   ');
+          break;
+        case 'watch':
+          type = colors.yellow('👁 WCH  ');
+          break;
+        case 'spider':
+          type = colors.magenta('🕷 SPD  ');
+          break;
+        default:
+          type = colors.gray('?      ');
+      }
+
+      // Status with color
+      let status: string;
+      switch (job.status) {
+        case 'running':
+          status = colors.green('● running ');
+          break;
+        case 'watching':
+          status = colors.yellow('◐ polling ');
+          break;
+        case 'crawling':
+          status = colors.magenta('● crawling');
+          break;
+        case 'completed':
+          status = colors.green('✓ done    ');
+          break;
+        case 'stopped':
+          status = colors.gray('○ stopped ');
+          break;
+        case 'failed':
+          status = colors.red('✗ failed  ');
+          break;
+        default:
+          status = colors.gray('○ pending ');
+      }
+
+      const target = job.target.slice(0, 18).padEnd(18);
+
+      // Progress (different format for spider)
+      let progress: string;
+      if (job.type === 'spider') {
+        const pages = job.progress.pages || 0;
+        const queued = job.progress.queued || 0;
+        const errors = job.progress.errors || 0;
+        if (errors > 0) {
+          progress = `${pages}pg ${queued}q ${colors.red(errors + 'err')}`;
+        } else {
+          progress = `${pages} pages, ${queued} queued`;
+        }
+      } else if (job.status === 'watching') {
+        progress = colors.gray('(waiting for live)');
+      } else if (job.progress.bytes > 0) {
+        const mb = (job.progress.bytes / 1024 / 1024).toFixed(1);
+        const segs = job.progress.segments;
+        progress = `${mb} MB (${segs} segs)`;
+      } else {
+        progress = '—';
+      }
+
+      console.log(` ${id} ${type} ${status}  ${target}  ${progress}`);
+
+      // Show output file on second line if exists
+      if (job.output) {
+        console.log(`     ${colors.gray('→')} ${colors.gray(job.output.slice(-50))}`);
+      }
+    }
+
+    console.log('');
+    const active = jobs.filter(j => j.status === 'running' || j.status === 'watching' || j.status === 'crawling').length;
+    console.log(colors.gray(`${active} active, ${jobs.length} total`));
     console.log('');
   }
 

@@ -6,7 +6,7 @@
 
 Nine protocols unified: HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS.
 <br>
-AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 57 tools.
+AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 65 tools.
 <br>
 48 service presets built-in. Zero config.
 
@@ -73,9 +73,9 @@ recker.ws('wss://example.com/socket'); // WebSocket
 | **Resilience** | Retry, circuit breaker, rate limiting, request deduplication |
 | **Auth** | Basic, Bearer, OAuth2, AWS SigV4, Digest, API Key + 15 providers |
 | **SEO** | 400+ rules, 19 categories, site-wide spider crawler |
-| **Testing** | 9 mock servers (HTTP, WebSocket, DNS, FTP, HLS, SSE...) |
+| **Testing** | 10 mock servers (HTTP, Proxy, WebSocket, DNS, FTP, HLS, SSE...) |
 | **CLI** | `rek` - curl replacement with superpowers |
-| **MCP** | 57 tools for AI assistants (Claude, Cursor, Windsurf) |
+| **MCP** | 65 tools for AI assistants (Claude, Cursor, Windsurf) |
 
 ## Highlights
 
@@ -247,9 +247,9 @@ claude mcp add recker npx recker@latest mcp --profile=full
 | Plugins | 30+ |
 | Auth Methods | 15 |
 | API Presets | 48 |
-| MCP Tools | 57 |
+| MCP Tools | 65 |
 | SEO Rules | 400+ |
-| Mock Servers | 9 |
+| Mock Servers | 10 |
 | Tests | 4200+ |
 
 ## License

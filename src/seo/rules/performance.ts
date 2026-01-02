@@ -14,7 +14,15 @@ export const performanceRules: SeoRule[] = [
           { id: 'perf-preconnect', name: 'Preconnect Hints', category: 'performance', severity: 'info' },
           'info',
           'No preconnect hints found',
-          { recommendation: 'Add <link rel="preconnect" href="..."> for important third-party domains' }
+          {
+            recommendation: 'Add <link rel="preconnect" href="..."> for important third-party domains',
+            evidence: {
+              found: 'No <link rel="preconnect"> tags detected',
+              expected: 'Preconnect hints for critical third-party origins',
+              impact: 'Preconnect establishes early connections (DNS, TCP, TLS) to third-party domains, reducing latency for fonts, CDN assets, and APIs by 100-500ms.',
+              example: '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://cdn.example.com" crossorigin>'
+            }
+          }
         );
       }
       if (ctx.preconnectCount && ctx.preconnectCount > 0) {
@@ -48,6 +56,23 @@ export const performanceRules: SeoRule[] = [
           { value: ctx.dnsPrefetchCount }
         );
       }
+      // Check if external resources exist but no dns-prefetch
+      if (ctx.externalLinks && ctx.externalLinks > 3) {
+        return createResult(
+          { id: 'perf-dns-prefetch', name: 'DNS Prefetch', category: 'performance', severity: 'info' },
+          'info',
+          'No dns-prefetch hints (external resources detected)',
+          {
+            recommendation: 'Add <link rel="dns-prefetch" href="..."> for external domains',
+            evidence: {
+              found: 'No dns-prefetch tags detected',
+              expected: 'dns-prefetch hints for external domains',
+              impact: 'DNS prefetch resolves domain names ahead of time, saving 20-120ms per external origin on first request.',
+              example: '<link rel="dns-prefetch" href="//fonts.googleapis.com">\n<link rel="dns-prefetch" href="//cdn.example.com">'
+            }
+          }
+        );
+      }
       return createResult(
         { id: 'perf-dns-prefetch', name: 'DNS Prefetch', category: 'performance', severity: 'info' },
         'pass',
@@ -72,8 +97,17 @@ export const performanceRules: SeoRule[] = [
       }
       return createResult(
         { id: 'perf-preload', name: 'Preload Hints', category: 'performance', severity: 'info' },
-        'pass',
-        'No preload hints (consider adding for critical resources)'
+        'info',
+        'No preload hints found',
+        {
+          recommendation: 'Add preload hints for critical resources like fonts, hero images, or critical CSS',
+          evidence: {
+            found: 'No <link rel="preload"> tags detected',
+            expected: 'Preload hints for resources needed immediately on page load',
+            impact: 'Preload tells the browser to fetch critical resources early, improving LCP by 100-300ms for above-the-fold content.',
+            example: '<link rel="preload" as="font" href="/fonts/main.woff2" type="font/woff2" crossorigin>\n<link rel="preload" as="image" href="/images/hero.webp">'
+          }
+        }
       );
     },
   },
@@ -108,7 +142,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'perf-render-blocking', name: 'Render Blocking', category: 'performance', severity: 'warning' },
           'info',
           `${blocking} render-blocking resource(s) in <head>`,
-          { value: blocking }
+          {
+            value: blocking,
+            recommendation: 'Consider using async/defer for non-critical scripts',
+            evidence: {
+              found: `${blocking} render-blocking resources`,
+              expected: 'Minimize render-blocking resources for faster FCP',
+              impact: 'Render-blocking resources pause HTML parsing until loaded. Consider deferring non-critical resources.',
+              example: '<script src="analytics.js" defer></script>\n<link rel="preload" as="style" href="critical.css" onload="this.rel=\'stylesheet\'">'
+            }
+          }
         );
       }
       return createResult(
@@ -131,7 +174,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'perf-inline-styles', name: 'Inline Styles', category: 'performance', severity: 'info' },
           'info',
           `${inline} inline style blocks found`,
-          { value: inline, recommendation: 'Consider consolidating inline styles into external CSS' }
+          {
+            value: inline,
+            recommendation: 'Consider consolidating inline styles into external CSS',
+            evidence: {
+              found: `${inline} inline style blocks`,
+              expected: '< 10 inline style blocks',
+              impact: 'Excessive inline styles increase HTML size and prevent browser caching of CSS. They also make maintenance harder.',
+              example: '<!-- Instead of multiple <style> blocks, consolidate into: -->\n<link rel="stylesheet" href="styles.css">'
+            }
+          }
         );
       }
       return createResult(
@@ -186,7 +238,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'cwv-lcp-priority', name: 'LCP Priority Hints', category: 'performance', severity: 'info' },
           'info',
           'No fetchpriority="high" found on large images',
-          { recommendation: 'Add fetchpriority="high" to LCP candidate images' }
+          {
+            recommendation: 'Add fetchpriority="high" to LCP candidate images',
+            evidence: {
+              found: 'Large images without fetchpriority attribute',
+              expected: 'LCP candidate images should have fetchpriority="high"',
+              impact: 'fetchpriority="high" tells the browser to prioritize downloading the LCP image, improving LCP by 50-200ms.',
+              example: '<img src="hero.jpg" alt="Hero" fetchpriority="high" width="1200" height="600">',
+              learnMore: 'https://web.dev/priority-hints/'
+            }
+          }
         );
       }
       return createResult(
@@ -263,7 +324,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'timing-ttfb', name: 'TTFB', category: 'performance', severity: 'error' },
           'info',
           `TTFB needs improvement (${ttfb}ms)`,
-          { value: ttfb, recommendation: `Optimize server response time to under ${good}ms` }
+          {
+            value: ttfb,
+            recommendation: `Optimize server response time to under ${good}ms`,
+            evidence: {
+              found: `${ttfb}ms TTFB`,
+              expected: `≤ ${good}ms for fast perceived loading`,
+              impact: 'TTFB affects all subsequent resource loading. A faster server response improves LCP and overall user experience.',
+              learnMore: 'https://web.dev/ttfb/'
+            }
+          }
         );
       }
       if (ttfb <= poor) {
@@ -332,7 +402,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'timing-total', name: 'Load Time', category: 'performance', severity: 'warning' },
           'info',
           `Page load time acceptable (${total}ms)`,
-          { value: total, recommendation: `Aim for under ${good}ms for better user experience` }
+          {
+            value: total,
+            recommendation: `Aim for under ${good}ms for better user experience`,
+            evidence: {
+              found: `${total}ms total load time`,
+              expected: `≤ ${good}ms for optimal user experience`,
+              impact: 'Load time directly affects bounce rate. Pages loading under 2s have significantly lower bounce rates.',
+              learnMore: 'https://web.dev/performance-scoring/'
+            }
+          }
         );
       }
       if (total <= poor) {
@@ -401,7 +480,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'timing-dns', name: 'DNS Lookup', category: 'performance', severity: 'info' },
           'info',
           `DNS lookup could be faster (${dns}ms)`,
-          { value: dns, recommendation: 'Consider using faster DNS provider or dns-prefetch' }
+          {
+            value: dns,
+            recommendation: 'Consider using faster DNS provider or dns-prefetch',
+            evidence: {
+              found: `${dns}ms DNS lookup`,
+              expected: `≤ ${good}ms for fast DNS resolution`,
+              impact: 'DNS lookup is the first step in establishing a connection. Faster DNS improves perceived loading speed.',
+              example: '<link rel="dns-prefetch" href="//api.example.com">'
+            }
+          }
         );
       }
       return createResult(
@@ -454,7 +542,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'timing-tls', name: 'TLS Handshake', category: 'performance', severity: 'info' },
           'info',
           `TLS handshake could be faster (${tls}ms)`,
-          { value: tls, recommendation: 'Consider TLS 1.3, HTTP/2, or preconnect hints' }
+          {
+            value: tls,
+            recommendation: 'Consider TLS 1.3, HTTP/2, or preconnect hints',
+            evidence: {
+              found: `${tls}ms TLS handshake`,
+              expected: `≤ ${good}ms for fast secure connection`,
+              impact: 'TLS 1.3 reduces handshake roundtrips. Preconnect can establish connections ahead of time.',
+              example: '<link rel="preconnect" href="https://api.example.com">'
+            }
+          }
         );
       }
       return createResult(
@@ -509,7 +606,16 @@ export const performanceRules: SeoRule[] = [
           { id: 'response-html-size', name: 'HTML Size', category: 'performance', severity: 'warning' },
           'info',
           `HTML size is acceptable (${sizeKb}KB)`,
-          { value: sizeKb, recommendation: 'Consider reducing HTML size for faster parsing' }
+          {
+            value: sizeKb,
+            recommendation: 'Consider reducing HTML size for faster parsing',
+            evidence: {
+              found: `${sizeKb}KB HTML`,
+              expected: `≤ ${Math.round(good / 1024)}KB for optimal performance`,
+              impact: 'Smaller HTML downloads faster and parses quicker, improving time to interactive.',
+              learnMore: 'https://web.dev/dom-size/'
+            }
+          }
         );
       }
       if (size <= poor) {

@@ -1,8 +1,8 @@
 # MCP Server
 
-Recker includes a built-in MCP Server that exposes **57 tools** across 12 categories to AI agents like Claude Code, Cursor, and other AI-powered tools.
+Recker includes a built-in MCP Server that exposes **65 tools** across 12 categories to AI agents like Claude Code, Cursor, and other AI-powered tools.
 
-> **TL;DR**: Run `rek mcp` and add the configuration to your AI tool to get access to 57 powerful tools.
+> **TL;DR**: Run `rek mcp` and add the configuration to your AI tool to get access to 65 powerful tools.
 
 ## Quick Start
 
@@ -12,11 +12,11 @@ Recker includes a built-in MCP Server that exposes **57 tools** across 12 catego
 # Start in stdio mode (for Claude Code, Cursor)
 rek mcp
 
-# With a specific profile
-rek mcp --profile=minimal
+# With a specific category
+rek mcp --category=minimal
 
-# Combine profiles
-rek mcp --profile=minimal,video,ai
+# Combine categories
+rek mcp --category=minimal,video,ai
 
 # Start HTTP server
 rek mcp --transport=http --port=3100
@@ -36,17 +36,17 @@ import { MCPServer } from 'recker/mcp';
 const server = new MCPServer({
   transport: 'http',
   port: 3100,
-  profile: 'full'
+  category: 'full'
 });
 
 await server.start();
 ```
 
-## Profiles
+## Categories
 
-Profiles allow you to control which tools are exposed to AI agents.
+Categories allow you to control which tools are exposed to AI agents.
 
-**Default Profile**: When no profile is specified, `minimal` is used automatically (6 core tools, ~1800 tokens).
+**Default Category**: When no category is specified, `minimal` is used automatically (7 core tools, ~2500 tokens).
 
 This is useful for:
 
@@ -54,52 +54,52 @@ This is useful for:
 - **Security**: Only expose necessary tools
 - **Focus**: Limit tools to specific tasks
 
-### Available Profiles
+### Available Categories
 
-| Profile | Tools | Est. Tokens | Description |
-|---------|-------|-------------|-------------|
-| `minimal` | 6 | ~1800 | Core docs + basic network |
-| `docs` | 5 | ~1500 | Documentation tools only |
-| `network` | 4 | ~1200 | HTTP, DNS, WHOIS, Ping |
-| `dns` | 9 | ~2700 | All DNS tools |
-| `security` | 5 | ~1500 | TLS, RDAP, GeoIP, security headers |
-| `seo` | 3 | ~900 | SEO analysis tools |
-| `scrape` | 1 | ~300 | Web scraping |
+| Category | Tools | Est. Tokens | Description |
+|----------|-------|-------------|-------------|
+| `minimal` | 7 | ~2500 | Core docs + basic network + site audit |
+| `docs` | 6 | ~1800 | Documentation and migration tools |
+| `network` | 11 | ~3500 | HTTP, DNS, TLS, WHOIS, ping, API tools |
+| `dns` | 9 | ~3000 | All DNS tools |
+| `security` | 6 | ~2200 | TLS inspection, security headers, GeoIP, domain audit |
+| `seo` | 7 | ~2800 | SEO analysis, spider, quick wins, sitemap, schema |
+| `scrape` | 2 | ~800 | Web scraping with CSS selectors |
 | `video` | 5 | ~1500 | Video/audio extraction |
-| `ai` | 4 | ~1200 | AI providers |
+| `ai` | 5 | ~1500 | AI providers (chat, embed, tokens, compare) |
 | `protocols` | 7 | ~2100 | FTP, SFTP, Telnet, WebSocket |
 | `parsing` | 10 | ~3000 | GraphQL, JSON-RPC, CSV, YAML, XML |
 | `streaming` | 3 | ~900 | HLS streaming |
-| `full` | 57 | ~18000 | All tools |
+| `full` | 65 | ~18000 | All tools |
 
-### Profile Tools
+### Category Tools
 
-**minimal** (6 tools):
-- `rek_search_docs`, `rek_get_doc`, `rek_ip_lookup`, `rek_http_request`, `rek_dns`, `rek_ping`
+**minimal** (7 tools):
+- `rek_search_docs`, `rek_get_doc`, `rek_http_request`, `rek_dns`, `rek_ping`, `rek_ip_lookup`, `rek_site_audit`
 
-**docs** (5 tools):
-- `rek_search_docs`, `rek_get_doc`, `rek_code_examples`, `rek_api_schema`, `rek_suggest`
+**docs** (6 tools):
+- `rek_search_docs`, `rek_get_doc`, `rek_code_examples`, `rek_api_schema`, `rek_suggest`, `rek_curl_convert`
 
-**network** (4 tools):
-- `rek_http_request`, `rek_dns`, `rek_whois`, `rek_ping`
+**network** (11 tools):
+- `rek_http_request`, `rek_dns`, `rek_dns_dig`, `rek_tls`, `rek_whois`, `rek_rdap`, `rek_ping`, `rek_ip_lookup`, `rek_curl_convert`, `rek_api_compare`, `rek_load_test`
 
 **dns** (9 tools):
 - `rek_dns`, `rek_dns_propagate`, `rek_dns_health`, `rek_dns_spf`, `rek_dns_dmarc`, `rek_dns_dkim`, `rek_dns_dig`, `rek_dns_system`, `rek_dns_toolkit`
 
-**security** (5 tools):
-- `rek_tls`, `rek_tls_inspect`, `rek_rdap`, `rek_rdap_lookup`, `rek_geoip_lookup`, `rek_security_headers`
+**security** (6 tools):
+- `rek_tls_inspect`, `rek_rdap_lookup`, `rek_geoip_lookup`, `rek_security_headers`, `rek_dns_toolkit`, `rek_domain_audit`
 
-**seo** (3 tools):
-- `rek_seo_analyze`, `rek_seo_spider`, `rek_seo_quick_wins`
+**seo** (7 tools):
+- `rek_site_audit`, `rek_seo_analyze`, `rek_seo_spider`, `rek_seo_quick_wins`, `rek_seo_sitemap`, `rek_seo_schema`, `rek_scrape`
 
-**scrape** (1 tool):
-- `rek_scrape`
+**scrape** (2 tools):
+- `rek_scrape`, `rek_http_request`
 
 **video** (5 tools):
 - `rek_video_info`, `rek_video_formats`, `rek_video_check`, `rek_video_extractors`, `rek_video_url`
 
-**ai** (4 tools):
-- `rek_ai_chat`, `rek_ai_embed`, `rek_ai_providers`, `rek_ai_tokens`
+**ai** (5 tools):
+- `rek_ai_chat`, `rek_ai_embed`, `rek_ai_providers`, `rek_ai_tokens`, `rek_ai_compare`
 
 **protocols** (7 tools):
 - `rek_ftp_connect`, `rek_ftp_download`, `rek_sftp_connect`, `rek_sftp_download`, `rek_telnet_connect`, `rek_websocket_connect`, `rek_websocket_ping`
@@ -110,26 +110,26 @@ This is useful for:
 **streaming** (3 tools):
 - `rek_hls_info`, `rek_hls_variants`, `rek_hls_download`
 
-### Using Profiles
+### Using Categories
 
 ```bash
 # CLI
-rek mcp --profile=minimal
-rek mcp --profile=minimal,video,ai
-rek mcp --profile=full
+rek mcp --category=minimal
+rek mcp --category=minimal,video,ai
+rek mcp --category=full
 
 # Programmatic
-const server = new MCPServer({ profile: 'minimal,video' });
+const server = new MCPServer({ category: 'minimal,video' });
 ```
 
-### Claude Code Configuration with Profiles
+### Claude Code Configuration with Categories
 
 ```json
 {
   "mcpServers": {
     "recker": {
       "command": "npx",
-      "args": ["recker@latest", "mcp", "--profile=minimal,video"]
+      "args": ["recker@latest", "mcp", "--category=minimal,video"]
     }
   }
 }
@@ -241,9 +241,9 @@ rek mcp --transport=sse --port=3100
 }
 ```
 
-## Available Tools (57)
+## Available Tools (65)
 
-### Documentation Tools (5)
+### Documentation Tools (6)
 
 #### rek_search_docs
 
@@ -321,6 +321,24 @@ Get implementation suggestions:
 }
 ```
 
+#### rek_curl_convert
+
+Convert a curl command to Recker TypeScript code or CLI command:
+
+```json
+{
+  "name": "rek_curl_convert",
+  "arguments": {
+    "curl": "curl -X POST https://api.example.com/users -H 'Content-Type: application/json' -d '{\"name\":\"John\"}'",
+    "format": "typescript"
+  }
+}
+```
+
+**Parameters:**
+- `curl` (required): The curl command to convert
+- `format` (optional): Output format - `typescript`/`ts` or `cli`/`rek` (default: typescript)
+
 ### Network Tools (13)
 
 #### rek_http_request
@@ -338,6 +356,28 @@ Perform HTTP requests:
   }
 }
 ```
+
+**Parameters:**
+- `url` (required): The URL to request
+- `method` (optional): HTTP method (default: GET)
+- `headers` (optional): Request headers object
+- `body` (optional): Request body (for POST, PUT, PATCH)
+- `timeout` (optional): Request timeout in ms (default: 10000)
+- `headersOnly` (optional): Set to `true` to return only status and headers (uses HEAD method internally, no body parsing)
+
+**Lightweight headers-only request:**
+
+```json
+{
+  "name": "rek_http_request",
+  "arguments": {
+    "url": "https://example.com",
+    "headersOnly": true
+  }
+}
+```
+
+This is useful for checking URL availability, getting content-type, or inspecting response headers without downloading the full response body.
 
 #### rek_ip_lookup
 
@@ -428,19 +468,6 @@ Get system DNS configuration:
 }
 ```
 
-#### rek_dns_toolkit
-
-Complete DNS security toolkit:
-
-```json
-{
-  "name": "rek_dns_toolkit",
-  "arguments": {
-    "domain": "example.com"
-  }
-}
-```
-
 #### rek_whois
 
 WHOIS lookup:
@@ -469,7 +496,83 @@ TCP ping with latency:
 }
 ```
 
-### Security Tools (6)
+#### rek_api_compare
+
+Compare responses from two API endpoints (useful for A/B testing, migrations):
+
+```json
+{
+  "name": "rek_api_compare",
+  "arguments": {
+    "url_a": "https://api-v1.example.com/users",
+    "url_b": "https://api-v2.example.com/users",
+    "method": "GET",
+    "ignore_fields": ["timestamp", "requestId"]
+  }
+}
+```
+
+#### rek_load_test
+
+Simple load test for an API endpoint (max 100 requests):
+
+```json
+{
+  "name": "rek_load_test",
+  "arguments": {
+    "url": "https://api.example.com/health",
+    "requests": 50,
+    "concurrency": 10
+  }
+}
+```
+
+**Returns:** Latency percentiles (p50, p95, p99), success rate, and error summary.
+
+### Utility Tools (2)
+
+#### rek_site_audit
+
+**Quick website audit** - consolidated analysis in a single call:
+
+```json
+{
+  "name": "rek_site_audit",
+  "arguments": {
+    "url": "https://example.com"
+  }
+}
+```
+
+**Returns:**
+- **Connectivity**: TCP latency, HTTP status, TTFB
+- **SEO**: title, description, h1, Open Graph tags, issues
+- **Security**: HTTPS, security headers grade
+- **TLS**: certificate validity, expiration, protocol
+- **DNS**: A records, CDN/server detection
+- **WHOIS/RDAP**: registrar, registration dates, expiration, nameservers, DNSSEC
+- **Discovery**: robots.txt, sitemap.xml, llms.txt, humans.txt, manifest.json, security.txt
+- **Overall**: Score (0-100) and Grade (A-F)
+
+This tool is ideal for quick site health checks without crawling.
+
+#### rek_domain_audit
+
+Comprehensive domain audit (DNS, TLS, HTTP headers, WHOIS):
+
+```json
+{
+  "name": "rek_domain_audit",
+  "arguments": {
+    "domain": "example.com",
+    "checks": ["dns", "tls", "http", "whois"]
+  }
+}
+```
+
+**Returns:** Grade (A-F) and actionable findings across all checks.
+
+### Security Tools (7)
 
 #### rek_tls
 
@@ -537,6 +640,26 @@ Analyze HTTP security headers (grade A+ to F):
 }
 ```
 
+#### rek_dns_toolkit
+
+Complete DNS security toolkit (SPF, DMARC, DKIM, CAA, MX):
+
+```json
+{
+  "name": "rek_dns_toolkit",
+  "arguments": {
+    "domain": "example.com",
+    "check": "all"
+  }
+}
+```
+
+**Parameters:**
+- `domain` (required): Domain to analyze
+- `check` (optional): Which check to run - `all`, `health`, `spf`, `dmarc`, `dkim`, `records` (default: all)
+
+**Returns:** DNS health score, email authentication status, and actionable recommendations.
+
 ### Scraping Tools (1)
 
 #### rek_scrape
@@ -557,7 +680,7 @@ Web scraping with CSS selectors:
 }
 ```
 
-### SEO Tools (3)
+### SEO Tools (5)
 
 #### rek_seo_analyze
 
@@ -601,6 +724,37 @@ Get prioritized SEO improvements:
   }
 }
 ```
+
+#### rek_seo_sitemap
+
+Analyze sitemap.xml for SEO issues:
+
+```json
+{
+  "name": "rek_seo_sitemap",
+  "arguments": {
+    "url": "https://example.com"
+  }
+}
+```
+
+**Checks:** URL count, HTTPS usage, trailing slashes, lastmod dates, sitemap structure.
+
+#### rek_seo_schema
+
+Extract and validate JSON-LD structured data (Schema.org):
+
+```json
+{
+  "name": "rek_seo_schema",
+  "arguments": {
+    "url": "https://example.com",
+    "validate": true
+  }
+}
+```
+
+**Returns:** Found schema types with validation of required properties.
 
 ### Video Tools (5)
 
@@ -672,7 +826,7 @@ Get direct download URL:
 }
 ```
 
-### AI Tools (4)
+### AI Tools (5)
 
 #### rek_ai_chat
 
@@ -730,6 +884,23 @@ Count tokens for text:
   }
 }
 ```
+
+#### rek_ai_compare
+
+Compare responses from multiple AI providers for the same prompt:
+
+```json
+{
+  "name": "rek_ai_compare",
+  "arguments": {
+    "prompt": "What is machine learning?",
+    "providers": ["openai", "anthropic"],
+    "max_tokens": 500
+  }
+}
+```
+
+**Returns:** Latency, token usage, and response quality comparison across providers. Requires API keys in environment.
 
 ### Protocol Tools (7)
 
@@ -1034,6 +1205,48 @@ Download HLS stream:
 
 ## Example Conversations
 
+### Quick Site Audit (NEW!)
+
+```
+User: Audit https://example.com
+
+AI: [Uses rek_site_audit]
+
+🔍 Site Audit: example.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Grade: B (78/100)
+
+✅ Connectivity
+  - Latency: 145ms
+  - HTTP Status: 200 OK
+  - TTFB: 89ms
+
+✅ TLS Certificate
+  - Valid: Yes
+  - Expires: 89 days
+  - Protocol: TLS 1.3
+
+✅ DNS
+  - Provider: Cloudflare
+  - A Record: 104.21.x.x
+
+⚠️ SEO Issues (2)
+  - Missing meta description
+  - H1 tag not found
+
+⚠️ Security Headers
+  - Grade: C
+  - Missing: CSP, X-Frame-Options
+
+📁 Discovery Files
+  ✅ robots.txt
+  ✅ sitemap.xml
+  ❌ security.txt (recommended)
+  ❌ llms.txt
+
+Would you like me to dig deeper into any specific area?
+```
+
 ### Documentation Search
 
 ```
@@ -1128,8 +1341,8 @@ interface MCPServerOptions {
   transport?: 'stdio' | 'http' | 'sse';  // Default: 'stdio'
   port?: number;        // Default: 3100 (for http/sse)
 
-  // Profile
-  profile?: string;     // Default: 'full'
+  // Category (controls which tools are exposed)
+  category?: string;    // Default: 'minimal'
 
   // Documentation paths
   docsPath?: string;
@@ -1166,8 +1379,8 @@ curl http://localhost:3100/health
   "status": "ok",
   "name": "recker",
   "version": "1.0.0",
-  "toolCount": 57,
-  "profile": "full"
+  "toolCount": 65,
+  "category": "full"
 }
 ```
 

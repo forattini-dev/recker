@@ -730,4 +730,144 @@ export function registerServeCommand(program: Command) {
         process.exit(0);
       });
     });
+
+  // Proxy Server
+  serve
+    .command('proxy')
+    .description('Start a proxy server for intercepting and forwarding HTTP/HTTPS traffic')
+    .option('port', {
+      type: 'number',
+      short: 'p',
+      default: 8888,
+      description: 'Port to listen on',
+    })
+    .option('host', {
+      type: 'string',
+      short: 'H',
+      default: '127.0.0.1',
+      description: 'Host to bind to',
+    })
+    .option('intercept', {
+      short: 'i',
+      description: 'Enable intercept mode (MITM) to read/modify HTTPS traffic',
+    })
+    .option('log-payloads', {
+      short: 'l',
+      description: 'Log request/response payloads (intercept mode only)',
+    })
+    .option('verbose', {
+      short: 'V',
+      description: 'Enable verbose logging',
+    })
+    .example('rek serve proxy', 'Start forward proxy on :8888')
+    .example('rek serve proxy -p 9999', 'Use custom port')
+    .example('rek serve proxy --intercept', 'Enable MITM mode')
+    .example('curl -x http://localhost:8888 https://api.github.com/users', 'Test with curl')
+    .action(async (args: string[], cmdObj: any) => {
+      const options = cmdObj.opts ? cmdObj.opts() : {};
+      const { MockProxyServer } = await import('../../testing/mock-proxy-server.js');
+
+      const port = options.port || 8888;
+      const host = options.host || '127.0.0.1';
+      const mode = options.intercept ? 'intercept' : 'forward';
+      const logPayloads = options['log-payloads'] || false;
+      const verbose = options.verbose || false;
+
+      const server = await MockProxyServer.create({
+        port,
+        host,
+        mode: mode as any,
+        verbose,
+        intercept: mode === 'intercept' ? { logPayloads } : undefined,
+      });
+
+      const modeLabel = mode === 'intercept' ? 'Intercept (MITM)' : 'Forward (Tunnel)';
+      const modeColor = mode === 'intercept' ? colors.yellow : colors.green;
+
+      console.log(colors.green(`
+┌─────────────────────────────────────────────┐
+│  ${colors.bold('Recker Proxy Server')}                       │
+├─────────────────────────────────────────────┤
+│  URL: ${colors.cyan(server.url.padEnd(37))}│
+│  Mode: ${modeColor(modeLabel.padEnd(36))}│
+│  Payloads: ${colors.gray((logPayloads ? 'Logged' : 'Hidden').padEnd(32))}
+├─────────────────────────────────────────────┤
+│  ${colors.cyan('curl -x ' + server.url + ' <url>')}              │
+│  Press ${colors.bold('Ctrl+C')} to stop                       │
+└─────────────────────────────────────────────┘`));
+
+      if (mode === 'intercept') {
+        console.log(colors.yellow('\n⚠️  MITM mode active - clients must trust the proxy CA certificate'));
+      }
+
+      // Request event
+      server.on('request', (req: any) => {
+        const method = req.method.padEnd(7);
+        const status = req.isHttps ? colors.cyan('HTTPS') : colors.gray('HTTP ');
+        const target = `${req.targetHost}:${req.targetPort}`;
+        console.log(
+          colors.gray(`${new Date().toISOString()} `) +
+          colors.green(method) +
+          status + ' ' +
+          colors.cyan(target) +
+          (req.method !== 'CONNECT' ? ` ${colors.gray(new URL(req.url).pathname)}` : '')
+        );
+      });
+
+      // Response event
+      server.on('response', (res: any) => {
+        const statusColor = res.statusCode >= 500 ? colors.red :
+                           res.statusCode >= 400 ? colors.yellow :
+                           res.statusCode >= 300 ? colors.cyan :
+                           colors.green;
+        console.log(
+          colors.gray(`${new Date().toISOString()} `) +
+          statusColor(`← ${res.statusCode}`) +
+          colors.gray(` ${res.latency}ms`) +
+          (res.size > 0 ? colors.gray(` ${formatBytes(res.size)}`) : '')
+        );
+      });
+
+      // Error event
+      server.on('error', (err: any) => {
+        console.log(
+          colors.gray(`${new Date().toISOString()} `) +
+          colors.red(`✗ ${err.type}: ${err.message}`) +
+          (err.targetHost ? colors.gray(` → ${err.targetHost}:${err.targetPort}`) : '')
+        );
+      });
+
+      // Periodic stats (every 30 seconds if verbose)
+      let statsInterval: NodeJS.Timeout | undefined;
+      if (verbose) {
+        statsInterval = setInterval(() => {
+          const stats = server.stats;
+          console.log(colors.gray(
+            `\n[stats] ${stats.totalRequests} req | ` +
+            `${stats.successCount} ok | ${stats.errorCount} err | ` +
+            `${formatBytes(stats.bytesIn)} in | ${formatBytes(stats.bytesOut)} out | ` +
+            `${stats.avgLatency}ms avg | ${stats.requestsPerSecond} rps\n`
+          ));
+        }, 30000);
+      }
+
+      process.on('SIGINT', async () => {
+        console.log(colors.yellow('\nShutting down...'));
+        if (statsInterval) clearInterval(statsInterval);
+        const stats = server.stats;
+        console.log(colors.gray(
+          `Final stats: ${stats.totalRequests} requests | ` +
+          `${stats.successCount} success | ${stats.errorCount} errors | ` +
+          `${formatBytes(stats.bytesIn + stats.bytesOut)} transferred`
+        ));
+        await server.stop();
+        process.exit(0);
+      });
+    });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }

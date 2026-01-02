@@ -49,6 +49,10 @@ export interface MCPCapabilities {
 export interface MCPTool {
   name: string;
   description?: string;
+  /** Tool category for filtering (e.g., 'seo', 'network', 'ai', 'docs') */
+  category?: string;
+  /** Optional tags for more granular filtering */
+  tags?: string[];
   inputSchema: {
     type: 'object';
     properties?: Record<string, unknown>;

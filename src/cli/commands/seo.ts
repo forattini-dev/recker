@@ -1,6 +1,7 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
 import { formatSeoReport, formatSeoReportJson, type SeoFormatOptions } from '../../seo/formatter.js';
+import { resolveOutputPath, writeReport, formatReportForJson } from '../../seo/output.js';
 
 export function registerSeoCommand(program: Command) {
   program
@@ -36,7 +37,25 @@ export function registerSeoCommand(program: Command) {
       enum: ['performance', 'security', 'content', 'links', 'images', 'meta', 'technical', 'accessibility', 'og', 'twitter'],
       description: 'Filter by category',
     })
+    .option('output', {
+      type: 'string',
+      short: 'o',
+      description: 'Save report to file',
+      example: 'report.json',
+    })
+    .option('outputDir', {
+      type: 'string',
+      short: 'O',
+      description: 'Save report to directory (auto-generates filename)',
+      example: '~/reports/',
+    })
+    .option('verbose', {
+      short: 'v',
+      description: 'Show detailed technical sections',
+    })
     .example('rek seo example.com', 'Run SEO audit')
+    .example('rek seo example.com -o report.json', 'Save to file')
+    .example('rek seo example.com -O ~/reports/', 'Save with auto-filename')
     .example('rek seo example.com --json', 'Get JSON report')
     .example('rek seo example.com -a', 'Show all checks')
     .example('rek seo example.com -e', 'Show evidence for issues')
@@ -46,16 +65,27 @@ export function registerSeoCommand(program: Command) {
       const jsonOutput = !!options.json;
       const analyzeContent = !options['no-content'];
       const checkBrokenLinks = !!options.links;
-
-      const formatOptions: SeoFormatOptions = {
-        showAll: !!options.all,
-        showEvidence: !!options.evidence,
-        compact: !!options.compact,
-        showKeywords: true,
-        showTiming: true,
-      };
+      const outputPath = options.output as string | undefined;
+      const outputDir = options.outputDir as string | undefined;
+      const verbose = !!options.verbose;
 
       if (!url.startsWith('http')) url = `https://${url}`;
+
+      // Extract domain for auto-filename
+      let domain: string;
+      try {
+        domain = new URL(url).hostname;
+      } catch {
+        domain = url.replace(/^https?:\/\//, '').split('/')[0];
+      }
+
+      // Resolve output path
+      const finalOutputPath = resolveOutputPath({
+        output: outputPath,
+        outputDir,
+        type: 'seo',
+        domain,
+      });
 
       const { SeoAnalyzer } = await import('../../seo/analyzer.js');
       const { createClient } = await import('../../core/client.js');
@@ -129,13 +159,41 @@ export function registerSeoCommand(program: Command) {
           download: t?.content ? Math.round(t.content) : undefined,
         };
 
-        if (jsonOutput) {
-          const jsonResult = formatSeoReportJson(report, url);
-          console.log(JSON.stringify(jsonResult, null, 2));
+        // Format options with verbose and responseHeaders
+        const formatOptions: SeoFormatOptions = {
+          showAll: !!options.all,
+          showEvidence: !!options.evidence,
+          compact: !!options.compact,
+          showKeywords: true,
+          showTiming: true,
+          verbose,
+          responseHeaders,
+        };
+
+        // Handle output
+        if (jsonOutput || finalOutputPath) {
+          const jsonResult = formatReportForJson(
+            formatSeoReportJson(report, url, { responseHeaders }),
+            url,
+            'seo'
+          );
+
+          if (finalOutputPath) {
+            // Save to file
+            const savedPath = await writeReport(finalOutputPath, jsonResult);
+            if (!jsonOutput) {
+              // Also show human output if not --json
+              console.log(formatSeoReport(report, url, formatOptions));
+            }
+            console.log(colors.green(`\n✔ Report saved to: ${savedPath}`));
+          } else {
+            // JSON to stdout
+            console.log(JSON.stringify(jsonResult, null, 2));
+          }
           return;
         }
 
-        // Use unified formatter
+        // Human-readable output to stdout
         console.log(formatSeoReport(report, url, formatOptions));
 
       } catch (error: any) {

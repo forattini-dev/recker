@@ -32,32 +32,39 @@ async function httpRequest(args: Record<string, unknown>): Promise<MCPToolResult
   const body = args.body as string | object | undefined;
   const timeout = Number(args.timeout) || 10000;
   const retries = Number(args.retries) || 0;
+  const headersOnly = Boolean(args.headersOnly);
 
   if (!url) return { content: [{ type: 'text', text: 'Error: url is required' }], isError: true };
 
   try {
     const client = createClient({ headers, timeout, retry: { maxAttempts: retries } });
     let response;
-    
-    // Using any to access methods dynamically or switch case
-    switch (method) {
+
+    // If headersOnly, use HEAD method
+    const effectiveMethod = headersOnly ? 'HEAD' : method;
+
+    switch (effectiveMethod) {
       case 'GET': response = await client.get(url); break;
       case 'POST': response = await client.post(url, { json: body }); break;
       case 'PUT': response = await client.put(url, { json: body }); break;
       case 'DELETE': response = await client.delete(url); break;
       case 'PATCH': response = await client.patch(url, { json: body }); break;
       case 'HEAD': response = await client.head(url); break;
-      default: return { content: [{ type: 'text', text: `Error: Unsupported method ${method}` }], isError: true };
+      default: return { content: [{ type: 'text', text: `Error: Unsupported method ${effectiveMethod}` }], isError: true };
     }
 
-    const result = {
+    const result: Record<string, unknown> = {
       status: response.status,
       statusText: response.statusText,
       headers: Object.fromEntries(response.headers.entries()),
-      data: await response.text(),
     };
 
-    try { result.data = JSON.parse(result.data); } catch {}
+    // Only fetch body if not headersOnly and not HEAD method
+    if (!headersOnly && effectiveMethod !== 'HEAD') {
+      let data: unknown = await response.text();
+      try { data = JSON.parse(data as string); } catch {}
+      result.data = data;
+    }
 
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   } catch (error) {
@@ -299,14 +306,15 @@ async function pingCheck(args: Record<string, unknown>): Promise<MCPToolResult> 
 export const networkTools: MCPTool[] = [
   {
     name: 'rek_http_request',
-    description: 'Perform HTTP request. Useful for calling APIs, fetching pages, etc.',
+    description: 'Perform HTTP request. Useful for calling APIs, fetching pages, etc. Use headersOnly=true for lightweight requests that only return status and headers (no body).',
     inputSchema: {
       type: 'object',
       properties: {
         url: { type: 'string' },
         method: { type: 'string', default: 'GET' },
         headers: { type: 'object' },
-        body: { type: 'object' }
+        body: { type: 'object' },
+        headersOnly: { type: 'boolean', default: false, description: 'Return only status and headers, skip body (uses HEAD method internally)' }
       },
       required: ['url']
     }

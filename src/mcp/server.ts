@@ -28,13 +28,15 @@ import { aiTools, aiToolHandlers } from './tools/ai.js';
 import { protocolTools } from './tools/protocols.js';
 import { parsingTools } from './tools/parsing.js';
 import { streamingTools } from './tools/streaming.js';
+import { unifiedTools, unifiedToolHandlers } from './tools/unified.js';
 import { ToolRegistry } from './tools/registry.js';
 import { loadToolModules } from './tools/loader.js';
 import { PromptRegistry } from './prompts/index.js';
+import { ResourceRegistry } from './resources/index.js';
 import {
-  resolveProfiles,
-  DEFAULT_PROFILE,
-  type ProfileName,
+  resolveCategories,
+  DEFAULT_CATEGORY,
+  type CategoryName,
 } from './profiles.js';
 
 export type MCPTransportMode = 'stdio' | 'http' | 'sse';
@@ -54,8 +56,8 @@ export interface MCPServerOptions {
   toolsFilter?: string[];
   /** Paths to external tool modules to load */
   toolPaths?: string[];
-  /** Profile(s) to use - comma-separated or array */
-  profile?: string | ProfileName[];
+  /** Category(s) to use - comma-separated or array */
+  category?: string | CategoryName[];
 }
 
 interface CodeExample {
@@ -112,7 +114,7 @@ interface TypeDefinition {
  * - `rek_dns_toolkit`: DNS security (SPF, DMARC, DKIM validation)
  */
 export class MCPServer {
-  private options: Required<Omit<MCPServerOptions, 'profile'>> & { profile?: string | ProfileName[] };
+  private options: Required<Omit<MCPServerOptions, 'category'>> & { category?: string | CategoryName[] };
   private server?: ReturnType<typeof createServer>;
   private hybridSearch: HybridSearch;
   private docsIndex: IndexedDoc[] = [];
@@ -122,6 +124,7 @@ export class MCPServer {
   private initialized = false;
   private toolRegistry: ToolRegistry;
   private promptRegistry: PromptRegistry;
+  private resourceRegistry: ResourceRegistry;
   private aiClient?: AIClient;
 
   constructor(options: MCPServerOptions = {}) {
@@ -137,7 +140,7 @@ export class MCPServer {
       offline: options.offline || false,
       toolsFilter: options.toolsFilter || [],
       toolPaths: options.toolPaths || [],
-      profile: options.profile,
+      category: options.category,
     };
 
     // Initialize AI client if available
@@ -151,6 +154,7 @@ export class MCPServer {
 
     this.toolRegistry = new ToolRegistry();
     this.promptRegistry = new PromptRegistry();
+    this.resourceRegistry = new ResourceRegistry();
 
     // Register built-in tools
     this.registerInternalTools();
@@ -203,41 +207,47 @@ export class MCPServer {
       );
     }
 
-    // Apply profile-based filtering
-    this.applyProfileFiltering();
+    // Register unified tools (consolidated & new functionality)
+    this.toolRegistry.registerModule({
+      tools: unifiedTools,
+      handlers: unifiedToolHandlers
+    });
+
+    // Apply category-based filtering
+    this.applyCategoryFiltering();
 
     // Note: buildIndex is async but constructor can't await.
     // Index is built lazily - guaranteed ready before handling requests via start() or ensureIndexReady()
   }
 
   /**
-   * Apply profile-based tool filtering
+   * Apply category-based tool filtering
    */
-  private applyProfileFiltering(): void {
-    // Profile takes precedence over toolsFilter
-    if (this.options.profile) {
+  private applyCategoryFiltering(): void {
+    // Category takes precedence over toolsFilter
+    if (this.options.category) {
       try {
-        const patterns = resolveProfiles(this.options.profile);
+        const patterns = resolveCategories(this.options.category);
         this.toolRegistry.setEnabledPatterns(patterns);
-        this.log('Profile filtering applied', {
-          profiles: this.options.profile,
+        this.log('Category filtering applied', {
+          categories: this.options.category,
           patterns,
           enabledTools: this.toolRegistry.listTools().map(t => t.name),
         });
       } catch (error) {
-        // Fall back to default profile on error
-        const patterns = resolveProfiles(DEFAULT_PROFILE);
+        // Fall back to default category on error
+        const patterns = resolveCategories(DEFAULT_CATEGORY);
         this.toolRegistry.setEnabledPatterns(patterns);
-        this.log('Profile error, using default', { error, default: DEFAULT_PROFILE });
+        this.log('Category error, using default', { error, default: DEFAULT_CATEGORY });
       }
     } else if (this.options.toolsFilter && this.options.toolsFilter.length > 0) {
       // Legacy toolsFilter support
       this.toolRegistry.setEnabledPatterns(this.options.toolsFilter);
     } else {
-      // Default to minimal profile to reduce context size
-      const patterns = resolveProfiles(DEFAULT_PROFILE);
+      // Default to minimal category to reduce context size
+      const patterns = resolveCategories(DEFAULT_CATEGORY);
       this.toolRegistry.setEnabledPatterns(patterns);
-      this.log('Using default profile', { profile: DEFAULT_PROFILE });
+      this.log('Using default category', { category: DEFAULT_CATEGORY });
     }
   }
   /**
@@ -829,6 +839,9 @@ export class MCPServer {
   private getResources(): MCPResource[] {
     const resources: MCPResource[] = [];
 
+    // Add resources from ResourceRegistry (recker://* resources)
+    resources.push(...this.resourceRegistry.listResources());
+
     // Add documentation files
     for (const doc of this.docsIndex) {
       resources.push({
@@ -852,7 +865,12 @@ export class MCPServer {
     return resources;
   }
 
-  private readResource(uri: string): MCPResourceContent[] {
+  private async readResource(uri: string): Promise<MCPResourceContent[]> {
+    // Try ResourceRegistry first (handles recker://* URIs)
+    if (uri.startsWith('recker://')) {
+      return this.resourceRegistry.readResource(uri);
+    }
+
     if (uri.startsWith('docs://')) {
       const path = uri.slice(7);
       const doc = this.docsIndex.find(d => d.path === path);
@@ -882,6 +900,14 @@ export class MCPServer {
     }
 
     throw new Error(`Unknown resource scheme: ${uri}`);
+  }
+
+  /**
+   * Get the ResourceRegistry instance for external state updates.
+   * Plugins can use this to record request history, update cache stats, etc.
+   */
+  getResourceRegistry(): ResourceRegistry {
+    return this.resourceRegistry;
   }
 
   private registerInternalTools(): void {
@@ -1559,8 +1585,21 @@ const client = createClient({
           return { jsonrpc: '2.0', id: id!, result: {} };
 
         case 'tools/list': {
-          const response: MCPToolsListResponse = { tools: this.getTools() };
+          // Support filtering by category, tags, or search
+          const { category, tags, search } = (params || {}) as {
+            category?: string;
+            tags?: string[];
+            search?: string;
+          };
+          const tools = this.toolRegistry.listTools({ category, tags, search });
+          const response: MCPToolsListResponse = { tools };
           return { jsonrpc: '2.0', id: id!, result: response };
+        }
+
+        case 'tools/categories': {
+          // List all available categories with tool counts
+          const categories = this.toolRegistry.listCategories();
+          return { jsonrpc: '2.0', id: id!, result: { categories } };
         }
 
         case 'tools/call': {
@@ -1577,7 +1616,7 @@ const client = createClient({
         case 'resources/read': {
           const { uri } = params as { uri: string };
           try {
-            const contents = this.readResource(uri);
+            const contents = await this.readResource(uri);
             return { jsonrpc: '2.0', id: id!, result: { contents } };
           } catch (error) {
             return {

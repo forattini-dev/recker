@@ -24,6 +24,10 @@ export interface SeoFormatOptions {
   showTiming?: boolean;
   /** Compact mode (less verbose) */
   compact?: boolean;
+  /** Verbose mode - show detailed technical sections */
+  verbose?: boolean;
+  /** HTTP response headers for security analysis */
+  responseHeaders?: Record<string, string | string[]>;
 }
 
 /**
@@ -94,6 +98,260 @@ export function formatCheck(check: SeoCheckResult, showEvidence = false): string
   return lines;
 }
 
+// =============================================================================
+// Enhanced Sections (Verbose Mode)
+// =============================================================================
+
+/**
+ * Format performance section with timing details
+ */
+export function formatPerformanceSection(
+  report: SeoReport,
+  responseHeaders?: Record<string, string | string[]>
+): string[] {
+  const lines: string[] = [];
+  const timing = report.timing;
+
+  lines.push('');
+  lines.push(` ${colors.bold('PERFORMANCE')}`);
+
+  // Timing metrics
+  if (timing?.ttfb !== undefined) {
+    const ttfbStatus = timing.ttfb < 200 ? colors.green('✔') : timing.ttfb < 500 ? colors.yellow('⚠') : colors.red('✖');
+    lines.push(`   TTFB: ${timing.ttfb}ms ${ttfbStatus} ${colors.gray('(target: <200ms)')}`);
+  }
+  if (timing?.total !== undefined) {
+    const totalStatus = timing.total < 1000 ? colors.green('✔') : timing.total < 3000 ? colors.yellow('⚠') : colors.red('✖');
+    lines.push(`   Total Load: ${timing.total}ms ${totalStatus}`);
+  }
+  if (timing?.dns !== undefined || timing?.tcp !== undefined || timing?.tls !== undefined) {
+    lines.push(`   ${colors.gray('Breakdown:')} DNS=${timing.dns || 0}ms TCP=${timing.tcp || 0}ms TLS=${timing.tls || 0}ms`);
+  }
+
+  // Resource counts
+  const s = report.summary;
+  if (s.vitals) {
+    lines.push('');
+    lines.push(`   ${colors.gray('Resources:')}`);
+    lines.push(`     Images: ${s.vitals.imageCount}`);
+    lines.push(`     Links: ${s.vitals.linkCount}`);
+    if (s.vitals.htmlSize) {
+      const sizeKb = Math.round(s.vitals.htmlSize / 1024);
+      lines.push(`     HTML Size: ${sizeKb} KB`);
+    }
+  }
+
+  // Compression and HTTP version from headers
+  if (responseHeaders) {
+    const encoding = responseHeaders['content-encoding'];
+    if (encoding) {
+      const enc = Array.isArray(encoding) ? encoding[0] : encoding;
+      lines.push(`   Compression: ${enc} ${colors.green('✔')}`);
+    }
+
+    // Check for HTTP/2 indicators
+    const altSvc = responseHeaders['alt-svc'];
+    if (altSvc) {
+      lines.push(`   HTTP/2+: ${colors.green('✔')} ${colors.gray('(Alt-Svc present)')}`);
+    }
+  }
+
+  return lines;
+}
+
+/**
+ * Format security headers section
+ */
+export function formatSecuritySection(
+  responseHeaders?: Record<string, string | string[]>
+): string[] {
+  const lines: string[] = [];
+
+  if (!responseHeaders) {
+    return [];
+  }
+
+  lines.push('');
+  lines.push(` ${colors.bold('SECURITY HEADERS')}`);
+
+  const securityHeaders = [
+    { name: 'content-security-policy', display: 'Content-Security-Policy', critical: true },
+    { name: 'strict-transport-security', display: 'Strict-Transport-Security', critical: true },
+    { name: 'x-content-type-options', display: 'X-Content-Type-Options', critical: false },
+    { name: 'x-frame-options', display: 'X-Frame-Options', critical: false },
+    { name: 'x-xss-protection', display: 'X-XSS-Protection', critical: false, deprecated: true },
+    { name: 'referrer-policy', display: 'Referrer-Policy', critical: false },
+    { name: 'permissions-policy', display: 'Permissions-Policy', critical: false },
+  ];
+
+  let score = 0;
+  let total = 0;
+
+  for (const header of securityHeaders) {
+    if (header.deprecated) continue; // Skip deprecated headers for scoring
+
+    total++;
+    const value = responseHeaders[header.name];
+    const shortValue = value
+      ? (Array.isArray(value) ? value[0] : value).slice(0, 40)
+      : null;
+
+    if (value) {
+      score++;
+      lines.push(`   ${header.display}: ${colors.green('✔')} ${colors.gray(shortValue + (shortValue!.length >= 40 ? '...' : ''))}`);
+    } else {
+      const icon = header.critical ? colors.red('✖') : colors.yellow('⚠');
+      lines.push(`   ${header.display}: ${icon} missing`);
+    }
+  }
+
+  // Security score
+  const percentage = Math.round((score / total) * 100);
+  const scoreColor = percentage >= 80 ? colors.green : percentage >= 50 ? colors.yellow : colors.red;
+  lines.push('');
+  lines.push(`   ${colors.gray('Security Score:')} ${scoreColor(`${score}/${total} (${percentage}%)`)}`);
+
+  return lines;
+}
+
+/**
+ * Format technical SEO section
+ */
+export function formatTechnicalSection(report: SeoReport): string[] {
+  const lines: string[] = [];
+  const tech = report.technical;
+
+  lines.push('');
+  lines.push(` ${colors.bold('TECHNICAL SEO')}`);
+
+  // Canonical
+  const canonicalIcon = tech.hasCanonical ? colors.green('✔') : colors.red('✖');
+  lines.push(`   Canonical: ${canonicalIcon} ${tech.canonicalUrl ? colors.gray(tech.canonicalUrl.slice(0, 50)) : 'missing'}`);
+
+  // Robots meta
+  const robotsIcon = tech.hasRobotsMeta ? colors.green('✔') : colors.yellow('⚠');
+  const robotsValue = tech.robotsContent?.join(', ') || 'not set (defaults to index, follow)';
+  lines.push(`   Robots Meta: ${robotsIcon} ${colors.gray(robotsValue)}`);
+
+  // Viewport
+  const viewportIcon = tech.hasViewport ? colors.green('✔') : colors.red('✖');
+  lines.push(`   Viewport: ${viewportIcon} ${tech.hasViewport ? 'configured' : 'missing'}`);
+
+  // Language
+  const langIcon = tech.hasLang ? colors.green('✔') : colors.yellow('⚠');
+  lines.push(`   Language: ${langIcon} ${tech.langValue || 'not set'}`);
+
+  // Charset
+  const charsetIcon = tech.hasCharset ? colors.green('✔') : colors.yellow('⚠');
+  lines.push(`   Charset: ${charsetIcon} ${tech.hasCharset ? 'UTF-8' : 'not declared'}`);
+
+  // Structured Data / Schema.org
+  if (report.structuredData) {
+    lines.push('');
+    lines.push(`   ${colors.gray('Schema.org:')}`);
+    if (report.structuredData.count > 0) {
+      for (const type of report.structuredData.types.slice(0, 5)) {
+        lines.push(`     @type: ${type} ${colors.green('✔')}`);
+      }
+      if (report.structuredData.types.length > 5) {
+        lines.push(`     ${colors.gray(`... and ${report.structuredData.types.length - 5} more`)}`);
+      }
+    } else {
+      lines.push(`     ${colors.yellow('⚠')} No JSON-LD structured data found`);
+    }
+  }
+
+  return lines;
+}
+
+/**
+ * Format content analysis section
+ */
+export function formatContentSection(report: SeoReport): string[] {
+  const lines: string[] = [];
+  const content = report.content;
+  const headings = report.headings;
+
+  lines.push('');
+  lines.push(` ${colors.bold('CONTENT ANALYSIS')}`);
+
+  // Word count and reading time
+  const wordIcon = content.wordCount >= 300 ? colors.green('✔') : colors.yellow('⚠');
+  lines.push(`   Word Count: ${content.wordCount} ${wordIcon} ${colors.gray(`(${content.readingTimeMinutes} min read)`)}`);
+
+  // Readability
+  if (content.fleschReadingEase !== undefined) {
+    const readability = content.fleschReadingEase;
+    const readIcon = readability >= 60 ? colors.green('✔') : readability >= 30 ? colors.yellow('⚠') : colors.red('✖');
+    const readLabel = readability >= 80 ? 'Easy' : readability >= 60 ? 'Moderate' : readability >= 30 ? 'Difficult' : 'Very Difficult';
+    lines.push(`   Readability: ${readability.toFixed(0)} ${readIcon} ${colors.gray(`(${readLabel})`)}`);
+  }
+
+  // Content structure
+  lines.push(`   Paragraphs: ${content.paragraphCount} | Lists: ${content.listCount} | Strong: ${content.strongTagCount}`);
+
+  // Heading structure
+  lines.push('');
+  lines.push(`   ${colors.gray('Heading Structure:')}`);
+  const h1Icon = headings.h1Count === 1 ? colors.green('✔') : headings.h1Count === 0 ? colors.red('✖') : colors.yellow('⚠');
+  lines.push(`     H1: ${headings.h1Count} ${h1Icon}`);
+
+  // Show heading hierarchy
+  for (const h of headings.structure.slice(0, 6)) {
+    const indent = '  '.repeat(h.level - 1);
+    lines.push(`     ${colors.gray(indent)}H${h.level}: ${h.text.slice(0, 40)}${h.text.length > 40 ? '...' : ''}`);
+  }
+
+  if (headings.structure.length > 6) {
+    lines.push(`     ${colors.gray(`... and ${headings.structure.length - 6} more headings`)}`);
+  }
+
+  if (!headings.hasProperHierarchy) {
+    lines.push(`     ${colors.yellow('⚠')} Heading hierarchy has issues`);
+  }
+
+  return lines;
+}
+
+/**
+ * Format link profile section
+ */
+export function formatLinkSection(report: SeoReport): string[] {
+  const lines: string[] = [];
+  const links = report.links;
+
+  lines.push('');
+  lines.push(` ${colors.bold('LINK PROFILE')}`);
+
+  // Overview
+  lines.push(`   Total Links: ${links.total}`);
+
+  // Internal vs External ratio
+  const internalRatio = links.total > 0 ? Math.round((links.internal / links.total) * 100) : 0;
+  lines.push(`   Internal: ${links.internal} (${internalRatio}%) | External: ${links.external} (${100 - internalRatio}%)`);
+
+  // Link issues
+  if (links.broken > 0) {
+    lines.push(`   Broken Links: ${colors.red(`${links.broken} ✖`)}`);
+  }
+  if (links.withoutText > 0) {
+    lines.push(`   Empty Link Text: ${colors.yellow(`${links.withoutText} ⚠`)}`);
+  }
+  if (links.nofollow > 0) {
+    lines.push(`   Nofollow: ${links.nofollow}`);
+  }
+  if (links.sponsoredLinks > 0 || links.ugcLinks > 0) {
+    lines.push(`   Sponsored: ${links.sponsoredLinks} | UGC: ${links.ugcLinks}`);
+  }
+
+  // Internal HTTP links warning
+  if (links.internalHttpLinks && links.internalHttpLinks > 0) {
+    lines.push(`   ${colors.yellow('⚠')} Internal HTTP links: ${links.internalHttpLinks} ${colors.gray('(should use HTTPS)')}`);
+  }
+
+  return lines;
+}
+
 /**
  * Format the SEO report for terminal output
  */
@@ -109,6 +367,8 @@ export function formatSeoReport(
     showKeywords = true,
     showTiming = true,
     compact = false,
+    verbose = false,
+    responseHeaders,
   } = options;
 
   const lines: string[] = [];
@@ -189,6 +449,24 @@ export function formatSeoReport(
     if (report.openGraph.image) lines.push(`   ${colors.cyan('og:image')}       ${report.openGraph.image}`);
   }
 
+  // Enhanced sections (verbose mode)
+  if (verbose) {
+    // Performance section
+    formatPerformanceSection(report, responseHeaders).forEach(line => lines.push(line));
+
+    // Security headers section (if headers available)
+    formatSecuritySection(responseHeaders).forEach(line => lines.push(line));
+
+    // Technical SEO section
+    formatTechnicalSection(report).forEach(line => lines.push(line));
+
+    // Content analysis section
+    formatContentSection(report).forEach(line => lines.push(line));
+
+    // Link profile section
+    formatLinkSection(report).forEach(line => lines.push(line));
+  }
+
   // Checks by Category
   const categories = [...new Set(report.checks.map(c => c.category))].filter(Boolean) as string[];
 
@@ -247,38 +525,182 @@ export function formatSeoReport(
 }
 
 /**
- * Format SEO report as JSON
+ * Analyze security headers and return structured data
  */
-export function formatSeoReportJson(report: SeoReport, url: string): object {
+export function analyzeSecurityHeaders(
+  headers?: Record<string, string | string[]>
+): {
+  score: number;
+  maxScore: number;
+  percentage: number;
+  grade: string;
+  headers: Array<{
+    name: string;
+    displayName: string;
+    present: boolean;
+    value?: string;
+    critical: boolean;
+    recommendation?: string;
+  }>;
+} {
+  const securityHeaders = [
+    { name: 'content-security-policy', display: 'Content-Security-Policy', critical: true, rec: 'Add CSP to prevent XSS attacks' },
+    { name: 'strict-transport-security', display: 'Strict-Transport-Security', critical: true, rec: 'Add HSTS to enforce HTTPS' },
+    { name: 'x-content-type-options', display: 'X-Content-Type-Options', critical: false, rec: 'Set to "nosniff" to prevent MIME sniffing' },
+    { name: 'x-frame-options', display: 'X-Frame-Options', critical: false, rec: 'Set to prevent clickjacking attacks' },
+    { name: 'referrer-policy', display: 'Referrer-Policy', critical: false, rec: 'Control referrer information leakage' },
+    { name: 'permissions-policy', display: 'Permissions-Policy', critical: false, rec: 'Control browser features access' },
+    { name: 'cross-origin-embedder-policy', display: 'Cross-Origin-Embedder-Policy', critical: false, rec: 'Enable cross-origin isolation' },
+    { name: 'cross-origin-opener-policy', display: 'Cross-Origin-Opener-Policy', critical: false, rec: 'Prevent cross-origin attacks' },
+  ];
+
+  let score = 0;
+  const headersResult = securityHeaders.map(h => {
+    const value = headers?.[h.name];
+    const present = !!value;
+    if (present) score++;
+
+    return {
+      name: h.name,
+      displayName: h.display,
+      present,
+      value: present ? (Array.isArray(value) ? value[0] : value)?.slice(0, 100) : undefined,
+      critical: h.critical,
+      recommendation: present ? undefined : h.rec,
+    };
+  });
+
+  const maxScore = securityHeaders.length;
+  const percentage = Math.round((score / maxScore) * 100);
+  const grade = percentage >= 90 ? 'A' : percentage >= 75 ? 'B' : percentage >= 50 ? 'C' : percentage >= 25 ? 'D' : 'F';
+
+  return { score, maxScore, percentage, grade, headers: headersResult };
+}
+
+/**
+ * Group checks by category for structured output
+ */
+function groupChecksByCategory(checks: SeoCheckResult[]): Record<string, {
+  passed: number;
+  warnings: number;
+  errors: number;
+  infos: number;
+  passRate: number;
+  checks: SeoCheckResult[];
+}> {
+  const categories: Record<string, SeoCheckResult[]> = {};
+
+  for (const check of checks) {
+    const cat = check.category || 'other';
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(check);
+  }
+
+  const result: Record<string, any> = {};
+  for (const [cat, catChecks] of Object.entries(categories)) {
+    const passed = catChecks.filter(c => c.status === 'pass').length;
+    const warnings = catChecks.filter(c => c.status === 'warn').length;
+    const errors = catChecks.filter(c => c.status === 'fail').length;
+    const infos = catChecks.filter(c => c.status === 'info').length;
+    const total = catChecks.length - infos; // Don't count info in pass rate
+
+    result[cat] = {
+      passed,
+      warnings,
+      errors,
+      infos,
+      passRate: total > 0 ? Math.round((passed / total) * 100) : 100,
+      checks: catChecks,
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Format SEO report as JSON (comprehensive format)
+ */
+export function formatSeoReportJson(
+  report: SeoReport,
+  url: string,
+  options?: { responseHeaders?: Record<string, string | string[]> }
+): object {
+  const securityAnalysis = options?.responseHeaders
+    ? analyzeSecurityHeaders(options.responseHeaders)
+    : undefined;
+
+  const checksByCategory = groupChecksByCategory(report.checks);
+
   return {
     url,
     analyzedAt: new Date().toISOString(),
-    timing: report.timing,
+
+    // Overall scores
     score: report.score,
     grade: report.grade,
-    title: report.title,
-    metaDescription: report.metaDescription,
-    content: report.content,
-    headings: report.headings,
-    links: report.links,
-    images: report.images,
-    openGraph: report.openGraph,
-    twitterCard: report.twitterCard,
-    social: report.social,
-    structuredData: report.structuredData,
-    technical: report.technical,
-    keywords: report.keywords,
-    checks: report.checks,
+
+    // Timing metrics
+    timing: report.timing,
+
+    // Summary statistics
     summary: {
-      total: report.checks.length,
+      totalChecks: report.checks.length,
       passed: report.checks.filter(c => c.status === 'pass').length,
       warnings: report.checks.filter(c => c.status === 'warn').length,
       errors: report.checks.filter(c => c.status === 'fail').length,
-      info: report.checks.filter(c => c.status === 'info').length,
+      infos: report.checks.filter(c => c.status === 'info').length,
       passRate: report.summary.passRate,
       completeness: report.summary.completeness,
+      topIssues: report.summary.topIssues,
       quickWins: report.summary.quickWins,
+      vitals: report.summary.vitals,
     },
+
+    // Meta information
+    meta: {
+      title: report.title,
+      description: report.metaDescription,
+      canonical: report.technical.canonicalUrl,
+      robots: report.technical.robotsContent,
+      viewport: report.technical.hasViewport,
+      charset: report.technical.hasCharset,
+      language: report.technical.langValue,
+    },
+
+    // Content analysis
+    content: {
+      ...report.content,
+      headings: report.headings,
+      keywords: report.keywords,
+    },
+
+    // Social meta tags
+    social: {
+      openGraph: report.openGraph,
+      twitterCard: report.twitterCard,
+      analysis: report.social,
+    },
+
+    // Technical SEO
+    technical: report.technical,
+
+    // Structured data / Schema.org
+    structuredData: report.structuredData,
+
+    // Links analysis
+    links: report.links,
+
+    // Images analysis
+    images: report.images,
+
+    // Security headers (if available)
+    security: securityAnalysis,
+
+    // Checks organized by category
+    checksByCategory,
+
+    // All checks (flat list for compatibility)
+    checks: report.checks,
   };
 }
 

@@ -9,7 +9,7 @@
 import { createClient } from '../core/client.js';
 import { ScrapeDocument } from './document.js';
 import { RequestPool } from '../utils/request-pool.js';
-import type { ExtractedLink } from './types.js';
+import type { ExtractedLink, ExtractionSchema } from './types.js';
 import {
   parseSitemap,
   discoverSitemaps,
@@ -68,6 +68,14 @@ export interface SpiderOptions {
   onPage?: (result: SpiderPageResult) => void;
   /** Callback for progress updates */
   onProgress?: (progress: SpiderProgress) => void;
+  /**
+   * CSS selectors to extract from each page.
+   * Can be:
+   * - Simple selectors: ['h1', 'h2', '.price']
+   * - Selector:attribute pairs: ['a:href', 'img:src']
+   * - Full extraction schema for complex cases
+   */
+  extract?: string[] | ExtractionSchema;
 }
 
 export interface SpiderPageResult {
@@ -97,6 +105,8 @@ export interface SpiderPageResult {
     ogDescription?: string;
     ogImage?: string;
   };
+  /** Custom extracted data from --extract selectors */
+  extracted?: Record<string, unknown>;
 }
 
 export interface SpiderProgress {
@@ -280,14 +290,43 @@ function sleep(ms: number): Promise<void> {
 /**
  * Spider class for crawling websites
  */
+/**
+ * Parse simple selector strings into ExtractionSchema
+ * Supports:
+ * - 'h1' -> { h1: { selector: 'h1', multiple: true } }
+ * - 'a:href' -> { a_href: { selector: 'a', attribute: 'href', multiple: true } }
+ * - '.price:text' -> { price: { selector: '.price', multiple: true } }
+ */
+function parseExtractSelectors(selectors: string[]): ExtractionSchema {
+  const schema: ExtractionSchema = {};
+
+  for (const sel of selectors) {
+    const [selector, attr] = sel.split(':');
+    // Generate a key name from the selector
+    const key = selector
+      .replace(/[^a-zA-Z0-9]/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase() + (attr && attr !== 'text' ? `_${attr}` : '');
+
+    schema[key || 'extracted'] = {
+      selector,
+      attribute: attr && attr !== 'text' ? attr : undefined,
+      multiple: true,
+    };
+  }
+
+  return schema;
+}
+
 export class Spider {
-  private options: Required<Omit<SpiderOptions, 'onPage' | 'onProgress' | 'exclude' | 'include' | 'sitemapUrl' | 'transport'>> & {
+  private options: Required<Omit<SpiderOptions, 'onPage' | 'onProgress' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract'>> & {
     exclude?: RegExp[];
     include?: RegExp[];
     sitemapUrl?: string;
     transport: SpiderTransport;
     onPage?: (result: SpiderPageResult) => void;
     onProgress?: (progress: SpiderProgress) => void;
+    extract?: ExtractionSchema;
   };
   private client: ReturnType<typeof createClient>;
   private pool: RequestPool;
@@ -313,6 +352,16 @@ export class Spider {
   private robotsValidation: { found: boolean; issues: Array<{ type: string; message: string }> } | null = null;
 
   constructor(options: SpiderOptions = {}) {
+    // Parse extract option - convert simple selectors to schema
+    let extractSchema: ExtractionSchema | undefined;
+    if (options.extract) {
+      if (Array.isArray(options.extract)) {
+        extractSchema = parseExtractSelectors(options.extract);
+      } else {
+        extractSchema = options.extract;
+      }
+    }
+
     this.options = {
       maxDepth: options.maxDepth ?? 5,
       maxPages: options.maxPages ?? 100,
@@ -329,6 +378,7 @@ export class Spider {
       include: options.include,
       onPage: options.onPage,
       onProgress: options.onProgress,
+      extract: extractSchema,
     };
 
     this.client = createClient({
@@ -784,6 +834,16 @@ export class Spider {
         ogImage: Array.isArray(og.image) ? og.image[0] : og.image,
       };
 
+      // Apply custom extraction if configured
+      let extracted: Record<string, unknown> | undefined;
+      if (this.options.extract) {
+        try {
+          extracted = doc.extract(this.options.extract);
+        } catch {
+          // Extraction failed, continue without it
+        }
+      }
+
       // Create result
       const result: SpiderPageResult = {
         url: item.url,
@@ -803,7 +863,8 @@ export class Spider {
             lang: doc.attr('html', 'lang')
         },
         metrics,
-        social
+        social,
+        extracted,
       };
 
       this.results.push(result);

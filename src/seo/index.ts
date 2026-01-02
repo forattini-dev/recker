@@ -54,6 +54,15 @@ export {
   ALL_SEO_RULES,
 } from './rules/index.js';
 
+// Output utilities (filename generation, file writing)
+export {
+  generateSeoFilename,
+  resolveOutputPath,
+  writeReport,
+  formatReportForJson,
+} from './output.js';
+export type { SeoOutputType, OutputOptions, WriteOptions } from './output.js';
+
 // Types
 export type {
   SeoReport,

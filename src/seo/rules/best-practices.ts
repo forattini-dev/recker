@@ -323,6 +323,18 @@ export const bestPracticesRules: SeoRule[] = [
         'No structured data found',
         {
           recommendation: 'Add schema.org structured data for rich search results',
+          evidence: {
+            expected: 'JSON-LD structured data in <script type="application/ld+json">',
+            impact: 'Structured data enables rich snippets like ratings, FAQs, and product info in search results',
+            example: `<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Your Title"
+}
+</script>`,
+            learnMore: 'https://developers.google.com/search/docs/advanced/structured-data/intro-structured-data'
+          }
         }
       );
     },

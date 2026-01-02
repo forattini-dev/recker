@@ -11,7 +11,7 @@ import { registerDnsCommands } from './commands/dns.js';
 import { registerAiCommand } from './commands/ai.js';
 import { registerSpiderCommand } from './commands/spider.js';
 import { registerScrapeCommand } from './commands/scrape.js';
-import { registerBenchCommand } from './commands/bench.js';
+import { registerBenchCommand, registerLoadCommand } from './commands/bench.js';
 import { registerSecurityCommand } from './commands/security.js';
 import { registerServeCommand } from './commands/serve.js';
 import { registerNetworkCommands } from './commands/network.js';
@@ -313,7 +313,31 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
       console.log(colors.gray(versionInfo));
   });
 
-  program.command('shell').alias('repl').action(async (args, opts) => {
+  program.command('shell').alias('repl')
+    .description('Interactive HTTP shell (tuiuiu-based)')
+    .action(async () => {
+      // Default: Use tuiuiu-based shell
+      const { startShellUI, clearHistory } = await import('./tui/app.js');
+      const { getExecutor } = await import('./tui/executor.js');
+
+      const executor = getExecutor();
+
+      await startShellUI({
+        onCommand: async (command: string) => {
+          const result = await executor.execute(command);
+
+          if (result.output === '__EXIT__') {
+            process.exit(0);
+          }
+          if (result.output === '__CLEAR__') {
+            clearHistory();
+          }
+        }
+      });
+  });
+
+  // Legacy readline-based shell (full features, no TUI)
+  program.command('shell:legacy').description('Legacy readline shell (full features)').action(async () => {
       const { RekShell } = await import('./tui/shell.js');
       const shell = new RekShell();
       shell.start();
@@ -338,6 +362,7 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
   registerVideoCommand(program as any);
   registerLiveCommand(program as any);
   registerAiCommand(program as any);
+  registerLoadCommand(program as any);
   registerBenchCommand(program as any);
   registerServeCommand(program as any);
   registerUtilsCommands(program as any);

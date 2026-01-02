@@ -1,26 +1,26 @@
 /**
- * MCP Tool Profiles
+ * MCP Tool Categories
  *
- * Profiles allow filtering which tools are exposed to AI agents,
+ * Categories allow filtering which tools are exposed to AI agents,
  * helping manage context size and focus tool availability.
  *
  * @example
  * ```bash
- * # Start with minimal profile (docs + basic network)
- * recker mcp --profile=minimal
+ * # Start with minimal category (docs + basic network)
+ * recker mcp --category=minimal
  *
- * # Combine profiles
- * recker mcp --profile=minimal,seo,security
+ * # Combine categories
+ * recker mcp --category=minimal,seo,security
  *
  * # Use all tools
- * recker mcp --profile=full
+ * recker mcp --category=full
  * ```
  */
 
 /**
- * Available profile names
+ * Available category names
  */
-export type ProfileName =
+export type CategoryName =
   | 'minimal'
   | 'docs'
   | 'network'
@@ -36,30 +36,33 @@ export type ProfileName =
   | 'full';
 
 /**
- * Profile definition with tool patterns
+ * Category definition with tool patterns
  */
-export interface Profile {
-  /** Profile name */
-  name: ProfileName;
+export interface Category {
+  /** Category name */
+  name: CategoryName;
   /** Human-readable description */
   description: string;
   /** Tool name patterns (supports * wildcard) */
   tools: string[];
   /** Estimated context cost in tokens */
   estimatedTokens: number;
+  /** Emoji icon for display */
+  icon?: string;
 }
 
 /**
- * All available profiles
+ * All available categories
  */
-export const profiles: Record<ProfileName, Profile> = {
+export const categories: Record<CategoryName, Category> = {
   /**
-   * Minimal profile - Essential tools only
+   * Minimal category - Essential tools only
    * Best for: Quick lookups, basic network checks
    */
   minimal: {
     name: 'minimal',
-    description: 'Essential tools only (docs + basic network)',
+    description: 'Essential tools only (docs + basic network + site audit)',
+    icon: '⚡',
     tools: [
       'rek_search_docs',
       'rek_get_doc',
@@ -67,34 +70,38 @@ export const profiles: Record<ProfileName, Profile> = {
       'rek_dns',
       'rek_ping',
       'rek_ip_lookup',
+      'rek_site_audit',  // Quick all-in-one site check
     ],
-    estimatedTokens: 2000,
+    estimatedTokens: 2500,
   },
 
   /**
-   * Documentation profile - All documentation tools
+   * Documentation category - All documentation tools
    * Best for: Learning Recker, finding examples
    */
   docs: {
     name: 'docs',
-    description: 'Documentation and code examples',
+    description: 'Documentation, code examples, and migration tools',
+    icon: '📚',
     tools: [
       'rek_search_docs',
       'rek_get_doc',
       'rek_code_examples',
       'rek_api_schema',
       'rek_suggest',
+      'rek_curl_convert', // Helps migrate from curl
     ],
-    estimatedTokens: 1500,
+    estimatedTokens: 1800,
   },
 
   /**
-   * Network profile - HTTP, DNS basics, TLS, WHOIS
+   * Network category - HTTP, DNS basics, TLS, WHOIS
    * Best for: Network diagnostics, API testing
    */
   network: {
     name: 'network',
-    description: 'HTTP requests, DNS, TLS, WHOIS, ping',
+    description: 'HTTP requests, DNS, TLS, WHOIS, ping, API tools',
+    icon: '🌐',
     tools: [
       'rek_http_request',
       'rek_dns',
@@ -104,17 +111,21 @@ export const profiles: Record<ProfileName, Profile> = {
       'rek_rdap',
       'rek_ping',
       'rek_ip_lookup',
+      'rek_curl_convert', // Convert curl to Recker
+      'rek_api_compare', // Compare two API responses
+      'rek_load_test', // Simple load testing
     ],
-    estimatedTokens: 2500,
+    estimatedTokens: 3500,
   },
 
   /**
-   * DNS profile - All DNS-related tools
+   * DNS category - All DNS-related tools
    * Best for: DNS debugging, email security validation
    */
   dns: {
     name: 'dns',
     description: 'All DNS tools including email security',
+    icon: '🔗',
     tools: [
       'rek_dns',
       'rek_dns_propagate',
@@ -130,45 +141,52 @@ export const profiles: Record<ProfileName, Profile> = {
   },
 
   /**
-   * SEO profile - SEO analysis tools
+   * SEO category - SEO analysis tools
    * Best for: Website optimization, content analysis
    */
   seo: {
     name: 'seo',
-    description: 'SEO analysis, spider, quick wins',
+    description: 'SEO analysis, spider, quick wins, sitemap, schema',
+    icon: '🔍',
     tools: [
+      'rek_site_audit',  // Quick SEO check
       'rek_seo_analyze',
       'rek_seo_spider',
       'rek_seo_quick_wins',
+      'rek_seo_sitemap',
+      'rek_seo_schema',
       'rek_scrape', // Often needed with SEO
     ],
-    estimatedTokens: 2000,
+    estimatedTokens: 2800,
   },
 
   /**
-   * Security profile - Security analysis tools
+   * Security category - Security analysis tools
    * Best for: Security audits, TLS inspection
    */
   security: {
     name: 'security',
-    description: 'TLS inspection, security headers, GeoIP',
+    description: 'TLS inspection, security headers, GeoIP, domain audit',
+    icon: '🔒',
     tools: [
       'rek_tls_inspect',
       'rek_rdap_lookup',
       'rek_geoip_lookup',
       'rek_security_headers',
       'rek_dns_toolkit',
+      'rek_domain_audit', // Comprehensive domain check
     ],
-    estimatedTokens: 1800,
+    estimatedTokens: 2200,
   },
 
   /**
-   * Scrape profile - Web scraping
+   * Scrape category - Web scraping
    * Best for: Data extraction, content analysis
    */
   scrape: {
     name: 'scrape',
     description: 'Web scraping with CSS selectors',
+    icon: '🕷️',
     tools: [
       'rek_scrape',
       'rek_http_request', // Needed for fetching pages
@@ -177,12 +195,13 @@ export const profiles: Record<ProfileName, Profile> = {
   },
 
   /**
-   * Video profile - Video/audio extraction from 35+ platforms
+   * Video category - Video/audio extraction from 35+ platforms
    * Best for: Media extraction, video info, format selection
    */
   video: {
     name: 'video',
     description: 'Video/audio extraction from 35+ platforms',
+    icon: '🎬',
     tools: [
       'rek_video_info',
       'rek_video_formats',
@@ -194,28 +213,31 @@ export const profiles: Record<ProfileName, Profile> = {
   },
 
   /**
-   * AI profile - Multi-provider AI chat and embeddings
+   * AI category - Multi-provider AI chat and embeddings
    * Best for: AI integration, LLM calls, embeddings
    */
   ai: {
     name: 'ai',
-    description: 'Multi-provider AI chat and embeddings',
+    description: 'Multi-provider AI chat, embeddings, and comparison',
+    icon: '🤖',
     tools: [
       'rek_ai_chat',
       'rek_ai_embed',
       'rek_ai_providers',
       'rek_ai_tokens',
+      'rek_ai_compare', // Compare responses across providers
     ],
-    estimatedTokens: 1200,
+    estimatedTokens: 1500,
   },
 
   /**
-   * Protocols profile - FTP, SFTP, Telnet, WebSocket
+   * Protocols category - FTP, SFTP, Telnet, WebSocket
    * Best for: File transfer, remote connections, real-time communication
    */
   protocols: {
     name: 'protocols',
     description: 'FTP, SFTP, Telnet, WebSocket protocols',
+    icon: '📡',
     tools: [
       'rek_ftp_connect',
       'rek_ftp_download',
@@ -229,12 +251,13 @@ export const profiles: Record<ProfileName, Profile> = {
   },
 
   /**
-   * Parsing profile - GraphQL, JSON-RPC, CSV, YAML, XML
+   * Parsing category - GraphQL, JSON-RPC, CSV, YAML, XML
    * Best for: API interactions, data transformation, format conversion
    */
   parsing: {
     name: 'parsing',
     description: 'GraphQL, JSON-RPC, CSV, YAML, XML parsing',
+    icon: '📄',
     tools: [
       'rek_graphql_query',
       'rek_graphql_introspect',
@@ -251,12 +274,13 @@ export const profiles: Record<ProfileName, Profile> = {
   },
 
   /**
-   * Streaming profile - HLS and other streaming protocols
+   * Streaming category - HLS and other streaming protocols
    * Best for: Video streaming, live content, media analysis
    */
   streaming: {
     name: 'streaming',
     description: 'HLS streaming analysis and download',
+    icon: '📺',
     tools: [
       'rek_hls_info',
       'rek_hls_variants',
@@ -266,50 +290,60 @@ export const profiles: Record<ProfileName, Profile> = {
   },
 
   /**
-   * Full profile - All available tools
-   * Warning: High context cost (~18K tokens with all profiles)
+   * Full category - All available tools
+   * Warning: High context cost (~18K tokens with all categories)
    */
   full: {
     name: 'full',
     description: 'All available tools (high context cost)',
+    icon: '🌟',
     tools: ['*'], // Wildcard for all tools
     estimatedTokens: 18000,
   },
 };
 
 /**
- * Default profile when none specified
+ * Default category when none specified
  */
-export const DEFAULT_PROFILE: ProfileName = 'minimal';
+export const DEFAULT_CATEGORY: CategoryName = 'minimal';
+
+// Legacy aliases for backwards compatibility
+export type ProfileName = CategoryName;
+export type Profile = Category;
+export const profiles = categories;
+export const DEFAULT_PROFILE = DEFAULT_CATEGORY;
 
 /**
- * Resolve profile names to tool patterns
+ * Resolve category names to tool patterns
  *
- * @param profileNames - Comma-separated profile names or array
+ * @param categoryNames - Comma-separated category names or array
  * @returns Array of tool patterns to include
  */
-export function resolveProfiles(profileNames: string | string[]): string[] {
-  const names = Array.isArray(profileNames)
-    ? profileNames
-    : profileNames.split(',').map((p) => p.trim().toLowerCase());
+export function resolveCategories(categoryNames: string | string[]): string[] {
+  const names = Array.isArray(categoryNames)
+    ? categoryNames
+    : categoryNames.split(',').map((p) => p.trim().toLowerCase());
 
   const toolSet = new Set<string>();
 
   for (const name of names) {
-    const profile = profiles[name as ProfileName];
-    if (!profile) {
+    const category = categories[name as CategoryName];
+    if (!category) {
       throw new Error(
-        `Unknown profile: ${name}. Available: ${Object.keys(profiles).join(', ')}`
+        `Unknown category: ${name}. Available: ${Object.keys(categories).join(', ')}`
       );
     }
 
-    for (const tool of profile.tools) {
+    for (const tool of category.tools) {
       toolSet.add(tool);
     }
   }
 
   return Array.from(toolSet);
 }
+
+// Legacy alias
+export const resolveProfiles = resolveCategories;
 
 /**
  * Check if a tool name matches any pattern in the list
@@ -335,30 +369,30 @@ export function matchesPattern(toolName: string, patterns: string[]): boolean {
 }
 
 /**
- * Get estimated token cost for a set of profiles
+ * Get estimated token cost for a set of categories
  *
- * @param profileNames - Profile names to calculate
+ * @param categoryNames - Category names to calculate
  * @returns Estimated token count
  */
-export function estimateProfileTokens(profileNames: string | string[]): number {
-  const names = Array.isArray(profileNames)
-    ? profileNames
-    : profileNames.split(',').map((p) => p.trim().toLowerCase());
+export function estimateCategoryTokens(categoryNames: string | string[]): number {
+  const names = Array.isArray(categoryNames)
+    ? categoryNames
+    : categoryNames.split(',').map((p) => p.trim().toLowerCase());
 
   // Deduplicate tools and sum unique token costs
   const seenTools = new Set<string>();
   let totalTokens = 0;
 
   for (const name of names) {
-    const profile = profiles[name as ProfileName];
-    if (!profile) continue;
+    const category = categories[name as CategoryName];
+    if (!category) continue;
 
     // For 'full', just return its estimate
-    if (profile.tools.includes('*')) {
-      return profile.estimatedTokens;
+    if (category.tools.includes('*')) {
+      return category.estimatedTokens;
     }
 
-    for (const tool of profile.tools) {
+    for (const tool of category.tools) {
       if (!seenTools.has(tool)) {
         seenTools.add(tool);
         // Estimate ~300 tokens per tool definition
@@ -370,40 +404,54 @@ export function estimateProfileTokens(profileNames: string | string[]): number {
   return totalTokens;
 }
 
+// Legacy alias
+export const estimateProfileTokens = estimateCategoryTokens;
+
 /**
- * List all available profiles with descriptions
+ * List all available categories with descriptions
  */
-export function listProfiles(): Array<{
-  name: ProfileName;
+export function listCategories(): Array<{
+  name: CategoryName;
   description: string;
+  icon?: string;
   toolCount: number;
   estimatedTokens: number;
 }> {
-  return Object.values(profiles).map((p) => ({
+  return Object.values(categories).map((p) => ({
     name: p.name,
     description: p.description,
+    icon: p.icon,
     toolCount: p.tools.includes('*') ? -1 : p.tools.length,
     estimatedTokens: p.estimatedTokens,
   }));
 }
 
-/**
- * Get profile details including tool list
- */
-export function getProfile(name: ProfileName): Profile | undefined {
-  return profiles[name];
-}
+// Legacy alias
+export const listProfiles = listCategories;
 
 /**
- * Validate profile names
+ * Get category details including tool list
  */
-export function validateProfiles(names: string[]): {
+export function getCategory(name: CategoryName): Category | undefined {
+  return categories[name];
+}
+
+// Legacy alias
+export const getProfile = getCategory;
+
+/**
+ * Validate category names
+ */
+export function validateCategories(names: string[]): {
   valid: boolean;
   invalid: string[];
 } {
-  const invalid = names.filter((n) => !profiles[n as ProfileName]);
+  const invalid = names.filter((n) => !categories[n as CategoryName]);
   return {
     valid: invalid.length === 0,
     invalid,
   };
 }
+
+// Legacy alias
+export const validateProfiles = validateCategories;

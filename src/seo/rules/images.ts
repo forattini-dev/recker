@@ -188,7 +188,16 @@ export const imageRules: SeoRule[] = [
           { id: 'images-empty-alt', name: 'Empty Alt Text', category: 'images', severity: 'info' },
           'info',
           `${emptyAlt} image(s) with empty alt="" (decorative)`,
-          { value: emptyAlt, recommendation: 'Ensure these images are truly decorative' }
+          {
+            value: emptyAlt,
+            recommendation: 'Ensure these images are truly decorative and don\'t convey important information',
+            evidence: {
+              found: `${emptyAlt} images with alt=""`,
+              expected: 'Empty alt only for purely decorative images (borders, spacers, backgrounds)',
+              impact: 'Images with alt="" are skipped by screen readers. If the image conveys important information, users relying on assistive technology will miss it.',
+              example: '<!-- Decorative: -->\n<img src="divider.png" alt="">\n\n<!-- Informative (needs real alt): -->\n<img src="chart.png" alt="Sales grew 50% in Q4">'
+            }
+          }
         );
       }
       return createResult(
@@ -353,7 +362,16 @@ export const imageRules: SeoRule[] = [
           { id: 'images-decoding-async', name: 'Image Decoding Async', category: 'images', severity: 'info' },
           'info',
           `${nonAsync} image(s) do not use decoding="async"`,
-          { value: nonAsync, recommendation: 'Consider adding decoding="async" to non-critical images for performance benefits.' }
+          {
+            value: nonAsync,
+            recommendation: 'Consider adding decoding="async" to non-critical images for performance benefits.',
+            evidence: {
+              found: `${nonAsync} images without decoding="async"`,
+              expected: 'Non-critical images should use decoding="async"',
+              impact: 'Async decoding allows the browser to decode images off the main thread, preventing layout jank during image loading.',
+              example: '<img src="photo.jpg" decoding="async" loading="lazy" alt="Description">'
+            }
+          }
         );
       }
       return createResult(

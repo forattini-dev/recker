@@ -2,8 +2,12 @@
   "mcpServers": {
     "recker": {
       "command": "pnpm",
-      "args": ["cli", "mcp", "--debug"],
+      "args": ["cli", "mcp", "--debug", "--category=full"],
       "cwd": "/home/cyber/Work/tetis/recker"
+    },
+    "tuiuiu": {
+      "command": "npx",
+      "args": ["tuiuiu.js@latest", "mcp"]
     }
   }
 }
