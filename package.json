@@ -109,6 +109,14 @@
       "types": "./dist/scrape/index.d.ts",
       "import": "./dist/scrape/index.js"
     },
+    "./scrape/parser": {
+      "types": "./dist/scrape/parser/index.d.ts",
+      "import": "./dist/scrape/parser/index.js"
+    },
+    "./scrape/extractors": {
+      "types": "./dist/scrape/extractors.d.ts",
+      "import": "./dist/scrape/extractors.js"
+    },
     "./parser": {
       "types": "./dist/scrape/parser/index.d.ts",
       "import": "./dist/scrape/parser/index.js"
@@ -117,9 +125,33 @@
       "types": "./dist/seo/index.d.ts",
       "import": "./dist/seo/index.js"
     },
+    "./seo/validators": {
+      "types": "./dist/seo/validators/index.d.ts",
+      "import": "./dist/seo/validators/index.js"
+    },
+    "./seo/validators/robots": {
+      "types": "./dist/seo/validators/robots.d.ts",
+      "import": "./dist/seo/validators/robots.js"
+    },
+    "./seo/validators/sitemap": {
+      "types": "./dist/seo/validators/sitemap.d.ts",
+      "import": "./dist/seo/validators/sitemap.js"
+    },
+    "./seo/validators/llms-txt": {
+      "types": "./dist/seo/validators/llms-txt.d.ts",
+      "import": "./dist/seo/validators/llms-txt.js"
+    },
     "./utils/*": {
       "types": "./dist/utils/*.d.ts",
       "import": "./dist/utils/*.js"
+    },
+    "./security": {
+      "types": "./dist/utils/security-grader.d.ts",
+      "import": "./dist/utils/security-grader.js"
+    },
+    "./dns-toolkit": {
+      "types": "./dist/utils/dns-toolkit.d.ts",
+      "import": "./dist/utils/dns-toolkit.js"
     },
     "./udp": {
       "types": "./dist/udp/index.d.ts",

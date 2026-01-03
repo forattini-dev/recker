@@ -90,3 +90,52 @@ export type {
 } from './rules/index.js';
 
 export type { SeoAnalyzerFullOptions } from './analyzer.js';
+
+// Validators (robots.txt, sitemap.xml, llms.txt)
+export {
+  // robots.txt
+  parseRobotsTxt,
+  validateRobotsTxt,
+  isPathAllowed,
+  fetchAndValidateRobotsTxt,
+} from './validators/robots.js';
+
+export type {
+  RobotsDirective,
+  RobotsUserAgentBlock,
+  RobotsParseResult,
+  RobotsValidationIssue,
+  RobotsValidationResult,
+} from './validators/robots.js';
+
+export {
+  // sitemap.xml
+  parseSitemap,
+  validateSitemap,
+  discoverSitemaps,
+  fetchAndValidateSitemap,
+} from './validators/sitemap.js';
+
+export type {
+  SitemapUrl,
+  SitemapIndex,
+  SitemapParseResult,
+  SitemapValidationIssue,
+  SitemapValidationResult,
+} from './validators/sitemap.js';
+
+export {
+  // llms.txt
+  parseLlmsTxt,
+  validateLlmsTxt,
+  fetchAndValidateLlmsTxt,
+  generateLlmsTxtTemplate,
+} from './validators/llms-txt.js';
+
+export type {
+  LlmsTxtLink,
+  LlmsTxtSection,
+  LlmsTxtParseResult,
+  LlmsTxtValidationIssue,
+  LlmsTxtValidationResult,
+} from './validators/llms-txt.js';

@@ -1,6 +1,33 @@
 // Security Headers Analyzer - Comprehensive security assessment
 // Based on OWASP Security Headers, Mozilla Observatory, and modern browser security features
 
+/**
+ * Accepts both Web API Headers or a plain Record<string, string>.
+ */
+export type HeadersInput = Headers | Record<string, string | undefined>;
+
+/**
+ * Normalize headers to a common interface for internal use.
+ */
+function normalizeHeaders(input: HeadersInput): { get(name: string): string | null } {
+  if (input instanceof Headers) {
+    return input;
+  }
+  // Plain object - wrap it
+  return {
+    get(name: string): string | null {
+      const lower = name.toLowerCase();
+      for (const key of Object.keys(input)) {
+        if (key.toLowerCase() === lower) {
+          const val = input[key];
+          return val === undefined ? null : val;
+        }
+      }
+      return null;
+    }
+  };
+}
+
 export interface SecurityHeaderResult {
   header: string;
   value?: string;
@@ -719,8 +746,11 @@ const HEADERS_CHECKS: Array<{
 
 /**
  * Comprehensive security headers analysis
+ *
+ * @param headers - Web API Headers object or plain Record<string, string>
  */
-export function analyzeSecurityHeaders(headers: Headers): SecurityReport {
+export function analyzeSecurityHeaders(headers: HeadersInput): SecurityReport {
+  const normalizedHeaders = normalizeHeaders(headers);
   let totalScore = 100;
   let penalty = 0;
   const details: SecurityHeaderResult[] = [];
@@ -731,7 +761,7 @@ export function analyzeSecurityHeaders(headers: Headers): SecurityReport {
   let cspAnalysis: CSPAnalysis | undefined;
 
   for (const check of HEADERS_CHECKS) {
-    const value = headers.get(check.header);
+    const value = normalizedHeaders.get(check.header);
     const result = check.check(value || undefined);
 
     // Track CSP analysis for detailed report
@@ -785,20 +815,23 @@ export function analyzeSecurityHeaders(headers: Headers): SecurityReport {
 
 /**
  * Quick security check - returns only critical issues
+ *
+ * @param headers - Web API Headers object or plain Record<string, string>
  */
-export function quickSecurityCheck(headers: Headers): {
+export function quickSecurityCheck(headers: HeadersInput): {
   secure: boolean;
   criticalIssues: string[];
 } {
+  const normalizedHeaders = normalizeHeaders(headers);
   const criticalIssues: string[] = [];
 
   // Check HTTPS enforcement
-  if (!headers.get('strict-transport-security')) {
+  if (!normalizedHeaders.get('strict-transport-security')) {
     criticalIssues.push('No HSTS - vulnerable to SSL stripping');
   }
 
   // Check XSS protection
-  const csp = headers.get('content-security-policy');
+  const csp = normalizedHeaders.get('content-security-policy');
   if (!csp) {
     criticalIssues.push('No CSP - vulnerable to XSS');
   } else if (csp.includes("'unsafe-inline'") && csp.includes("'unsafe-eval'")) {
@@ -806,14 +839,14 @@ export function quickSecurityCheck(headers: Headers): {
   }
 
   // Check clickjacking
-  const xfo = headers.get('x-frame-options');
+  const xfo = normalizedHeaders.get('x-frame-options');
   const frameAncestors = csp?.includes('frame-ancestors');
   if (!xfo && !frameAncestors) {
     criticalIssues.push('No clickjacking protection');
   }
 
   // Check MIME sniffing
-  if (!headers.get('x-content-type-options')) {
+  if (!normalizedHeaders.get('x-content-type-options')) {
     criticalIssues.push('MIME sniffing not disabled');
   }
 
