@@ -25,13 +25,13 @@ importers:
         version: 5.8.2
       tuiuiu.js:
         specifier: ^1.0.42
-        version: 1.0.42
+        version: 1.0.45
       undici:
         specifier: ^7.16.0
         version: 7.16.0
       zod:
         specifier: ^4.3.4
-        version: 4.3.4
+        version: 4.3.5
     devDependencies:
       '@hapi/wreck':
         specifier: ^18.1.0
@@ -1948,8 +1948,8 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
-  tuiuiu.js@1.0.42:
-    resolution: {integrity: sha512-NCUsUslAxXIwR10OZszjbUrMpKgA3rMVL0ShJ6vUcUhN1zsWZTlyKkBDJwmkX81+mrpquol1U7CGaMZ76/N6wA==}
+  tuiuiu.js@1.0.45:
+    resolution: {integrity: sha512-OKblF5rZ12QGPFiwFbttz9d6sMzCARxutoqqR0Iz/86QUKl8Ve1BEHh1QZk8YUFma35cYm1RGtlmEO3qpcprIQ==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -2149,8 +2149,8 @@ packages:
     resolution: {integrity: sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==}
     engines: {node: '>=18'}
 
-  zod@4.3.4:
-    resolution: {integrity: sha512-Zw/uYiiyF6pUT1qmKbZziChgNPRu+ZRneAsMUDU6IwmXdWt5JwcUfy2bvLOCUtz5UniaN/Zx5aFttZYbYc7O/A==}
+  zod@4.3.5:
+    resolution: {integrity: sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g==}
 
 snapshots:
 
@@ -3859,7 +3859,7 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  tuiuiu.js@1.0.42: {}
+  tuiuiu.js@1.0.45: {}
 
   tweetnacl@0.14.5: {}
 
@@ -4000,4 +4000,4 @@ snapshots:
 
   yallist@5.0.0: {}
 
-  zod@4.3.4: {}
+  zod@4.3.5: {}
