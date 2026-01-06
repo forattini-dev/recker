@@ -2,11 +2,23 @@
  * Testing Commands
  *
  * Commands for load testing and traffic recording:
- * - load: Load/stress testing
+ * - load: Load/stress testing (runs as background job in TUI)
  * - har: HAR recording and playback
  */
 
 import type { CommandContext, CommandResult } from './types.js';
+import { parseArgValueFlag } from './parser.js';
+import {
+  addHistoryItem,
+  setPendingTabSwitch,
+} from '../hooks/useShellState.js';
+import {
+  registerLoadTest,
+  startJob,
+  failJob,
+  updateJobStatus,
+  getJobManager,
+} from '../hooks/useJobs.js';
 
 // =============================================================================
 // Load Command
@@ -43,7 +55,7 @@ Examples:
   load api.example.com --mode stress
   load api.example.com -k             (allow self-signed certs)
 
-Note: Press ESC to stop the test.`,
+Note: View progress in Jobs tab (F2). Stop with job stop <id>.`,
     });
     return { success: true };
   }
@@ -52,55 +64,94 @@ Note: Press ESC to stop the test.`,
     url = `https://${url}`;
   }
 
-  // Parse options from args
-  const options = {
-    users: 50,
-    duration: 60,
-    mode: 'throughput' as 'throughput' | 'stress' | 'realistic',
-    http2: false,
-    insecure: false,
-    rampUp: 5,
-  };
+  // Parse options
+  const users = Number(parseArgValueFlag(args, ['-u', '--users'], 50)) || 50;
+  const duration = Number(parseArgValueFlag(args, ['-d', '--duration'], 60)) || 60;
+  const mode = parseArgValueFlag(args, ['-m', '--mode'], 'throughput');
+  const http2 = args.includes('--http2');
+  const rampUp = Number(parseArgValueFlag(args, ['-r', '--ramp', '--ramp-up'], 5)) || 5;
+  const insecure = args.includes('-k') || args.includes('--insecure');
 
-  for (let i = 1; i < args.length; i++) {
-    const arg = args[i];
-    if ((arg === '-u' || arg === '--users') && args[i + 1]) {
-      options.users = parseInt(args[++i], 10);
-    } else if ((arg === '-d' || arg === '--duration') && args[i + 1]) {
-      options.duration = parseInt(args[++i], 10);
-    } else if ((arg === '-r' || arg === '--ramp') && args[i + 1]) {
-      options.rampUp = parseInt(args[++i], 10);
-    } else if ((arg === '-m' || arg === '--mode') && args[i + 1]) {
-      options.mode = args[++i] as any;
-    } else if (arg === '--http2') {
-      options.http2 = true;
-    } else if (arg === '-k' || arg === '--insecure') {
-      options.insecure = true;
-    }
-  }
+  // Register as background job
+  const controller = new AbortController();
+  const job = registerLoadTest(url, () => controller.abort());
 
-  ctx.addHistoryItem({ type: 'info', content: `Starting load test: ${options.users} users, ${options.duration}s, mode: ${options.mode}` });
+  const manager = getJobManager();
+  const fullCommand = `load ${args.join(' ')}`;
+  manager.setCommand(job.id, fullCommand);
+  manager.setMetadata(job.id, { users, duration, mode });
+
+  startJob(job.id);
+  manager.addLog(job.id, {
+    timestamp: Date.now(),
+    level: 'info',
+    message: `Starting load test: ${url} (${users} users, ${duration}s, ${mode})`,
+  });
+
+  // Run async
+  runLoadTestAsync(job.id, url, { users, duration, mode, http2, rampUp, insecure }, controller.signal);
+
+  addHistoryItem({
+    type: 'info',
+    content: `[job:${job.id}] Load test started: ${url} (${users} users, ${duration}s)`,
+  });
+
+  // Auto-switch to Jobs tab
+  setPendingTabSwitch('jobs');
+
+  return { success: true, output: { jobId: job.id } };
+}
+
+async function runLoadTestAsync(
+  jobId: number,
+  url: string,
+  options: {
+    users: number;
+    duration: number;
+    mode: string;
+    http2: boolean;
+    rampUp: number;
+    insecure: boolean;
+  },
+  signal: AbortSignal
+): Promise<void> {
+  const manager = getJobManager();
 
   try {
-    const { startLoadDashboard } = await import('../load-dashboard.js');
+    const { LoadTestRunner } = await import('../../commands/loadtest-runner.js');
+    const { attachTUIHandler } = await import('../../events/handlers/tui.js');
 
-    await startLoadDashboard({
+    const runner = new LoadTestRunner();
+    attachTUIHandler(runner, { jobId, signal });
+
+    await runner.run({
       url,
+      signal,
       users: options.users,
       duration: options.duration,
-      mode: options.mode,
+      mode: options.mode as 'throughput' | 'stress' | 'realistic',
       http2: options.http2,
-      insecure: options.insecure,
       rampUp: options.rampUp,
+      insecure: options.insecure,
     });
 
-    ctx.addHistoryItem({ type: 'info', content: 'Load test completed. Check the report above.' });
-    return { success: true };
+    manager.addLog(jobId, {
+      timestamp: Date.now(),
+      level: 'info',
+      message: 'Load test completed',
+    });
+    updateJobStatus(jobId, 'completed');
   } catch (err: any) {
-    if (err.message !== 'User aborted') {
-      ctx.addHistoryItem({ type: 'error', content: `Load test failed: ${err.message}` });
+    if (signal.aborted || err.message === 'Aborted') {
+      manager.addLog(jobId, {
+        timestamp: Date.now(),
+        level: 'info',
+        message: 'Load test stopped by user',
+      });
+      updateJobStatus(jobId, 'stopped');
+    } else {
+      failJob(jobId, err instanceof Error ? err : new Error(err.message));
     }
-    return { success: false, error: err.message };
   }
 }
 

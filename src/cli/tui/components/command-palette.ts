@@ -11,6 +11,9 @@ import {
   CommandPalette,
   createCommandPalette,
   useInput,
+  useEffect,
+  setHotkeyScope,
+  resetHotkeyScope,
   type CommandItem,
 } from 'tuiuiu.js';
 import { themeColor } from '../shared/theme-helper.js';
@@ -266,6 +269,14 @@ export interface ShellCommandPaletteProps {
  */
 export function ShellCommandPalette(props: ShellCommandPaletteProps): VNode {
   const { visible, onClose, onSelect, commands, width } = props;
+
+  // Isolate hotkeys when palette is visible - auto-restores on close
+  useEffect(() => {
+    if (visible) {
+      setHotkeyScope('command-palette');
+      return () => resetHotkeyScope();
+    }
+  });
 
   // Get or create palette state
   const palette = getPaletteState(commands, onSelect, onClose);
