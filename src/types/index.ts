@@ -270,6 +270,10 @@ export interface ReckerRequest {
       onTlsHandshake?: (info: any) => void;
       onRequestSent?: () => void;
       onResponseStart?: (info: any) => void;
+      // HTTP/2 observability hooks
+      onHttp2Session?: (info: any) => void;
+      onHttp2Stream?: (info: any) => void;
+      onHttp2FlowControl?: (info: any) => void;
   };
 }
 
@@ -523,6 +527,97 @@ export interface Hooks {
    * Represents Time To First Byte (TTFB).
    */
   onResponseStart?: Array<(info: { status: number, headers: Headers }, req: ReckerRequest) => void>;
+
+  // HTTP/2 Observability Hooks
+  /**
+   * Dispatched when an HTTP/2 session is established or updated.
+   * Provides session-level metrics for monitoring connection health.
+   */
+  onHttp2Session?: Array<(info: Http2SessionInfo, req: ReckerRequest) => void>;
+
+  /**
+   * Dispatched when an HTTP/2 stream is opened, closed, or errors.
+   * Provides stream-level metrics for request tracking.
+   */
+  onHttp2Stream?: Array<(info: Http2StreamInfo, req: ReckerRequest) => void>;
+
+  /**
+   * Dispatched when HTTP/2 flow control window is updated.
+   * Useful for detecting backpressure and throughput issues.
+   */
+  onHttp2FlowControl?: Array<(info: Http2FlowControlInfo, req: ReckerRequest) => void>;
+}
+
+/**
+ * HTTP/2 session metrics for observability
+ */
+export interface Http2SessionInfo {
+  /** Origin this session is connected to */
+  origin: string;
+  /** Event type */
+  event: 'connect' | 'goaway' | 'close' | 'error' | 'settings';
+  /** Server-advertised max concurrent streams */
+  maxConcurrentStreams?: number;
+  /** Current active streams on this session */
+  activeStreams?: number;
+  /** Total streams created on this session */
+  totalStreams?: number;
+  /** Session error if event is 'error' */
+  error?: string;
+  /** GOAWAY error code if event is 'goaway' */
+  goawayCode?: number;
+  /** Last stream ID in GOAWAY */
+  lastStreamId?: number;
+  /** Session duration in ms (on close) */
+  duration?: number;
+  /** Local HTTP/2 settings */
+  localSettings?: HTTP2Settings;
+  /** Remote HTTP/2 settings */
+  remoteSettings?: HTTP2Settings;
+}
+
+/**
+ * HTTP/2 stream metrics for observability
+ */
+export interface Http2StreamInfo {
+  /** Stream ID (odd = client-initiated, even = server push) */
+  streamId: number;
+  /** Origin this stream belongs to */
+  origin: string;
+  /** Event type */
+  event: 'open' | 'close' | 'error' | 'headers' | 'data' | 'trailers';
+  /** Stream state */
+  state?: 'open' | 'half-closed-local' | 'half-closed-remote' | 'closed';
+  /** HTTP status code (on headers event) */
+  status?: number;
+  /** Stream error code if event is 'error' */
+  errorCode?: string;
+  /** Bytes sent on this stream */
+  bytesSent?: number;
+  /** Bytes received on this stream */
+  bytesReceived?: number;
+  /** Stream duration in ms (on close) */
+  duration?: number;
+  /** Whether this is a pushed stream */
+  pushed?: boolean;
+}
+
+/**
+ * HTTP/2 flow control metrics for observability
+ */
+export interface Http2FlowControlInfo {
+  /** Stream ID (0 for connection-level) */
+  streamId: number;
+  /** Origin this applies to */
+  origin: string;
+  /** Event type */
+  event: 'window-update' | 'blocked' | 'unblocked';
+  /** Current window size */
+  windowSize: number;
+  /** Window delta (for window-update events) */
+  delta?: number;
+  /** How long flow was blocked in ms (for unblocked events) */
+  blockedDuration?: number;
 }
 
 export interface ProxyOptions {
@@ -809,6 +904,73 @@ export interface CompressionOptions {
   methods?: string[];
 }
 
+/**
+ * HTTP/2 preset names for common use cases
+ *
+ * @example
+ * ```typescript
+ * // Use preset by name
+ * const client = createClient({ http2: 'performance' });
+ * ```
+ */
+export type HTTP2Preset = 'balanced' | 'performance' | 'low-latency' | 'low-memory';
+
+/**
+ * HTTP/2 preset configuration values
+ * Uses the same fields as HTTP2Settings but with user-friendly defaults
+ */
+export interface HTTP2PresetConfig {
+  maxConcurrentStreams: number;
+  initialWindowSize: number;
+  maxHeaderListSize: number;
+  enablePush: number;  // 0 = disabled, 1 = enabled (HTTP/2 SETTINGS format)
+}
+
+/**
+ * HTTP/2 preset configurations optimized for different use cases
+ */
+export const HTTP2_PRESETS: Record<HTTP2Preset, HTTP2PresetConfig> = {
+  /**
+   * Balanced - Good for general API calls (default)
+   */
+  balanced: {
+    maxConcurrentStreams: 100,
+    initialWindowSize: 65_535,      // 64KB (spec default)
+    maxHeaderListSize: 16_384,      // 16KB
+    enablePush: 0,                  // API clients don't need server push
+  },
+
+  /**
+   * Performance - Optimized for large uploads/downloads (S3, file transfers)
+   */
+  performance: {
+    maxConcurrentStreams: 128,      // AWS S3 allows this
+    initialWindowSize: 1_048_576,   // 1MB (16x default) - better throughput
+    maxHeaderListSize: 32_768,      // 32KB (room for big JWTs)
+    enablePush: 0,
+  },
+
+  /**
+   * Low-latency - Optimized for many small concurrent requests
+   */
+  'low-latency': {
+    maxConcurrentStreams: 250,      // More parallelism
+    initialWindowSize: 65_535,      // 64KB (smaller buffers = faster start)
+    maxHeaderListSize: 16_384,      // 16KB
+    enablePush: 0,
+  },
+
+  /**
+   * Low-memory - Conservative settings for constrained environments (Lambda, Edge)
+   */
+  'low-memory': {
+    maxConcurrentStreams: 50,       // Less memory per connection
+    initialWindowSize: 32_768,      // 32KB
+    maxHeaderListSize: 8_192,       // 8KB
+    enablePush: 0,
+  },
+};
+
 export interface HTTP2Options {
   /**
    * Enable HTTP/2 support (default: false)
@@ -818,9 +980,23 @@ export interface HTTP2Options {
   enabled?: boolean;
 
   /**
-   * Maximum number of concurrent HTTP/2 streams per connection (default: 100)
-   * Only applies when HTTP/2 is enabled
-   * @default 100
+   * Use a preset configuration optimized for specific use cases
+   * Presets can be overridden by other options
+   *
+   * @example
+   * ```typescript
+   * // Use performance preset
+   * http2: { preset: 'performance' }
+   *
+   * // Use preset with override
+   * http2: { preset: 'performance', maxConcurrentStreams: 200 }
+   * ```
+   */
+  preset?: HTTP2Preset;
+
+  /**
+   * Maximum number of concurrent HTTP/2 streams per connection
+   * @default 100 (or from preset)
    */
   maxConcurrentStreams?: number;
 
@@ -831,6 +1007,12 @@ export interface HTTP2Options {
    * @default 1
    */
   pipelining?: number;
+
+  /**
+   * Advanced HTTP/2 session settings (RFC 7540)
+   * These settings are sent to the server during connection setup
+   */
+  settings?: Omit<HTTP2Settings, 'maxConcurrentStreams'>;
 }
 
 export interface AgentOptions {
@@ -907,6 +1089,20 @@ export interface AgentOptions {
    * Local address to bind to for outgoing connections
    */
   localAddress?: string;
+
+  /**
+   * Enable HTTP/2 support for the agent
+   * When true, agent will use ALPN to negotiate HTTP/2 with servers
+   * @default false
+   */
+  allowH2?: boolean;
+
+  /**
+   * Maximum concurrent HTTP/2 streams per connection
+   * Only applies when allowH2 is true
+   * @default 100
+   */
+  maxConcurrentStreams?: number;
 }
 
 export interface ClientOptions {
@@ -1018,11 +1214,22 @@ export interface ClientOptions {
    *
    * @example
    * ```typescript
-   * http2: true // Enable HTTP/2 with defaults
-   * http2: { enabled: true, maxConcurrentStreams: 200, pipelining: 10 }
+   * // Simple - enable with balanced preset
+   * http2: true
+   *
+   * // Use optimized preset by name
+   * http2: 'performance'      // For S3, large uploads
+   * http2: 'low-latency'      // For many small requests
+   * http2: 'low-memory'       // For Lambda/Edge
+   *
+   * // Preset with overrides
+   * http2: { preset: 'performance', maxConcurrentStreams: 200 }
+   *
+   * // Full custom config
+   * http2: { enabled: true, settings: { initialWindowSize: 1048576 } }
    * ```
    */
-  http2?: boolean | HTTP2Options;
+  http2?: boolean | HTTP2Preset | HTTP2Options;
 
   /**
    * Unified concurrency control for requests, rate limiting, and connection pooling
@@ -1090,6 +1297,33 @@ export interface ClientOptions {
    * ```
    */
   socketPath?: string;
+
+  /**
+   * HTTP 100-Continue support for large body uploads.
+   *
+   * When enabled, sends `Expect: 100-continue` header and waits for
+   * server confirmation before transmitting the request body.
+   * This prevents sending large payloads when the server would reject
+   * early (e.g., authentication failure, invalid headers).
+   *
+   * **Important**: Only works with HTTP/2. HTTP/1.1 does not support
+   * waiting for 100 Continue (body is sent immediately regardless).
+   *
+   * @example
+   * ```typescript
+   * // Enable for all requests (recommended for S3 uploads)
+   * expectContinue: true
+   *
+   * // Enable with byte threshold (only for bodies > 2MB)
+   * expectContinue: 2 * 1024 * 1024  // 2MB
+   *
+   * // Disable (default)
+   * expectContinue: false
+   * ```
+   *
+   * @default false
+   */
+  expectContinue?: boolean | number;
 
   /**
    * Cookie handling configuration (got-compatible)

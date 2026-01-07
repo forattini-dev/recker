@@ -1,17 +1,23 @@
+import { availableParallelism, cpus } from 'node:os';
 import { defineConfig } from 'vitest/config';
+
+const cpuCount = typeof availableParallelism === 'function' ? availableParallelism() : cpus().length;
+const defaultMaxWorkers = Math.min(6, Math.max(1, cpuCount - 1));
+const envMaxWorkers = process.env.VITEST_MAX_WORKERS?.trim();
+const maxWorkers = envMaxWorkers
+  ? (/^\d+%$/.test(envMaxWorkers) ? envMaxWorkers : Number.parseInt(envMaxWorkers, 10))
+  : defaultMaxWorkers;
+const resolvedMaxWorkers = typeof maxWorkers === 'number'
+  ? (Number.isFinite(maxWorkers) ? maxWorkers : defaultMaxWorkers)
+  : maxWorkers;
 
 export default defineConfig({
   test: {
-    // Resource limits - prevent excessive RAM/CPU usage
+    // Resource limits - keep tests parallel but bounded
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        maxForks: 2,
-        minForks: 1,
-      },
-    },
+    maxWorkers: resolvedMaxWorkers,
     maxConcurrency: 3,
-    fileParallelism: false,
+    fileParallelism: true,
 
     include: ['test/**/*.test.ts'],
     exclude: ['docs/**', 'node_modules/**', 'benchmark/**'],

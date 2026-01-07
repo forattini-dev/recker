@@ -1,10 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import {
     AgentManager,
     createAgent,
     extractDomain,
     analyzeBatchDomains
 } from '../../src/utils/agent-manager.js';
+import { ProtocolCache } from '../../src/utils/protocol-cache.js';
 import { Agent } from 'undici';
 
 describe('Agent Manager', () => {
@@ -236,6 +237,94 @@ describe('Agent Manager', () => {
 
             expect(result.strategy).toBe('single');
             expect(result.domains.size).toBe(1);
+        });
+    });
+
+    describe('Adaptive Pooling', () => {
+        let protocolCache: ProtocolCache;
+
+        beforeEach(() => {
+            protocolCache = new ProtocolCache();
+        });
+
+        afterEach(async () => {
+            if (manager) {
+                await manager.destroy();
+                manager = null;
+            }
+        });
+
+        it('should create manager with protocol cache', () => {
+            manager = new AgentManager({}, protocolCache);
+            expect(manager).toBeInstanceOf(AgentManager);
+        });
+
+        it('should set protocol cache after creation', () => {
+            manager = new AgentManager();
+            manager.setProtocolCache(protocolCache);
+
+            // Should not throw when getting adaptive agent
+            const agent = manager.getAdaptiveAgentForUrl('https://api.example.com');
+            expect(agent).toBeInstanceOf(Agent);
+        });
+
+        it('should return optimistic agent for unknown origins', () => {
+            manager = new AgentManager({ perDomainPooling: true }, protocolCache);
+            const agent = manager.getAdaptiveAgentForUrl('https://unknown.example.com');
+            expect(agent).toBeInstanceOf(Agent);
+        });
+
+        it('should create HTTP/2 optimized agent when h2 detected', () => {
+            protocolCache.set('https://h2.example.com', 'h2');
+            manager = new AgentManager({ perDomainPooling: true, connections: 10 }, protocolCache);
+
+            const agent = manager.getAdaptiveAgentForUrl('https://h2.example.com/api');
+            expect(agent).toBeInstanceOf(Agent);
+
+            // Agent should be cached for this domain
+            const agent2 = manager.getAdaptiveAgentForUrl('https://h2.example.com/other');
+            expect(agent2).toBe(agent);
+        });
+
+        it('should create HTTP/1.1 optimized agent when http/1.1 detected', () => {
+            protocolCache.set('https://h1.example.com', 'http/1.1');
+            manager = new AgentManager({ perDomainPooling: true, connections: 2 }, protocolCache);
+
+            const agent = manager.getAdaptiveAgentForUrl('https://h1.example.com/api');
+            expect(agent).toBeInstanceOf(Agent);
+        });
+
+        it('should reuse existing domain agent', () => {
+            manager = new AgentManager({ perDomainPooling: true }, protocolCache);
+
+            // First call creates agent
+            const agent1 = manager.getAdaptiveAgentForUrl('https://api.example.com');
+
+            // Update protocol cache
+            protocolCache.set('https://api.example.com', 'h2');
+
+            // Second call should reuse existing agent (not recreate)
+            const agent2 = manager.getAdaptiveAgentForUrl('https://api.example.com');
+            expect(agent2).toBe(agent1);
+        });
+
+        it('should fallback to global agent when perDomainPooling disabled', () => {
+            manager = new AgentManager({ perDomainPooling: false }, protocolCache);
+            protocolCache.set('https://api.example.com', 'h2');
+
+            const agent1 = manager.getAdaptiveAgentForUrl('https://api.example.com');
+            const agent2 = manager.getAdaptiveAgentForUrl('https://other.example.com');
+
+            // Both should be the global agent
+            expect(agent1).toBe(agent2);
+        });
+
+        it('should handle HTTP/3 detected protocol', () => {
+            protocolCache.set('https://h3.example.com', 'h3');
+            manager = new AgentManager({ perDomainPooling: true }, protocolCache);
+
+            const agent = manager.getAdaptiveAgentForUrl('https://h3.example.com');
+            expect(agent).toBeInstanceOf(Agent);
         });
     });
 });

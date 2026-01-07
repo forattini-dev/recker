@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   normalizeConcurrency,
   calculateOptimalConnections,
-  createBatchConfig
+  createBatchConfig,
+  expandHTTP2Options
 } from '../../src/utils/concurrency.js';
+import { HTTP2_PRESETS } from '../../src/types/index.js';
 
 describe('Concurrency Utilities', () => {
   describe('normalizeConcurrency', () => {
@@ -170,6 +172,99 @@ describe('Concurrency Utilities', () => {
       // With pipelining=4 and max=100, connections should be 100/4 = 25
       expect(result.agent.connections).toBe(25);
       expect(result.agent.pipelining).toBe(4);
+    });
+  });
+
+  describe('HTTP2_PRESETS', () => {
+    it('should define all preset types', () => {
+      expect(HTTP2_PRESETS.balanced).toBeDefined();
+      expect(HTTP2_PRESETS.performance).toBeDefined();
+      expect(HTTP2_PRESETS['low-latency']).toBeDefined();
+      expect(HTTP2_PRESETS['low-memory']).toBeDefined();
+    });
+
+    it('should have valid maxConcurrentStreams values', () => {
+      expect(HTTP2_PRESETS.balanced.maxConcurrentStreams).toBe(100);
+      expect(HTTP2_PRESETS.performance.maxConcurrentStreams).toBe(128);
+      expect(HTTP2_PRESETS['low-latency'].maxConcurrentStreams).toBe(250);
+      expect(HTTP2_PRESETS['low-memory'].maxConcurrentStreams).toBe(50);
+    });
+
+    it('should have enablePush disabled for all presets (API clients)', () => {
+      Object.values(HTTP2_PRESETS).forEach(preset => {
+        expect(preset.enablePush).toBe(0);
+      });
+    });
+
+    it('should have performance preset with larger window size', () => {
+      expect(HTTP2_PRESETS.performance.initialWindowSize).toBe(1_048_576); // 1MB
+      expect(HTTP2_PRESETS.balanced.initialWindowSize).toBe(65_535); // 64KB
+    });
+  });
+
+  describe('expandHTTP2Options', () => {
+    it('should return disabled when http2 is undefined', () => {
+      const result = expandHTTP2Options(undefined);
+      expect(result.enabled).toBe(false);
+    });
+
+    it('should enable with balanced preset when http2 is true', () => {
+      const result = expandHTTP2Options(true);
+      expect(result.enabled).toBe(true);
+      expect(result.preset).toBe('balanced');
+      expect(result.resolvedSettings.maxConcurrentStreams).toBe(100);
+    });
+
+    it('should accept preset string directly', () => {
+      const result = expandHTTP2Options('performance');
+      expect(result.enabled).toBe(true);
+      expect(result.preset).toBe('performance');
+      expect(result.resolvedSettings.maxConcurrentStreams).toBe(128);
+      expect(result.resolvedSettings.initialWindowSize).toBe(1_048_576);
+    });
+
+    it('should accept low-latency preset', () => {
+      const result = expandHTTP2Options('low-latency');
+      expect(result.enabled).toBe(true);
+      expect(result.preset).toBe('low-latency');
+      expect(result.resolvedSettings.maxConcurrentStreams).toBe(250);
+    });
+
+    it('should accept low-memory preset', () => {
+      const result = expandHTTP2Options('low-memory');
+      expect(result.enabled).toBe(true);
+      expect(result.preset).toBe('low-memory');
+      expect(result.resolvedSettings.maxConcurrentStreams).toBe(50);
+    });
+
+    it('should accept object config with preset', () => {
+      const result = expandHTTP2Options({ preset: 'performance' });
+      expect(result.enabled).toBe(true);
+      expect(result.preset).toBe('performance');
+      expect(result.resolvedSettings.maxConcurrentStreams).toBe(128);
+    });
+
+    it('should allow overriding preset values', () => {
+      const result = expandHTTP2Options({
+        preset: 'balanced',
+        maxConcurrentStreams: 200
+      });
+      expect(result.enabled).toBe(true);
+      expect(result.preset).toBe('balanced');
+      // Override should take precedence
+      expect(result.resolvedSettings.maxConcurrentStreams).toBe(200);
+    });
+
+    it('should default to balanced preset when only enabled', () => {
+      const result = expandHTTP2Options({ enabled: true });
+      expect(result.enabled).toBe(true);
+      expect(result.preset).toBe('balanced');
+      expect(result.resolvedSettings.maxConcurrentStreams).toBe(100);
+    });
+
+    it('should handle explicit enabled: false', () => {
+      const result = expandHTTP2Options({ enabled: false });
+      expect(result.enabled).toBe(false);
     });
   });
 });

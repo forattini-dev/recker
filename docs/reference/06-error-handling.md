@@ -42,6 +42,108 @@ Recker provides a comprehensive error handling system that:
 | `TLS_HANDSHAKE` | TLS Handshake Failed | Yes | Try again or check TLS version compatibility |
 | `TLS_PROTOCOL` | TLS Protocol Error | No | Try different TLS version |
 
+### HTTP/2 Errors
+
+HTTP/2 specific errors from GOAWAY frames and stream resets (RFC 7540):
+
+| Type | Code | Retriable | Suggestion |
+|------|------|-----------|------------|
+| `NO_ERROR` | 0x0 | Yes | Graceful shutdown, retry on new connection |
+| `PROTOCOL_ERROR` | 0x1 | No | Check HTTP/2 implementation compliance |
+| `INTERNAL_ERROR` | 0x2 | Yes | Server error, retry after delay |
+| `FLOW_CONTROL_ERROR` | 0x3 | Yes | Flow control violated, retry |
+| `SETTINGS_TIMEOUT` | 0x4 | Yes | Settings ack timeout, retry |
+| `STREAM_CLOSED` | 0x5 | Yes | Stream was closed, retry on new stream |
+| `FRAME_SIZE_ERROR` | 0x6 | No | Invalid frame size, check payload |
+| `REFUSED_STREAM` | 0x7 | Yes | Server refused stream, retry |
+| `CANCEL` | 0x8 | Yes | Stream cancelled, retry if needed |
+| `COMPRESSION_ERROR` | 0x9 | No | HPACK compression error |
+| `CONNECT_ERROR` | 0xa | Yes | Proxy CONNECT failed, retry |
+| `ENHANCE_YOUR_CALM` | 0xb | Yes | Rate limited by server, wait and retry |
+| `INADEQUATE_SECURITY` | 0xc | No | TLS requirements not met |
+| `HTTP_1_1_REQUIRED` | 0xd | No | Server requires HTTP/1.1 |
+
+#### Http2Error Class
+
+```typescript
+import { Http2Error, Http2ErrorCode, parseHttp2Error } from 'recker';
+
+try {
+  await client.get('/api/data');
+} catch (error) {
+  if (error instanceof Http2Error) {
+    console.log('HTTP/2 Error:', error.code);      // e.g., 'GOAWAY' or 'RST_STREAM'
+    console.log('Error Code:', error.errorCode);   // e.g., 0x7 (REFUSED_STREAM)
+    console.log('Code Name:', error.errorCodeName); // e.g., 'REFUSED_STREAM'
+    console.log('Retriable:', error.retriable);    // true/false
+    console.log('Last Stream ID:', error.lastStreamId); // For GOAWAY frames
+  }
+}
+```
+
+#### Parsing HTTP/2 Errors
+
+```typescript
+import { parseHttp2Error } from 'recker';
+
+try {
+  await client.get('/api/data');
+} catch (error) {
+  // parseHttp2Error returns Http2Error if applicable, null otherwise
+  const h2Error = parseHttp2Error(error);
+
+  if (h2Error) {
+    if (h2Error.retriable) {
+      console.log(`HTTP/2 error ${h2Error.errorCodeName}, retrying...`);
+      // Retry logic
+    } else {
+      console.error(`Non-retriable HTTP/2 error: ${h2Error.errorCodeName}`);
+    }
+  }
+}
+```
+
+#### Handling GOAWAY
+
+GOAWAY frames indicate the server is shutting down the connection:
+
+```typescript
+import { Http2Error } from 'recker';
+
+try {
+  await client.get('/api/data');
+} catch (error) {
+  if (error instanceof Http2Error && error.code === 'GOAWAY') {
+    console.log(`Server sent GOAWAY: ${error.errorCodeName}`);
+    console.log(`Last processed stream: ${error.lastStreamId}`);
+
+    // GOAWAY with NO_ERROR is graceful shutdown
+    if (error.errorCode === 0x0) {
+      console.log('Graceful shutdown, safe to retry');
+    }
+  }
+}
+```
+
+#### Handling ENHANCE_YOUR_CALM
+
+This error indicates server-side rate limiting:
+
+```typescript
+import { Http2Error } from 'recker';
+
+try {
+  await client.get('/api/data');
+} catch (error) {
+  if (error instanceof Http2Error && error.errorCodeName === 'ENHANCE_YOUR_CALM') {
+    console.log('Server rate limited the request');
+    // Wait before retrying (similar to HTTP 429)
+    await sleep(5000);
+    // Retry...
+  }
+}
+```
+
 ### Authentication Errors
 
 | Type | Label | Retriable | Suggestion |

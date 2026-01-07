@@ -139,6 +139,191 @@ export class NetworkError extends ReckerError {
   }
 }
 
+/**
+ * HTTP/2 error codes (RFC 7540 Section 7)
+ */
+export type Http2ErrorCode =
+  | 'NO_ERROR'           // Graceful shutdown
+  | 'PROTOCOL_ERROR'     // Protocol error detected
+  | 'INTERNAL_ERROR'     // Implementation fault
+  | 'FLOW_CONTROL_ERROR' // Flow-control limits exceeded
+  | 'SETTINGS_TIMEOUT'   // Settings not acknowledged
+  | 'STREAM_CLOSED'      // Frame received for closed stream
+  | 'FRAME_SIZE_ERROR'   // Frame size incorrect
+  | 'REFUSED_STREAM'     // Stream not processed
+  | 'CANCEL'             // Stream cancelled
+  | 'COMPRESSION_ERROR'  // Compression state not updated
+  | 'CONNECT_ERROR'      // TCP connection error for CONNECT
+  | 'ENHANCE_YOUR_CALM'  // Processing capacity exceeded (rate limit)
+  | 'INADEQUATE_SECURITY'// Negotiated TLS parameters not acceptable
+  | 'HTTP_1_1_REQUIRED'; // Use HTTP/1.1 for the request
+
+/**
+ * HTTP/2 specific error with protocol-level details
+ */
+export class Http2Error extends ReckerError {
+  /** HTTP/2 error code */
+  errorCode: Http2ErrorCode | string;
+
+  /** Whether this is a session-level or stream-level error */
+  level: 'session' | 'stream';
+
+  /** Stream ID if stream-level error */
+  streamId?: number;
+
+  /** Whether fallback to HTTP/1.1 is recommended */
+  suggestFallback: boolean;
+
+  constructor(
+    message: string,
+    errorCode: Http2ErrorCode | string,
+    options: {
+      level?: 'session' | 'stream';
+      streamId?: number;
+      request?: ReckerRequest;
+    } = {}
+  ) {
+    // Determine if retriable based on error code
+    const retriable = isRetriableHttp2Error(errorCode);
+    const suggestFallback = shouldFallbackToHttp1(errorCode);
+
+    const suggestions = getHttp2ErrorSuggestions(errorCode, suggestFallback);
+
+    super(message, options.request, undefined, suggestions, retriable);
+    this.name = 'Http2Error';
+    this.errorCode = errorCode;
+    this.level = options.level ?? 'stream';
+    this.streamId = options.streamId;
+    this.suggestFallback = suggestFallback;
+  }
+}
+
+/**
+ * Check if an HTTP/2 error is retriable
+ */
+function isRetriableHttp2Error(errorCode: string): boolean {
+  const retriableCodes = [
+    'NO_ERROR',           // Graceful shutdown, retry is safe
+    'INTERNAL_ERROR',     // Server-side issue, might recover
+    'REFUSED_STREAM',     // Server busy, retry with backoff
+    'ENHANCE_YOUR_CALM',  // Rate limited, retry with backoff
+    'CANCEL',             // Cancelled, might succeed on retry
+  ];
+  return retriableCodes.includes(errorCode);
+}
+
+/**
+ * Check if we should suggest fallback to HTTP/1.1
+ */
+function shouldFallbackToHttp1(errorCode: string): boolean {
+  const fallbackCodes = [
+    'HTTP_1_1_REQUIRED',      // Explicit: server wants HTTP/1.1
+    'INADEQUATE_SECURITY',    // TLS issues, might work with HTTP/1.1
+    'PROTOCOL_ERROR',         // Protocol issues, fallback might help
+    'COMPRESSION_ERROR',      // HPACK issues
+  ];
+  return fallbackCodes.includes(errorCode);
+}
+
+/**
+ * Get suggestions for HTTP/2 errors
+ */
+function getHttp2ErrorSuggestions(errorCode: string, suggestFallback: boolean): string[] {
+  const suggestions: string[] = [];
+
+  switch (errorCode) {
+    case 'ENHANCE_YOUR_CALM':
+      suggestions.push('Server is rate limiting. Implement exponential backoff.');
+      suggestions.push('Reduce concurrent requests to this origin.');
+      break;
+    case 'REFUSED_STREAM':
+      suggestions.push('Server is overloaded. Retry with backoff.');
+      suggestions.push('Consider reducing max concurrent streams.');
+      break;
+    case 'FLOW_CONTROL_ERROR':
+      suggestions.push('Reduce initial window size in HTTP/2 settings.');
+      suggestions.push('Server may not handle large uploads well over HTTP/2.');
+      break;
+    case 'HTTP_1_1_REQUIRED':
+      suggestions.push('Server requires HTTP/1.1 for this request.');
+      suggestions.push('Disable HTTP/2 for this origin.');
+      break;
+    case 'INADEQUATE_SECURITY':
+      suggestions.push('Upgrade TLS configuration or use HTTP/1.1.');
+      break;
+    case 'GOAWAY':
+      suggestions.push('Server is shutting down connection. Retry is safe.');
+      break;
+    default:
+      suggestions.push('Check server logs for details.');
+  }
+
+  if (suggestFallback) {
+    suggestions.push('Consider disabling HTTP/2 for this origin with { http2: false }.');
+  }
+
+  return suggestions;
+}
+
+/**
+ * Parse HTTP/2 error from undici/Node.js error
+ */
+export function parseHttp2Error(error: Error): Http2Error | null {
+  const message = error.message || '';
+  const code = (error as any).code || '';
+
+  // Check for GOAWAY frame
+  if (message.includes('GOAWAY') || code.includes('GOAWAY')) {
+    return new Http2Error(
+      'Server sent GOAWAY frame, closing connection',
+      'NO_ERROR',
+      { level: 'session' }
+    );
+  }
+
+  // Check for RST_STREAM
+  if (message.includes('RST_STREAM') || code.includes('RST_STREAM')) {
+    // Try to extract error code from message
+    const match = message.match(/RST_STREAM.*code[:\s]+(\w+)/i);
+    const errorCode = match?.[1] || 'CANCEL';
+    return new Http2Error(
+      `Stream was reset: ${errorCode}`,
+      errorCode,
+      { level: 'stream' }
+    );
+  }
+
+  // Check for specific HTTP/2 error codes
+  const h2ErrorCodes: Http2ErrorCode[] = [
+    'PROTOCOL_ERROR', 'INTERNAL_ERROR', 'FLOW_CONTROL_ERROR',
+    'SETTINGS_TIMEOUT', 'STREAM_CLOSED', 'FRAME_SIZE_ERROR',
+    'REFUSED_STREAM', 'CANCEL', 'COMPRESSION_ERROR', 'CONNECT_ERROR',
+    'ENHANCE_YOUR_CALM', 'INADEQUATE_SECURITY', 'HTTP_1_1_REQUIRED'
+  ];
+
+  for (const errorCode of h2ErrorCodes) {
+    if (message.includes(errorCode) || code.includes(errorCode)) {
+      return new Http2Error(
+        `HTTP/2 error: ${errorCode}`,
+        errorCode,
+        { level: message.includes('session') ? 'session' : 'stream' }
+      );
+    }
+  }
+
+  // Check for NGHTTP2 errors (Node.js http2 module)
+  if (code.startsWith('ERR_HTTP2_')) {
+    const errorCode = code.replace('ERR_HTTP2_', '');
+    return new Http2Error(
+      message || `HTTP/2 error: ${errorCode}`,
+      errorCode,
+      { level: 'session' }
+    );
+  }
+
+  return null;
+}
+
 export class MaxSizeExceededError extends ReckerError {
   maxSize: number;
   actualSize?: number;

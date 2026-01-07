@@ -429,6 +429,207 @@ function serverMetricsPlugin(metrics: MetricsClient): Plugin {
 }
 ```
 
+## HTTP/2 Metrics Hooks
+
+Recker provides dedicated hooks for deep HTTP/2 observability at the session, stream, and flow control levels.
+
+### Hook Types
+
+```typescript
+interface Hooks {
+  // ... other hooks
+  onHttp2Session?: Array<(info: Http2SessionInfo) => void>;
+  onHttp2Stream?: Array<(info: Http2StreamInfo) => void>;
+  onHttp2FlowControl?: Array<(info: Http2FlowControlInfo) => void>;
+}
+```
+
+### Session Events
+
+Track HTTP/2 session lifecycle:
+
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  hooks: {
+    onHttp2Session: [(info) => {
+      switch (info.event) {
+        case 'connect':
+          console.log(`H2 session connected to ${info.origin}`);
+          console.log(`Max streams: ${info.maxConcurrentStreams}`);
+          break;
+        case 'settings':
+          console.log('Remote settings:', info.remoteSettings);
+          console.log('Local settings:', info.localSettings);
+          break;
+        case 'goaway':
+          console.log(`GOAWAY received: code=${info.goawayCode}, lastStream=${info.lastStreamId}`);
+          break;
+        case 'close':
+          console.log(`Session closed after ${info.duration}ms`);
+          break;
+        case 'error':
+          console.error(`Session error: ${info.error}`);
+          break;
+      }
+    }]
+  }
+});
+```
+
+### Stream Events
+
+Monitor individual HTTP/2 streams:
+
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  hooks: {
+    onHttp2Stream: [(info) => {
+      switch (info.event) {
+        case 'open':
+          console.log(`Stream ${info.streamId} opened`);
+          break;
+        case 'data':
+          console.log(`Stream ${info.streamId}: sent=${info.bytesSent}, received=${info.bytesReceived}`);
+          break;
+        case 'close':
+          console.log(`Stream ${info.streamId} closed after ${info.duration}ms`);
+          break;
+        case 'error':
+          console.error(`Stream ${info.streamId} error: ${info.errorCode}`);
+          break;
+      }
+    }]
+  }
+});
+```
+
+### Flow Control Events
+
+Track HTTP/2 flow control for performance tuning:
+
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  hooks: {
+    onHttp2FlowControl: [(info) => {
+      switch (info.event) {
+        case 'window-update':
+          console.log(`Window update: stream=${info.streamId}, size=${info.windowSize}, delta=${info.delta}`);
+          break;
+        case 'blocked':
+          console.warn(`Flow control blocked on stream ${info.streamId}`);
+          break;
+        case 'unblocked':
+          console.log(`Stream ${info.streamId} unblocked after ${info.blockedDuration}ms`);
+          break;
+      }
+    }]
+  }
+});
+```
+
+### Http2MetricsCollector
+
+For comprehensive HTTP/2 metrics aggregation, use the built-in collector:
+
+```typescript
+import {
+  Http2MetricsCollector,
+  getGlobalHttp2Metrics,
+  createHttp2MetricsHooks
+} from 'recker';
+
+// Create collector and hooks
+const collector = new Http2MetricsCollector();
+const hooks = createHttp2MetricsHooks(collector);
+
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  hooks
+});
+
+// Make requests...
+await client.get('/api/data');
+await client.get('/api/users');
+
+// Get per-origin metrics
+const metrics = collector.getOriginMetrics('https://api.example.com');
+console.log(metrics);
+// {
+//   sessions: { total: 1, active: 1, failed: 0, avgDuration: 0 },
+//   streams: { total: 2, active: 0, failed: 0, avgDuration: 45 },
+//   flowControl: { windowUpdates: 3, blockedCount: 0, totalBlockedTime: 0 },
+//   settings: { local: {...}, remote: {...} },
+//   lastActivity: 1699876543000
+// }
+
+// Get global summary
+const summary = collector.getSummary();
+console.log(summary);
+// {
+//   totals: { sessions: 5, activeSessions: 2, streams: 100, activeStreams: 3, errors: 0 },
+//   origins: Map(3) {...}
+// }
+
+// Get top origins by activity
+const top = collector.getTopOrigins(5);
+top.forEach(m => console.log(`${m.origin}: ${m.streams.total} streams`));
+
+// Cleanup stale origins (older than 1 hour)
+collector.pruneStale(60 * 60 * 1000);
+```
+
+### Global Metrics Instance
+
+Use the global singleton for application-wide metrics:
+
+```typescript
+import { getGlobalHttp2Metrics, resetGlobalHttp2Metrics, createHttp2MetricsHooks } from 'recker';
+
+// Use global collector
+const hooks = createHttp2MetricsHooks(); // Uses global by default
+
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  hooks
+});
+
+// Access global metrics anywhere
+const global = getGlobalHttp2Metrics();
+console.log(global.getSummary());
+
+// Reset metrics (e.g., for testing)
+resetGlobalHttp2Metrics();
+```
+
+### Metrics Dashboard Example
+
+```typescript
+function logHttp2Dashboard() {
+  const metrics = getGlobalHttp2Metrics();
+  const summary = metrics.getSummary();
+
+  console.log('\n=== HTTP/2 Dashboard ===');
+  console.log(`Sessions: ${summary.totals.activeSessions}/${summary.totals.sessions} active`);
+  console.log(`Streams: ${summary.totals.activeStreams}/${summary.totals.streams} active`);
+  console.log(`Errors: ${summary.totals.errors}`);
+  console.log(`Origins: ${summary.origins.size}`);
+
+  const top = metrics.getTopOrigins(3);
+  console.log('\nTop Origins:');
+  top.forEach((m, i) => {
+    console.log(`  ${i + 1}. ${m.origin}`);
+    console.log(`     Streams: ${m.streams.total} (${m.streams.avgDuration}ms avg)`);
+    console.log(`     Flow blocks: ${m.flowControl.blockedCount}`);
+  });
+}
+
+// Log every 30 seconds
+setInterval(logHttp2Dashboard, 30000);
+```
+
 ## HTTP/2 Insights
 
 When ALPN negotiates `h2`, Recker records session-level details:

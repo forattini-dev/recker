@@ -9,8 +9,15 @@ import type {
   ConcurrencyConfig,
   AgentOptions,
   HTTP2Options,
+  HTTP2Preset,
+  HTTP2Settings,
   ClientOptions
 } from '../types/index.js';
+import { HTTP2_PRESETS } from '../types/index.js';
+
+// Re-export HTTP2Preset type and HTTP2_PRESETS constant for external use
+export type { HTTP2Preset } from '../types/index.js';
+export { HTTP2_PRESETS };
 
 /**
  * Normalized concurrency configuration with all defaults applied
@@ -134,14 +141,75 @@ export function normalizeConcurrency(
 }
 
 /**
- * Parse HTTP/2 options from boolean or object format
+ * Parse HTTP/2 options from various input formats
+ *
+ * Supports:
+ * - boolean: true enables with 'balanced' preset
+ * - string: preset name ('performance', 'low-latency', etc.)
+ * - object: full config with optional preset + overrides
+ *
+ * @example
+ * ```typescript
+ * parseHTTP2Options(true)              // { enabled: true, preset: 'balanced' }
+ * parseHTTP2Options('performance')     // { enabled: true, preset: 'performance' }
+ * parseHTTP2Options({ preset: 'performance', maxConcurrentStreams: 200 })
+ * ```
  */
-function parseHTTP2Options(http2?: boolean | HTTP2Options): Partial<HTTP2Options> {
+function parseHTTP2Options(http2?: boolean | HTTP2Preset | HTTP2Options): Partial<HTTP2Options> {
   if (!http2) return {};
+
+  // Boolean: enable with balanced preset
   if (typeof http2 === 'boolean') {
-    return { enabled: http2 };
+    return { enabled: http2, preset: 'balanced' };
   }
-  return http2;
+
+  // String: preset name
+  if (typeof http2 === 'string') {
+    return { enabled: true, preset: http2 as HTTP2Preset };
+  }
+
+  // Object: full config (may include preset)
+  return {
+    ...http2,
+    enabled: http2.enabled ?? true,
+    preset: http2.preset ?? 'balanced'
+  };
+}
+
+/**
+ * Expand HTTP/2 options with preset values
+ * Preset values are used as defaults, explicit options override them
+ */
+export function expandHTTP2Options(http2?: boolean | HTTP2Preset | HTTP2Options): HTTP2Options & { resolvedSettings: HTTP2Settings } {
+  const parsed = parseHTTP2Options(http2);
+
+  if (!parsed.enabled) {
+    return {
+      enabled: false,
+      resolvedSettings: HTTP2_PRESETS.balanced // Default settings even when disabled
+    };
+  }
+
+  // Get preset settings (default to balanced)
+  const presetName = parsed.preset ?? 'balanced';
+  const presetSettings = HTTP2_PRESETS[presetName] ?? HTTP2_PRESETS.balanced;
+
+  // Merge: preset defaults < explicit settings < explicit maxConcurrentStreams
+  // Note: maxConcurrentStreams is only at top level (not in settings - it's Omit'd)
+  const resolvedSettings: HTTP2Settings = {
+    ...presetSettings,
+    ...parsed.settings,
+    maxConcurrentStreams: parsed.maxConcurrentStreams ?? presetSettings.maxConcurrentStreams,
+  };
+
+  return {
+    enabled: true,
+    preset: presetName,
+    maxConcurrentStreams: resolvedSettings.maxConcurrentStreams,
+    pipelining: parsed.pipelining,
+    settings: resolvedSettings,
+    resolvedSettings
+  };
 }
 
 /**

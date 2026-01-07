@@ -61,6 +61,90 @@ const client = createClient({
 });
 ```
 
+### HTTP/2 Presets (Recommended)
+
+Recker provides DX-friendly presets for common HTTP/2 scenarios:
+
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  http2: 'balanced' // Preset name
+});
+```
+
+| Preset | Best For | Max Streams | Window Size |
+|--------|----------|-------------|-------------|
+| `balanced` | General use, APIs | 100 | 64KB |
+| `performance` | High throughput | 250 | 1MB |
+| `low-latency` | Real-time, gaming | 1000 | 64KB |
+| `low-memory` | Lambda, Edge | 50 | 32KB |
+
+**Preset Details:**
+
+```typescript
+// 'balanced' (default) - Good for most APIs
+http2: 'balanced'
+// maxConcurrentStreams: 100, initialWindowSize: 65535
+
+// 'performance' - High throughput batch operations
+http2: 'performance'
+// maxConcurrentStreams: 250, initialWindowSize: 1MB, enablePush: 1
+
+// 'low-latency' - Real-time apps, gaming servers
+http2: 'low-latency'
+// maxConcurrentStreams: 1000, initialWindowSize: 64KB
+
+// 'low-memory' - Serverless, edge functions
+http2: 'low-memory'
+// maxConcurrentStreams: 50, initialWindowSize: 32KB
+```
+
+**Combine Preset with Custom Settings:**
+
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  http2: {
+    preset: 'performance',
+    maxConcurrentStreams: 300, // Override preset value
+    settings: {
+      enablePush: 0 // Disable server push
+    }
+  }
+});
+```
+
+### Adaptive Protocol Pooling
+
+Recker automatically optimizes connection pools based on detected protocol:
+
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  http2: true,
+  concurrency: {
+    agent: { perDomainPooling: true }
+  }
+});
+
+// First request: ALPN negotiation detects h2
+await client.get('/api/data');
+
+// Subsequent requests: Uses optimized HTTP/2 pool
+// - Fewer connections (HTTP/2 multiplexes)
+// - allowH2 enabled
+// - Appropriate window sizes
+```
+
+The protocol cache tracks detected protocols per origin:
+
+```typescript
+import { getGlobalProtocolCache } from 'recker';
+
+const cache = getGlobalProtocolCache();
+console.log(cache.get('https://api.example.com')); // 'h2' | 'http/1.1' | undefined
+```
+
 ### Per-Request Override
 
 ```typescript

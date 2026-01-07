@@ -6,11 +6,13 @@
  * - Global shared agent for same-domain requests
  * - Per-domain agents for multi-domain batches
  * - Auto-configuration based on concurrency hints
+ * - Adaptive pooling based on detected protocol (HTTP/2 vs HTTP/1.1)
  * - Connection pool lifecycle management
  */
 
 import { Agent } from 'undici';
 import type { AgentOptions } from '../types/index.js';
+import { ProtocolCache, DetectedProtocol, extractOrigin } from './protocol-cache.js';
 
 export interface AgentStats {
   /** Number of active agents */
@@ -31,10 +33,12 @@ export interface AgentStats {
 export class AgentManager {
   private globalAgent?: Agent;
   private domainAgents: Map<string, Agent>;
-  private options: Required<Omit<AgentOptions, 'localAddress' | 'clientTtl' | 'maxHeaderSize'>> & Pick<AgentOptions, 'localAddress' | 'clientTtl' | 'maxHeaderSize'>;
+  private options: Required<Omit<AgentOptions, 'localAddress' | 'clientTtl' | 'maxHeaderSize' | 'allowH2' | 'maxConcurrentStreams'>> & Pick<AgentOptions, 'localAddress' | 'clientTtl' | 'maxHeaderSize' | 'allowH2' | 'maxConcurrentStreams'>;
+  private protocolCache?: ProtocolCache;
 
-  constructor(options: AgentOptions = {}) {
+  constructor(options: AgentOptions = {}, protocolCache?: ProtocolCache) {
     this.domainAgents = new Map();
+    this.protocolCache = protocolCache;
     this.options = {
       connections: options.connections ?? 10,
       pipelining: options.pipelining ?? 1,
@@ -49,6 +53,9 @@ export class AgentManager {
       maxCachedSessions: options.maxCachedSessions ?? 100,
       maxHeaderSize: options.maxHeaderSize,
       clientTtl: options.clientTtl ?? null,
+      // HTTP/2 support
+      allowH2: options.allowH2,
+      maxConcurrentStreams: options.maxConcurrentStreams,
     };
   }
 
@@ -94,6 +101,89 @@ export class AgentManager {
       // Fallback to global agent if URL parsing fails
       return this.getGlobalAgent();
     }
+  }
+
+  /**
+   * Get an agent optimized for the detected protocol of an origin.
+   *
+   * Uses protocol cache to determine if origin supports HTTP/2:
+   * - HTTP/2: Fewer connections, allowH2 enabled
+   * - HTTP/1.1: More connections, pipelining enabled
+   * - Unknown: Uses default settings (optimistic HTTP/2)
+   *
+   * @param url - Full URL or origin
+   * @param options - Optional overrides
+   */
+  getAdaptiveAgentForUrl(url: string, options?: Partial<AgentOptions>): Agent {
+    const origin = extractOrigin(url);
+    const domain = new URL(origin).hostname;
+
+    // Check if we already have an agent for this domain
+    if (this.options.perDomainPooling) {
+      const existing = this.domainAgents.get(domain);
+      if (existing) return existing;
+    }
+
+    // Get protocol hint from cache
+    const detectedProtocol = this.protocolCache?.get(origin);
+    const adaptiveOptions = this.getAdaptiveOptions(detectedProtocol, options);
+
+    if (!this.options.perDomainPooling) {
+      // Return global agent (but we can't change its settings)
+      return this.getGlobalAgent();
+    }
+
+    // Create domain-specific agent with adaptive settings
+    const agent = this.createAgent(adaptiveOptions);
+    this.domainAgents.set(domain, agent);
+    return agent;
+  }
+
+  /**
+   * Get optimal agent options based on detected protocol
+   */
+  private getAdaptiveOptions(
+    protocol: DetectedProtocol | undefined,
+    overrides?: Partial<AgentOptions>
+  ): Partial<AgentOptions> {
+    const base = { ...this.options };
+
+    if (protocol === 'h2' || protocol === 'h3') {
+      // HTTP/2 or HTTP/3: Few connections, many streams
+      return {
+        ...base,
+        connections: Math.min(base.connections, 2), // HTTP/2 multiplexes
+        pipelining: 1, // Not needed for HTTP/2
+        allowH2: true,
+        maxConcurrentStreams: base.maxConcurrentStreams ?? 100,
+        ...overrides,
+      };
+    }
+
+    if (protocol === 'http/1.1') {
+      // HTTP/1.1: More connections, enable pipelining
+      return {
+        ...base,
+        connections: Math.max(base.connections, 6), // Need more for HTTP/1.1
+        pipelining: 2, // Safe pipelining
+        allowH2: false, // Don't attempt HTTP/2
+        ...overrides,
+      };
+    }
+
+    // Unknown: Use defaults (optimistic HTTP/2)
+    return {
+      ...base,
+      allowH2: base.allowH2 ?? true, // Optimistic
+      ...overrides,
+    };
+  }
+
+  /**
+   * Set the protocol cache for adaptive pooling
+   */
+  setProtocolCache(cache: ProtocolCache): void {
+    this.protocolCache = cache;
   }
 
   /**
@@ -185,6 +275,9 @@ export class AgentManager {
       keepAliveTimeoutThreshold: options.keepAliveTimeoutThreshold,
       connectTimeout: options.connectTimeout,
       socketPath: undefined,
+      // HTTP/2 support - enables ALPN negotiation
+      allowH2: options.allowH2,
+      maxConcurrentStreams: options.maxConcurrentStreams,
       connect: {
         timeout: options.connectTimeout,
         keepAlive: options.keepAlive,

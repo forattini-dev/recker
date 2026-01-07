@@ -202,7 +202,7 @@
     "prepublishOnly": "pnpm build && pnpm build:embeddings && mkdir -p dist/mcp/data && cp src/mcp/data/embeddings.json dist/mcp/data/embeddings.json && node scripts/inject-version.js",
     "test": "NODE_OPTIONS='--max-old-space-size=512' vitest run",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=512' vitest run --coverage",
-    "test:light": "NODE_OPTIONS='--max-old-space-size=256' vitest run --poolOptions.forks.maxForks=1",
+    "test:light": "NODE_OPTIONS='--max-old-space-size=256' vitest run --maxWorkers=1 --fileParallelism=false",
     "test:browser": "vitest run --config vitest.config.browser.ts",
     "test:browser:coverage": "vitest run --config vitest.config.browser.ts --coverage",
     "bench": "tsx benchmark/index.ts",

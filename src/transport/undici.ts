@@ -1,7 +1,7 @@
 import { request as undiciRequest, errors as undiciErrors, ProxyAgent, Agent, Client } from 'undici';
 import { ConnectionInfo, ReckerRequest, ReckerResponse, Timings, Transport, ProxyOptions, HTTP2Options, DNSOptions, AgentOptions, TLSOptions, ProgressCallback, RedirectInfo, TimeoutOptions } from '../types/index.js';
 import { HttpResponse } from '../core/response.js';
-import { NetworkError, TimeoutError, MaxSizeExceededError } from '../core/errors.js';
+import { NetworkError, TimeoutError, MaxSizeExceededError, parseHttp2Error } from '../core/errors.js';
 import { performance } from 'perf_hooks';
 import { AsyncLocalStorage } from 'async_hooks';
 import { channel } from 'node:diagnostics_channel';
@@ -9,6 +9,7 @@ import { createLookupFunction } from '../utils/dns.js';
 import { AgentManager } from '../utils/agent-manager.js';
 import { createProgressStream } from '../utils/progress.js';
 import { nodeToWebStream } from '../utils/streaming.js';
+import { ProtocolCache, getGlobalProtocolCache, normalizeProtocol } from '../utils/protocol-cache.js';
 
 // Define the shape of undici's internal diagnostic events
 interface UndiciRequestStartEvent {
@@ -70,6 +71,10 @@ interface RequestContext {
       onTlsHandshake?: (info: any) => void;
       onRequestSent?: () => void;
       onResponseStart?: (info: any) => void;
+      // HTTP/2 observability hooks (pre-bound closures)
+      onHttp2Session?: (info: any) => void;
+      onHttp2Stream?: (info: any) => void;
+      onHttp2FlowControl?: (info: any) => void;
   };
 }
 
@@ -199,6 +204,31 @@ undiciConnectChannel.subscribe((message: unknown) => {
         localSettings: localSettings ? { ...localSettings } : undefined,
         remoteSettings: remoteSettings ? { ...remoteSettings } : undefined
       };
+
+      // Dispatch HTTP/2 session hook (pre-bound closure, no need to pass request)
+      if (store.hooks?.onHttp2Session) {
+        const origin = (socket as any).origin || payload.connectParams?.hostname || '';
+        store.hooks.onHttp2Session({
+          origin,
+          event: 'connect',
+          maxConcurrentStreams: remoteSettings?.maxConcurrentStreams,
+          activeStreams: http2State?.streamCount,
+          localSettings: localSettings ? { ...localSettings } : undefined,
+          remoteSettings: remoteSettings ? { ...remoteSettings } : undefined,
+        });
+      }
+
+      // Dispatch HTTP/2 stream hook if we have stream info (pre-bound closure)
+      if (store.hooks?.onHttp2Stream && (socket as any).streamId) {
+        const origin = (socket as any).origin || payload.connectParams?.hostname || '';
+        store.hooks.onHttp2Stream({
+          streamId: (socket as any).streamId,
+          origin,
+          event: 'open',
+          state: 'open',
+          pushed: Boolean((socket as any).serverPush),
+        });
+      }
     }
 
     // HTTP/3 / QUIC metrics (when protocol is h3)
@@ -247,6 +277,23 @@ interface UndiciTransportOptions {
    * @default true
    */
   observability?: boolean;
+  /**
+   * HTTP 100-Continue support for large body uploads (HTTP/2 only)
+   * - true: Always send Expect: 100-continue
+   * - number: Only for bodies larger than threshold (bytes)
+   * @default false
+   */
+  expectContinue?: boolean | number;
+
+  /**
+   * Protocol negotiation cache for tracking detected protocols per origin.
+   * Enables adaptive pooling and avoids repeated ALPN negotiation.
+   * - true: Use global shared cache
+   * - ProtocolCache instance: Use custom cache
+   * - false/undefined: Disable caching
+   * @default true
+   */
+  protocolCache?: boolean | ProtocolCache;
 }
 
 /**
@@ -312,12 +359,21 @@ export class UndiciTransport implements Transport {
   private tlsOptions?: TLSOptions;
   private socketClient?: Client;  // Unix domain socket client
   private observability: boolean;  // Enable/disable timing capture
+  private protocolCache?: ProtocolCache;  // Protocol negotiation tracking
 
   constructor(baseUrl?: string, options: UndiciTransportOptions = {}) {
     this.baseUrl = baseUrl || '';
     this.options = options;
     this.tlsOptions = options.tls;
     this.observability = options.observability !== false;  // Default: true
+
+    // Initialize protocol cache
+    if (options.protocolCache === true) {
+      this.protocolCache = getGlobalProtocolCache();
+    } else if (options.protocolCache instanceof ProtocolCache) {
+      this.protocolCache = options.protocolCache;
+    }
+    // false or undefined = no caching
 
     if (options.proxy) {
       const proxyConfig: ProxyOptions = typeof options.proxy === 'string'
@@ -410,6 +466,49 @@ export class UndiciTransport implements Transport {
         socketPath: options.socketPath
       });
     }
+  }
+
+  /**
+   * Update protocol cache after successful response
+   */
+  private updateProtocolCache(url: string, connection?: ConnectionInfo): void {
+    if (!this.protocolCache || !connection?.protocol) return;
+
+    const protocol = normalizeProtocol(connection.protocol);
+    if (protocol) {
+      this.protocolCache.set(url, protocol);
+    }
+  }
+
+  /**
+   * Record protocol cache failure (for adaptive fallback)
+   */
+  private recordProtocolFailure(url: string, error: Error): void {
+    if (!this.protocolCache) return;
+
+    // Check if this is an HTTP/2 specific error
+    const isHttp2Error = error.message?.includes('HTTP/2') ||
+                        error.message?.includes('h2') ||
+                        error.message?.includes('GOAWAY') ||
+                        error.message?.includes('stream');
+
+    this.protocolCache.recordFailure(url, isHttp2Error);
+  }
+
+  /**
+   * Check if HTTP/2 should be attempted for this origin
+   */
+  shouldUseHttp2(url: string): boolean {
+    if (!this.protocolCache) return true; // No cache = optimistic
+
+    return this.protocolCache.shouldTryHttp2(url);
+  }
+
+  /**
+   * Get the protocol cache instance (for external access/debugging)
+   */
+  getProtocolCache(): ProtocolCache | undefined {
+    return this.protocolCache;
   }
 
   async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
@@ -593,6 +692,20 @@ export class UndiciTransport implements Transport {
             }
           }
 
+          // HTTP 100-Continue support (HTTP/2 only - undici limitation)
+          // Only applies when HTTP/2 is enabled and body exists
+          if (http2Enabled && this.options.expectContinue !== undefined && finalBody) {
+            const expectContinue = this.options.expectContinue;
+            if (expectContinue === true) {
+              // Always enable 100-Continue
+              undiciOptions.expectContinue = true;
+            } else if (typeof expectContinue === 'number' && uploadTotal !== undefined) {
+              // Enable only if body exceeds threshold
+              if (uploadTotal > expectContinue) {
+                undiciOptions.expectContinue = true;
+              }
+            }
+          }
 
           // For Unix sockets, use the Client's request method directly with just the path
           // undiciRequest with a dispatcher doesn't work correctly for Unix sockets
@@ -653,6 +766,9 @@ export class UndiciTransport implements Transport {
                     ? wrapDownloadResponse(undiciResponse, req.onDownloadProgress)
                     : undiciResponse;
 
+                  // Update protocol cache
+                  this.updateProtocolCache(currentUrl, requestContext.connection);
+
                   return new HttpResponse(finalResponse, {
                     timings: requestContext.timings,
                     connection: requestContext.connection
@@ -705,12 +821,17 @@ export class UndiciTransport implements Transport {
               requestContext.timings.total = totalTime;
           }
 
+          // Update protocol cache with detected protocol
+          this.updateProtocolCache(currentUrl, requestContext.connection);
+
           return new HttpResponse(finalResponse, {
             timings: requestContext.timings,
             connection: requestContext.connection
           });
         }
       } catch (error: any) {
+        // Record failure in protocol cache
+        this.recordProtocolFailure(currentUrl, error);
         // Map Undici timeout errors to our phase-specific TimeoutError
         if (error instanceof undiciErrors.ConnectTimeoutError || error.code === 'UND_ERR_CONNECT_TIMEOUT') {
           throw new TimeoutError(req, {
@@ -749,6 +870,13 @@ export class UndiciTransport implements Transport {
             undefined,
             req
           );
+        }
+
+        // Check for HTTP/2 specific errors (GOAWAY, RST_STREAM, etc.)
+        const http2Error = parseHttp2Error(error);
+        if (http2Error) {
+          http2Error.request = req;
+          throw http2Error;
         }
 
         throw new NetworkError(error.message, code, req);
@@ -886,6 +1014,18 @@ export class UndiciTransport implements Transport {
           }
         }
 
+        // HTTP 100-Continue support (HTTP/2 only - undici limitation)
+        if (http2Enabled && this.options.expectContinue !== undefined && finalBody) {
+          const expectContinue = this.options.expectContinue;
+          if (expectContinue === true) {
+            undiciOptions.expectContinue = true;
+          } else if (typeof expectContinue === 'number' && uploadTotal !== undefined) {
+            if (uploadTotal > expectContinue) {
+              undiciOptions.expectContinue = true;
+            }
+          }
+        }
+
         let undiciResponse;
         if (this.socketClient) {
           const urlPath = new URL(currentUrl).pathname + new URL(currentUrl).search;
@@ -1016,6 +1156,13 @@ export class UndiciTransport implements Transport {
           undefined,
           req
         );
+      }
+
+      // Check for HTTP/2 specific errors (GOAWAY, RST_STREAM, etc.)
+      const http2Error = parseHttp2Error(error);
+      if (http2Error) {
+        http2Error.request = req;
+        throw http2Error;
       }
 
       throw new NetworkError(error.message, code, req);

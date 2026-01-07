@@ -10,7 +10,8 @@ import { HttpError, MaxSizeExceededError, ConfigurationError, ValidationError, T
 import { processBody, createFormData, createMultipart, isPlainObject } from '../utils/body.js';
 import { AgentManager } from '../utils/agent-manager.js';
 import { RequestPool } from '../utils/request-pool.js';
-import { normalizeConcurrency, createBatchConfig, type NormalizedConcurrencyConfig } from '../utils/concurrency.js';
+import { normalizeConcurrency, createBatchConfig, expandHTTP2Options, type NormalizedConcurrencyConfig } from '../utils/concurrency.js';
+import { ProtocolCache, getGlobalProtocolCache } from '../utils/protocol-cache.js';
 import { getDefaultUserAgent } from '../utils/user-agent.js';
 import { getVersion, getVersionSync, getVersionInfo, type VersionInfo } from '../version.js';
 
@@ -97,6 +98,7 @@ export class Client {
   private cookieJar?: CookieJar;
   private cookieIgnoreInvalid: boolean = false;
   private defaultTimeout?: number | import('../types/index.js').TimeoutOptions;
+  private http2Enabled: boolean = false;
 
   // AI integration
   private _aiConfig?: PresetAIConfig;
@@ -142,6 +144,10 @@ export class Client {
       http2: options.http2
     });
 
+    // Expand HTTP/2 options with preset support
+    const expandedHttp2 = expandHTTP2Options(options.http2);
+    this.http2Enabled = expandedHttp2.enabled ?? false;
+
     if (options.transport) {
       this.transport = options.transport;
     } else if (options.useCurl) {
@@ -149,28 +155,30 @@ export class Client {
       this.transport = new CurlTransport();
     } else {
       if (this.debugEnabled) console.log('[DEBUG] Using Undici Transport');
-      // Parse HTTP/2 options
-      let http2Options: HTTP2Options | undefined;
-      if (options.http2) {
-        if (typeof options.http2 === 'boolean') {
-          http2Options = { enabled: options.http2 };
-        } else {
-          http2Options = options.http2;
-        }
-      }
 
-      // Create AgentManager with auto-configured options
-      this.agentManager = new AgentManager(this.concurrencyConfig.agent);
+      // Use global protocol cache for adaptive pooling (enabled by default)
+      const protocolCache = getGlobalProtocolCache();
+
+      // Create AgentManager with auto-configured options + HTTP/2 settings + protocol cache
+      const agentOptions = {
+        ...this.concurrencyConfig.agent,
+        // Wire HTTP/2 settings from preset/config to agent level
+        allowH2: expandedHttp2.enabled,
+        maxConcurrentStreams: expandedHttp2.resolvedSettings?.maxConcurrentStreams,
+      };
+      this.agentManager = new AgentManager(agentOptions, protocolCache);
 
       // UndiciTransport accepts optional baseUrl - when empty, requests must use absolute URLs
       this.transport = new UndiciTransport(this.baseUrl || undefined, {
         proxy: options.proxy,
-        http2: http2Options,
+        http2: expandedHttp2.enabled ? expandedHttp2 : undefined,
         dns: options.dns,
         agent: this.agentManager,
         socketPath: options.socketPath,
         tls: options.tls,
-        observability: options.observability
+        observability: options.observability,
+        expectContinue: options.expectContinue,
+        protocolCache: true, // Use global cache for protocol tracking
       });
     }
 
@@ -1277,6 +1285,171 @@ export class Client {
    */
   hls(manifestUrl: string, options: HlsOptions = {}): HlsPromise {
     return new HlsPromise(this, manifestUrl, options);
+  }
+
+  // ============================================
+  // Smithy HttpHandler Interface (AWS SDK v3)
+  // ============================================
+
+  /**
+   * Protocol metadata for Smithy HttpHandler interface.
+   * Used by AWS SDK v3 to identify the handler protocol.
+   */
+  get metadata(): { handlerProtocol: string } {
+    return { handlerProtocol: this.http2Enabled ? 'h2' : 'http/1.1' };
+  }
+
+  /**
+   * Handle method for Smithy HttpHandler interface compatibility.
+   * Allows Recker Client to be used directly as AWS SDK v3 requestHandler.
+   *
+   * @example
+   * ```typescript
+   * import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+   * import { createClient } from 'recker';
+   *
+   * const s3 = new S3Client({
+   *   region: 'us-east-1',
+   *   requestHandler: createClient({ http2: true })
+   * });
+   *
+   * await s3.send(new PutObjectCommand({
+   *   Bucket: 'my-bucket',
+   *   Key: 'file.txt',
+   *   Body: 'Hello!'
+   * }));
+   * ```
+   */
+  async handle(
+    request: {
+      protocol?: string;
+      hostname: string;
+      port?: number;
+      path?: string;
+      query?: Record<string, string | string[] | null | undefined>;
+      method?: string;
+      headers?: Record<string, string | string[]>;
+      body?: unknown;
+    },
+    options?: { abortSignal?: AbortSignal; requestTimeout?: number }
+  ): Promise<{
+    response: {
+      statusCode: number;
+      reason?: string;
+      headers: Record<string, string>;
+      body?: import('stream').Readable;
+    };
+  }> {
+    // Build URL from Smithy request parts
+    const protocol = request.protocol || 'https:';
+    const hostname = request.hostname;
+    const port = request.port;
+    const path = request.path || '/';
+
+    let url = `${protocol}//${hostname}`;
+    if (port && !((protocol === 'https:' && port === 443) || (protocol === 'http:' && port === 80))) {
+      url += `:${port}`;
+    }
+    url += path;
+
+    // Build query string
+    if (request.query) {
+      const searchParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(request.query)) {
+        if (value === null || value === undefined) continue;
+        if (Array.isArray(value)) {
+          for (const v of value) {
+            searchParams.append(key, v);
+          }
+        } else {
+          searchParams.set(key, value);
+        }
+      }
+      const qs = searchParams.toString();
+      if (qs) {
+        url += (url.includes('?') ? '&' : '?') + qs;
+      }
+    }
+
+    // Normalize headers (array values → comma-joined string)
+    const headers: Record<string, string> = {};
+    if (request.headers) {
+      for (const [key, value] of Object.entries(request.headers)) {
+        if (value === undefined) continue;
+        headers[key] = Array.isArray(value) ? value.join(', ') : value;
+      }
+    }
+
+    // Make request using Recker's internal machinery
+    const response = await this.request(url, {
+      method: (request.method || 'GET') as RequestOptions['method'],
+      headers,
+      body: request.body as RequestOptions['body'],
+      signal: options?.abortSignal,
+      timeout: options?.requestTimeout,
+    });
+
+    // Convert response headers to Record<string, string>
+    const responseHeaders: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      responseHeaders[key] = value;
+    });
+
+    // Convert body to Node.js Readable stream if present
+    let body: import('stream').Readable | undefined;
+    if (response.raw.body) {
+      const { Readable } = await import('stream');
+      body = Readable.fromWeb(response.raw.body as Parameters<typeof Readable.fromWeb>[0]);
+    }
+
+    return {
+      response: {
+        statusCode: response.status,
+        reason: response.statusText,
+        headers: responseHeaders,
+        body,
+      },
+    };
+  }
+
+  /**
+   * Update HTTP client configuration (Smithy HttpHandler interface).
+   * @internal
+   */
+  updateHttpClientConfig(_key: string, _value: unknown): void {
+    // Configuration is immutable after creation
+    // This method exists for interface compatibility
+  }
+
+  /**
+   * Get HTTP client configuration (Smithy HttpHandler interface).
+   * @internal
+   */
+  httpHandlerConfigs(): Record<string, unknown> {
+    return {
+      http2: this.http2Enabled,
+      maxSockets: this.concurrencyConfig.agent.connections,
+      keepAlive: true,
+    };
+  }
+
+  /**
+   * Clean up resources (agents, connection pools).
+   * Call this when you're done using the client to free up resources.
+   *
+   * @example
+   * ```typescript
+   * const client = createClient({ http2: true });
+   * // ... use client ...
+   * await client.destroy();
+   * ```
+   */
+  async destroy(): Promise<void> {
+    if (this.agentManager) {
+      await this.agentManager.destroy();
+    }
+    // RequestPool queue will be garbage collected
+    this.requestPool = undefined;
   }
 
   // ============================================

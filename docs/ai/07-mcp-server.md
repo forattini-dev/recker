@@ -341,6 +341,8 @@ Convert a curl command to Recker TypeScript code or CLI command:
 
 ### Network Tools (13)
 
+> **HTTP/2 Support**: All HTTP requests automatically negotiate HTTP/2 when the server supports it. This provides multiplexing, header compression, and improved performance without any configuration. For advanced HTTP/2 tuning, see the [Performance documentation](/http/06-performance.md#http2-presets-recommended).
+
 #### rek_http_request
 
 Perform HTTP requests:
