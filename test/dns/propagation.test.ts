@@ -345,7 +345,8 @@ describe('DNS Propagation', () => {
 
   // Integration tests for checkPropagation (makes real network requests)
   // These tests verify the actual behavior with real DNS providers
-  describe('checkPropagation (integration)', () => {
+  // Skip in CI as network access to external DNS providers may be blocked
+  describe.skipIf(process.env.CI)('checkPropagation (integration)', () => {
     it('should check propagation for a domain', async () => {
       const results = await checkPropagation('example.com', 'A');
 

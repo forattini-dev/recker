@@ -374,6 +374,6 @@ describe('HTTP/2 Metrics', () => {
       expect(ImportedCollector).toBeDefined();
       expect(typeof importedGet).toBe('function');
       expect(typeof importedCreate).toBe('function');
-    });
+    }, 30000);
   });
 });

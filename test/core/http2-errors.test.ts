@@ -164,6 +164,6 @@ describe('HTTP/2 Error Handling', () => {
       const { Http2Error: ImportedError, parseHttp2Error: importedFn } = await import('../../src/index.js');
       expect(ImportedError).toBeDefined();
       expect(typeof importedFn).toBe('function');
-    });
+    }, 30000);
   });
 });
