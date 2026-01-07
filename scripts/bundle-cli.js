@@ -34,6 +34,9 @@ try {
     format: 'cjs',
     sourcemap: false,
     minify: false,
+    logOverride: {
+      'empty-import-meta': 'silent', // We polyfill import.meta.url in post-processing
+    },
     plugins: [nodeSqliteStubPlugin],
     external: [
       'fsevents',
