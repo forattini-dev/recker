@@ -107,7 +107,9 @@ jobs:
 
       - name: Build
         if: steps.check.outputs.skip != 'true'
-        run: pnpm run build
+        run: |
+          pnpm run build
+          pnpm run build:browser:bundle
 
       - name: Build CLI & Binaries (Next)
         if: steps.check.outputs.skip != 'true'
@@ -256,7 +258,9 @@ jobs:
         run: pnpm run build:embeddings
 
       - name: Build
-        run: pnpm run build
+        run: |
+          pnpm run build
+          pnpm run build:browser:bundle
 
       - name: Build CLI Bundle
         run: pnpm run build:cli

@@ -65,8 +65,7 @@
     ".": {
       "types": "./dist/index.d.ts",
       "node": {
-        "import": "./dist/index.js",
-        "require": "./dist/index.cjs"
+        "import": "./dist/index.js"
       },
       "browser": {
         "import": "./dist/browser/browser/index.js",
@@ -199,7 +198,7 @@
     "build:binary": "npx pkg ./dist/bin/rek.cjs --output dist/bin/recker --targets node18-linux-x64,node18-macos-x64,node18-win-x64",
     "build:embeddings": "tsx scripts/build-embeddings.ts",
     "prepare": "husky",
-    "prepublishOnly": "pnpm build && pnpm build:embeddings && mkdir -p dist/mcp/data && cp src/mcp/data/embeddings.json dist/mcp/data/embeddings.json && node scripts/inject-version.js",
+    "prepublishOnly": "pnpm build && pnpm build:browser:bundle && pnpm build:embeddings && mkdir -p dist/mcp/data && cp src/mcp/data/embeddings.json dist/mcp/data/embeddings.json && node scripts/inject-version.js",
     "test": "NODE_OPTIONS='--max-old-space-size=512' vitest run",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=512' vitest run --coverage",
     "test:light": "NODE_OPTIONS='--max-old-space-size=256' vitest run --maxWorkers=1 --fileParallelism=false",

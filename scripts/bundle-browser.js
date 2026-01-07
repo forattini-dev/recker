@@ -286,7 +286,7 @@ async function bundleBrowser() {
     ...commonOptions,
     outfile: './dist/browser/index.umd.js',
     format: 'iife',
-    globalName: 'Recker',
+    globalName: 'recker',
     minify: false,
   });
   console.log('  UMD: dist/browser/index.umd.js');
@@ -296,7 +296,7 @@ async function bundleBrowser() {
     ...commonOptions,
     outfile: './dist/browser/index.umd.min.js',
     format: 'iife',
-    globalName: 'Recker',
+    globalName: 'recker',
     minify: true,
     sourcemap: true,
   });
@@ -307,7 +307,7 @@ async function bundleBrowser() {
     ...commonOptions,
     outfile: './dist/browser/index.iife.js',
     format: 'iife',
-    globalName: 'Recker',
+    globalName: 'recker',
     minify: false,
   });
   console.log('  IIFE: dist/browser/index.iife.js');
@@ -317,7 +317,7 @@ async function bundleBrowser() {
     ...commonOptions,
     outfile: './dist/browser/index.iife.min.js',
     format: 'iife',
-    globalName: 'Recker',
+    globalName: 'recker',
     minify: true,
     sourcemap: true,
   });

@@ -6,7 +6,7 @@
  *
  * Features included:
  * - HTTP client with FetchTransport
- * - 18 portable plugins (retry, rate-limit, auth, graphql, etc.)
+ * - 19 portable plugins (retry, rate-limit, auth, graphql, compression, etc.)
  * - 15 auth methods (all except mTLS)
  * - WebSocket (native browser)
  * - All 38 API presets
@@ -14,6 +14,7 @@
  * - HAR recording (Blob + download export)
  * - SEO analysis
  * - Network simulation
+ * - Request body compression (gzip, deflate via CompressionStream API)
  *
  * Features excluded (Node.js only):
  * - UndiciTransport
@@ -22,6 +23,7 @@
  * - File-based cache (use IndexedDB/Service Worker)
  * - mTLS authentication
  * - CLI
+ * - Brotli compression (browser only supports gzip/deflate for compression)
  */
 
 // ============================================================================
@@ -119,6 +121,7 @@ export * from '../constants/http-status.js';
 // ============================================================================
 export * from './crypto.js';
 export * from './cache.js';
+export * from './compression.js';
 
 // ============================================================================
 // Unified API - Browser version

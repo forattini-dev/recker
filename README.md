@@ -45,11 +45,23 @@ const info = await whois('github.com');
 ### Browser
 
 ```html
-<script src="https://unpkg.com/recker/dist/recker.min.js"></script>
+<!-- CDN (UMD) -->
+<script src="https://unpkg.com/recker/dist/browser/index.umd.min.js"></script>
 <script>
   const { get, post } = recker;
   const data = await get('https://api.example.com/data').json();
 </script>
+
+<!-- ES Module -->
+<script type="module">
+  import { get, post } from 'https://unpkg.com/recker/dist/browser/index.min.js';
+  const data = await get('https://api.example.com/data').json();
+</script>
+```
+
+```typescript
+// With bundler (Vite, Webpack, etc.)
+import { get, post, createClient } from 'recker/browser';
 ```
 
 ### Unified Namespace
