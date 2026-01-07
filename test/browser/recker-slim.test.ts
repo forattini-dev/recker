@@ -14,7 +14,15 @@ describe('recker browser slim entrypoint', () => {
   it('should expose browser-safe plugins', () => {
     expect(typeof (slim as Record<string, unknown>).retryPlugin).toBe('function');
     expect(typeof (slim as Record<string, unknown>).rateLimitPlugin).toBe('function');
-    expect(typeof (slim as Record<string, unknown>).basicAuth).toBe('function');
+    // Note: Auth plugins (basicAuth, bearerAuth, etc.) are NOT exported in slim build
+    // They are Node-focused and excluded intentionally
+  });
+
+  it('should not export auth plugins (Node-focused)', () => {
+    // Auth plugins are intentionally excluded from browser-slim build
+    expect((slim as Record<string, unknown>).basicAuth).toBeUndefined();
+    expect((slim as Record<string, unknown>).bearerAuth).toBeUndefined();
+    expect((slim as Record<string, unknown>).oauth2).toBeUndefined();
   });
 
   it('should not export AI, SEO, scrape, or presets', () => {

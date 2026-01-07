@@ -1,5 +1,5 @@
 import { ConnectionInfo, ReckerResponse, Timings, SSEEvent, ProgressEvent } from '../types/index.js';
-import { Dispatcher } from 'undici'; // Import Dispatcher
+import type { Dispatcher } from 'undici'; // Import Dispatcher
 import { parseSSE } from '../utils/sse.js';
 import { cleanHtml } from '../utils/html-cleaner.js';
 import { calculateProgress } from '../utils/progress.js';

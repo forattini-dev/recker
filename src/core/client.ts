@@ -1,19 +1,17 @@
-import { ClientOptions, Middleware, NextFunction, ReckerRequest, ReckerResponse, RequestOptions, Transport, CacheStorage, Hooks, PaginationConfig, HTTP2Options, PageResult, CookieJar, CookieOptions, Logger, consoleLogger } from '../types/index.js';
+import { ClientOptions, Middleware, NextFunction, ReckerRequest, ReckerResponse, RequestOptions, Transport, CacheStorage, CacheEntry, Hooks, PaginationConfig, HTTP2Options, PageResult, CookieJar, CookieOptions, Logger, consoleLogger } from '../types/index.js';
 import type { ClientAI, PresetAIConfig, ClientOptionsWithAI } from '../types/ai-client.js';
 import { ClientAIImpl } from '../ai/client-ai.js';
 import { HttpRequest } from './request.js';
-import { HttpResponse } from './response.js';
-import { UndiciTransport } from '../transport/undici.js';
-import { CurlTransport } from '../transport/curl.js';
 import { RequestPromise } from './request-promise.js';
-import { HttpError, MaxSizeExceededError, ConfigurationError, ValidationError, TimeoutError } from '../core/errors.js';
+import { HttpError, MaxSizeExceededError, ConfigurationError, ValidationError, TimeoutError, UnsupportedError } from '../core/errors.js';
 import { processBody, createFormData, createMultipart, isPlainObject } from '../utils/body.js';
-import { AgentManager } from '../utils/agent-manager.js';
+import type { AgentManager } from '../utils/agent-manager.js';
 import { RequestPool } from '../utils/request-pool.js';
-import { normalizeConcurrency, createBatchConfig, expandHTTP2Options, type NormalizedConcurrencyConfig } from '../utils/concurrency.js';
-import { ProtocolCache, getGlobalProtocolCache } from '../utils/protocol-cache.js';
+import { normalizeConcurrency, expandHTTP2Options, type NormalizedConcurrencyConfig } from '../utils/concurrency.js';
+import { getGlobalProtocolCache } from '../utils/protocol-cache.js';
 import { getDefaultUserAgent } from '../utils/user-agent.js';
 import { getVersion, getVersionSync, getVersionInfo, type VersionInfo } from '../version.js';
+import { FetchTransport } from '../transport/fetch.js';
 
 // Plugins and Storage for auto-wiring
 import { paginate, PaginationOptions, streamPages } from '../plugins/pagination.js';
@@ -26,14 +24,13 @@ import { serializeXML } from '../plugins/xml.js';
 import { serializeYaml } from '../plugins/yaml.js';
 import { serializeCsv } from '../plugins/csv.js';
 import { MemoryStorage } from '../cache/memory-storage.js';
-import { FileStorage } from '../cache/basic-file-storage.js';
 import { RequestRunner } from '../runner/request-runner.js';
 import { ReckerWebSocket, type WebSocketOptions } from '../websocket/client.js';
 import { whois as performWhois, isDomainAvailable, type WhoisOptions, type WhoisResult } from '../utils/whois.js';
 import { MemoryCookieJar } from '../cookies/memory-cookie-jar.js';
 import { scrape as scrapeHelper, type ScrapePromise } from '../plugins/scrape.js';
 import type { ScrapeOptions, ExtractedLink, ExtractedImage, ExtractedMeta, OpenGraphData, TwitterCardData, JsonLdData, ExtractedForm, ExtractedTable, ExtractedScript, ExtractedStyle, ExtractionSchema, LinkExtractionOptions, ImageExtractionOptions } from '../scrape/types.js';
-import { HlsPromise, type HlsOptions } from '../plugins/hls.js';
+import type { HlsPromise, HlsOptions } from '../plugins/hls.js';
 
 // Extended Cache Config for Client
 interface ClientCacheConfig extends Omit<CacheOptions, 'storage'> {
@@ -47,6 +44,156 @@ export interface ExtendedClientOptions extends ClientOptions {
   retry?: RetryOptions;
   cache?: ClientCacheConfig;
   dedup?: DedupOptions;
+}
+
+function isNodeRuntime(): boolean {
+  return typeof globalThis !== 'undefined' && Boolean((globalThis as any).process?.versions?.node);
+}
+
+class LazyTransport implements Transport {
+  private transport?: Transport;
+  private resolving?: Promise<Transport>;
+
+  constructor(private factory: () => Promise<Transport>) {}
+
+  async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
+    if (!this.transport) {
+      if (!this.resolving) {
+        this.resolving = this.factory().then((instance) => {
+          this.transport = instance;
+          return instance;
+        });
+      }
+      this.transport = await this.resolving;
+    }
+    return this.transport.dispatch(req);
+  }
+}
+
+function createLazyCurlTransport(): Transport {
+  if (!isNodeRuntime()) {
+    return {
+      async dispatch(req: ReckerRequest) {
+        throw new ConfigurationError(
+          'Curl transport is only available in Node.js environments.',
+          { configKey: 'useCurl', request: req }
+        );
+      }
+    };
+  }
+
+  return new LazyTransport(async () => {
+    const { CurlTransport } = await import('../transport/curl.js');
+    return new CurlTransport();
+  });
+}
+
+class LazyCacheStorage implements CacheStorage {
+  private storage?: CacheStorage;
+  private resolving?: Promise<CacheStorage>;
+
+  constructor(private factory: () => Promise<CacheStorage>) {}
+
+  private async getStorage(): Promise<CacheStorage> {
+    if (!this.storage) {
+      if (!this.resolving) {
+        this.resolving = this.factory().then((instance) => {
+          this.storage = instance;
+          return instance;
+        });
+      }
+      this.storage = await this.resolving;
+    }
+    return this.storage;
+  }
+
+  async get(key: string): Promise<CacheEntry | undefined | null> {
+    return (await this.getStorage()).get(key);
+  }
+
+  async set(key: string, value: CacheEntry, ttl: number): Promise<void> {
+    return (await this.getStorage()).set(key, value, ttl);
+  }
+
+  async delete(key: string): Promise<void> {
+    return (await this.getStorage()).delete(key);
+  }
+}
+
+function createLazyFileStorage(path?: string): CacheStorage {
+  if (!isNodeRuntime()) {
+    throw new ConfigurationError(
+      'File cache storage is only available in Node.js environments.',
+      { configKey: 'cache.driver' }
+    );
+  }
+
+  return new LazyCacheStorage(async () => {
+    const { FileStorage } = await import('../cache/basic-file-storage.js');
+    return new FileStorage(path);
+  });
+}
+
+/**
+ * LazyHlsPromise wraps HlsPromise for lazy-loading the HLS module.
+ *
+ * IMPORTANT: The factory returns { instance: HlsPromise } wrapped in an object
+ * to prevent JavaScript from calling HlsPromise.then() during await.
+ * HlsPromise implements Promise<void> with a .then() that rejects when awaited
+ * directly (without calling .download(), .stream(), etc.), so we need to
+ * prevent automatic Promise unwrapping.
+ */
+class LazyHlsPromise implements Promise<void> {
+  private instancePromise: Promise<{ instance: HlsPromise }>;
+
+  constructor(factory: () => Promise<{ instance: HlsPromise }>) {
+    this.instancePromise = factory();
+  }
+
+  get [Symbol.toStringTag]() {
+    return 'HlsPromise';
+  }
+
+  then<TResult1 = void, TResult2 = never>(
+    onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2> {
+    return this.instancePromise.then(({ instance }) => instance.then(onfulfilled, onrejected));
+  }
+
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<void | TResult> {
+    return this.then(null, onrejected);
+  }
+
+  finally(onfinally?: (() => void) | null): Promise<void> {
+    return this.instancePromise.then(({ instance }) => instance.finally(onfinally));
+  }
+
+  cancel(): void {
+    this.instancePromise.then(({ instance }) => instance.cancel()).catch(() => {});
+  }
+
+  async download(dest: any): Promise<void> {
+    const { instance } = await this.instancePromise;
+    return instance.download(dest);
+  }
+
+  async *stream(): AsyncGenerator<any> {
+    const { instance } = await this.instancePromise;
+    yield* instance.stream();
+  }
+
+  async pipe(writable: any): Promise<void> {
+    const { instance } = await this.instancePromise;
+    return instance.pipe(writable);
+  }
+
+  async info(): Promise<any> {
+    const { instance } = await this.instancePromise;
+    return instance.info();
+  }
 }
 
 export class Client {
@@ -99,6 +246,7 @@ export class Client {
   private cookieIgnoreInvalid: boolean = false;
   private defaultTimeout?: number | import('../types/index.js').TimeoutOptions;
   private http2Enabled: boolean = false;
+  private transportKind: 'curl' | 'undici' | 'fetch' | 'custom' = 'custom';
 
   // AI integration
   private _aiConfig?: PresetAIConfig;
@@ -150,14 +298,13 @@ export class Client {
 
     if (options.transport) {
       this.transport = options.transport;
+      this.transportKind = 'custom';
     } else if (options.useCurl) {
       if (this.debugEnabled) console.log('[DEBUG] Using Curl Transport');
-      this.transport = new CurlTransport();
-    } else {
+      this.transport = createLazyCurlTransport();
+      this.transportKind = 'curl';
+    } else if (isNodeRuntime()) {
       if (this.debugEnabled) console.log('[DEBUG] Using Undici Transport');
-
-      // Use global protocol cache for adaptive pooling (enabled by default)
-      const protocolCache = getGlobalProtocolCache();
 
       // Create AgentManager with auto-configured options + HTTP/2 settings + protocol cache
       const agentOptions = {
@@ -166,20 +313,36 @@ export class Client {
         allowH2: expandedHttp2.enabled,
         maxConcurrentStreams: expandedHttp2.resolvedSettings?.maxConcurrentStreams,
       };
-      this.agentManager = new AgentManager(agentOptions, protocolCache);
 
-      // UndiciTransport accepts optional baseUrl - when empty, requests must use absolute URLs
-      this.transport = new UndiciTransport(this.baseUrl || undefined, {
+      const transportOptions = {
         proxy: options.proxy,
         http2: expandedHttp2.enabled ? expandedHttp2 : undefined,
         dns: options.dns,
-        agent: this.agentManager,
         socketPath: options.socketPath,
         tls: options.tls,
         observability: options.observability,
         expectContinue: options.expectContinue,
         protocolCache: true, // Use global cache for protocol tracking
+      };
+
+      this.transport = new LazyTransport(async () => {
+        if (!this.agentManager) {
+          const protocolCache = getGlobalProtocolCache();
+          const { AgentManager } = await import('../utils/agent-manager.js');
+          this.agentManager = new AgentManager(agentOptions, protocolCache);
+        }
+        const { UndiciTransport } = await import('../transport/undici.js');
+        // UndiciTransport accepts optional baseUrl - when empty, requests must use absolute URLs
+        return new UndiciTransport(this.baseUrl || undefined, {
+          ...transportOptions,
+          agent: this.agentManager
+        });
       });
+      this.transportKind = 'undici';
+    } else {
+      if (this.debugEnabled) console.log('[DEBUG] Using Fetch Transport');
+      this.transport = new FetchTransport();
+      this.transportKind = 'fetch';
     }
 
     // 1. Auto-wire plugins based on config
@@ -220,7 +383,7 @@ export class Client {
       if (options.cache.storage) {
         storage = options.cache.storage;
       } else if (options.cache.driver === 'file') {
-        storage = new FileStorage(options.cache.fileStoragePath);
+        storage = createLazyFileStorage(options.cache.fileStoragePath);
       } else {
         storage = new MemoryStorage();
       }
@@ -432,11 +595,11 @@ export class Client {
 
   private async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
     // Check per-request override for Curl
-    if (req.useCurl && !(this.transport instanceof CurlTransport)) {
-        if (!this.curlTransport) {
-            this.curlTransport = new CurlTransport();
-        }
-        return this.curlTransport.dispatch(req);
+    if (req.useCurl && this.transportKind !== 'curl') {
+      if (!this.curlTransport) {
+        this.curlTransport = createLazyCurlTransport();
+      }
+      return this.curlTransport.dispatch(req);
     }
     return this.transport.dispatch(req);
   }
@@ -642,19 +805,17 @@ export class Client {
   request<T = unknown>(path: string, options: RequestOptions = {}): RequestPromise<T> {
     const url = this.buildUrl(path, options.params);
 
-    // Optimized: Merge headers efficiently
+    // Optimized: Merge headers efficiently (options override defaults)
     let mergedHeaders: Headers;
     if (options.headers) {
-      // Only create Headers when we need to merge
       mergedHeaders = this.defaultHeaders instanceof Headers
         ? new Headers(this.defaultHeaders)
         : new Headers(this.defaultHeaders);
       const optHeaders = options.headers instanceof Headers
         ? options.headers
         : new Headers(options.headers);
-      optHeaders.forEach((value, key) => mergedHeaders.append(key, value));
+      optHeaders.forEach((value, key) => mergedHeaders.set(key, value));
     } else {
-      // Reuse existing Headers if already created
       mergedHeaders = this.defaultHeaders instanceof Headers
         ? this.defaultHeaders
         : new Headers(this.defaultHeaders);
@@ -838,6 +999,8 @@ export class Client {
         potentialOptions.json !== undefined ||
         potentialOptions.form !== undefined ||
         potentialOptions.xml !== undefined ||
+        potentialOptions.yaml !== undefined ||
+        potentialOptions.csv !== undefined ||
         potentialOptions.body !== undefined ||
         potentialOptions.headers !== undefined ||
         potentialOptions.timeout !== undefined ||
@@ -1284,7 +1447,20 @@ export class Client {
    * ```
    */
   hls(manifestUrl: string, options: HlsOptions = {}): HlsPromise {
-    return new HlsPromise(this, manifestUrl, options);
+    if (!isNodeRuntime()) {
+      throw new UnsupportedError(
+        'HLS is only available in Node.js environments.',
+        { feature: 'hls' }
+      );
+    }
+
+    const factory = async () => {
+      const { HlsPromise } = await import('../plugins/hls.js');
+      // Wrap in object to prevent await from calling HlsPromise.then()
+      return { instance: new HlsPromise(this, manifestUrl, options) };
+    };
+
+    return new LazyHlsPromise(factory) as unknown as HlsPromise;
   }
 
   // ============================================

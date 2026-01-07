@@ -6,10 +6,8 @@
  *
  * Features included:
  * - HTTP client with FetchTransport
- * - 19 portable plugins (retry, rate-limit, auth, graphql, compression, etc.)
- * - 15 auth methods (all except mTLS)
+ * - 19 portable plugins (retry, rate-limit, graphql, compression, etc.)
  * - WebSocket (native browser)
- * - All 38 API presets
  * - AI layer (full support)
  * - HAR recording (Blob + download export)
  * - SEO analysis
@@ -21,7 +19,8 @@
  * - FTP/SFTP/Telnet protocols
  * - DNS/WHOIS utilities
  * - File-based cache (use IndexedDB/Service Worker)
- * - mTLS authentication
+ * - Auth plugins (Node-only)
+ * - Presets (Node-only)
  * - CLI
  * - Brotli compression (browser only supports gzip/deflate for compression)
  */
@@ -33,7 +32,6 @@ export * from '../core/request-promise.js';
 export * from '../core/errors.js';
 export * from '../core/client.js';
 export * from '../core/request.js';
-export * from '../core/response.js';
 
 // ============================================================================
 // Transport (Fetch + Worker for browser)
@@ -63,11 +61,6 @@ export * from '../plugins/har-recorder.js';
 export * from '../plugins/network-simulation.js';
 
 // ============================================================================
-// Authentication (15/16 methods - all except mTLS)
-// ============================================================================
-export * from '../plugins/auth.js';
-
-// ============================================================================
 // Cache (Memory only for browser)
 // ============================================================================
 export * from '../cache/memory-storage.js';
@@ -93,10 +86,7 @@ export * from '../seo/analyzer.js';
 // ============================================================================
 export * as ai from '../ai/index.js';
 
-// ============================================================================
-// Presets (all API clients)
-// ============================================================================
-export * as presets from '../presets/index.js';
+// NOTE: Auth plugins and presets are Node-focused and are not exported here.
 
 // ============================================================================
 // Browser-specific utilities
@@ -108,13 +98,6 @@ export * from '../constants/http-status.js';
 // - websocket/client.js - uses Node.js EventEmitter and streams
 // - contract/index.js - uses Node.js streaming
 // - events/request-events.js - uses Node.js EventEmitter
-
-// ============================================================================
-// Presets (all 38 API clients)
-// NOTE: Presets may have dependencies on Node.js modules via AI layer
-// Users should import individual presets that don't depend on Node.js
-// ============================================================================
-// export * as presets from '../presets/index.js';
 
 // ============================================================================
 // Browser-specific utilities

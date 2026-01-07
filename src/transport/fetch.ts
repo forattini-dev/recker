@@ -1,4 +1,5 @@
-import { ReckerRequest, ReckerResponse, Transport, Timings, ProgressEvent } from '../types/index.js';
+import { ReckerRequest, ReckerResponse, Transport, Timings, ProgressEvent, RedirectInfo, ProgressCallback } from '../types/index.js';
+import { createProgressStream } from '../utils/progress.js';
 
 export interface FetchTransportOptions {
   /** Default credentials mode for all requests */
@@ -7,6 +8,67 @@ export interface FetchTransportOptions {
   cache?: RequestCache;
   /** Keep connections alive for reuse */
   keepalive?: boolean;
+}
+
+function parseContentLength(headers: Headers): number | undefined {
+  const raw = headers.get('content-length');
+  if (!raw) return undefined;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function wrapDownloadResponse(response: Response, onProgress?: ProgressCallback): Response {
+  if (!onProgress || !response.body) return response;
+  const total = parseContentLength(response.headers);
+  const body = createProgressStream(response.body, onProgress, {
+    total,
+    direction: 'download'
+  });
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}
+
+function bufferToStream(buffer: Uint8Array): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(buffer);
+      controller.close();
+    }
+  });
+}
+
+function wrapUploadBody(body: BodyInit | null, onProgress?: ProgressCallback, total?: number): BodyInit | null {
+  if (!onProgress || !body) return body;
+
+  if (typeof FormData !== 'undefined' && body instanceof FormData) {
+    return body;
+  }
+
+  if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) {
+    return createProgressStream(body, onProgress, { total, direction: 'upload' });
+  }
+
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    return createProgressStream(body.stream(), onProgress, { total: body.size, direction: 'upload' });
+  }
+
+  if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+    const view = body instanceof ArrayBuffer
+      ? new Uint8Array(body)
+      : new Uint8Array((body as ArrayBufferView).buffer, (body as ArrayBufferView).byteOffset, (body as ArrayBufferView).byteLength);
+    return createProgressStream(bufferToStream(view), onProgress, { total: view.byteLength, direction: 'upload' });
+  }
+
+  if (typeof body === 'string') {
+    const encoder = new TextEncoder();
+    const view = encoder.encode(body);
+    return createProgressStream(bufferToStream(view), onProgress, { total: view.byteLength, direction: 'upload' });
+  }
+
+  return body;
 }
 
 export class FetchTransport implements Transport {
@@ -36,31 +98,97 @@ export class FetchTransport implements Transport {
       timeoutId = setTimeout(() => abortController!.abort(), timeoutMs);
     }
 
-    const requestInit: RequestInit = {
-      method: req.method,
-      headers: req.headers,
-      body: req.body,
-      signal,
-      credentials: this.options.credentials,
-      cache: this.options.cache,
-      keepalive: this.options.keepalive ?? true,
-      // duplex: 'half' is required for streaming bodies in some fetch implementations (like Node/Chrome)
-      // @ts-ignore - Types might not be up to date for 'duplex'
-      duplex: req.body ? 'half' : undefined
-    };
+    const followRedirects = req.followRedirects !== false;
+    const maxRedirects = req.maxRedirects ?? 20;
+    const handleRedirectsManually = Boolean(req.beforeRedirect) || req.followRedirects === false || req.maxRedirects !== undefined;
+
+    let currentUrl = req.url;
+    let currentMethod = req.method;
+    let currentBody = req.body;
+    let currentHeaders = new Headers(req.headers);
+    const uploadTotal = parseContentLength(currentHeaders);
+    let redirectCount = 0;
 
     try {
-      const response = await globalThis.fetch(req.url, requestInit);
+      while (true) {
+        const bodyWithProgress = redirectCount === 0
+          ? wrapUploadBody(currentBody, req.onUploadProgress, uploadTotal)
+          : currentBody;
 
-      // Approximate timings since Fetch API doesn't give low-level timings
-      const totalTime = performance.now() - start;
-      const timings: Timings = {
-        total: totalTime,
-        firstByte: totalTime, // Rough approximation
-      };
+        const requestInit: RequestInit = {
+          method: currentMethod,
+          headers: currentHeaders,
+          body: bodyWithProgress,
+          signal,
+          credentials: this.options.credentials,
+          cache: this.options.cache,
+          keepalive: this.options.keepalive ?? true,
+          redirect: handleRedirectsManually ? 'manual' : 'follow',
+          // duplex: 'half' is required for streaming bodies in some fetch implementations (like Node/Chrome)
+          // @ts-ignore - Types might not be up to date for 'duplex'
+          duplex: bodyWithProgress ? 'half' : undefined
+        };
 
-      return new FetchResponseWrapper(response, timings);
+        const response = await globalThis.fetch(currentUrl, requestInit);
 
+        if (handleRedirectsManually) {
+          const status = response.status;
+          const isRedirect = status >= 300 && status < 400;
+
+          if (isRedirect && followRedirects && redirectCount < maxRedirects) {
+            const location = response.headers.get('location');
+            if (!location || response.type === 'opaqueredirect') {
+              const finalResponse = wrapDownloadResponse(response, req.onDownloadProgress);
+              const totalTime = performance.now() - start;
+              return new FetchResponseWrapper(finalResponse, { total: totalTime, firstByte: totalTime });
+            }
+
+            const nextUrl = new URL(location, currentUrl).toString();
+            let resolvedUrl = nextUrl;
+
+            if (req.beforeRedirect) {
+              const redirectInfo: RedirectInfo = {
+                from: currentUrl,
+                to: nextUrl,
+                status,
+                headers: response.headers
+              };
+              const hookResult = await req.beforeRedirect(redirectInfo);
+              if (hookResult === false) {
+                const finalResponse = wrapDownloadResponse(response, req.onDownloadProgress);
+                const totalTime = performance.now() - start;
+                return new FetchResponseWrapper(finalResponse, { total: totalTime, firstByte: totalTime });
+              }
+              if (typeof hookResult === 'string') {
+                resolvedUrl = hookResult;
+              }
+            }
+
+            if (status === 303 || ((status === 301 || status === 302) && currentMethod !== 'GET' && currentMethod !== 'HEAD')) {
+              currentMethod = 'GET';
+              currentBody = null;
+              currentHeaders.delete('content-type');
+              currentHeaders.delete('content-length');
+            }
+
+            await response.body?.cancel();
+            currentUrl = resolvedUrl;
+            redirectCount++;
+            continue;
+          }
+        }
+
+        const finalResponse = wrapDownloadResponse(response, req.onDownloadProgress);
+
+        // Approximate timings since Fetch API doesn't give low-level timings
+        const totalTime = performance.now() - start;
+        const timings: Timings = {
+          total: totalTime,
+          firstByte: totalTime, // Rough approximation
+        };
+
+        return new FetchResponseWrapper(finalResponse, timings);
+      }
     } catch (error: any) {
       // Handle timeout abort
       if (error.name === 'AbortError' && abortController) {

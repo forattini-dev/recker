@@ -151,6 +151,30 @@ export interface RequestOptions {
    * ```
    */
   xml?: any;
+  /**
+   * Shorthand for sending YAML data
+   * Automatically serializes object to YAML and sets Content-Type to application/yaml
+   *
+   * @example
+   * ```typescript
+   * client.post('/config', {
+   *   yaml: { name: 'service', enabled: true }
+   * });
+   * ```
+   */
+  yaml?: any;
+  /**
+   * Shorthand for sending CSV data
+   * Automatically serializes arrays/objects to CSV and sets Content-Type to text/csv
+   *
+   * @example
+   * ```typescript
+   * client.post('/report', {
+   *   csv: [{ name: 'John', age: 30 }]
+   * });
+   * ```
+   */
+  csv?: any;
   params?: Record<string, string | number>;
   signal?: AbortSignal;
   throwHttpErrors?: boolean; // Default true

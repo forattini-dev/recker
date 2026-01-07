@@ -50,18 +50,30 @@ describe('HLS Plugin - Fluent API', () => {
     });
 
     describe('HlsPromise construction', () => {
-        it('should create HlsPromise via client.hls()', () => {
+        it('should create HlsPromise-like object via client.hls()', () => {
             const client = createClient();
             const hlsPromise = client.hls('http://test.com/video.m3u8');
 
-            expect(hlsPromise).toBeInstanceOf(HlsPromise);
+            // client.hls() returns a LazyHlsPromise (for lazy-loading), not a direct HlsPromise
+            // So we check Symbol.toStringTag instead of instanceof
+            expect(hlsPromise[Symbol.toStringTag]).toBe('HlsPromise');
+            expect(typeof hlsPromise.download).toBe('function');
+            expect(typeof hlsPromise.stream).toBe('function');
+            expect(typeof hlsPromise.info).toBe('function');
+
+            // Attach handler to prevent unhandled rejection
+            hlsPromise.catch(() => {});
         });
 
         it('should create HlsPromise via hls() factory', () => {
             const client = createClient();
             const hlsPromise = hls(client, 'http://test.com/video.m3u8');
 
-            expect(hlsPromise).toBeInstanceOf(HlsPromise);
+            // hls() factory returns a real HlsPromise
+            expect(hlsPromise instanceof HlsPromise).toBe(true);
+
+            // Attach handler to prevent unhandled rejection
+            hlsPromise.catch(() => {});
         });
 
         it('should throw when awaited directly without terminal method', async () => {
@@ -71,11 +83,13 @@ describe('HLS Plugin - Fluent API', () => {
             await expect(hlsPromise).rejects.toThrow('requires .download()');
         });
 
-        it('should throw for non-ts formats (ffmpeg required)', () => {
+        it('should throw for non-ts formats (ffmpeg required)', async () => {
             const client = createClient();
 
-            expect(() => client.hls('http://test.com/video.m3u8', { format: 'mp4' }))
-                .toThrow('requires ffmpeg');
+            // Error is thrown inside the HlsPromise constructor during lazy-load
+            // So we need to await to trigger the factory execution
+            const hlsPromise = client.hls('http://test.com/video.m3u8', { format: 'mp4' });
+            await expect(hlsPromise.info()).rejects.toThrow('requires ffmpeg');
         });
     });
 

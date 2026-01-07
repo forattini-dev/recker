@@ -1,4 +1,3 @@
-import { EventEmitter } from 'events';
 import { Client } from '../core/client.js';
 import { ReckerResponse } from '../types/index.js';
 
@@ -25,7 +24,52 @@ export interface RunnerResult<T = any> {
   };
 }
 
-export class RequestRunner extends EventEmitter {
+type Listener = (...args: any[]) => void;
+
+class SimpleEmitter {
+  private listeners = new Map<string, Set<Listener>>();
+
+  on(event: string, listener: Listener) {
+    const set = this.listeners.get(event) ?? new Set<Listener>();
+    set.add(listener);
+    this.listeners.set(event, set);
+    return this;
+  }
+
+  once(event: string, listener: Listener) {
+    const wrapped: Listener = (...args) => {
+      this.off(event, wrapped);
+      listener(...args);
+    };
+    return this.on(event, wrapped);
+  }
+
+  off(event: string, listener: Listener) {
+    const set = this.listeners.get(event);
+    if (set) {
+      set.delete(listener);
+      if (set.size === 0) {
+        this.listeners.delete(event);
+      }
+    }
+    return this;
+  }
+
+  removeListener(event: string, listener: Listener) {
+    return this.off(event, listener);
+  }
+
+  emit(event: string, ...args: any[]) {
+    const set = this.listeners.get(event);
+    if (!set) return false;
+    for (const listener of [...set]) {
+      listener(...args);
+    }
+    return true;
+  }
+}
+
+export class RequestRunner extends SimpleEmitter {
   private concurrency: number;
   private queue: RequestTask[] = [];
   private activeCount: number = 0;

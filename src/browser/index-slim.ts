@@ -12,7 +12,6 @@ export * from '../core/request-promise.js';
 export * from '../core/errors.js';
 export * from '../core/client.js';
 export * from '../core/request.js';
-export * from '../core/response.js';
 
 // ============================================================================
 // Transport (Fetch + Worker for browser)
@@ -41,11 +40,7 @@ export * from '../plugins/odata.js';
 export * from '../plugins/har-recorder.js';
 export * from '../plugins/network-simulation.js';
 
-// ============================================================================
-// Authentication (15/16 methods - all except mTLS)
-// ============================================================================
-export * from '../plugins/auth.js';
-
+// NOTE: Auth plugins are Node-focused and are not exported here.
 // ============================================================================
 // Cache (Memory/IndexedDB only for browser)
 // ============================================================================

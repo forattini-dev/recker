@@ -42,7 +42,6 @@ import { Client, createClient, type ExtendedClientOptions } from './core/client.
 import { getVersion, getVersionSync, getVersionInfo, type VersionInfo } from './version.js';
 import { type RequestPromise } from './core/request-promise.js';
 import type { RequestOptions } from './types/index.js';
-import { FetchTransport } from './transport/fetch.js';
 import { createWebSocket, type WebSocketOptions, type ReckerWebSocket } from './websocket/client.js';
 import { whois as whoisLookup, isDomainAvailable, createWhois, type WhoisResult, type WhoisOptions } from './utils/whois.js';
 import { createDNS, type DNSClientOptions, type DNSClient } from './dns/index.js';
@@ -64,10 +63,7 @@ let _defaultAi: UnifiedAIClient | null = null;
 
 function getDefaultClient(): Client {
   if (!_defaultClient) {
-    // Use FetchTransport for absolute URLs without requiring baseUrl
-    _defaultClient = createClient({
-      transport: new FetchTransport(),
-    });
+    _defaultClient = createClient();
   }
   return _defaultClient;
 }

@@ -1,12 +1,13 @@
 import { ReckerResponse, SSEEvent, ProgressEvent } from '../types/index.js';
 import type { ZodSchema } from 'zod';
-import { createWriteStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
-import { Readable } from 'node:stream';
 import { tryFn } from '../utils/try-fn.js';
 import { StreamError } from './errors.js';
 import { parseYaml, type YamlParseOptions } from '../plugins/yaml.js';
 import { parseCsv, type CsvParseOptions } from '../plugins/csv.js';
+
+function isNodeRuntime(): boolean {
+  return typeof globalThis !== 'undefined' && Boolean((globalThis as any).process?.versions?.node);
+}
 
 export class RequestPromise<T = unknown> implements Promise<ReckerResponse<T>> {
   private promise: Promise<ReckerResponse<T>>;
@@ -102,6 +103,13 @@ export class RequestPromise<T = unknown> implements Promise<ReckerResponse<T>> {
   }
 
   async write(path: string): Promise<void> {
+    if (!isNodeRuntime()) {
+      throw new StreamError(
+        'write() is only supported in Node.js environments.',
+        { streamType: 'response', retriable: false }
+      );
+    }
+
     const response = await this.promise;
     const body = response.read();
     if (!body) {
@@ -114,6 +122,12 @@ export class RequestPromise<T = unknown> implements Promise<ReckerResponse<T>> {
       );
     }
     
+    const [{ createWriteStream }, { pipeline }, { Readable }] = await Promise.all([
+      import('node:fs'),
+      import('node:stream/promises'),
+      import('node:stream'),
+    ]);
+
     // Convert Web Stream to Node Stream
     // @ts-ignore - Readable.fromWeb exists in recent Node versions but types might lag
     const nodeStream = Readable.fromWeb(body as any);
