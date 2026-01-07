@@ -59,9 +59,9 @@ yarn add recker
 </script>
 ```
 
-### Slim Bundle (Core + Plugins)
+### Slim Bundle (~480 KB)
 
-Use this when you don't need AI, SEO, scrape, or presets.
+**Recommended for most projects.** Use when you only need HTTP requests and core plugins:
 
 ```html
 <!-- Slim UMD -->
@@ -76,8 +76,12 @@ Use this when you don't need AI, SEO, scrape, or presets.
 ```
 
 ```typescript
+// With bundlers (Vite, Webpack, etc.)
 import { recker } from 'recker/browser-slim';
 ```
+
+> **Slim excludes:** AI providers, SEO analysis, web scraping, API presets.
+> See [Bundle Sizes](#bundle-sizes) for the full comparison.
 
 ## Basic Usage
 
@@ -386,23 +390,39 @@ const client = recker.client({
 });
 ```
 
-## Bundle Size
+## Bundle Sizes
 
-| Format | Minified | Gzip |
-|--------|----------|------|
-| ESM | 734 KB | 227 KB |
-| UMD | 734 KB | 227 KB |
-| IIFE | 734 KB | 227 KB |
+Recker provides two browser builds:
 
-For smaller bundles, import only what you need (tree-shaking):
+| Build | Import Path | Minified | What's Included |
+|:------|:------------|:---------|:----------------|
+| **Full** | `recker/browser` | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, all plugins |
+| **Slim** | `recker/browser-slim` | ~480 KB | HTTP, WebSocket, SSE, core plugins only |
+
+### Which Build to Choose?
+
+| Use Case | Recommended |
+|:---------|:------------|
+| Simple HTTP requests | `recker/browser-slim` (57% smaller) |
+| Need AI streaming | `recker/browser` |
+| Need SEO analysis | `recker/browser` |
+| Need web scraping | `recker/browser` |
+| Need API presets | `recker/browser` |
+| Bundle size is critical | `recker/browser-slim` |
+
+### Tree-Shaking
+
+For smallest possible bundle, import only what you need:
 
 ```typescript
 // ❌ Large: imports everything
 import { recker } from 'recker/browser';
 
-// ✅ Small: imports only what's used
-import { get, post } from 'recker/browser';
-import { retry } from 'recker/plugins/retry';
+// ✅ Smaller: use slim build
+import { recker } from 'recker/browser-slim';
+
+// ✅ Smallest: import only functions
+import { get, post } from 'recker/browser-slim';
 ```
 
 ## Detecting Browser Build

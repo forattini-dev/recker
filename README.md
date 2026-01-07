@@ -44,35 +44,58 @@ const info = await whois('github.com');
 
 ### Browser
 
+Recker provides two browser builds: **Full** and **Slim**.
+
+| Build | Size | Includes |
+|:------|:-----|:---------|
+| **Full** | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, all plugins |
+| **Slim** | ~480 KB | HTTP, WebSocket, SSE, core plugins only |
+
+```typescript
+// Full build - includes everything
+import { recker, get, post } from 'recker/browser';
+
+// Slim build - 57% smaller, no AI/SEO/scrape/presets
+import { recker, get, post } from 'recker/browser-slim';
+```
+
+#### CDN Usage
+
 ```html
-<!-- CDN (UMD) -->
+<!-- Full build (UMD) -->
 <script src="https://unpkg.com/recker/dist/browser/index.umd.min.js"></script>
+
+<!-- Slim build (UMD) - recommended for most projects -->
+<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
+
 <script>
-  const { get, post } = recker;
+  const { recker, get, post } = Recker;
   const data = await get('https://api.example.com/data').json();
 </script>
+```
 
+```html
 <!-- ES Module -->
 <script type="module">
-  import { get, post } from 'https://unpkg.com/recker/dist/browser/index.min.js';
-  const data = await get('https://api.example.com/data').json();
+  // Full
+  import { get } from 'https://unpkg.com/recker/dist/browser/index.min.js';
+  // Slim
+  import { get } from 'https://unpkg.com/recker/dist/browser/index.slim.min.js';
 </script>
 ```
 
-```typescript
-// With bundler (Vite, Webpack, etc.)
-import { get, post, createClient } from 'recker/browser';
-```
+#### Which Build to Choose?
 
-```html
-<!-- Slim bundle (core + plugins, no AI/SEO/scrape/presets) -->
-<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
-```
+| Use Case | Recommended Build |
+|:---------|:------------------|
+| Simple HTTP requests | `recker/browser-slim` |
+| Need AI streaming (OpenAI, etc.) | `recker/browser` |
+| Need SEO analysis | `recker/browser` |
+| Need web scraping | `recker/browser` |
+| Need API presets (GitHub, Stripe) | `recker/browser` |
+| Bundle size is critical | `recker/browser-slim` |
 
-```typescript
-// Slim import path
-import { get, post, createClient } from 'recker/browser-slim';
-```
+[→ Browser Documentation](https://forattini-dev.github.io/recker/#/browser/01-quickstart)
 
 ### Unified Namespace
 

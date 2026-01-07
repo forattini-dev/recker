@@ -60,48 +60,187 @@ const client = createClient();
 console.log('Recker installed successfully!');
 ```
 
-## Browser Usage
+## Import Paths
 
-Recker also works in the browser with ~70% of features. See [Browser Guide](/browser/01-quickstart.md) for details.
+Recker provides multiple entry points optimized for different environments:
 
-### With Bundlers (Vite, Webpack, etc.)
+### Node.js (Default)
 
 ```typescript
-import { recker } from 'recker/browser';
+// Full SDK - all features
+import { recker, get, post, createClient } from 'recker';
 
-const data = await recker.get('https://api.example.com/users').json();
+// Or using the node-specific path (same as above)
+import { recker } from 'recker/node';
 ```
 
-### Via CDN
+### Browser Builds
+
+Recker provides **two browser builds** with different sizes and features:
+
+| Build | Import Path | Size | What's Included |
+|:------|:------------|:-----|:----------------|
+| **Full** | `recker/browser` | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, all 27 plugins, 48 presets |
+| **Slim** | `recker/browser-slim` | ~480 KB | HTTP, WebSocket, SSE, 18 core plugins |
+
+#### Full Browser Build
+
+Use when you need AI streaming, SEO analysis, web scraping, or API presets:
+
+```typescript
+import { recker, get, post, createClient } from 'recker/browser';
+
+// Full features available
+await recker.get('/api/users').json();
+await recker.ai.chat('Hello!');  // AI available
+const seo = await recker.seo(html);  // SEO available
+```
+
+#### Slim Browser Build
+
+**Recommended for most projects.** Use when you only need HTTP requests and core plugins:
+
+```typescript
+import { recker, get, post, createClient } from 'recker/browser-slim';
+
+// Core features only
+await recker.get('/api/users').json();
+// recker.ai → undefined (not included)
+// recker.seo → undefined (not included)
+```
+
+#### Slim Build: What's Included vs Excluded
+
+| ✅ Included in Slim | ❌ Excluded from Slim |
+|:--------------------|:----------------------|
+| HTTP (GET, POST, PUT, PATCH, DELETE) | AI providers (OpenAI, Anthropic, etc.) |
+| WebSocket | SEO analysis (400+ rules) |
+| SSE (Server-Sent Events) | Web scraping |
+| Response types (JSON, text, blob, stream) | 48 API presets |
+| Retry plugin | Template engine |
+| Rate limit plugin | |
+| Circuit breaker plugin | |
+| Dedup plugin | |
+| Auth plugins (Basic, Bearer, OAuth2, etc.) | |
+| GraphQL plugin | |
+| Cache (Memory, IndexedDB) | |
+
+### CDN Usage
+
+#### UMD (Global Variable)
 
 ```html
-<!-- UMD (recommended) -->
+<!-- Full build -->
 <script src="https://unpkg.com/recker/dist/browser/index.umd.min.js"></script>
-<script>
-  const { recker } = Recker;
-  recker.get('https://api.example.com/users').json().then(console.log);
-</script>
 
-<!-- ESM -->
+<!-- Slim build (recommended for smaller bundle) -->
+<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
+
+<script>
+  // Access via global 'Recker' object
+  const { recker, get, post, createClient } = Recker;
+
+  async function main() {
+    const data = await get('https://api.example.com/users').json();
+    console.log(data);
+  }
+  main();
+</script>
+```
+
+#### ES Module (Script Tag)
+
+```html
+<script type="module">
+  // Full build
+  import { recker } from 'https://unpkg.com/recker/dist/browser/index.min.js';
+
+  // Slim build
+  import { recker } from 'https://unpkg.com/recker/dist/browser/index.slim.min.js';
+
+  const data = await recker.get('https://api.example.com/users').json();
+  console.log(data);
+</script>
+```
+
+#### Alternative CDNs
+
+```html
+<!-- jsDelivr -->
+<script src="https://cdn.jsdelivr.net/npm/recker/dist/browser/index.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/recker/dist/browser/index.slim.umd.min.js"></script>
+
+<!-- unpkg -->
+<script src="https://unpkg.com/recker/dist/browser/index.umd.min.js"></script>
+<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
+
+<!-- esm.sh (ESM only) -->
 <script type="module">
   import { recker } from 'https://esm.sh/recker';
-  const data = await recker.get('https://api.example.com/users').json();
 </script>
+```
+
+### Which Build Should I Use?
+
+| Your Use Case | Recommended Import |
+|:--------------|:-------------------|
+| **Node.js server/CLI** | `import { recker } from 'recker'` |
+| **React/Vue/Angular app (simple HTTP)** | `import { recker } from 'recker/browser-slim'` |
+| **Need AI streaming in browser** | `import { recker } from 'recker/browser'` |
+| **Need SEO analysis in browser** | `import { recker } from 'recker/browser'` |
+| **Need scraping in browser** | `import { recker } from 'recker/browser'` |
+| **Bundle size is critical** | `import { recker } from 'recker/browser-slim'` |
+| **Static HTML page** | `<script src="...index.slim.umd.min.js">` |
+
+### Subpath Imports
+
+For tree-shaking and smaller bundles, import specific modules:
+
+```typescript
+// Plugins only
+import { retryPlugin, rateLimitPlugin } from 'recker/plugins';
+
+// Specific plugin
+import { retryPlugin } from 'recker/plugins/retry';
+
+// SEO only (Node.js)
+import { analyzeSeo, Spider } from 'recker/seo';
+
+// Scraping only (Node.js)
+import { scrape, Spider } from 'recker/scrape';
+
+// AI only (Node.js)
+import { ai, createAiClient } from 'recker/ai';
+
+// DNS only (Node.js)
+import { dns, dnsClient } from 'recker/dns';
+
+// Template engine (Node.js only)
+import { TemplateEngine, template } from 'recker/template';
+
+// Testing utilities
+import { MockHttpServer, MockWebSocketServer } from 'recker/testing';
+
+// Presets
+import { presets } from 'recker/presets';
+import { github } from 'recker/presets/github';
 ```
 
 ### Browser Limitations
 
-Some features are **not available** in browser environments:
+Some features are **not available** in browser environments due to platform constraints:
 
 | Feature | Reason |
 |---------|--------|
 | DNS/WHOIS | Requires raw socket access |
 | FTP/SFTP/Telnet | Requires raw socket access |
-| AI Layer | Node.js dependencies |
-| HAR Recording | File system access |
+| Template Engine | Requires Node.js `fs` module |
+| HAR File Export | File system access |
 | mTLS Auth | Client certificates |
 | Redis Cache | Server-side only |
 | CLI | Terminal access |
+
+> **Note:** AI, SEO, and Scraping work in the browser **only with the full build** (`recker/browser`).
 
 See [Node vs Browser Differences](/browser/02-differences.md) for the complete comparison.
 
