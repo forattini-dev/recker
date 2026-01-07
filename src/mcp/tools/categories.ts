@@ -30,6 +30,7 @@ export type ToolCategory =
   | 'protocols' // FTP, SFTP, Telnet, WebSocket
   | 'parsing'   // CSV, YAML, XML, GraphQL
   | 'streaming' // HLS, SSE
+  | 'template'  // Template rendering and parsing
   | 'unified'   // Consolidated multi-purpose tools
   | 'utilities'; // General utilities
 
@@ -93,6 +94,11 @@ export const categoryMetadata: Record<ToolCategory, Omit<CategoryInfo, 'toolCoun
     name: 'streaming',
     description: 'HLS streaming, SSE, real-time content',
     icon: '📺',
+  },
+  template: {
+    name: 'template',
+    description: 'Template rendering, validation, and parsing tools',
+    icon: '📝',
   },
   unified: {
     name: 'unified',
@@ -197,6 +203,14 @@ export const toolCategories: Record<string, ToolCategory> = {
   rek_curl_convert: 'unified',
   rek_api_compare: 'unified',
   rek_load_test: 'unified',
+
+  // Template
+  rek_template_render: 'template',
+  rek_template_validate: 'template',
+  rek_template_parse: 'template',
+  rek_template_variables: 'template',
+  rek_template_check: 'template',
+  rek_template_helpers: 'template',
 };
 
 /**
@@ -231,6 +245,7 @@ export function listCategories(): CategoryInfo[] {
     protocols: 0,
     parsing: 0,
     streaming: 0,
+    template: 0,
     unified: 0,
     utilities: 0,
   };

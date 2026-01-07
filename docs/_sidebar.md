@@ -24,6 +24,13 @@
   - [JSON-RPC](/http/15-jsonrpc.md)
   - [OData](/http/16-odata.md)
 
+- **Template Engine**
+  - [Overview](/template/01-overview.md)
+  - [Syntax](/template/02-syntax.md)
+  - [Helpers](/template/03-helpers.md)
+  - [Filters](/template/04-filters.md)
+  - [Escaping](/template/05-escaping.md)
+
 - **Clients**
   - [Overview](/clients/00-overview.md)
   - [Mini Client](/mini/01-overview.md)

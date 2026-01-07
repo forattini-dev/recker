@@ -80,6 +80,10 @@ export * as protocols from './protocols/index.js';
 export * from './mcp/client.js';
 export * from './mcp/contract.js';
 
+// Template Engine
+export * as template from './template/index.js';
+export { TemplateEngine, template as renderTemplate, createTemplateEngine, hasTemplateExpressions } from './template/index.js';
+
 // Mini client (maximum performance mode)
 export * from './mini.js';
 

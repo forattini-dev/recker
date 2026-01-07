@@ -29,6 +29,7 @@ import { protocolTools } from './tools/protocols.js';
 import { parsingTools } from './tools/parsing.js';
 import { streamingTools } from './tools/streaming.js';
 import { unifiedTools, unifiedToolHandlers } from './tools/unified.js';
+import { tools as templateTools, handlers as templateToolHandlers } from './tools/template.js';
 import { ToolRegistry } from './tools/registry.js';
 import { loadToolModules } from './tools/loader.js';
 import { PromptRegistry } from './prompts/index.js';
@@ -211,6 +212,12 @@ export class MCPServer {
     this.toolRegistry.registerModule({
       tools: unifiedTools,
       handlers: unifiedToolHandlers
+    });
+
+    // Register template tools
+    this.toolRegistry.registerModule({
+      tools: templateTools,
+      handlers: templateToolHandlers
     });
 
     // Apply category-based filtering
