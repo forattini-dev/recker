@@ -254,8 +254,12 @@ export const andHelper: TemplateHelper = function(
   this: HelperContext,
   ...args: unknown[]
 ): unknown {
-  // Remove options object if present
-  const values = args.filter(a => typeof a !== 'object' || !('fn' in (a as object)));
+  // Remove options object if present (handle null safely)
+  const values = args.filter(a => {
+    if (a === null || a === undefined) return true;
+    if (typeof a !== 'object') return true;
+    return !('fn' in (a as object));
+  });
 
   for (const value of values) {
     if (!isTruthy(value)) {
@@ -275,7 +279,12 @@ export const orHelper: TemplateHelper = function(
   this: HelperContext,
   ...args: unknown[]
 ): unknown {
-  const values = args.filter(a => typeof a !== 'object' || !('fn' in (a as object)));
+  // Remove options object if present (handle null safely)
+  const values = args.filter(a => {
+    if (a === null || a === undefined) return true;
+    if (typeof a !== 'object') return true;
+    return !('fn' in (a as object));
+  });
 
   for (const value of values) {
     if (isTruthy(value)) {
@@ -454,18 +463,27 @@ export const rangeHelper: TemplateHelper = async function(
   let opts: BlockHelperOptions | undefined;
 
   if (typeof end === 'object' && 'fn' in end) {
+    // Block mode with single arg: {{#range 5}}...{{/range}}
     opts = end;
     actualStart = 0;
     actualEnd = start;
     actualStep = 1;
   } else if (typeof step === 'object' && 'fn' in step) {
+    // Block mode with two args: {{#range 1 5}}...{{/range}}
     opts = step;
     actualStart = start;
     actualEnd = end as number;
     actualStep = 1;
+  } else if (end === undefined) {
+    // Expression mode with single arg: (range 5)
+    actualStart = 0;
+    actualEnd = start;
+    actualStep = 1;
+    opts = options;
   } else {
+    // Expression or block mode with explicit args
     actualStart = start;
-    actualEnd = (end as number) ?? start;
+    actualEnd = end as number;
     actualStep = (step as number) ?? 1;
     opts = options;
   }

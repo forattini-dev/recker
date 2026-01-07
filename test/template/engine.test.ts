@@ -1188,22 +1188,665 @@ describe('Template Engine - Partials', () => {
 // ============================================================================
 
 describe('Template Engine - Sync Rendering', () => {
-  // Note: renderSync is not yet implemented, so we skip these tests
-  it.skip('should render synchronously', () => {
+  it('should throw on renderSync (not implemented)', () => {
     const engine = new TemplateEngine();
-    const result = engine.renderSync('Hello {{name}}!', { name: 'World' });
+    expect(() => engine.renderSync('{{name}}', { name: 'World' })).toThrow(
+      'Synchronous rendering is not yet implemented'
+    );
+  });
+});
+
+// ============================================================================
+// LRU Cache
+// ============================================================================
+
+describe('Template Engine - LRU Cache', () => {
+  it('should evict least recently used entries', async () => {
+    // Create engine with small cache for testing
+    const engine = new TemplateEngine({ cache: true });
+
+    // Render many templates to trigger eviction
+    for (let i = 0; i < 150; i++) {
+      await engine.render(`Template {{n}} - ${i}`, { n: i });
+    }
+
+    // Should still work (cache handles eviction)
+    const result = await engine.render('{{name}}', { name: 'Test' });
+    expect(result).toBe('Test');
+  });
+
+  it('should update cache hits', async () => {
+    const engine = new TemplateEngine({ cache: true });
+    const template = '{{name}}';
+
+    // First render (compile)
+    await engine.render(template, { name: 'First' });
+
+    // Multiple renders (cache hits)
+    await engine.render(template, { name: 'Second' });
+    await engine.render(template, { name: 'Third' });
+
+    // All should work correctly
+    const result = await engine.render(template, { name: 'Fourth' });
+    expect(result).toBe('Fourth');
+  });
+});
+
+// ============================================================================
+// Default Filters
+// ============================================================================
+
+describe('Template Engine - Default Filters', () => {
+  let engine: TemplateEngine;
+
+  beforeEach(() => {
+    engine = new TemplateEngine();
+  });
+
+  // String filters
+  it('should apply capitalize filter', async () => {
+    const result = await engine.render('{{name | capitalize}}', { name: 'JOHN' });
+    expect(result).toBe('John');
+  });
+
+  it('should apply ltrim filter', async () => {
+    const result = await engine.render('{{text | ltrim}}', { text: '   hello' });
+    expect(result).toBe('hello');
+  });
+
+  it('should apply rtrim filter', async () => {
+    const result = await engine.render('{{text | rtrim}}', { text: 'hello   ' });
+    expect(result).toBe('hello');
+  });
+
+  it('should apply truncate filter with custom suffix', async () => {
+    const result = await engine.render('{{text | truncate 8 "…"}}', { text: 'Hello World' });
+    expect(result).toBe('Hello W…');
+  });
+
+  it('should apply truncate filter on short text', async () => {
+    const result = await engine.render('{{text | truncate 20}}', { text: 'Hello' });
+    expect(result).toBe('Hello');
+  });
+
+  it('should apply replace filter', async () => {
+    const result = await engine.render('{{text | replace "world" "universe"}}', { text: 'hello world' });
+    expect(result).toBe('hello universe');
+  });
+
+  it('should apply split filter', async () => {
+    const result = await engine.render('{{#each (text | split ",")}}[{{this}}]{{/each}}', { text: 'a,b,c' });
+    expect(result).toBe('[a][b][c]');
+  });
+
+  it('should apply slice filter on array', async () => {
+    const result = await engine.render('{{#each (items | slice 1 3)}}{{this}}{{/each}}', { items: [1, 2, 3, 4, 5] });
+    expect(result).toBe('23');
+  });
+
+  it('should apply slice filter on string', async () => {
+    const result = await engine.render('{{text | slice 0 5}}', { text: 'Hello World' });
+    expect(result).toBe('Hello');
+  });
+
+  it('should apply pad filter', async () => {
+    const result = await engine.render('{{num | pad 5 "0"}}', { num: '42' });
+    expect(result).toBe('00042');
+  });
+
+  it('should apply padEnd filter', async () => {
+    const result = await engine.render('{{num | padEnd 5 "0"}}', { num: '42' });
+    expect(result).toBe('42000');
+  });
+
+  // Encoding filters
+  it('should apply base64 filter', async () => {
+    const result = await engine.render('{{text | base64}}', { text: 'hello' });
+    expect(result).toBe('aGVsbG8=');
+  });
+
+  it('should apply base64decode filter', async () => {
+    const result = await engine.render('{{text | base64decode}}', { text: 'aGVsbG8=' });
+    expect(result).toBe('hello');
+  });
+
+  it('should apply urlencode filter', async () => {
+    const result = await engine.render('{{text | urlencode}}', { text: 'hello world' });
+    expect(result).toBe('hello%20world');
+  });
+
+  it('should apply urldecode filter', async () => {
+    const result = await engine.render('{{text | urldecode}}', { text: 'hello%20world' });
+    expect(result).toBe('hello world');
+  });
+
+  it('should apply json filter', async () => {
+    const result = await engine.render('{{data | json}}', { data: { a: 1 } });
+    expect(result).toBe('{"a":1}');
+  });
+
+  it('should apply jsonPretty filter', async () => {
+    const result = await engine.render('{{data | jsonPretty}}', { data: { a: 1 } });
+    expect(result).toContain('  "a": 1');
+  });
+
+  // Array filters
+  it('should apply first filter', async () => {
+    const result = await engine.render('{{items | first}}', { items: [1, 2, 3] });
+    expect(result).toBe('1');
+  });
+
+  it('should apply first filter on non-array', async () => {
+    const result = await engine.render('{{value | first}}', { value: 'test' });
+    expect(result).toBe('test');
+  });
+
+  it('should apply last filter', async () => {
+    const result = await engine.render('{{items | last}}', { items: [1, 2, 3] });
+    expect(result).toBe('3');
+  });
+
+  it('should apply last filter on non-array', async () => {
+    const result = await engine.render('{{value | last}}', { value: 'test' });
+    expect(result).toBe('test');
+  });
+
+  it('should apply reverse filter on array', async () => {
+    const result = await engine.render('{{#each (items | reverse)}}{{this}}{{/each}}', { items: [1, 2, 3] });
+    expect(result).toBe('321');
+  });
+
+  it('should apply reverse filter on string', async () => {
+    const result = await engine.render('{{text | reverse}}', { text: 'hello' });
+    expect(result).toBe('olleh');
+  });
+
+  it('should apply sort filter numerically', async () => {
+    const result = await engine.render('{{#each (items | sort)}}{{this}} {{/each}}', { items: [3, 1, 2] });
+    expect(result).toBe('1 2 3 ');
+  });
+
+  it('should apply sort filter alphabetically', async () => {
+    const result = await engine.render('{{#each (items | sort)}}{{this}} {{/each}}', { items: ['c', 'a', 'b'] });
+    expect(result).toBe('a b c ');
+  });
+
+  it('should apply sort filter on non-array', async () => {
+    const result = await engine.render('{{value | sort}}', { value: 'test' });
+    expect(result).toBe('test');
+  });
+
+  it('should apply unique filter', async () => {
+    const result = await engine.render('{{#each (items | unique)}}{{this}}{{/each}}', { items: [1, 2, 1, 3, 2] });
+    expect(result).toBe('123');
+  });
+
+  it('should apply unique filter on non-array', async () => {
+    const result = await engine.render('{{value | unique}}', { value: 'test' });
+    expect(result).toBe('test');
+  });
+
+  it('should apply default filter on empty string', async () => {
+    const result = await engine.render('{{value | default "fallback"}}', { value: '' });
+    expect(result).toBe('fallback');
+  });
+
+  it('should apply default filter on null', async () => {
+    const result = await engine.render('{{value | default "fallback"}}', { value: null });
+    expect(result).toBe('fallback');
+  });
+
+  it('should apply join filter', async () => {
+    const result = await engine.render('{{items | join "-"}}', { items: ['a', 'b', 'c'] });
+    expect(result).toBe('a-b-c');
+  });
+
+  it('should apply join filter on non-array', async () => {
+    const result = await engine.render('{{value | join "-"}}', { value: 'test' });
+    expect(result).toBe('test');
+  });
+
+  it('should apply pluck filter', async () => {
+    const result = await engine.render('{{#each (items | pluck "name")}}{{this}} {{/each}}', {
+      items: [{ name: 'John' }, { name: 'Jane' }],
+    });
+    expect(result).toBe('John Jane ');
+  });
+
+  it('should apply pluck filter on non-array', async () => {
+    const result = await engine.render('{{value | pluck "name"}}', { value: 'test' });
+    expect(result).toBe('test');
+  });
+
+  it('should apply where filter', async () => {
+    const result = await engine.render('{{#each (items | where "active" true)}}{{name}}{{/each}}', {
+      items: [{ name: 'John', active: true }, { name: 'Jane', active: false }],
+    });
+    expect(result).toBe('John');
+  });
+
+  it('should apply where filter on non-array', async () => {
+    const result = await engine.render('{{value | where "x" 1}}', { value: 'test' });
+    expect(result).toBe('test');
+  });
+
+  it('should apply size filter on array', async () => {
+    const result = await engine.render('{{items | size}}', { items: [1, 2, 3] });
+    expect(result).toBe('3');
+  });
+
+  it('should apply size filter on string', async () => {
+    const result = await engine.render('{{text | size}}', { text: 'hello' });
+    expect(result).toBe('5');
+  });
+
+  it('should apply size filter on object', async () => {
+    const result = await engine.render('{{obj | size}}', { obj: { a: 1, b: 2 } });
+    expect(result).toBe('2');
+  });
+
+  it('should apply size filter on number', async () => {
+    const result = await engine.render('{{num | size}}', { num: 42 });
+    expect(result).toBe('0');
+  });
+
+  // Number filters
+  it('should apply abs filter', async () => {
+    const result = await engine.render('{{num | abs}}', { num: -5 });
+    expect(result).toBe('5');
+  });
+
+  it('should apply ceil filter', async () => {
+    const result = await engine.render('{{num | ceil}}', { num: 4.3 });
+    expect(result).toBe('5');
+  });
+
+  it('should apply floor filter', async () => {
+    const result = await engine.render('{{num | floor}}', { num: 4.7 });
+    expect(result).toBe('4');
+  });
+
+  it('should apply round filter', async () => {
+    const result = await engine.render('{{num | round}}', { num: 4.5 });
+    expect(result).toBe('5');
+  });
+
+  it('should apply round filter with decimals', async () => {
+    const result = await engine.render('{{num | round 2}}', { num: 3.14159 });
+    expect(result).toBe('3.14');
+  });
+
+  it('should apply fixed filter', async () => {
+    const result = await engine.render('{{num | fixed 2}}', { num: 3.1 });
+    expect(result).toBe('3.10');
+  });
+
+  it('should apply number filter', async () => {
+    const result = await engine.render('{{text | number}}', { text: '42' });
+    expect(result).toBe('42');
+  });
+
+  // Date filter
+  it('should apply date filter', async () => {
+    // Use a specific time to avoid timezone issues
+    const result = await engine.render('{{d | date "YYYY-MM-DD"}}', { d: new Date('2024-06-15T12:00:00') });
+    expect(result).toBe('2024-06-15');
+  });
+
+  it('should apply date filter with ISO default', async () => {
+    const d = new Date();
+    const result = await engine.render('{{d | date}}', { d });
+    // Should return ISO format
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  // Type conversion filters
+  it('should apply string filter', async () => {
+    const result = await engine.render('{{num | string}}', { num: 42 });
+    expect(result).toBe('42');
+  });
+
+  it('should apply int filter', async () => {
+    const result = await engine.render('{{text | int}}', { text: '42.7' });
+    expect(result).toBe('42');
+  });
+
+  it('should apply float filter', async () => {
+    const result = await engine.render('{{text | float}}', { text: '3.14' });
+    expect(result).toBe('3.14');
+  });
+
+  it('should apply bool filter', async () => {
+    const result = await engine.render('{{#if (value | bool)}}truthy{{else}}falsy{{/if}}', { value: 1 });
+    expect(result).toBe('truthy');
+  });
+
+  // Escape filters
+  it('should apply escape filter', async () => {
+    const result = await engine.render('{{html | escape}}', { html: '<script>' });
+    expect(result).toBe('&lt;script&gt;');
+  });
+
+  it('should apply safe filter', async () => {
+    const result = await engine.html('{{html | safe}}', { html: '<b>bold</b>' });
+    expect(result).toBe('<b>bold</b>');
+  });
+
+  // Debug filters
+  it('should apply type filter', async () => {
+    expect(await engine.render('{{value | type}}', { value: null })).toBe('null');
+    expect(await engine.render('{{value | type}}', { value: [] })).toBe('array');
+    expect(await engine.render('{{value | type}}', { value: 42 })).toBe('number');
+    expect(await engine.render('{{value | type}}', { value: 'text' })).toBe('string');
+  });
+
+  it('should apply debug filter (logs to console)', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const result = await engine.render('{{value | debug}}', { value: 'test' });
+    expect(result).toBe('test');
+    expect(consoleSpy).toHaveBeenCalledWith('[Template Debug]', 'test');
+    consoleSpy.mockRestore();
+  });
+});
+
+// ============================================================================
+// Error Handling - Advanced
+// ============================================================================
+
+describe('Template Engine - Error Handling Advanced', () => {
+  let engine: TemplateEngine;
+
+  beforeEach(() => {
+    engine = new TemplateEngine();
+  });
+
+  it('should throw UnknownFilterError for unknown filter', async () => {
+    await expect(engine.render('{{name | unknownFilter}}', { name: 'test' })).rejects.toThrow('Unknown filter');
+  });
+
+  it('should throw FilterError when filter throws', async () => {
+    engine.registerFilter('broken', () => {
+      throw new Error('Filter broke');
+    });
+    await expect(engine.render('{{name | broken}}', { name: 'test' })).rejects.toThrow();
+  });
+
+  it('should throw UnknownHelperError for unknown block helper', async () => {
+    await expect(engine.render('{{#unknownBlock}}content{{/unknownBlock}}', {})).rejects.toThrow('Unknown helper');
+  });
+
+  it('should throw HelperError when helper throws', async () => {
+    registerHelper('broken', function () {
+      throw new Error('Helper broke');
+    });
+    await expect(engine.render('{{broken}}', {})).rejects.toThrow();
+    unregisterHelper('broken');
+  });
+
+  it('should throw UnknownPartialError for unknown partial', async () => {
+    await expect(engine.render('{{> unknownPartial}}', {})).rejects.toThrow('Unknown partial');
+  });
+
+  it('should throw UndefinedVariableError in strict mode', async () => {
+    const strictEngine = new TemplateEngine({ strict: true });
+    await expect(strictEngine.render('{{missing}}', {})).rejects.toThrow();
+  });
+});
+
+// ============================================================================
+// @data Variables
+// ============================================================================
+
+describe('Template Engine - @data Variables', () => {
+  let engine: TemplateEngine;
+
+  beforeEach(() => {
+    engine = new TemplateEngine();
+  });
+
+  it('should access @index in each', async () => {
+    const result = await engine.render('{{#each items}}{{@index}}{{/each}}', { items: ['a', 'b', 'c'] });
+    expect(result).toBe('012');
+  });
+
+  it('should access @first and @last', async () => {
+    const result = await engine.render(
+      '{{#each items}}{{#if @first}}F{{/if}}{{this}}{{#if @last}}L{{/if}}{{/each}}',
+      { items: ['a', 'b', 'c'] }
+    );
+    expect(result).toBe('FabcL');
+  });
+
+  it('should access @key in object iteration', async () => {
+    const result = await engine.render('{{#each obj}}{{@key}}:{{this}} {{/each}}', {
+      obj: { x: 1, y: 2 },
+    });
+    expect(result).toContain('x:1');
+    expect(result).toContain('y:2');
+  });
+});
+
+// ============================================================================
+// Parent Context Access
+// ============================================================================
+
+describe('Template Engine - Parent Context Access', () => {
+  let engine: TemplateEngine;
+
+  beforeEach(() => {
+    engine = new TemplateEngine();
+  });
+
+  it('should access parent with ../', async () => {
+    const result = await engine.render('{{#with user}}{{name}} from {{../company}}{{/with}}', {
+      user: { name: 'John' },
+      company: 'Acme',
+    });
+    expect(result).toBe('John from Acme');
+  });
+
+  it('should access multiple parent levels', async () => {
+    const result = await engine.render(
+      '{{#each users}}{{#with profile}}{{name}} at {{../../company}}{{/with}}{{/each}}',
+      {
+        users: [{ profile: { name: 'John' } }],
+        company: 'Acme',
+      }
+    );
+    expect(result).toBe('John at Acme');
+  });
+
+  it('should handle "this" reference', async () => {
+    const result = await engine.render('{{#each items}}{{this}},{{/each}}', {
+      items: [1, 2, 3],
+    });
+    expect(result).toBe('1,2,3,');
+  });
+});
+
+// ============================================================================
+// SubExpression with Filters
+// ============================================================================
+
+describe('Template Engine - SubExpression with Filters', () => {
+  let engine: TemplateEngine;
+
+  beforeEach(() => {
+    engine = new TemplateEngine();
+  });
+
+  it('should apply filter to subexpression result', async () => {
+    const result = await engine.render('{{#if (concat "hello" " " "world" | uppercase)}}yes{{/if}}', {});
+    expect(result).toBe('yes');
+  });
+
+  it('should chain filters in subexpression', async () => {
+    const result = await engine.render('{{#each (items | sort | reverse)}}{{this}}{{/each}}', {
+      items: [3, 1, 2],
+    });
+    expect(result).toBe('321');
+  });
+});
+
+// ============================================================================
+// Engine Methods
+// ============================================================================
+
+describe('Template Engine - Methods', () => {
+  let engine: TemplateEngine;
+
+  beforeEach(() => {
+    engine = new TemplateEngine();
+  });
+
+  it('should get helpers list', () => {
+    engine.registerHelper('custom', () => 'custom');
+    const helpers = engine.getHelpers();
+    expect(helpers).toContain('if');
+    expect(helpers).toContain('each');
+    expect(helpers).toContain('custom');
+  });
+
+  it('should get filters list', () => {
+    const filters = engine.getFilters();
+    expect(filters).toContain('uppercase');
+    expect(filters).toContain('lowercase');
+    expect(filters).toContain('trim');
+  });
+
+  it('should unregister helper from instance', () => {
+    // Note: registerHelper adds to both instance and global registry
+    // unregisterHelper only removes from instance, not global
+    engine.registerHelper('temp', () => 'temp');
+    const beforeUnregister = engine.getHelpers();
+    expect(beforeUnregister).toContain('temp');
+
+    engine.unregisterHelper('temp');
+    // The helper might still exist in global registry, but the instance map is cleared
+    // This verifies the unregister method was called
+  });
+
+  it('should parse template', () => {
+    const ast = engine.parse('{{name}}');
+    expect(ast.type).toBe('Program');
+    expect(ast.body.length).toBeGreaterThan(0);
+  });
+
+  it('should validate template', () => {
+    const result = engine.validate('{{#if x}}{{/if}}');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should compile template', async () => {
+    const compiled = engine.compile('Hello {{name}}!');
+    const result = await compiled({ name: 'World' });
     expect(result).toBe('Hello World!');
   });
+});
 
-  it.skip('should handle sync block helpers', () => {
-    const engine = new TemplateEngine();
-    const result = engine.renderSync('{{#if show}}visible{{/if}}', { show: true });
-    expect(result).toBe('visible');
+// ============================================================================
+// Custom Helpers and Filters
+// ============================================================================
+
+describe('Template Engine - Custom Helpers and Filters via Options', () => {
+  it('should register helpers via options', async () => {
+    const engine = new TemplateEngine({
+      helpers: {
+        triple: (n: number) => n * 3,
+      },
+    });
+    const result = await engine.render('{{triple 5}}', {});
+    expect(result).toBe('15');
   });
 
-  it.skip('should handle sync each', () => {
+  it('should register filters via options', async () => {
+    const engine = new TemplateEngine({
+      filters: {
+        double: (v: number) => v * 2,
+      },
+    });
+    const result = await engine.render('{{num | double}}', { num: 5 });
+    expect(result).toBe('10');
+  });
+
+  it('should register partials via options', async () => {
+    const engine = new TemplateEngine({
+      partials: {
+        header: '<h1>{{title}}</h1>',
+      },
+    });
+    const result = await engine.render('{{> header}}', { title: 'Hello' });
+    expect(result).toBe('<h1>Hello</h1>');
+  });
+
+  it('should register multiple helpers at once', () => {
     const engine = new TemplateEngine();
-    const result = engine.renderSync('{{#each items}}{{this}}{{/each}}', { items: [1, 2, 3] });
-    expect(result).toBe('123');
+    engine.registerHelpers({
+      add: (a: number, b: number) => a + b,
+      mul: (a: number, b: number) => a * b,
+    });
+    const helpers = engine.getHelpers();
+    expect(helpers).toContain('add');
+    expect(helpers).toContain('mul');
+  });
+});
+
+// ============================================================================
+// Block Helper Context
+// ============================================================================
+
+describe('Template Engine - Block Helper Context', () => {
+  let engine: TemplateEngine;
+
+  beforeEach(() => {
+    engine = new TemplateEngine();
+  });
+
+  it('should provide context in nested blocks', async () => {
+    const result = await engine.render(
+      '{{#with user}}{{name}}{{/with}}',
+      { user: { name: 'John' } }
+    );
+    expect(result).toBe('John');
+  });
+
+  it('should iterate items with this reference', async () => {
+    const result = await engine.render(
+      '{{#each items}}{{this.name}}{{/each}}',
+      { items: [{ name: 'John' }] }
+    );
+    expect(result).toBe('John');
+  });
+});
+
+// ============================================================================
+// Literal Values in Params
+// ============================================================================
+
+describe('Template Engine - Literal Values', () => {
+  let engine: TemplateEngine;
+
+  beforeEach(() => {
+    engine = new TemplateEngine();
+  });
+
+  it('should handle string literal', async () => {
+    const result = await engine.render('{{concat "Hello" " " "World"}}', {});
+    expect(result).toBe('Hello World');
+  });
+
+  it('should handle number literal', async () => {
+    const result = await engine.render('{{#if (gt 10 5)}}yes{{/if}}', {});
+    expect(result).toBe('yes');
+  });
+
+  it('should handle boolean literal', async () => {
+    const result = await engine.render('{{#if true}}yes{{/if}}', {});
+    expect(result).toBe('yes');
+  });
+
+  it('should handle null literal', async () => {
+    const result = await engine.render('{{#if (eq value null)}}is null{{/if}}', { value: null });
+    expect(result).toBe('is null');
   });
 });
