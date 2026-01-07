@@ -59,6 +59,26 @@ yarn add recker
 </script>
 ```
 
+### Slim Bundle (Core + Plugins)
+
+Use this when you don't need AI, SEO, scrape, or presets.
+
+```html
+<!-- Slim UMD -->
+<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
+
+<!-- Slim ESM -->
+<script type="module">
+  import { recker } from 'https://unpkg.com/recker/dist/browser/index.slim.min.js';
+  const data = await recker.get('https://api.example.com/users').json();
+  console.log(data);
+</script>
+```
+
+```typescript
+import { recker } from 'recker/browser-slim';
+```
+
 ## Basic Usage
 
 ### With Bundlers (Vite, Webpack, etc.)

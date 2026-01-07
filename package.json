@@ -79,6 +79,11 @@
       "import": "./dist/browser/browser/index.js",
       "default": "./dist/browser/browser/index.js"
     },
+    "./browser-slim": {
+      "types": "./dist/browser/browser/index-slim.d.ts",
+      "import": "./dist/browser/browser/index-slim.js",
+      "default": "./dist/browser/browser/index-slim.js"
+    },
     "./node": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",

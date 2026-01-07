@@ -64,6 +64,16 @@ const info = await whois('github.com');
 import { get, post, createClient } from 'recker/browser';
 ```
 
+```html
+<!-- Slim bundle (core + plugins, no AI/SEO/scrape/presets) -->
+<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
+```
+
+```typescript
+// Slim import path
+import { get, post, createClient } from 'recker/browser-slim';
+```
+
 ### Unified Namespace
 
 ```typescript

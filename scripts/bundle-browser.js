@@ -268,6 +268,11 @@ const commonOptions = {
   plugins: [nodeStubPlugin],
 };
 
+const slimOptions = {
+  ...commonOptions,
+  entryPoints: ['./dist/browser/browser/index-slim.js'],
+};
+
 async function bundleBrowser() {
   console.log('Building browser bundles...\n');
 
@@ -322,6 +327,58 @@ async function bundleBrowser() {
     sourcemap: true,
   });
   console.log('  IIFE minified: dist/browser/index.iife.min.js');
+
+  // Slim ESM minified
+  await build({
+    ...slimOptions,
+    outfile: './dist/browser/index.slim.min.js',
+    format: 'esm',
+    minify: true,
+    sourcemap: true,
+  });
+  console.log('  Slim ESM minified: dist/browser/index.slim.min.js');
+
+  // Slim UMD (for <script> tags)
+  await build({
+    ...slimOptions,
+    outfile: './dist/browser/index.slim.umd.js',
+    format: 'iife',
+    globalName: 'recker',
+    minify: false,
+  });
+  console.log('  Slim UMD: dist/browser/index.slim.umd.js');
+
+  // Slim UMD minified
+  await build({
+    ...slimOptions,
+    outfile: './dist/browser/index.slim.umd.min.js',
+    format: 'iife',
+    globalName: 'recker',
+    minify: true,
+    sourcemap: true,
+  });
+  console.log('  Slim UMD minified: dist/browser/index.slim.umd.min.js');
+
+  // Slim IIFE (for CDN)
+  await build({
+    ...slimOptions,
+    outfile: './dist/browser/index.slim.iife.js',
+    format: 'iife',
+    globalName: 'recker',
+    minify: false,
+  });
+  console.log('  Slim IIFE: dist/browser/index.slim.iife.js');
+
+  // Slim IIFE minified
+  await build({
+    ...slimOptions,
+    outfile: './dist/browser/index.slim.iife.min.js',
+    format: 'iife',
+    globalName: 'recker',
+    minify: true,
+    sourcemap: true,
+  });
+  console.log('  Slim IIFE minified: dist/browser/index.slim.iife.min.js');
 
   console.log('\nBrowser bundles built successfully!');
 }
