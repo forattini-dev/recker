@@ -14,24 +14,28 @@ describe('Smithy HttpHandler Interface', () => {
       expect(client.metadata).toEqual({ handlerProtocol: 'http/1.1' });
     });
 
-    it('should return h2 protocol when http2 is enabled (boolean)', () => {
+    it('should always return http/1.1 even when http2 transport is enabled (boolean)', () => {
+      // metadata.handlerProtocol controls request signing style, not transport protocol
+      // Always 'http/1.1' ensures 'host' header is signed (not ':authority' pseudo-header)
       const mockTransport = new MockTransport();
       const client = createClient({
         baseUrl: 'https://example.com',
         http2: true,
         transport: mockTransport
       });
-      expect(client.metadata).toEqual({ handlerProtocol: 'h2' });
+      expect(client.metadata).toEqual({ handlerProtocol: 'http/1.1' });
     });
 
-    it('should return h2 protocol when http2 is enabled (object)', () => {
+    it('should always return http/1.1 even when http2 transport is enabled (object)', () => {
+      // metadata.handlerProtocol controls request signing style, not transport protocol
+      // Always 'http/1.1' ensures 'host' header is signed (not ':authority' pseudo-header)
       const mockTransport = new MockTransport();
       const client = createClient({
         baseUrl: 'https://example.com',
         http2: { enabled: true },
         transport: mockTransport
       });
-      expect(client.metadata).toEqual({ handlerProtocol: 'h2' });
+      expect(client.metadata).toEqual({ handlerProtocol: 'http/1.1' });
     });
 
     it('should return http/1.1 when http2 is explicitly disabled', () => {

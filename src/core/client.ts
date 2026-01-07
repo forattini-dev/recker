@@ -1470,9 +1470,14 @@ export class Client {
   /**
    * Protocol metadata for Smithy HttpHandler interface.
    * Used by AWS SDK v3 to identify the handler protocol.
+   *
+   * Always returns 'http/1.1' to ensure AWS SDK signs the 'host' header
+   * instead of HTTP/2 pseudo-header ':authority'. This is critical because
+   * we filter out HTTP/2 pseudo-headers before sending, which would cause
+   * signature mismatch if ':authority' was included in the signature.
    */
   get metadata(): { handlerProtocol: string } {
-    return { handlerProtocol: this.http2Enabled ? 'h2' : 'http/1.1' };
+    return { handlerProtocol: 'http/1.1' };
   }
 
   /**
@@ -1548,21 +1553,26 @@ export class Client {
     }
 
     // Normalize headers (array values → comma-joined string)
+    // Filter out HTTP/2 pseudo-headers (start with ':') as they are not valid for fetch API
     const headers: Record<string, string> = {};
     if (request.headers) {
       for (const [key, value] of Object.entries(request.headers)) {
         if (value === undefined) continue;
+        if (key.startsWith(':')) continue; // Skip HTTP/2 pseudo-headers like :authority, :method, :path
         headers[key] = Array.isArray(value) ? value.join(', ') : value;
       }
     }
 
     // Make request using Recker's internal machinery
+    // AWS SDK expects the handler to return the response even for error status codes
+    // so it can parse the XML body and extract the proper error code (e.g., NoSuchKey)
     const response = await this.request(url, {
       method: (request.method || 'GET') as RequestOptions['method'],
       headers,
       body: request.body as RequestOptions['body'],
       signal: options?.abortSignal,
       timeout: options?.requestTimeout,
+      throwHttpErrors: false,
     });
 
     // Convert response headers to Record<string, string>
