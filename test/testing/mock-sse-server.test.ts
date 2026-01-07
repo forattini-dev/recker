@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { MockSSEServer, createMockSSEServer } from '../../src/testing/mock-sse-server.js';
 
 describe('MockSSEServer', () => {
@@ -247,45 +247,57 @@ describe('MockSSEServer', () => {
   });
 
   describe('Periodic Events', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should send periodic events', async () => {
+      vi.useRealTimers(); // Need real timers for server setup
       server = await MockSSEServer.create({ sendRetry: false });
 
       const controller = new AbortController();
       fetch(server.url, { signal: controller.signal }).catch(() => {});
 
       await server.waitForConnections(1);
+      vi.useFakeTimers(); // Switch to fake timers for periodic events
 
-      server.startPeriodicEvents('heartbeat', 20);
+      server.startPeriodicEvents('heartbeat', 100);
 
-      // Wait for a few events to be sent
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Advance time deterministically: 5 intervals = 5 events
+      await vi.advanceTimersByTimeAsync(500);
 
       server.stopPeriodicEvents('heartbeat');
       controller.abort();
 
-      // Verify events were sent
-      expect(server.statistics.totalEventsSent).toBeGreaterThanOrEqual(2);
+      // Exactly 5 events: at 100ms, 200ms, 300ms, 400ms, 500ms
+      expect(server.statistics.totalEventsSent).toBe(5);
     });
 
     it('should use custom data generator', async () => {
+      vi.useRealTimers(); // Need real timers for server setup
       server = await MockSSEServer.create({ sendRetry: false });
 
       const controller = new AbortController();
       fetch(server.url, { signal: controller.signal }).catch(() => {});
 
       await server.waitForConnections(1);
+      vi.useFakeTimers(); // Switch to fake timers for periodic events
 
       let counter = 0;
-      server.startPeriodicEvents('counter', 20, () => String(++counter));
+      server.startPeriodicEvents('counter', 50, () => String(++counter));
 
-      // Wait for a few intervals
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Advance time deterministically: 4 intervals = 4 events
+      await vi.advanceTimersByTimeAsync(200);
 
       server.stopPeriodicEvents();
 
-      // Verify events were sent with incremented counter
-      expect(counter).toBeGreaterThan(0);
-      expect(server.statistics.totalEventsSent).toBeGreaterThan(0);
+      // Exactly 4 events with counter incremented each time
+      expect(counter).toBe(4);
+      expect(server.statistics.totalEventsSent).toBe(4);
 
       controller.abort();
     });
