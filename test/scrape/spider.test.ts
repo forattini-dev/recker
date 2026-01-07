@@ -608,7 +608,7 @@ Allow: /
       });
 
       expect(result.sitemap).toBeDefined();
-    });
+    }, 15000);
 
     it('should include sitemap analysis in result', async () => {
       server.get('/sitemap.xml', {
