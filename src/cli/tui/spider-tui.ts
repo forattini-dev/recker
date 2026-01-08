@@ -14,6 +14,7 @@ import {
   StatusIndicator,
   Table,
   createSignal,
+  useApp,
 } from 'tuiuiu.js';
 
 export interface SpiderTimings {
@@ -277,8 +278,14 @@ export function createSpiderTui(startUrl: string, limit: number) {
     setState((s) => ({ ...s, status: 'error', currentUrl: error }));
   };
 
+  // Store exit function reference for external control
+  let exitApp: (() => void) | null = null;
+
   // Render the TUI
   function SpiderApp() {
+    const app = useApp();
+    exitApp = () => app.exit();
+
     const s = state();
     const elapsed = Math.round((Date.now() - s.startTime) / 1000);
     const isComplete = s.status === 'complete';
@@ -414,7 +421,13 @@ export function createSpiderTui(startUrl: string, limit: number) {
     updateUrl,
     setComplete,
     setError,
-    stop: () => app.unmount(),
+    stop: () => {
+      if (exitApp) {
+        exitApp();
+      } else {
+        app.unmount();
+      }
+    },
     waitUntilExit: () => app.waitUntilExit(),
   };
 }
