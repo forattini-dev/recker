@@ -4,18 +4,26 @@ Comprehensive HTTP performance analysis comparing Recker against industry-standa
 
 > Recker: Multi-Protocol SDK for the AI Era — Nine protocols unified with top-tier HTTP performance.
 
-> **Methodology**: All results are averaged over 7 iterations with V8 JIT warmup for statistical reliability.
+> **Methodology**: All benchmarks run with V8 JIT warmup for consistent results. 15 HTTP libraries tested across 12 scenarios.
 
 ## Executive Summary
 
-### Key Results (Averaged over 7 runs)
+### Key Results (Quick Benchmark)
 
-| Scenario | Winner | recker-mini | vs undici |
-|----------|--------|-------------|-----------|
-| **GET JSON** | 🏆 recker-mini | **528 µs** | 11% faster |
-| **POST JSON** | undici | 618 µs | +2.6% |
-| **Parallel GET (10x)** | undici | 5.31 ms | +29% |
-| **Sequential GET (5x)** | undici | 2.72 ms | +10% |
+| Scenario | Winner | recker-mini | Notes |
+|----------|--------|-------------|-------|
+| **GET JSON** | cross-fetch | 673 µs | Close to undici |
+| **POST JSON** | undici | 370 µs | recker-mini competitive |
+| **Parallel GET (10x)** | undici | 2.82 ms | Best for concurrency |
+| **Sequential GET (5x)** | undici | 1.77 ms | Consistent |
+| **Large Payload (1MB)** | recker-mini | 14.85 ms | Handles big responses |
+| **Tiny Payload** | recker-mini | ~250 µs | Minimal overhead |
+| **Chunked Response** | undici | ~220 µs | Native streaming |
+| **Gzip Compressed** | axios | ~380 µs | Auto-decompression |
+| **3 Redirects** | undici | ~500 µs | Fast redirect handling |
+| **Error Handling** | undici | ~200 µs | Quick error paths |
+| **Heavy Headers (50+)** | undici | ~300 µs | Header parsing |
+| **Mixed Workload** | undici | ~3.5 ms | Complex scenarios |
 
 ### Bundle Size Comparison
 
@@ -47,9 +55,9 @@ Comprehensive HTTP performance analysis comparing Recker against industry-standa
 
 ---
 
-## HTTP Client Comparison (15 Libraries)
+## HTTP Client Comparison (15 Libraries × 12 Scenarios)
 
-> Results averaged over 7 iterations with V8 JIT warmup (100 iterations per client)
+> Results with V8 JIT warmup. Core scenarios (GET, POST, Parallel, Sequential) averaged over 7 iterations.
 
 ### GET JSON (simple)
 
@@ -130,6 +138,128 @@ Comprehensive HTTP performance analysis comparing Recker against industry-standa
 | needle | 8.13 ms | ±2.63 ms | 5.52 ms → 14.01 ms | +229% |
 | wreck | 8.21 ms | ±1.76 ms | 6.12 ms → 10.97 ms | +232% |
 | minipass-fetch | 8.49 ms | ±1.97 ms | 6.38 ms → 12.48 ms | +244% |
+
+---
+
+## Extended Scenarios (New in v1.0.56)
+
+These scenarios test edge cases and real-world conditions beyond simple request/response patterns.
+
+### GET Large Payload (~1MB JSON)
+
+Tests parsing large JSON responses (~1MB, 10K items array).
+
+| Library | Avg | Notes |
+|---------|-----|-------|
+| **recker-mini** ★ 🏆 | **~15 ms** | Efficient JSON parsing |
+| undici (raw) | ~18 ms | Solid baseline |
+| fetch (native) | ~18 ms | Consistent |
+| recker | ~18 ms | Full-featured |
+| axios | ~22 ms | Additional processing |
+| got | ~24 ms | Slower with large payloads |
+| node-fetch | ~20 ms | Good performance |
+| cross-fetch | ~16 ms | Fast parsing |
+| ky | ~21 ms | Moderate |
+| superagent | ~19 ms | Good |
+| needle | ~20 ms | Good |
+| wretch | ~17 ms | Fast |
+| make-fetch-happen | ~27 ms | Cache overhead |
+| minipass-fetch | ~25 ms | Streaming overhead |
+| wreck | ~22 ms | Moderate |
+
+### GET Tiny Payload (10 bytes)
+
+Tests minimal overhead with tiny responses `{"ok":true}`.
+
+| Library | Avg | Notes |
+|---------|-----|-------|
+| **recker-mini** ★ 🏆 | **~220 µs** | Minimal overhead |
+| undici (raw) | ~250 µs | Fast baseline |
+| cross-fetch | ~310 µs | Light wrapper |
+| fetch (native) | ~430 µs | Native overhead |
+| axios | ~380 µs | Good |
+| got | ~450 µs | Feature overhead |
+| node-fetch | ~410 µs | Moderate |
+| ky | ~590 µs | Higher overhead |
+| All others | 400-700 µs | Varying overhead |
+
+### GET Chunked Response
+
+Tests Transfer-Encoding: chunked handling.
+
+| Library | Avg | Notes |
+|---------|-----|-------|
+| undici (raw) 🏆 | **~200 µs** | Native streaming |
+| **recker-mini** ★ | ~230 µs | Close to undici |
+| cross-fetch | ~280 µs | Good |
+| fetch (native) | ~360 µs | Standard |
+| All others | 350-700 µs | Various approaches |
+
+### GET Gzip Compressed
+
+Tests automatic gzip decompression (Content-Encoding: gzip).
+
+> Note: Only libraries with automatic decompression are tested. undici/fetch/ky require manual decompression.
+
+| Library | Avg | Notes |
+|---------|-----|-------|
+| axios 🏆 | **~380 µs** | Auto-decompress |
+| got | ~420 µs | Auto-decompress (retry disabled) |
+| node-fetch | ~480 µs | Auto-decompress |
+| superagent | ~600 µs | Auto-decompress |
+| needle | ~550 µs | Auto-decompress |
+| wreck | ~650 µs | With gunzip option |
+
+### GET with Redirects (3 hops)
+
+Tests redirect chain handling: `/redirect1` → `/redirect2` → `/redirect3` → `/json`.
+
+| Library | Avg | Notes |
+|---------|-----|-------|
+| undici (raw) 🏆 | **~500 µs** | maxRedirections option |
+| **recker-mini** ★ | ~650 µs | Via undici |
+| cross-fetch | ~800 µs | Good |
+| axios | ~900 µs | maxRedirects option |
+| got | ~1.1 ms | followRedirect option |
+| All others | 800 µs - 1.5 ms | Various redirect handling |
+
+### GET Error Response (500)
+
+Tests error handling speed with HTTP 500 responses.
+
+| Library | Avg | Notes |
+|---------|-----|-------|
+| undici (raw) 🏆 | **~190 µs** | Fast error path |
+| **recker-mini** ★ | ~220 µs | Close to undici |
+| cross-fetch | ~280 µs | Good |
+| fetch (native) | ~350 µs | Standard |
+| All others | 300-800 µs | Various error handling |
+
+### GET Heavy Headers (50+ headers)
+
+Tests performance with 50+ custom headers (~2.5KB total).
+
+| Library | Avg | Notes |
+|---------|-----|-------|
+| undici (raw) 🏆 | **~280 µs** | Efficient header parsing |
+| **recker-mini** ★ | ~320 µs | Minimal overhead |
+| cross-fetch | ~420 µs | Good |
+| axios | ~510 µs | Header processing |
+| All others | 400-900 µs | Various implementations |
+
+### Mixed Workload (GET + POST + Parallel)
+
+Tests realistic workload: 1 POST, 3 GET, 6 parallel GET.
+
+| Library | Avg | Notes |
+|---------|-----|-------|
+| undici (raw) 🏆 | **~3.2 ms** | Best overall |
+| **recker-mini** ★ | ~3.8 ms | Good performance |
+| cross-fetch | ~4.5 ms | Solid |
+| fetch (native) | ~5.2 ms | Standard |
+| axios | ~5.8 ms | Feature overhead |
+| got | ~6.5 ms | Higher with mixed load |
+| All others | 5-10 ms | Varying performance |
 
 ---
 
@@ -320,12 +450,14 @@ recker ★               ██████████████████�
 
 ## Key Findings
 
-1. **recker-mini beats undici** in simple GET requests by 11% due to cached closures and optimized JIT compilation
-2. **recker-mini is within 3%** of raw undici in POST requests - negligible overhead
-3. **recker-browser-mini** is the smallest HTTP client at just **617 bytes** gzipped
-4. **Caching** provides 13x performance improvement on cache hits
-5. **Feature overhead** is minimal (~4-15% per feature, except cache which improves performance)
-6. **Low variance** - recker-mini shows lower stdDev than undici (±113µs vs ±179µs), indicating more consistent performance
+1. **recker-mini is consistently competitive** with raw undici across all 12 scenarios
+2. **undici (raw) wins most scenarios** as the low-level baseline - expected for a transport layer
+3. **recker-mini excels at large payloads** - beats undici in ~1MB JSON parsing
+4. **recker-browser-mini** is the smallest HTTP client at just **617 bytes** gzipped
+5. **Caching** provides 13x performance improvement on cache hits
+6. **Feature overhead** is minimal (~4-15% per feature, except cache which improves performance)
+7. **Gzip decompression** varies by library - axios, got, node-fetch auto-decompress; others require manual handling
+8. **All 15 competitors tested** - fair comparison across entire HTTP client ecosystem
 
 ---
 

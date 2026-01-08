@@ -4141,17 +4141,18 @@ export class RekShell {
       console.log(`  ${colors.cyan('spider bg <url>')}        - Crawl in background`);
       console.log('');
       console.log(colors.yellow('Options:'));
-      console.log(`  ${colors.gray('--depth=<n>')}           - Max depth (default: 5)`);
-      console.log(`  ${colors.gray('--pages=<n>')}           - Max pages (default: 100)`);
+      console.log(`  ${colors.gray('--seo')}                 - Enable SEO analysis during crawl`);
+      console.log(`  ${colors.gray('--depth=<n>')}           - Max depth (default: 10)`);
+      console.log(`  ${colors.gray('--limit=<n>')}           - Max pages (default: 1000)`);
       console.log(`  ${colors.gray('--concurrency=<n>')}     - Concurrent requests (default: 5)`);
-      console.log(`  ${colors.gray('--delay=<ms>')}          - Delay between requests (default: 100)`);
-      console.log(`  ${colors.gray('--sitemap')}             - Use sitemap.xml for discovery`);
+      console.log(`  ${colors.gray('--no-sitemap')}          - Disable sitemap.xml crawling (on by default with --seo)`);
       console.log(`  ${colors.gray('-o <file>')}             - Save results to JSON file`);
+      console.log(`  ${colors.gray('--json')}                - Output JSON format`);
       console.log('');
       console.log(colors.yellow('Examples:'));
       console.log(`  ${colors.gray('spider https://example.com')}`);
-      console.log(`  ${colors.gray('spider bg https://example.com --depth=3 --pages=50')}`);
-      console.log(`  ${colors.gray('spider bg https://example.com -o crawl-results.json')}`);
+      console.log(`  ${colors.gray('spider https://example.com --seo --limit=50')}`);
+      console.log(`  ${colors.gray('spider bg https://example.com --depth=3 --limit=50')}`);
       console.log('');
       return;
     }
@@ -4164,15 +4165,68 @@ export class RekShell {
       return;
     }
 
-    // Foreground mode: spider <url> [options]
-    const spiderUrl = args[0].startsWith('-') ? (this.baseUrl || '') : args[0];
+    // Parse foreground options
+    let spiderUrl = '';
+    let depth: number | undefined;
+    let limit: number | undefined;
+    let concurrency: number | undefined;
+    let seo = false;
+    let noSitemap = false;
+    let json = false;
+    let output: string | undefined;
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+
+      if (arg === '--seo') {
+        seo = true;
+      } else if (arg === '--no-sitemap') {
+        noSitemap = true;
+      } else if (arg === '--json') {
+        json = true;
+      } else if (arg === '--depth' || arg === '-d') {
+        depth = parseInt(args[++i], 10);
+      } else if (arg.startsWith('--depth=')) {
+        depth = parseInt(arg.split('=')[1], 10);
+      } else if (arg === '--limit' || arg === '-l' || arg === '--pages' || arg === '-p') {
+        limit = parseInt(args[++i], 10);
+      } else if (arg.startsWith('--limit=') || arg.startsWith('--pages=')) {
+        limit = parseInt(arg.split('=')[1], 10);
+      } else if (arg === '--concurrency' || arg === '-c') {
+        concurrency = parseInt(args[++i], 10);
+      } else if (arg.startsWith('--concurrency=')) {
+        concurrency = parseInt(arg.split('=')[1], 10);
+      } else if (arg === '-o' || arg === '--output') {
+        output = args[++i];
+      } else if (arg.startsWith('--output=')) {
+        output = arg.split('=')[1];
+      } else if (!arg.startsWith('-')) {
+        spiderUrl = arg;
+      }
+    }
+
+    // Use base URL if no URL specified
+    if (!spiderUrl) {
+      spiderUrl = this.baseUrl || '';
+    }
+
     if (!spiderUrl) {
       console.log(colors.red('No URL specified. Use: spider <url>'));
       return;
     }
 
-    // Run foreground spider (existing behavior)
-    await runSpider({ url: spiderUrl });
+    // Run foreground spider with disableTui (shell has its own interface)
+    await runSpider({
+      url: spiderUrl,
+      depth,
+      limit,
+      concurrency,
+      seo,
+      noSitemap,
+      json,
+      output,
+      disableTui: true, // Shell context - use simple progress output
+    });
   }
 
   /**

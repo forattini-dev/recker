@@ -98,104 +98,112 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
   try {
     const root = parse(content, { lowerCaseTagName: false }); // Preserve case for XML tags
     // sitemap tags are usually lowercase.
-    
+
     // Determine sitemap type
     if (root.querySelectorAll('urlset').length > 0) {
       type = 'urlset';
 
       // Parse URLs
       root.querySelectorAll('url').forEach((urlElem) => {
-        const locElem = urlElem.querySelector('loc');
-        const loc = locElem ? locElem.text.trim() : '';
-
-        if (!loc) {
-          errors.push('URL entry missing <loc> element');
-          return;
-        }
-
-        // Validate URL
         try {
-          new URL(loc);
-        } catch {
-          errors.push(`Invalid URL: ${loc}`);
-          return;
-        }
+          const locElem = urlElem.querySelector('loc');
+          const loc = locElem ? locElem.text.trim() : '';
 
-        const url: SitemapUrl = { loc };
-
-        // Optional fields
-        const lastmodElem = urlElem.querySelector('lastmod');
-        const lastmod = lastmodElem ? lastmodElem.text.trim() : '';
-        if (lastmod) {
-          if (isValidDate(lastmod)) {
-            url.lastmod = lastmod;
-          } else {
-            warnings.push(`Invalid lastmod date for ${loc}: ${lastmod}`);
+          if (!loc) {
+            errors.push('URL entry missing <loc> element');
+            return;
           }
-        }
 
-        const changefreqElem = urlElem.querySelector('changefreq');
-        const changefreq = changefreqElem ? changefreqElem.text.trim().toLowerCase() : '';
-        if (changefreq) {
-          if (VALID_CHANGEFREQ.includes(changefreq)) {
-            url.changefreq = changefreq as SitemapUrl['changefreq'];
-          } else {
-            warnings.push(`Invalid changefreq for ${loc}: ${changefreq}`);
+          // Validate URL
+          try {
+            new URL(loc);
+          } catch {
+            errors.push(`Invalid URL: ${loc}`);
+            return;
           }
-        }
 
-        const priorityElem = urlElem.querySelector('priority');
-        const priority = priorityElem ? priorityElem.text.trim() : '';
-        if (priority) {
-          const p = parseFloat(priority);
-          if (isNaN(p) || p < 0 || p > 1) {
-            warnings.push(`Invalid priority for ${loc}: ${priority} (must be 0.0-1.0)`);
-          } else {
-            url.priority = p;
+          const url: SitemapUrl = { loc };
+
+          // Optional fields
+          const lastmodElem = urlElem.querySelector('lastmod');
+          const lastmod = lastmodElem ? lastmodElem.text.trim() : '';
+          if (lastmod) {
+            if (isValidDate(lastmod)) {
+              url.lastmod = lastmod;
+            } else {
+              warnings.push(`Invalid lastmod date for ${loc}: ${lastmod}`);
+            }
           }
-        }
 
-        // Parse images
-        const images: SitemapUrl['images'] = [];
-        // Namespaced tags like image:image might be parsed as 'image:image' or 'image' depending on parser
-        // We'll try querySelectorAll with namespaces.
-        // CSS selectors with namespaces usually need escaping: 'image\:image'
-        
-        const imageElems = urlElem.querySelectorAll('image\:image, image');
-        imageElems.forEach((imgElem) => {
-          const locEl = imgElem.querySelector('image\:loc, loc');
-          const imgLoc = locEl ? locEl.text.trim() : '';
-          
-          if (imgLoc) {
-            const captionEl = imgElem.querySelector('image\:caption, caption');
-            const titleEl = imgElem.querySelector('image\:title, title');
-            
-            images.push({
-              loc: imgLoc,
-              caption: captionEl ? captionEl.text.trim() || undefined : undefined,
-              title: titleEl ? titleEl.text.trim() || undefined : undefined,
+          const changefreqElem = urlElem.querySelector('changefreq');
+          const changefreq = changefreqElem ? changefreqElem.text.trim().toLowerCase() : '';
+          if (changefreq) {
+            if (VALID_CHANGEFREQ.includes(changefreq)) {
+              url.changefreq = changefreq as SitemapUrl['changefreq'];
+            } else {
+              warnings.push(`Invalid changefreq for ${loc}: ${changefreq}`);
+            }
+          }
+
+          const priorityElem = urlElem.querySelector('priority');
+          const priority = priorityElem ? priorityElem.text.trim() : '';
+          if (priority) {
+            const p = parseFloat(priority);
+            if (isNaN(p) || p < 0 || p > 1) {
+              warnings.push(`Invalid priority for ${loc}: ${priority} (must be 0.0-1.0)`);
+            } else {
+              url.priority = p;
+            }
+          }
+
+          // Parse images (skip namespace syntax that might crash)
+          try {
+            const images: SitemapUrl['images'] = [];
+            const imageElems = urlElem.querySelectorAll('image');
+            imageElems.forEach((imgElem) => {
+              const locEl = imgElem.querySelector('loc');
+              const imgLoc = locEl ? locEl.text.trim() : '';
+
+              if (imgLoc) {
+                const captionEl = imgElem.querySelector('caption');
+                const titleEl = imgElem.querySelector('title');
+
+                images.push({
+                  loc: imgLoc,
+                  caption: captionEl ? captionEl.text.trim() || undefined : undefined,
+                  title: titleEl ? titleEl.text.trim() || undefined : undefined,
+                });
+              }
             });
+            if (images.length > 0) {
+              url.images = images;
+            }
+          } catch (imgErr) {
+            // Skip image parsing errors
           }
-        });
-        if (images.length > 0) {
-          url.images = images;
-        }
 
-        // Parse xhtml:link alternates
-        const alternates: SitemapUrl['alternates'] = [];
-        const linkElems = urlElem.querySelectorAll('xhtml\:link[rel="alternate"], link[rel="alternate"]');
-        linkElems.forEach((linkElem) => {
-          const hreflang = linkElem.getAttribute('hreflang');
-          const href = linkElem.getAttribute('href');
-          if (hreflang && href) {
-            alternates.push({ hreflang, href });
+          // Parse xhtml:link alternates (skip namespace syntax that might crash)
+          try {
+            const alternates: SitemapUrl['alternates'] = [];
+            const linkElems = urlElem.querySelectorAll('link[rel="alternate"]');
+            linkElems.forEach((linkElem) => {
+              const hreflang = linkElem.getAttribute('hreflang');
+              const href = linkElem.getAttribute('href');
+              if (hreflang && href) {
+                alternates.push({ hreflang, href });
+              }
+            });
+            if (alternates.length > 0) {
+              url.alternates = alternates;
+            }
+          } catch (linkErr) {
+            // Skip alternate parsing errors
           }
-        });
-        if (alternates.length > 0) {
-          url.alternates = alternates;
-        }
 
-        urls.push(url);
+          urls.push(url);
+        } catch (urlErr) {
+          errors.push(`Error processing URL: ${urlErr instanceof Error ? urlErr.message : 'Unknown error'}`);
+        }
       });
 
     } else if (root.querySelectorAll('sitemapindex').length > 0) {

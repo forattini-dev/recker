@@ -15,6 +15,7 @@ export interface SeoCheckEvidence {
 }
 
 export interface SeoCheckResult {
+  id: string;
   name: string;
   category: string;
   status: SeoStatus;
@@ -264,6 +265,17 @@ export interface SeoAnalyzerOptions {
   checkBrokenLinks?: boolean;
   /** HTTP response headers for security checks */
   responseHeaders?: Record<string, string | string[]>;
+  /** Timing metrics from HTTP request (for performance rules) */
+  timings?: {
+    ttfb?: number;
+    dns?: number;
+    tcp?: number;
+    tls?: number;
+    download?: number;
+    total?: number;
+  };
+  /** HTML size in bytes (for performance rules) */
+  htmlSize?: number;
 }
 
 export interface ExtractedLink {

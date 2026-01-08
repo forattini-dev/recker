@@ -90,16 +90,76 @@ export class SeoSpider {
   private spider: Spider;
   private options: SeoSpiderOptions;
   private seoResults: Map<string, SeoReport> = new Map();
+  private seoPages: SeoPageResult[] = [];
+  private homeHtml: string = '';
 
   constructor(options: SeoSpiderOptions = {}) {
     this.options = options;
-    this.spider = new Spider(options);
+
+    // Create spider with onPageWithHtml callback for SEO analysis during crawl
+    this.spider = new Spider({
+      ...options,
+      onPageWithHtml: this.options.seo
+        ? async (pageResult, html) => {
+            await this.analyzePageDuringCrawl(pageResult, html);
+          }
+        : undefined,
+    });
+  }
+
+  /**
+   * Analyze a single page during crawling (not after)
+   */
+  private async analyzePageDuringCrawl(
+    pageResult: SpiderPageResult,
+    html: string
+  ): Promise<void> {
+    // Skip error pages
+    if (pageResult.error || pageResult.status >= 400) {
+      const seoPage: SeoPageResult = { ...pageResult, seoReport: undefined };
+      this.seoPages.push(seoPage);
+      return;
+    }
+
+    // Store home page HTML for RSS discovery later
+    if (pageResult.depth === 0) {
+      this.homeHtml = html;
+    }
+
+    try {
+      // Build rules options based on focus categories
+      const rulesOptions = this.options.focusCategories?.length
+        ? { categories: this.options.focusCategories as any[] }
+        : undefined;
+
+      // Run full SEO analysis on the HTML we already have
+      const seoReport = await analyzeSeo(html, {
+        baseUrl: pageResult.url,
+        rules: rulesOptions,
+      });
+
+      const seoPage: SeoPageResult = { ...pageResult, seoReport };
+      this.seoPages.push(seoPage);
+      this.seoResults.set(pageResult.url, seoReport);
+
+      // Call callback if provided
+      this.options.onSeoAnalysis?.(seoPage);
+    } catch {
+      const seoPage: SeoPageResult = { ...pageResult, seoReport: undefined };
+      this.seoPages.push(seoPage);
+    }
   }
 
   /**
    * Crawl a website with optional SEO analysis
    */
   async crawl(startUrl: string): Promise<SeoSpiderResult> {
+    // Reset state
+    this.seoPages = [];
+    this.seoResults.clear();
+    this.homeHtml = '';
+
+    // Crawl with SEO analysis happening during crawl (via onPageWithHtml)
     const result = await this.spider.crawl(startUrl);
 
     // If SEO is disabled, return basic result
@@ -121,10 +181,10 @@ export class SeoSpider {
       };
     }
 
-    // Perform SEO analysis on each page
-    const seoPages = await this.analyzePages(result.pages);
+    // SEO pages were analyzed during crawl - use them directly
+    const seoPages = this.seoPages;
 
-    // Detect site-wide issues
+    // Detect site-wide issues (fast - just aggregation)
     const siteWideIssues = this.detectSiteWideIssues(seoPages);
 
     // Calculate summary
@@ -133,16 +193,10 @@ export class SeoSpider {
     // Check for site files (humans.txt, llms.txt, sitemap.xml, manifest.json)
     const discovery = await this.checkSiteFiles(startUrl);
 
-    // Discover RSS feeds
-    let homeHtml = '';
-    try {
-       const client = createClient({ timeout: 10000 });
-       const res = await client.get(startUrl);
-       homeHtml = await res.text();
-    } catch {}
-    const rssFeeds = await discoverFeeds(new URL(startUrl).origin, homeHtml);
+    // Discover RSS feeds using home page HTML we captured during crawl
+    const rssFeeds = await discoverFeeds(new URL(startUrl).origin, this.homeHtml);
 
-    // Validate sitemap (once per crawl, not per page)
+    // Validate sitemap (once per crawl)
     const sitemapValidation = await this.validateSitemap(startUrl);
 
     const seoResult: SeoSpiderResult = {
@@ -326,65 +380,6 @@ export class SeoSpider {
   }
 
   /**
-   * Analyze SEO for all crawled pages
-   */
-  private async analyzePages(pages: SpiderPageResult[]): Promise<SeoPageResult[]> {
-    const results: SeoPageResult[] = [];
-    const client = createClient({
-      timeout: this.options.timeout || 10000,
-      headers: {
-        'User-Agent': this.options.userAgent || 'Recker Spider/1.0',
-      },
-    });
-
-    for (const page of pages) {
-      // Skip error pages
-      if (page.error || page.status >= 400) {
-        results.push({
-          ...page,
-          seoReport: undefined,
-        });
-        continue;
-      }
-
-      try {
-        // Re-fetch the HTML for full SEO analysis
-        const response = await client.get(page.url);
-        const html = await response.text();
-
-        // Build rules options based on focus categories
-        const rulesOptions = this.options.focusCategories?.length
-          ? { categories: this.options.focusCategories as any[] }
-          : undefined;
-
-        // Use the full SEO analyzer with focus categories if specified
-        const seoReport = await analyzeSeo(html, {
-          baseUrl: page.url,
-          rules: rulesOptions,
-        });
-
-        const seoPage: SeoPageResult = {
-          ...page,
-          seoReport,
-        };
-
-        results.push(seoPage);
-        this.seoResults.set(page.url, seoReport);
-
-        // Call callback if provided
-        this.options.onSeoAnalysis?.(seoPage);
-      } catch {
-        results.push({
-          ...page,
-          seoReport: undefined,
-        });
-      }
-    }
-
-    return results;
-  }
-
-  /**
    * Create a basic SEO report from spider page data
    * Note: This is limited since we don't have full HTML access
    */
@@ -396,6 +391,7 @@ export class SeoSpider {
       const titleLength = page.title.length;
       if (titleLength < 30) {
         checks.push({
+          id: 'title-length',
           name: 'Title Length',
           category: 'title',
           status: 'warn',
@@ -405,6 +401,7 @@ export class SeoSpider {
         });
       } else if (titleLength > 60) {
         checks.push({
+          id: 'title-length',
           name: 'Title Length',
           category: 'title',
           status: 'warn',
@@ -414,6 +411,7 @@ export class SeoSpider {
         });
       } else {
         checks.push({
+          id: 'title-length',
           name: 'Title Length',
           category: 'title',
           status: 'pass',
@@ -423,6 +421,7 @@ export class SeoSpider {
       }
     } else {
       checks.push({
+        id: 'title-missing',
         name: 'Title',
         category: 'title',
         status: 'fail',
@@ -437,6 +436,7 @@ export class SeoSpider {
 
     if (internalLinks === 0) {
       checks.push({
+        id: 'internal-links',
         name: 'Internal Links',
         category: 'links',
         status: 'warn',
@@ -445,6 +445,7 @@ export class SeoSpider {
       });
     } else {
       checks.push({
+        id: 'internal-links',
         name: 'Internal Links',
         category: 'links',
         status: 'pass',

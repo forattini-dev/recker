@@ -13,6 +13,7 @@
 import { Agent } from 'undici';
 import type { AgentOptions } from '../types/index.js';
 import { ProtocolCache, DetectedProtocol, extractOrigin } from './protocol-cache.js';
+import { buildTimingConnector } from './timing-connector.js';
 
 export interface AgentStats {
   /** Number of active agents */
@@ -261,8 +262,18 @@ export class AgentManager {
 
   /**
    * Create a new Agent instance with given options
+   * Uses timing connector for accurate DNS/TCP/TLS timing capture
    */
   private createAgent(options: Partial<AgentOptions>): Agent {
+    // Build timing-aware connector for accurate network timing
+    const timingConnector = buildTimingConnector({
+      timeout: options.connectTimeout,
+      allowH2: options.allowH2,
+      keepAliveInitialDelay: options.keepAliveTimeout,
+      maxCachedSessions: options.maxCachedSessions,
+      localAddress: options.localAddress,
+    });
+
     return new Agent({
       connections: options.connections,
       pipelining: options.pipelining,
@@ -278,12 +289,8 @@ export class AgentManager {
       // HTTP/2 support - enables ALPN negotiation
       allowH2: options.allowH2,
       maxConcurrentStreams: options.maxConcurrentStreams,
-      connect: {
-        timeout: options.connectTimeout,
-        keepAlive: options.keepAlive,
-        keepAliveInitialDelay: options.keepAliveTimeout,
-        localAddress: options.localAddress,
-      },
+      // Use timing connector for accurate network timing
+      connect: timingConnector,
     });
   }
 

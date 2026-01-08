@@ -10,6 +10,7 @@ import { AgentManager } from '../utils/agent-manager.js';
 import { createProgressStream } from '../utils/progress.js';
 import { nodeToWebStream } from '../utils/streaming.js';
 import { ProtocolCache, getGlobalProtocolCache, normalizeProtocol } from '../utils/protocol-cache.js';
+import { getTimingForHost, clearTimingForHost, getConnectionId, isNewConnection } from '../utils/timing-connector.js';
 
 // Define the shape of undici's internal diagnostic events
 interface UndiciRequestStartEvent {
@@ -88,9 +89,30 @@ const requestStorage = new AsyncLocalStorage<RequestContext>();
 undiciRequestChannel.subscribe((message: unknown) => {
   const store = requestStorage.getStore();
   if (store) {
-    store.requestStartTime = performance.now();
-    store.timings = { queuing: 0, dns: 0, tcp: 0, tls: 0, firstByte: 0, content: 0, total: 0 };
-    store.connection = {};
+    // Only set start time on first request (not on redirects)
+    if (store.requestStartTime === 0) {
+      store.requestStartTime = performance.now();
+    }
+
+    // IMPORTANT: Don't reset timings if they already have connection phase values
+    // This preserves DNS/TCP/TLS timings captured on the first connection when
+    // subsequent requests reuse the connection (e.g., redirects)
+    const hasConnectionTimings = store.timings.dns || store.timings.tcp || store.timings.tls;
+    if (!hasConnectionTimings) {
+      store.timings = { queuing: 0, dns: 0, tcp: 0, tls: 0, firstByte: 0, content: 0, total: 0 };
+      store.connection = {};
+    }
+
+    // Store the hostname for later timing retrieval (after connection)
+    // Only update if not already set (first request)
+    const msg = message as any;
+    if (msg?.request?.origin && !store.requestCorrelationId) {
+      try {
+        store.requestCorrelationId = new URL(msg.request.origin).hostname;
+      } catch {
+        // Invalid URL, ignore
+      }
+    }
   }
 });
 
@@ -109,9 +131,16 @@ undiciBodySentChannel.subscribe((message: unknown) => {
 undiciHeadersChannel.subscribe((message: unknown) => {
   const payload = message as UndiciRequestHeadersEvent;
   const store = requestStorage.getStore();
-  if (store && payload && payload.timing) {
+  if (!store || !payload) return;
+
+  // Calculate TTFB from request start
+  const now = performance.now();
+  const ttfb = now - store.requestStartTime;
+
+  // Try to get timing from undici (v6.x) or from our timing connector (v7.x+)
+  if (payload.timing) {
+    // Undici provides timing (v6.x)
     const { timing } = payload;
-    // ... timings update ...
     store.timings.queuing = timing.queuing;
     store.timings.dns = timing.dns;
     store.timings.tcp = timing.tcp;
@@ -119,29 +148,36 @@ undiciHeadersChannel.subscribe((message: unknown) => {
     store.timings.firstByte = timing.response;
     store.timings.content = timing.body;
     store.timings.total = timing.ended;
+  } else {
+    // Undici v7.x+ doesn't provide timing via diagnostics_channel
+    // Timing is now read directly from timing connector in dispatch() after request completes
+    // This avoids AsyncLocalStorage context issues with concurrent requests
+    // Set TTFB from our measurement (this is still reliable since it's calculated locally)
+    store.timings.firstByte = ttfb;
+  }
 
-    // Dispatch Hooks (if registered) - "Zero-Cost" check
-    if (store.hooks) {
-        if (store.hooks.onDnsLookup && timing.dns > 0) {
-            store.hooks.onDnsLookup({ domain: payload.request.origin, duration: timing.dns });
-        }
-        if (store.hooks.onTcpConnect && timing.tcp > 0) {
-            store.hooks.onTcpConnect({ remoteAddress: '', duration: timing.tcp }); 
-        }
-        if (store.hooks.onTlsHandshake && timing.tls > 0) {
-            store.hooks.onTlsHandshake({ protocol: '', cipher: '', duration: timing.tls }); 
-        }
-        
-        // New: onResponseStart
-        if (store.hooks.onResponseStart) {
-            // We construct a minimal Headers object or just pass raw array?
-            // Let's keep it simple/fast for internal hook.
-            const headers = new Headers();
-            for (let i = 0; i < payload.response.headers.length; i += 2) {
-                headers.append(payload.response.headers[i], payload.response.headers[i + 1]);
-            }
-            store.hooks.onResponseStart({ status: payload.response.statusCode, headers });
-        }
+  // Dispatch Hooks (if registered)
+  if (store.hooks) {
+    const dns = store.timings.dns ?? 0;
+    const tcp = store.timings.tcp ?? 0;
+    const tls = store.timings.tls ?? 0;
+
+    if (store.hooks.onDnsLookup && dns > 0) {
+      store.hooks.onDnsLookup({ domain: payload.request.origin, duration: dns });
+    }
+    if (store.hooks.onTcpConnect && tcp > 0) {
+      store.hooks.onTcpConnect({ remoteAddress: '', duration: tcp });
+    }
+    if (store.hooks.onTlsHandshake && tls > 0) {
+      store.hooks.onTlsHandshake({ protocol: '', cipher: '', duration: tls });
+    }
+
+    if (store.hooks.onResponseStart) {
+      const headers = new Headers();
+      for (let i = 0; i < payload.response.headers.length; i += 2) {
+        headers.append(payload.response.headers[i], payload.response.headers[i + 1]);
+      }
+      store.hooks.onResponseStart({ status: payload.response.statusCode, headers });
     }
   }
 });
@@ -348,8 +384,6 @@ function mapTimeoutOptions(
 }
 
 export class UndiciTransport implements Transport {
-  private static requestCounter = 0;  // Fast correlation ID generator
-
   private baseUrl: string;
   private options: UndiciTransportOptions;
   private proxyAgent?: ProxyAgent;
@@ -564,7 +598,7 @@ export class UndiciTransport implements Transport {
       timings: {},
       connection: {},
       requestStartTime: 0,
-      requestCorrelationId: `r${++UndiciTransport.requestCounter}`,
+      requestCorrelationId: '', // Will be set to hostname on first request event
       hooks: req._hooks
     };
 
@@ -710,6 +744,16 @@ export class UndiciTransport implements Transport {
           // For Unix sockets, use the Client's request method directly with just the path
           // undiciRequest with a dispatcher doesn't work correctly for Unix sockets
           let undiciResponse;
+
+          // Capture connection ID before request to detect if a NEW connection is made
+          // If connection is reused (HTTP Keep-Alive), no new connection is made
+          let connectionIdBefore = 0;
+          try {
+            connectionIdBefore = getConnectionId(new URL(currentUrl).hostname);
+          } catch {
+            // URL parsing failed, skip
+          }
+
           if (this.socketClient) {
             const urlPath = new URL(currentUrl).pathname + new URL(currentUrl).search;
             undiciResponse = await this.socketClient.request({
@@ -769,6 +813,26 @@ export class UndiciTransport implements Transport {
                   // Update protocol cache
                   this.updateProtocolCache(currentUrl, requestContext.connection);
 
+                  // Populate timing for connection reuse detection
+                  try {
+                    const urlHostname = new URL(currentUrl).hostname;
+                    const madeNewConnection = isNewConnection(urlHostname, connectionIdBefore);
+                    if (madeNewConnection) {
+                      const connTiming = getTimingForHost(urlHostname);
+                      if (connTiming && !requestContext.timings.dns && !requestContext.timings.tcp && !requestContext.timings.tls) {
+                        requestContext.timings.dns = connTiming.dns;
+                        requestContext.timings.tcp = connTiming.tcp;
+                        requestContext.timings.tls = connTiming.tls;
+                      }
+                    } else if (!requestContext.timings.dns && !requestContext.timings.tcp && !requestContext.timings.tls) {
+                      requestContext.timings.dns = 0;
+                      requestContext.timings.tcp = 0;
+                      requestContext.timings.tls = 0;
+                    }
+                  } catch {
+                    // URL parsing failed, skip
+                  }
+
                   return new HttpResponse(finalResponse, {
                     timings: requestContext.timings,
                     connection: requestContext.connection
@@ -823,6 +887,38 @@ export class UndiciTransport implements Transport {
 
           // Update protocol cache with detected protocol
           this.updateProtocolCache(currentUrl, requestContext.connection);
+
+          // Read timing directly from the connector
+          // diagnostics_channel events don't reliably propagate AsyncLocalStorage context
+          // so we read timing here instead of in the headers event handler
+          try {
+            const urlHostname = new URL(currentUrl).hostname;
+            // Check if a NEW connection was made for this request
+            const madeNewConnection = isNewConnection(urlHostname, connectionIdBefore);
+
+            if (madeNewConnection) {
+              // New connection - use the actual timing values
+              const connTiming = getTimingForHost(urlHostname);
+              if (connTiming) {
+                // Only set if not already set (could be set by diagnostics_channel in some cases)
+                if (!requestContext.timings.dns && !requestContext.timings.tcp && !requestContext.timings.tls) {
+                  requestContext.timings.dns = connTiming.dns;
+                  requestContext.timings.tcp = connTiming.tcp;
+                  requestContext.timings.tls = connTiming.tls;
+                }
+              }
+            } else {
+              // Connection was REUSED (HTTP Keep-Alive) - no new DNS/TCP/TLS occurred
+              // Set to 0 to indicate connection reuse, not stale cached values
+              if (!requestContext.timings.dns && !requestContext.timings.tcp && !requestContext.timings.tls) {
+                requestContext.timings.dns = 0;
+                requestContext.timings.tcp = 0;
+                requestContext.timings.tls = 0;
+              }
+            }
+          } catch {
+            // URL parsing failed, skip timing population
+          }
 
           return new HttpResponse(finalResponse, {
             timings: requestContext.timings,

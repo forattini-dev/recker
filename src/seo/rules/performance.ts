@@ -291,13 +291,13 @@ export const performanceRules: SeoRule[] = [
     },
   },
 
-  // Timing Rules
+  // Timing Rules (4-level stratification: excellent → good → acceptable → poor)
   {
     id: 'timing-ttfb',
     name: 'Time to First Byte',
     category: 'performance',
     severity: 'error',
-    description: 'TTFB should be under 600ms (ideally under 200ms)',
+    description: 'TTFB should be under 200ms (excellent), 500ms (good), 800ms (acceptable)',
     check: (ctx) => {
       const ttfb = ctx.timings?.ttfb;
       if (ttfb === undefined) {
@@ -309,61 +309,90 @@ export const performanceRules: SeoRule[] = [
         );
       }
 
-      const { good, needsImprovement, poor } = SEO_THRESHOLDS.timing.ttfb;
+      const { excellent, good, acceptable } = SEO_THRESHOLDS.timing.ttfb;
+      const ttfbMs = Math.round(ttfb);
 
+      // Excellent: < 200ms
+      if (ttfb <= excellent) {
+        return createResult(
+          { id: 'timing-ttfb', name: 'TTFB', category: 'performance', severity: 'error' },
+          'pass',
+          `Excellent TTFB (${ttfbMs}ms)`,
+          {
+            value: ttfbMs,
+            evidence: {
+              found: `${ttfbMs}ms`,
+              rating: 'Excellent',
+              impact: 'Server response is very fast. Great user experience.'
+            }
+          }
+        );
+      }
+
+      // Good: 200-500ms
       if (ttfb <= good) {
         return createResult(
           { id: 'timing-ttfb', name: 'TTFB', category: 'performance', severity: 'error' },
           'pass',
-          `Excellent TTFB (${ttfb}ms)`,
-          { value: ttfb }
-        );
-      }
-      if (ttfb <= needsImprovement) {
-        return createResult(
-          { id: 'timing-ttfb', name: 'TTFB', category: 'performance', severity: 'error' },
-          'info',
-          `TTFB needs improvement (${ttfb}ms)`,
+          `Good TTFB (${ttfbMs}ms)`,
           {
-            value: ttfb,
-            recommendation: `Optimize server response time to under ${good}ms`,
+            value: ttfbMs,
             evidence: {
-              found: `${ttfb}ms TTFB`,
-              expected: `≤ ${good}ms for fast perceived loading`,
-              impact: 'TTFB affects all subsequent resource loading. A faster server response improves LCP and overall user experience.',
-              learnMore: 'https://web.dev/ttfb/'
+              found: `${ttfbMs}ms`,
+              rating: 'Good',
+              target: `< ${excellent}ms for excellent`,
+              impact: 'Server response is acceptable. Consider CDN or caching for further improvement.'
             }
           }
         );
       }
-      if (ttfb <= poor) {
+
+      // Acceptable: 500-800ms
+      if (ttfb <= acceptable) {
         return createResult(
           { id: 'timing-ttfb', name: 'TTFB', category: 'performance', severity: 'error' },
           'warn',
-          `Slow TTFB (${ttfb}ms)`,
+          `Acceptable TTFB (${ttfbMs}ms) - needs improvement`,
           {
-            value: ttfb,
-            recommendation: 'Optimize server, use CDN, enable caching',
+            value: ttfbMs,
+            recommendation: 'Optimize server response: enable caching, use CDN, optimize database queries',
             evidence: {
-              found: `${ttfb}ms TTFB`,
-              expected: `≤ ${needsImprovement}ms`,
-              impact: 'Slow server response delays page rendering and all subsequent resources',
+              found: `${ttfbMs}ms`,
+              rating: 'Acceptable',
+              target: `< ${good}ms for good, < ${excellent}ms for excellent`,
+              impact: 'TTFB affects all subsequent resource loading. Users on slow networks will notice delay.',
+              optimization: [
+                'Enable server-side caching (Redis, Memcached)',
+                'Use a CDN (Cloudflare, Fastly, CloudFront)',
+                'Optimize database queries and indexes',
+                'Consider edge computing for dynamic content'
+              ],
               learnMore: 'https://web.dev/ttfb/'
             }
           }
         );
       }
+
+      // Poor: > 800ms
       return createResult(
         { id: 'timing-ttfb', name: 'TTFB', category: 'performance', severity: 'error' },
         'fail',
-        `Very slow TTFB (${ttfb}ms)`,
+        `Slow TTFB (${ttfbMs}ms) - critical issue`,
         {
-          value: ttfb,
-          recommendation: 'Critical: Server is too slow. Check server, database, and network',
+          value: ttfbMs,
+          recommendation: 'Critical: Server response is too slow. Immediate optimization required.',
           evidence: {
-            found: `${ttfb}ms TTFB`,
-            expected: `≤ ${poor}ms (ideally ≤ ${good}ms)`,
-            impact: 'Critical server performance issue. Users will experience very slow page loads',
+            found: `${ttfbMs}ms`,
+            rating: 'Poor',
+            target: `< ${acceptable}ms for acceptable, < ${excellent}ms for excellent`,
+            impact: 'Critical server performance issue. High bounce rate expected.',
+            optimization: [
+              'Check server CPU/memory usage',
+              'Optimize slow database queries',
+              'Enable response compression (gzip/brotli)',
+              'Use CDN with edge caching',
+              'Consider upgrading server resources'
+            ],
             learnMore: 'https://web.dev/ttfb/'
           }
         }
@@ -375,7 +404,7 @@ export const performanceRules: SeoRule[] = [
     name: 'Total Load Time',
     category: 'performance',
     severity: 'warning',
-    description: 'Total page load should be under 2.5s',
+    description: 'Total page load should be under 1s (excellent), 2.5s (good), 4s (acceptable)',
     check: (ctx) => {
       const total = ctx.timings?.total;
       if (total === undefined) {
@@ -387,61 +416,91 @@ export const performanceRules: SeoRule[] = [
         );
       }
 
-      const { good, needsImprovement, poor } = SEO_THRESHOLDS.timing.total;
+      const { excellent, good, acceptable } = SEO_THRESHOLDS.timing.total;
+      const totalMs = Math.round(total);
+      const totalSec = (total / 1000).toFixed(1);
 
+      // Excellent: < 1s
+      if (total <= excellent) {
+        return createResult(
+          { id: 'timing-total', name: 'Load Time', category: 'performance', severity: 'warning' },
+          'pass',
+          `Excellent load time (${totalSec}s)`,
+          {
+            value: totalMs,
+            evidence: {
+              found: `${totalMs}ms (${totalSec}s)`,
+              rating: 'Excellent',
+              impact: 'Page loads very fast. Excellent user experience.'
+            }
+          }
+        );
+      }
+
+      // Good: 1-2.5s
       if (total <= good) {
         return createResult(
           { id: 'timing-total', name: 'Load Time', category: 'performance', severity: 'warning' },
           'pass',
-          `Fast page load (${total}ms)`,
-          { value: total }
-        );
-      }
-      if (total <= needsImprovement) {
-        return createResult(
-          { id: 'timing-total', name: 'Load Time', category: 'performance', severity: 'warning' },
-          'info',
-          `Page load time acceptable (${total}ms)`,
+          `Good load time (${totalSec}s)`,
           {
-            value: total,
-            recommendation: `Aim for under ${good}ms for better user experience`,
+            value: totalMs,
             evidence: {
-              found: `${total}ms total load time`,
-              expected: `≤ ${good}ms for optimal user experience`,
-              impact: 'Load time directly affects bounce rate. Pages loading under 2s have significantly lower bounce rates.',
-              learnMore: 'https://web.dev/performance-scoring/'
+              found: `${totalMs}ms (${totalSec}s)`,
+              rating: 'Good',
+              target: `< ${excellent / 1000}s for excellent`,
+              impact: 'Load time is acceptable for most users.'
             }
           }
         );
       }
-      if (total <= poor) {
+
+      // Acceptable: 2.5-4s
+      if (total <= acceptable) {
         return createResult(
           { id: 'timing-total', name: 'Load Time', category: 'performance', severity: 'warning' },
           'warn',
-          `Slow page load (${total}ms)`,
+          `Acceptable load time (${totalSec}s) - needs improvement`,
           {
-            value: total,
-            recommendation: 'Optimize assets, enable compression, use CDN',
+            value: totalMs,
+            recommendation: 'Optimize page load: compress assets, lazy load images, use CDN',
             evidence: {
-              found: `${total}ms total load time`,
-              expected: `≤ ${needsImprovement}ms`,
-              impact: 'Slow page loads increase bounce rate and reduce user engagement',
+              found: `${totalMs}ms (${totalSec}s)`,
+              rating: 'Acceptable',
+              target: `< ${good / 1000}s for good, < ${excellent / 1000}s for excellent`,
+              impact: 'Slow loads increase bounce rate, especially on mobile.',
+              optimization: [
+                'Enable gzip/brotli compression',
+                'Lazy load below-the-fold images',
+                'Use a CDN for static assets',
+                'Minify and bundle JS/CSS'
+              ],
               learnMore: 'https://web.dev/performance-scoring/'
             }
           }
         );
       }
+
+      // Poor: > 4s
       return createResult(
         { id: 'timing-total', name: 'Load Time', category: 'performance', severity: 'warning' },
         'fail',
-        `Very slow page load (${total}ms)`,
+        `Slow page load (${totalSec}s) - critical issue`,
         {
-          value: total,
-          recommendation: 'Critical performance issue. Full optimization needed.',
+          value: totalMs,
+          recommendation: 'Critical: Page is too slow. Full performance audit required.',
           evidence: {
-            found: `${total}ms total load time`,
-            expected: `≤ ${poor}ms (ideally ≤ ${good}ms)`,
-            impact: 'Critical performance issue. Very slow load times severely hurt SEO rankings and user experience',
+            found: `${totalMs}ms (${totalSec}s)`,
+            rating: 'Poor',
+            target: `< ${acceptable / 1000}s for acceptable`,
+            impact: 'Very slow load times severely hurt SEO rankings and cause high bounce rates.',
+            optimization: [
+              'Run Lighthouse audit for detailed recommendations',
+              'Reduce JavaScript bundle size',
+              'Optimize server response time (TTFB)',
+              'Use image CDN with auto-optimization',
+              'Implement code splitting and lazy loading'
+            ],
             learnMore: 'https://web.dev/performance-scoring/'
           }
         }
@@ -453,9 +512,9 @@ export const performanceRules: SeoRule[] = [
     name: 'DNS Lookup',
     category: 'performance',
     severity: 'info',
-    description: 'DNS lookup should be under 50ms',
+    description: 'DNS lookup should be under 20ms (excellent), 50ms (good), 100ms (acceptable)',
     check: (ctx) => {
-      const dns = ctx.timings?.dnsLookup;
+      const dns = ctx.timings?.dns;
       if (dns === undefined) {
         return createResult(
           { id: 'timing-dns', name: 'DNS Lookup', category: 'performance', severity: 'info' },
@@ -465,45 +524,89 @@ export const performanceRules: SeoRule[] = [
         );
       }
 
-      const { good, poor } = SEO_THRESHOLDS.timing.dnsLookup;
+      const { excellent, good, acceptable } = SEO_THRESHOLDS.timing.dns;
+      const dnsMs = Math.round(dns);
 
+      // Excellent: < 20ms
+      if (dns <= excellent) {
+        return createResult(
+          { id: 'timing-dns', name: 'DNS Lookup', category: 'performance', severity: 'info' },
+          'pass',
+          `Excellent DNS lookup (${dnsMs}ms)`,
+          {
+            value: dnsMs,
+            evidence: {
+              found: `${dnsMs}ms`,
+              rating: 'Excellent',
+              impact: 'DNS resolution is very fast. Great connection establishment.'
+            }
+          }
+        );
+      }
+
+      // Good: 20-50ms
       if (dns <= good) {
         return createResult(
           { id: 'timing-dns', name: 'DNS Lookup', category: 'performance', severity: 'info' },
           'pass',
-          `Fast DNS lookup (${dns}ms)`,
-          { value: dns }
+          `Good DNS lookup (${dnsMs}ms)`,
+          {
+            value: dnsMs,
+            evidence: {
+              found: `${dnsMs}ms`,
+              rating: 'Good',
+              target: `< ${excellent}ms for excellent`,
+              impact: 'DNS resolution is acceptable.'
+            }
+          }
         );
       }
-      if (dns <= poor) {
+
+      // Acceptable: 50-100ms
+      if (dns <= acceptable) {
         return createResult(
           { id: 'timing-dns', name: 'DNS Lookup', category: 'performance', severity: 'info' },
           'info',
-          `DNS lookup could be faster (${dns}ms)`,
+          `Acceptable DNS lookup (${dnsMs}ms) - could be faster`,
           {
-            value: dns,
-            recommendation: 'Consider using faster DNS provider or dns-prefetch',
+            value: dnsMs,
+            recommendation: 'Consider using faster DNS provider or dns-prefetch hints',
             evidence: {
-              found: `${dns}ms DNS lookup`,
-              expected: `≤ ${good}ms for fast DNS resolution`,
-              impact: 'DNS lookup is the first step in establishing a connection. Faster DNS improves perceived loading speed.',
+              found: `${dnsMs}ms`,
+              rating: 'Acceptable',
+              target: `< ${good}ms for good, < ${excellent}ms for excellent`,
+              impact: 'DNS lookup is the first step in connection. Slower DNS adds latency to every request.',
+              optimization: [
+                'Use dns-prefetch for external domains',
+                'Consider faster DNS providers (Cloudflare 1.1.1.1, Google 8.8.8.8)',
+                'Enable DNS caching at edge/CDN'
+              ],
               example: '<link rel="dns-prefetch" href="//api.example.com">'
             }
           }
         );
       }
+
+      // Poor: > 100ms
       return createResult(
         { id: 'timing-dns', name: 'DNS Lookup', category: 'performance', severity: 'info' },
         'warn',
-        `Slow DNS lookup (${dns}ms)`,
+        `Slow DNS lookup (${dnsMs}ms) - needs optimization`,
         {
-          value: dns,
-          recommendation: 'DNS is slow. Consider Cloudflare, Google DNS, or dns-prefetch',
+          value: dnsMs,
+          recommendation: 'DNS is slow. Use faster DNS provider and dns-prefetch hints.',
           evidence: {
-            found: `${dns}ms DNS lookup`,
-            expected: `≤ ${poor}ms (ideally ≤ ${good}ms)`,
-            impact: 'Slow DNS resolution delays connection establishment and increases page load time',
-            example: '<link rel="dns-prefetch" href="//api.example.com">',
+            found: `${dnsMs}ms`,
+            rating: 'Poor',
+            target: `< ${acceptable}ms for acceptable`,
+            impact: 'Slow DNS resolution delays all page resources. Major impact on perceived loading speed.',
+            optimization: [
+              'Switch to faster DNS provider (Cloudflare, Google DNS)',
+              'Add dns-prefetch for critical domains',
+              'Check DNS server configuration',
+              'Consider using CDN with global PoP'
+            ],
+            example: '<link rel="dns-prefetch" href="//fonts.googleapis.com">',
             learnMore: 'https://web.dev/dns-prefetch/'
           }
         }
@@ -515,9 +618,9 @@ export const performanceRules: SeoRule[] = [
     name: 'TLS Handshake',
     category: 'performance',
     severity: 'info',
-    description: 'TLS handshake should be under 100ms',
+    description: 'TLS handshake should be under 100ms (excellent), 200ms (good), 300ms (acceptable)',
     check: (ctx) => {
-      const tls = ctx.timings?.tlsHandshake;
+      const tls = ctx.timings?.tls;
       if (tls === undefined) {
         return createResult(
           { id: 'timing-tls', name: 'TLS Handshake', category: 'performance', severity: 'info' },
@@ -527,45 +630,324 @@ export const performanceRules: SeoRule[] = [
         );
       }
 
-      const { good, poor } = SEO_THRESHOLDS.timing.tlsHandshake;
+      const { excellent, good, acceptable } = SEO_THRESHOLDS.timing.tls;
+      const tlsMs = Math.round(tls);
 
+      // Excellent: < 100ms
+      if (tls <= excellent) {
+        return createResult(
+          { id: 'timing-tls', name: 'TLS Handshake', category: 'performance', severity: 'info' },
+          'pass',
+          `Excellent TLS handshake (${tlsMs}ms)`,
+          {
+            value: tlsMs,
+            evidence: {
+              found: `${tlsMs}ms`,
+              rating: 'Excellent',
+              impact: 'TLS handshake is very fast. Secure connection established quickly.'
+            }
+          }
+        );
+      }
+
+      // Good: 100-200ms
       if (tls <= good) {
         return createResult(
           { id: 'timing-tls', name: 'TLS Handshake', category: 'performance', severity: 'info' },
           'pass',
-          `Fast TLS handshake (${tls}ms)`,
-          { value: tls }
+          `Good TLS handshake (${tlsMs}ms)`,
+          {
+            value: tlsMs,
+            evidence: {
+              found: `${tlsMs}ms`,
+              rating: 'Good',
+              target: `< ${excellent}ms for excellent`,
+              impact: 'TLS handshake is acceptable. Consider TLS 1.3 for further improvement.'
+            }
+          }
         );
       }
-      if (tls <= poor) {
+
+      // Acceptable: 200-300ms
+      if (tls <= acceptable) {
         return createResult(
           { id: 'timing-tls', name: 'TLS Handshake', category: 'performance', severity: 'info' },
           'info',
-          `TLS handshake could be faster (${tls}ms)`,
+          `Acceptable TLS handshake (${tlsMs}ms) - could be faster`,
           {
-            value: tls,
-            recommendation: 'Consider TLS 1.3, HTTP/2, or preconnect hints',
+            value: tlsMs,
+            recommendation: 'Consider TLS 1.3, preconnect hints, or shorter certificate chain',
             evidence: {
-              found: `${tls}ms TLS handshake`,
-              expected: `≤ ${good}ms for fast secure connection`,
-              impact: 'TLS 1.3 reduces handshake roundtrips. Preconnect can establish connections ahead of time.',
+              found: `${tlsMs}ms`,
+              rating: 'Acceptable',
+              target: `< ${good}ms for good, < ${excellent}ms for excellent`,
+              impact: 'TLS handshake adds latency to every new HTTPS connection.',
+              optimization: [
+                'Enable TLS 1.3 (reduces roundtrips)',
+                'Use preconnect for critical domains',
+                'Optimize certificate chain length',
+                'Enable OCSP stapling'
+              ],
               example: '<link rel="preconnect" href="https://api.example.com">'
             }
           }
         );
       }
+
+      // Poor: > 300ms
       return createResult(
         { id: 'timing-tls', name: 'TLS Handshake', category: 'performance', severity: 'info' },
         'warn',
-        `Slow TLS handshake (${tls}ms)`,
+        `Slow TLS handshake (${tlsMs}ms) - needs optimization`,
         {
-          value: tls,
-          recommendation: 'TLS is slow. Check server configuration and certificate chain',
+          value: tlsMs,
+          recommendation: 'TLS is slow. Check server TLS configuration and certificate chain.',
           evidence: {
-            found: `${tls}ms TLS handshake`,
-            expected: `≤ ${poor}ms (ideally ≤ ${good}ms)`,
-            impact: 'Slow TLS handshake delays secure connection establishment, especially on mobile networks',
+            found: `${tlsMs}ms`,
+            rating: 'Poor',
+            target: `< ${acceptable}ms for acceptable`,
+            impact: 'Slow TLS delays secure connection, especially impactful on mobile networks.',
+            optimization: [
+              'Enable TLS 1.3 on server',
+              'Reduce certificate chain length',
+              'Enable OCSP stapling',
+              'Use HTTP/2 or HTTP/3',
+              'Add preconnect hints for external domains'
+            ],
             learnMore: 'https://web.dev/uses-http2/'
+          }
+        }
+      );
+    },
+  },
+  {
+    id: 'timing-tcp',
+    name: 'TCP Connection',
+    category: 'performance',
+    severity: 'info',
+    description: 'TCP connection should be under 50ms (excellent), 100ms (good), 200ms (acceptable)',
+    check: (ctx) => {
+      const tcp = ctx.timings?.tcp;
+      if (tcp === undefined) {
+        return createResult(
+          { id: 'timing-tcp', name: 'TCP Connection', category: 'performance', severity: 'info' },
+          'info',
+          'Not applicable (TCP connection timing data unavailable)',
+          { recommendation: 'This rule checks TCP connection time when timing data is available' }
+        );
+      }
+
+      const { excellent, good, acceptable } = SEO_THRESHOLDS.timing.tcp;
+      const tcpMs = Math.round(tcp);
+
+      // Excellent: < 50ms
+      if (tcp <= excellent) {
+        return createResult(
+          { id: 'timing-tcp', name: 'TCP Connection', category: 'performance', severity: 'info' },
+          'pass',
+          `Excellent TCP connection (${tcpMs}ms)`,
+          {
+            value: tcpMs,
+            evidence: {
+              found: `${tcpMs}ms`,
+              rating: 'Excellent',
+              impact: 'TCP connection established very quickly. Low network latency.'
+            }
+          }
+        );
+      }
+
+      // Good: 50-100ms
+      if (tcp <= good) {
+        return createResult(
+          { id: 'timing-tcp', name: 'TCP Connection', category: 'performance', severity: 'info' },
+          'pass',
+          `Good TCP connection (${tcpMs}ms)`,
+          {
+            value: tcpMs,
+            evidence: {
+              found: `${tcpMs}ms`,
+              rating: 'Good',
+              target: `< ${excellent}ms for excellent`,
+              impact: 'TCP connection is acceptable. Server proximity is good.'
+            }
+          }
+        );
+      }
+
+      // Acceptable: 100-200ms
+      if (tcp <= acceptable) {
+        return createResult(
+          { id: 'timing-tcp', name: 'TCP Connection', category: 'performance', severity: 'info' },
+          'info',
+          `Acceptable TCP connection (${tcpMs}ms) - could be faster`,
+          {
+            value: tcpMs,
+            recommendation: 'Consider using CDN or server closer to users',
+            evidence: {
+              found: `${tcpMs}ms`,
+              rating: 'Acceptable',
+              target: `< ${good}ms for good, < ${excellent}ms for excellent`,
+              impact: 'TCP connection time reflects network latency between user and server.',
+              optimization: [
+                'Use a CDN with global edge locations',
+                'Use preconnect for critical domains',
+                'Enable HTTP/2 for connection multiplexing',
+                'Consider regional server deployments'
+              ],
+              example: '<link rel="preconnect" href="https://cdn.example.com">'
+            }
+          }
+        );
+      }
+
+      // Poor: > 200ms
+      return createResult(
+        { id: 'timing-tcp', name: 'TCP Connection', category: 'performance', severity: 'info' },
+        'warn',
+        `Slow TCP connection (${tcpMs}ms) - high latency`,
+        {
+          value: tcpMs,
+          recommendation: 'High network latency. Use CDN with edge locations closer to users.',
+          evidence: {
+            found: `${tcpMs}ms`,
+            rating: 'Poor',
+            target: `< ${acceptable}ms for acceptable`,
+            impact: 'High TCP connection time indicates significant network latency. Major impact on user experience.',
+            optimization: [
+              'Deploy CDN with edge locations (Cloudflare, Fastly, CloudFront)',
+              'Add preconnect hints for critical domains',
+              'Consider multi-region server deployment',
+              'Enable HTTP/2 or HTTP/3 for better connection reuse'
+            ],
+            learnMore: 'https://web.dev/reduce-network-payloads/'
+          }
+        }
+      );
+    },
+  },
+  {
+    id: 'timing-download',
+    name: 'Download Time',
+    category: 'performance',
+    severity: 'warning',
+    description: 'Download time should be optimized based on page size',
+    check: (ctx) => {
+      const download = ctx.timings?.download;
+      const htmlSize = ctx.htmlSize;
+
+      if (download === undefined) {
+        return createResult(
+          { id: 'timing-download', name: 'Download Time', category: 'performance', severity: 'warning' },
+          'info',
+          'Not applicable (download timing data unavailable)',
+          { recommendation: 'This rule checks download time when timing data is available' }
+        );
+      }
+
+      const downloadMs = Math.round(download);
+      const sizeKb = htmlSize ? Math.round(htmlSize / 1024) : 0;
+      const { htmlSmall, htmlMedium, htmlLarge } = SEO_THRESHOLDS.timing.download;
+
+      // Determine thresholds based on page size
+      let thresholds: { excellent: number; good: number; acceptable: number };
+      let sizeCategory: string;
+
+      if (!htmlSize || htmlSize <= htmlSmall.sizeKb * 1024) {
+        thresholds = htmlSmall;
+        sizeCategory = `small (< ${htmlSmall.sizeKb}KB)`;
+      } else if (htmlSize <= htmlMedium.sizeKb * 1024) {
+        thresholds = htmlMedium;
+        sizeCategory = `medium (${htmlSmall.sizeKb}-${htmlMedium.sizeKb}KB)`;
+      } else {
+        thresholds = htmlLarge;
+        sizeCategory = `large (> ${htmlMedium.sizeKb}KB)`;
+      }
+
+      // Excellent
+      if (download <= thresholds.excellent) {
+        return createResult(
+          { id: 'timing-download', name: 'Download Time', category: 'performance', severity: 'warning' },
+          'pass',
+          `Excellent download time (${downloadMs}ms for ${sizeKb}KB)`,
+          {
+            value: downloadMs,
+            evidence: {
+              found: `${downloadMs}ms`,
+              size: `${sizeKb}KB (${sizeCategory})`,
+              rating: 'Excellent',
+              impact: 'Page content downloads very quickly.'
+            }
+          }
+        );
+      }
+
+      // Good
+      if (download <= thresholds.good) {
+        return createResult(
+          { id: 'timing-download', name: 'Download Time', category: 'performance', severity: 'warning' },
+          'pass',
+          `Good download time (${downloadMs}ms for ${sizeKb}KB)`,
+          {
+            value: downloadMs,
+            evidence: {
+              found: `${downloadMs}ms`,
+              size: `${sizeKb}KB (${sizeCategory})`,
+              rating: 'Good',
+              target: `< ${thresholds.excellent}ms for excellent`,
+              impact: 'Download time is acceptable for page size.'
+            }
+          }
+        );
+      }
+
+      // Acceptable
+      if (download <= thresholds.acceptable) {
+        return createResult(
+          { id: 'timing-download', name: 'Download Time', category: 'performance', severity: 'warning' },
+          'warn',
+          `Acceptable download time (${downloadMs}ms for ${sizeKb}KB) - could be faster`,
+          {
+            value: downloadMs,
+            recommendation: 'Consider enabling compression or reducing page size',
+            evidence: {
+              found: `${downloadMs}ms`,
+              size: `${sizeKb}KB (${sizeCategory})`,
+              rating: 'Acceptable',
+              target: `< ${thresholds.good}ms for good`,
+              impact: 'Download time is slow for this page size. May affect user experience on slower connections.',
+              optimization: [
+                'Enable gzip/brotli compression',
+                'Remove unnecessary HTML/inline styles',
+                'Reduce page size by lazy loading content',
+                'Use CDN for faster delivery'
+              ]
+            }
+          }
+        );
+      }
+
+      // Poor
+      return createResult(
+        { id: 'timing-download', name: 'Download Time', category: 'performance', severity: 'warning' },
+        'fail',
+        `Slow download time (${downloadMs}ms for ${sizeKb}KB) - needs optimization`,
+        {
+          value: downloadMs,
+          recommendation: 'Download is too slow. Check compression, server bandwidth, and page size.',
+          evidence: {
+            found: `${downloadMs}ms`,
+            size: `${sizeKb}KB (${sizeCategory})`,
+            rating: 'Poor',
+            target: `< ${thresholds.acceptable}ms for acceptable`,
+            impact: 'Very slow download time. Users will experience noticeable delays.',
+            optimization: [
+              'Enable server compression (gzip/brotli)',
+              'Reduce HTML size (remove inline data, comments)',
+              'Use CDN with edge caching',
+              'Check server bandwidth capacity',
+              'Consider pagination for large content'
+            ]
           }
         }
       );

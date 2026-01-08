@@ -111,28 +111,50 @@ export const SEO_THRESHOLDS = {
   },
 
   // Timing (Core Web Vitals and Google recommendations)
+  // 4-level stratification: excellent → good → acceptable → poor
   timing: {
+    // TTFB: Excelente <200ms, Bom 200-500ms, Aceitável 500-800ms, Ruim >800ms
     ttfb: {
-      good: 200, // Under 200ms is good
-      needsImprovement: 500, // 200-500ms needs improvement
-      poor: 600, // Over 600ms is poor
+      excellent: 200, // Under 200ms is excellent
+      good: 500,      // 200-500ms is good
+      acceptable: 800, // 500-800ms needs improvement
+      poor: 800,      // Over 800ms is poor
     },
     total: {
-      good: 1000, // Under 1s is good
-      needsImprovement: 2500, // Under 2.5s is acceptable
-      poor: 4000, // Over 4s is poor
+      excellent: 1000, // Under 1s is excellent
+      good: 2500,      // Under 2.5s is good
+      acceptable: 4000, // Under 4s is acceptable
+      poor: 4000,      // Over 4s is poor
     },
-    dnsLookup: {
-      good: 50,
-      poor: 200,
+    // DNS: Excelente <20ms, Bom 20-50ms, Aceitável 50-100ms, Ruim >100ms
+    dns: {
+      excellent: 20,    // Under 20ms is excellent
+      good: 50,         // 20-50ms is good
+      acceptable: 100,  // 50-100ms is acceptable
+      poor: 100,        // Over 100ms is poor
     },
-    tcpConnect: {
-      good: 100,
-      poor: 300,
+    // TCP: Excelente <50ms, Bom 50-100ms, Aceitável 100-200ms, Ruim >200ms
+    tcp: {
+      excellent: 50,    // Under 50ms is excellent
+      good: 100,        // 50-100ms is good
+      acceptable: 200,  // 100-200ms is acceptable
+      poor: 200,        // Over 200ms is poor
     },
-    tlsHandshake: {
-      good: 100,
-      poor: 300,
+    // TLS: Excelente <100ms, Bom 100-200ms, Aceitável 200-300ms, Ruim >300ms
+    tls: {
+      excellent: 100,   // Under 100ms is excellent
+      good: 200,        // 100-200ms is good
+      acceptable: 300,  // 200-300ms is acceptable
+      poor: 300,        // Over 300ms is poor
+    },
+    // Download time (size-based, values in ms per KB)
+    download: {
+      // For HTML < 50KB, download should be < 100ms
+      htmlSmall: { sizeKb: 50, excellent: 100, good: 200, acceptable: 400 },
+      // For HTML 50-200KB, download should be < 300ms
+      htmlMedium: { sizeKb: 200, excellent: 300, good: 500, acceptable: 800 },
+      // For HTML > 200KB, download should be < 500ms
+      htmlLarge: { excellent: 500, good: 800, acceptable: 1200 },
     },
   },
 

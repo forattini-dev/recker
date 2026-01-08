@@ -6,6 +6,7 @@
  * Optionally uses sitemap.xml for URL discovery.
  */
 
+import { performance } from 'node:perf_hooks';
 import { createClient } from '../core/client.js';
 import { ScrapeDocument } from './document.js';
 import { RequestPool } from '../utils/request-pool.js';
@@ -66,6 +67,8 @@ export interface SpiderOptions {
   transport?: SpiderTransport;
   /** Callback for each page crawled */
   onPage?: (result: SpiderPageResult) => void;
+  /** Callback for each page with HTML content (for SEO analysis during crawl) */
+  onPageWithHtml?: (result: SpiderPageResult, html: string) => void | Promise<void>;
   /** Callback for progress updates */
   onProgress?: (progress: SpiderProgress) => void;
   /**
@@ -105,6 +108,17 @@ export interface SpiderPageResult {
     ogDescription?: string;
     ogImage?: string;
   };
+  /** Network timing data from HTTP request */
+  timings?: {
+    dns?: number;
+    tcp?: number;
+    tls?: number;
+    ttfb?: number;
+    download?: number;
+    total?: number;
+  };
+  /** Timestamp when this page was fetched (Date.now()) */
+  fetchedAt?: number;
   /** Custom extracted data from --extract selectors */
   extracted?: Record<string, unknown>;
 }
@@ -112,6 +126,8 @@ export interface SpiderPageResult {
 export interface SpiderProgress {
   crawled: number;
   queued: number;
+  /** Number of URLs currently being processed */
+  pending: number;
   total: number;
   currentUrl: string;
   depth: number;
@@ -156,6 +172,10 @@ export interface SpiderResult {
   pages: SpiderPageResult[];
   visited: Set<string>;
   duration: number;
+  /** Timestamp when crawl started (Date.now()) */
+  startTime: number;
+  /** Timestamp when crawl ended (Date.now()) */
+  endTime: number;
   errors: Array<{ url: string; error: string }>;
   /** Sitemap analysis (when useSitemap is enabled) */
   sitemap?: SitemapAnalysis;
@@ -319,12 +339,13 @@ function parseExtractSelectors(selectors: string[]): ExtractionSchema {
 }
 
 export class Spider {
-  private options: Required<Omit<SpiderOptions, 'onPage' | 'onProgress' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract'>> & {
+  private options: Required<Omit<SpiderOptions, 'onPage' | 'onPageWithHtml' | 'onProgress' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract'>> & {
     exclude?: RegExp[];
     include?: RegExp[];
     sitemapUrl?: string;
     transport: SpiderTransport;
     onPage?: (result: SpiderPageResult) => void;
+    onPageWithHtml?: (result: SpiderPageResult, html: string) => void | Promise<void>;
     onProgress?: (progress: SpiderProgress) => void;
     extract?: ExtractionSchema;
   };
@@ -377,6 +398,7 @@ export class Spider {
       exclude: options.exclude,
       include: options.include,
       onPage: options.onPage,
+      onPageWithHtml: options.onPageWithHtml,
       onProgress: options.onProgress,
       extract: extractSchema,
     };
@@ -415,7 +437,8 @@ export class Spider {
    * - Immediate scheduling of discovered URLs
    */
   async crawl(startUrl: string): Promise<SpiderResult> {
-    const startTime = performance.now();
+    const perfStart = performance.now();
+    const startTimestamp = Date.now();
 
     // Normalize and validate start URL
     const normalizedStart = normalizeUrl(startUrl);
@@ -551,7 +574,9 @@ export class Spider {
       startUrl: normalizedStart,
       pages: this.results,
       visited: this.visited,
-      duration: Math.round(performance.now() - startTime),
+      duration: Math.round(performance.now() - perfStart),
+      startTime: startTimestamp,
+      endTime: Date.now(),
       errors: this.errors,
       sitemap: this.options.useSitemap ? sitemapAnalysis : undefined,
       robots: robotsAnalysis,
@@ -741,7 +766,7 @@ export class Spider {
    * Fetch a page using the appropriate transport (undici or curl-impersonate)
    * Implements auto-detection and fallback for blocked requests.
    */
-  private async fetchPage(url: string): Promise<{ response: Response; body: string; usedCurl: boolean }> {
+  private async fetchPage(url: string): Promise<{ response: Response; body: string; usedCurl: boolean; timings?: SpiderPageResult['timings'] }> {
     const hostname = new URL(url).hostname;
 
     // Determine if we should use curl directly
@@ -762,7 +787,23 @@ export class Spider {
 
     // Try with undici first
     const response = await this.client.get(url);
+
+    // Measure body download time
+    const downloadStart = performance.now();
     const body = await response.text();
+    const downloadTime = performance.now() - downloadStart;
+
+    // Extract timing data from response
+    // Note: response.timings.content may not be accurate (measured before body consumed)
+    // so we use our own downloadTime measurement
+    const timings: SpiderPageResult['timings'] = response.timings ? {
+      dns: response.timings.dns,
+      tcp: response.timings.tcp,
+      tls: response.timings.tls,
+      ttfb: response.timings.firstByte,
+      download: Math.round(downloadTime),
+      total: response.timings.firstByte ? Math.round(response.timings.firstByte + downloadTime) : undefined,
+    } : undefined;
 
     // If in auto mode, check if we were blocked
     if (this.options.transport === 'auto' && this.curlAvailable && this.curlTransport) {
@@ -783,7 +824,7 @@ export class Spider {
       }
     }
 
-    return { response: response as unknown as Response, body, usedCurl: false };
+    return { response: response as unknown as Response, body, usedCurl: false, timings };
   }
 
   /**
@@ -791,18 +832,20 @@ export class Spider {
    */
   private async crawlPage(item: QueueItem): Promise<void> {
     const startTime = performance.now();
+    const fetchedAt = Date.now();
 
     // Report progress
     this.options.onProgress?.({
       crawled: this.results.length,
       queued: this.queue.length,
+      pending: this.pendingCount,
       total: this.visited.size,
       currentUrl: item.url,
       depth: item.depth,
     });
 
     try {
-      const { response, body: html } = await this.fetchPage(item.url);
+      const { response, body: html, timings } = await this.fetchPage(item.url);
       const status = response.status;
 
       // Skip non-HTML responses
@@ -864,11 +907,18 @@ export class Spider {
         },
         metrics,
         social,
+        timings,
+        fetchedAt,
         extracted,
       };
 
       this.results.push(result);
       this.options.onPage?.(result);
+
+      // Call onPageWithHtml for SEO analysis during crawl (await if async)
+      if (this.options.onPageWithHtml) {
+        await this.options.onPageWithHtml(result, html);
+      }
 
       // Add new links to queue (only internal, unvisited)
       for (const link of links) {
@@ -901,6 +951,7 @@ export class Spider {
         links: [],
         duration: Math.round(performance.now() - startTime),
         error: message,
+        fetchedAt,
       };
 
       this.results.push(errorResult);
@@ -930,6 +981,7 @@ export class Spider {
     return {
       crawled: this.results.length,
       queued: this.queue.length,
+      pending: this.pendingCount,
       total: this.visited.size,
       currentUrl: '',
       depth: 0,

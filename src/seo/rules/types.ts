@@ -285,12 +285,12 @@ export interface RuleContext {
   scriptCount?: number;
   hasNoscriptContent?: boolean;
 
-  // Timing metrics (passed from request)
+  // Timing metrics (passed from request/spider)
   timings?: {
     ttfb?: number; // Time to first byte (ms)
-    dnsLookup?: number; // DNS lookup time (ms)
-    tcpConnect?: number; // TCP connection time (ms)
-    tlsHandshake?: number; // TLS handshake time (ms)
+    dns?: number; // DNS lookup time (ms)
+    tcp?: number; // TCP connection time (ms)
+    tls?: number; // TLS handshake time (ms)
     download?: number; // Content download time (ms)
     total?: number; // Total request time (ms)
   };
@@ -643,6 +643,14 @@ export interface RuleEvidence {
   example?: string;
   /** Link to documentation or reference */
   learnMore?: string;
+  /** Performance rating (Excellent, Good, Acceptable, Poor) */
+  rating?: 'Excellent' | 'Good' | 'Acceptable' | 'Poor' | string;
+  /** Target value to aim for */
+  target?: string;
+  /** Size information (for download time rules) */
+  size?: string;
+  /** List of optimization suggestions */
+  optimization?: string[];
 }
 
 export interface RuleResult {

@@ -655,6 +655,10 @@ export class SeoAnalyzer {
       formCount: conversion.formCount,
       hasWhatsAppLink: conversion.hasWhatsAppLink,
       hasPhoneOnPage: conversion.hasPhoneOnPage,
+
+      // Timing metrics (passed from HTTP request/spider)
+      timings: this.options.timings,
+      htmlSize: this.options.htmlSize,
     };
   }
   /**
@@ -1592,6 +1596,7 @@ export class SeoAnalyzer {
    */
   private convertToCheckResults(results: RuleResult[]): SeoCheckResult[] {
     return results.map((r) => ({
+      id: r.id,
       name: r.name,
       category: r.category,
       status: r.status,

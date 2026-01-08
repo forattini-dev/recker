@@ -36,6 +36,8 @@ export interface SpiderRunnerOptions {
   robots?: boolean;
   /** Enable SEO analysis */
   seo?: boolean;
+  /** Use sitemap.xml to discover URLs (default: true in SEO mode) */
+  useSitemap?: boolean;
   /** Focus mode for SEO analysis */
   focus?: 'all' | 'links' | 'duplicates' | 'security' | 'ai' | 'resources';
   /** Abort signal for cancellation */
@@ -321,7 +323,7 @@ export class SpiderRunner extends CommandEmitter {
     options: SpiderRunnerOptions,
     pages: SpiderRunnerResult['pages']
   ): Promise<SpiderRunnerResult> {
-    const { depth = 5, limit = 100, concurrency = 5, robots = true, focus = 'all', signal } = options;
+    const { depth = 5, limit = 100, concurrency = 5, robots = true, focus = 'all', signal, useSitemap = true } = options;
 
     const focusCategories: Record<string, string[]> = {
       links: ['links'],
@@ -348,6 +350,7 @@ export class SpiderRunner extends CommandEmitter {
       delay: 100,
       seo: true,
       respectRobotsTxt: robots,
+      useSitemap,
       focusCategories: focusCategories[focus],
       focusMode: focus as any,
       onProgress: (progress) => {

@@ -21,6 +21,10 @@ export interface SpiderOptions {
   include?: string | string[];
   /** URL patterns to exclude (comma-separated string or array) */
   exclude?: string | string[];
+  /** Disable sitemap.xml crawling (sitemap is enabled by default in SEO mode) */
+  noSitemap?: boolean;
+  /** Disable rich TUI (when running inside shell context) */
+  disableTui?: boolean;
 }
 
 export async function runSpider(opts: SpiderOptions) {
@@ -31,10 +35,12 @@ export async function runSpider(opts: SpiderOptions) {
   const seoEnabled = !!opts.seo;
   const focusMode = opts.focus || 'all';
   const respectRobotsTxt = !!opts.robots;
+  // In SEO mode, sitemap crawling is enabled by default unless --no-sitemap is passed
+  const useSitemap = seoEnabled && !opts.noSitemap;
 
   // Apply defaults
-  const depth = opts.depth || 5;
-  const limit = opts.limit || 100;
+  const depth = opts.depth || 10;
+  const limit = opts.limit || 1000;
   const concurrency = opts.concurrency || 5;
 
   // Parse comma-separated options into arrays
@@ -57,6 +63,7 @@ export async function runSpider(opts: SpiderOptions) {
         concurrency,
         robots: respectRobotsTxt,
         seo: seoEnabled,
+        useSitemap,
         focus: focusMode as any,
         extract: extractSelectors,
         include: includePatterns,
@@ -102,6 +109,20 @@ Spider starting: ${startUrl}`));
     if (seoEnabled) {
       const { SeoSpider } = await import('../../seo/index.js');
 
+      // Use TUI for interactive mode, simple progress for non-interactive
+      // disableTui is used when running inside shell context (shell has its own interface)
+      let tui: Awaited<ReturnType<typeof import('../tui/spider-tui.js').createSpiderTui>> | null = null;
+
+      if (!formatJson && !opts.disableTui && process.stdout.isTTY) {
+        const { createSpiderTui } = await import('../tui/spider-tui.js');
+        tui = createSpiderTui(startUrl, limit);
+      }
+
+      // Fallback simple progress for non-TTY
+      let analyzedCount = 0;
+      let totalScore = 0;
+      let currentCrawled = 0;
+
       const seoSpider = new SeoSpider({
         maxDepth: depth,
         maxPages: limit,
@@ -110,15 +131,52 @@ Spider starting: ${startUrl}`));
         delay: 100,
         seo: true,
         respectRobotsTxt,
+        useSitemap,
         output: outputFile || undefined,
         focusCategories: focusCategories[focusMode],
         focusMode: focusMode as any,
-        onProgress: formatJson ? undefined : (progress) => {
-          process.stdout.write(`\r${colors.gray('  Crawling:')} ${colors.cyan(progress.crawled.toString())} pages | ${colors.gray('Queue:')} ${progress.queued} | ${colors.gray('Depth:')} ${progress.depth}   `);
+        onProgress: (progress) => {
+          currentCrawled = progress.crawled;
+          if (tui) {
+            tui.updateProgress(progress.crawled, progress.queued, progress.pending, progress.depth);
+            tui.updateUrl(progress.currentUrl);
+          } else if (!formatJson) {
+            // Simple fallback for non-TTY
+            const percent = Math.min(100, Math.round((progress.crawled / limit) * 100));
+            const avgScore = analyzedCount > 0 ? Math.round(totalScore / analyzedCount) : 0;
+            process.stdout.write(`\r  [${percent}%] ${progress.crawled}/${limit} pages | Score: ${avgScore}   `);
+          }
+        },
+        onSeoAnalysis: (seoPage) => {
+          if (seoPage.seoReport) {
+            analyzedCount++;
+            totalScore += seoPage.seoReport.score;
+            if (tui) {
+              // Pass url, score, bytes, and timings to TUI
+              // Use timings from spider page result (network-level data)
+              const bytes = seoPage.metrics?.htmlSize;
+              const timings = seoPage.timings || { total: seoPage.duration };
+              tui.updateSeo(seoPage.url, seoPage.seoReport.score, bytes, timings);
+            }
+          }
         },
       });
 
       const result = await seoSpider.crawl(startUrl);
+
+      // Update TUI with final results and cleanup
+      if (tui) {
+        tui.setComplete({
+          duplicateTitles: result.summary.duplicateTitles,
+          duplicateDescriptions: result.summary.duplicateDescriptions,
+          orphanPages: result.summary.orphanPages,
+          pagesWithErrors: result.summary.pagesWithErrors,
+        });
+        // Give TUI a moment to show final state, then cleanup
+        await new Promise(resolve => setTimeout(resolve, 500));
+        tui.stop();
+        await tui.waitUntilExit();
+      }
 
       // JSON output mode - print structured data and exit
       if (formatJson) {
@@ -152,7 +210,8 @@ Spider starting: ${startUrl}`));
 
         const jsonOutput = {
           startUrl: startUrl,
-          crawledAt: new Date().toISOString(),
+          startTime: result.startTime,
+          endTime: result.endTime,
           duration: result.duration,
           config: {
             maxDepth: depth,
@@ -201,6 +260,8 @@ Spider starting: ${startUrl}`));
                 status: page.status,
                 depth: page.depth,
                 duration: page.duration,
+                fetchedAt: page.fetchedAt,
+                timings: page.timings,
                 title: page.title,
                 error: page.error,
                 seo: page.seoReport ? {
@@ -442,7 +503,8 @@ Spider starting: ${startUrl}`));
       if (formatJson) {
         const jsonOutput = {
           startUrl: result.startUrl,
-          crawledAt: new Date().toISOString(),
+          startTime: result.startTime,
+          endTime: result.endTime,
           duration: result.duration,
           config: {
             maxDepth: depth,
@@ -462,6 +524,8 @@ Spider starting: ${startUrl}`));
             depth: p.depth,
             linksCount: p.links.length,
             duration: p.duration,
+            fetchedAt: p.fetchedAt,
+            timings: p.timings,
             error: p.error,
             meta: p.meta,
             metrics: p.metrics,
@@ -578,7 +642,8 @@ Spider starting: ${startUrl}`));
       if (outputFile) {
         const jsonOutput = {
           startUrl: result.startUrl,
-          crawledAt: new Date().toISOString(),
+          startTime: result.startTime,
+          endTime: result.endTime,
           duration: result.duration,
           summary: {
             totalPages: result.pages.length,
@@ -593,6 +658,8 @@ Spider starting: ${startUrl}`));
             depth: p.depth,
             linksCount: p.links.length,
             duration: p.duration,
+            fetchedAt: p.fetchedAt,
+            timings: p.timings,
             error: p.error,
             meta: p.meta,
             metrics: p.metrics,
@@ -642,16 +709,16 @@ export function registerSpiderCommand(program: Command) {
     .option('depth', {
       type: 'number',
       short: 'd',
-      default: 5,
+      default: 10,
       description: 'Max link depth to follow',
       example: '3',
     })
     .option('limit', {
       type: 'number',
       short: 'l',
-      default: 100,
+      default: 1000,
       description: 'Max pages to crawl',
-      example: '50',
+      example: '500',
     })
     .option('concurrency', {
       type: 'number',
@@ -703,6 +770,10 @@ export function registerSpiderCommand(program: Command) {
       short: 'L',
       description: 'Stream output as JSONL (one JSON object per line)',
     })
+    .option('no-sitemap', {
+      short: 'N',
+      description: 'Disable sitemap.xml crawling (sitemap is used by default in SEO mode)',
+    })
     .example('rek spider example.com', 'Basic crawl')
     .example('rek spider example.com -d 3 -l 50', 'Depth 3, max 50 pages')
     .example('rek spider example.com --seo', 'Enable SEO analysis')
@@ -730,6 +801,7 @@ export function registerSpiderCommand(program: Command) {
         extract: options.extract,
         include: options.include,
         exclude: options.exclude,
+        noSitemap: options.noSitemap || options['no-sitemap'],
       });
     });
 }
