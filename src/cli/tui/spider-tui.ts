@@ -206,7 +206,7 @@ function renderRecentPages(pages: PageInfo[], isComplete: boolean, totalAnalyzed
   ];
 }
 
-export function createSpiderTui(startUrl: string, limit: number) {
+export function createSpiderTui(startUrl: string, limit: number, concurrency: number) {
   const [state, setState] = createSignal<SpiderTuiState>({
     ...initialState,
     startTime: Date.now(),
@@ -278,13 +278,15 @@ export function createSpiderTui(startUrl: string, limit: number) {
     setState((s) => ({ ...s, status: 'error', currentUrl: error }));
   };
 
-  // Store exit function reference for external control
-  let exitApp: (() => void) | null = null;
+  // Manual exit control - unmount cleans up TUI, exitPromise signals completion
+  let resolveExit: (() => void) | null = null;
+  const exitPromise = new Promise<void>((resolve) => {
+    resolveExit = resolve;
+  });
 
   // Render the TUI
   function SpiderApp() {
-    const app = useApp();
-    exitApp = () => app.exit();
+    useApp(); // Keep for potential future use
 
     const s = state();
     const elapsed = Math.round((Date.now() - s.startTime) / 1000);
@@ -323,6 +325,11 @@ export function createSpiderTui(startUrl: string, limit: number) {
           { flexDirection: 'column' },
           Text({ dim: true }, 'To Crawl'),
           Text({ color: (s.queued + s.pending) > 0 ? 'yellow' : 'gray', bold: true }, String(s.queued + s.pending)),
+        ),
+        Box(
+          { flexDirection: 'column' },
+          Text({ dim: true }, 'Parallel'),
+          Text({ color: 'magenta', bold: true }, String(concurrency)),
         ),
         Box(
           { flexDirection: 'column' },
@@ -422,12 +429,12 @@ export function createSpiderTui(startUrl: string, limit: number) {
     setComplete,
     setError,
     stop: () => {
-      if (exitApp) {
-        exitApp();
-      } else {
-        app.unmount();
-      }
+      app.unmount();
+      // Small delay to let terminal cleanup complete before resolving
+      setTimeout(() => {
+        if (resolveExit) resolveExit();
+      }, 50);
     },
-    waitUntilExit: () => app.waitUntilExit(),
+    waitUntilExit: () => exitPromise,
   };
 }

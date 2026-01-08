@@ -115,7 +115,7 @@ Spider starting: ${startUrl}`));
 
       if (!formatJson && !opts.disableTui && process.stdout.isTTY) {
         const { createSpiderTui } = await import('../tui/spider-tui.js');
-        tui = createSpiderTui(startUrl, limit);
+        tui = createSpiderTui(startUrl, limit, concurrency);
       }
 
       // Fallback simple progress for non-TTY
