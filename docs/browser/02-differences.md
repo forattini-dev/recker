@@ -6,14 +6,14 @@ This document provides a complete comparison between the browser and Node.js bui
 
 | Aspect | Node.js | Browser |
 |--------|---------|---------|
-| **Features** | 100% | ~85% |
+| **Features** | 100% | ~80% |
 | **Bundle Size** | N/A | 800KB minified |
 | **Transport** | Undici (high-performance) | Fetch API |
 | **Crypto** | Node.js crypto (sync) | SubtleCrypto (async) |
 | **Cache** | Memory, File, Redis | Memory, IndexedDB, Service Worker |
 | **Protocols** | HTTP, WS, FTP, SFTP, DNS, WHOIS | HTTP, WS only |
 | **AI** | ✅ Full | ✅ Full |
-| **Presets** | ✅ 38 APIs | ✅ 38 APIs |
+| **Presets** | ✅ 38 APIs | ❌ Node-only |
 
 ## Complete Feature Matrix
 
@@ -73,29 +73,22 @@ This document provides a complete comparison between the browser and Node.js bui
 
 | Plugin | Node.js | Browser | Notes |
 |--------|:-------:|:-------:|-------|
-| compression | ✅ | ⚠️ | Browser handles automatically |
+| compression | ✅ | ⚠️ | Requires plugin; uses CompressionStream (gzip/deflate only) |
 | http2-push | ✅ | ⚠️ | Browser handles automatically |
 | http3 | ✅ | ⚠️ | Browser handles automatically |
 
-### Authentication (15/16 available)
+### Authentication
 
-| Auth Method | Node.js | Browser | Notes |
-|-------------|:-------:|:-------:|-------|
-| Basic | ✅ | ✅ | Base64 encoding |
-| Bearer | ✅ | ✅ | Token header |
-| API Key | ✅ | ✅ | Header or query |
-| Digest | ✅ | ✅ | Uses SubtleCrypto |
-| OAuth2 | ✅ | ✅ | Token refresh support |
-| AWS SigV4 | ✅ | ✅ | Uses SubtleCrypto |
-| OIDC | ✅ | ✅ | OpenID Connect |
-| Auth0 | ✅ | ✅ | Auth0 integration |
-| Okta | ✅ | ✅ | Okta integration |
-| Azure AD | ✅ | ✅ | Microsoft identity |
-| Cognito | ✅ | ✅ | AWS Cognito |
-| Firebase | ✅ | ✅ | Firebase Auth |
-| Google Service Account | ✅ | ✅ | JWT signing |
-| GitHub App | ✅ | ✅ | GitHub App auth |
-| mTLS | ✅ | ❌ | **Requires client certificates** |
+Auth helpers are Node-only. In browser builds, set headers directly (or use your auth library):
+
+```typescript
+import { createClient } from 'recker/browser';
+
+const client = createClient({ baseUrl: 'https://api.example.com' });
+const response = await client.get('/users', {
+  headers: { Authorization: 'Bearer your-token' }
+});
+```
 
 ### Cache Storage
 
@@ -126,7 +119,7 @@ This document provides a complete comparison between the browser and Node.js bui
 | Feature | Node.js | Browser | Notes |
 |---------|:-------:|:-------:|-------|
 | AI Layer | ✅ | ✅ | Full support via Fetch |
-| 38 API Presets | ✅ | ✅ | All presets available |
+| 38 API Presets | ✅ | ❌ | Node-only |
 | CLI (`rek`) | ✅ | ❌ | Terminal-only |
 | MCP Server | ✅ | ❌ | Node.js process |
 | GeoIP | ✅ | ❌ | MaxMind database |
@@ -256,7 +249,7 @@ const hmac = await crypto.hmac('SHA-256', 'key', 'data');
 const random = crypto.randomBytes(16); // This one is sync
 ```
 
-> **Important:** Browser crypto uses SubtleCrypto which is Promise-based. Auth plugins that use crypto (Digest, AWS SigV4) handle this automatically.
+> **Important:** Browser crypto uses SubtleCrypto which is Promise-based. Use it directly or via your auth library.
 
 ## Cache Differences
 
@@ -264,39 +257,39 @@ const random = crypto.randomBytes(16); // This one is sync
 
 ```typescript
 import { createClient, MemoryStorage, FileStorage, RedisStorage } from 'recker';
-import { cache } from 'recker/plugins';
+import { cachePlugin } from 'recker/plugins';
 
 // Memory (default)
-client.use(cache({ storage: new MemoryStorage() }));
+client.use(cachePlugin({ storage: new MemoryStorage() }));
 
 // File (persistent)
-client.use(cache({ storage: new FileStorage('./cache') }));
+client.use(cachePlugin({ storage: new FileStorage('./cache') }));
 
 // Redis (distributed)
-client.use(cache({ storage: new RedisStorage('redis://localhost') }));
+client.use(cachePlugin({ storage: new RedisStorage('redis://localhost') }));
 ```
 
 ### Browser Options
 
 ```typescript
-import { createClient, MemoryStorage, IndexedDBStorage, ServiceWorkerCache } from 'recker/browser';
-import { cache } from 'recker/plugins';
+import { createClient, IndexedDBStorage, ServiceWorkerCache } from 'recker/browser';
+import { cachePlugin } from 'recker/plugins';
 
 // Memory (lost on page reload)
-client.use(cache({ storage: new MemoryStorage() }));
+client.use(cachePlugin());
 
 // IndexedDB (persistent across sessions)
 const idbStorage = new IndexedDBStorage('my-cache');
-client.use(cache({ storage: idbStorage }));
+client.use(cachePlugin({ storage: idbStorage }));
 
 // Service Worker Cache (modern, persistent, fast)
 // Best for production - uses browser's Cache API
 const swCache = new ServiceWorkerCache({ cacheName: 'my-app-v1' });
-client.use(cache({ storage: swCache }));
+client.use(cachePlugin({ storage: swCache }));
 
 // Check if Service Worker Cache is supported
 if (ServiceWorkerCache.isSupported()) {
-  client.use(cache({ storage: new ServiceWorkerCache() }));
+  client.use(cachePlugin({ storage: new ServiceWorkerCache() }));
 }
 ```
 
@@ -327,7 +320,7 @@ if (recker.isBrowser) {
 // List unavailable features
 console.log('Unavailable:', recker.unavailable);
 // ['whois', 'whoisAvailable', 'dns', 'dnsSecurity', 'dnsClient', 'whoisClient']
-// Note: AI and presets ARE available in browser!
+// Note: AI is available in browser; presets are Node-only.
 
 // Feature detection
 function hasFeature(feature: string): boolean {

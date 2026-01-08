@@ -98,7 +98,9 @@ rek mcp --category=full
 }
 ```
 
-## Available Tools (65)
+## Category Tools (65 total)
+
+Some tools appear in multiple categories based on use case.
 
 ### Documentation (6 tools)
 
@@ -111,12 +113,26 @@ rek mcp --category=full
 | `rek_suggest` | Get implementation suggestions |
 | `rek_curl_convert` | Convert curl commands to Recker TypeScript/CLI |
 
-### Network (13 tools)
+### Network (11 tools)
 
 | Tool | Description |
 |------|-------------|
 | `rek_http_request` | Make HTTP requests (supports `headersOnly` for lightweight HEAD requests) |
+| `rek_dns` | Resolve DNS records (A, AAAA, MX, TXT, NS, ALL) |
+| `rek_dns_dig` | Advanced DNS lookup (like dig) |
+| `rek_tls` | Inspect SSL/TLS certificates |
+| `rek_whois` | WHOIS domain/IP lookup |
+| `rek_rdap` | Modern WHOIS (RDAP) for domains and IPs |
+| `rek_ping` | TCP ping with latency measurement |
 | `rek_ip_lookup` | Get public IP information |
+| `rek_curl_convert` | Convert curl commands to Recker TypeScript/CLI |
+| `rek_api_compare` | Compare responses from two API endpoints |
+| `rek_load_test` | Simple load test for an API endpoint (max 100 requests) |
+
+### DNS (9 tools)
+
+| Tool | Description |
+|------|-------------|
 | `rek_dns` | Resolve DNS records (A, AAAA, MX, TXT, NS, ALL) |
 | `rek_dns_propagate` | Check DNS propagation globally |
 | `rek_dns_health` | Comprehensive DNS health check |
@@ -125,45 +141,37 @@ rek mcp --category=full
 | `rek_dns_dkim` | Check DKIM record |
 | `rek_dns_dig` | Advanced DNS lookup (like dig) |
 | `rek_dns_system` | Get system DNS configuration |
-| `rek_whois` | WHOIS domain/IP lookup |
-| `rek_ping` | TCP ping with latency measurement |
-| `rek_api_compare` | Compare responses from two API endpoints |
+| `rek_dns_toolkit` | Complete DNS security toolkit (SPF, DMARC, DKIM, CAA) |
 
-### Utility (3 tools)
+### Security (6 tools)
 
 | Tool | Description |
 |------|-------------|
-| `rek_site_audit` | **Quick website audit** - connectivity, SEO, security, TLS, DNS, WHOIS in one call |
-| `rek_domain_audit` | Comprehensive domain audit (DNS, TLS, HTTP headers, WHOIS) |
-| `rek_load_test` | Simple load test for an API endpoint (max 100 requests) |
-
-### Security (7 tools)
-
-| Tool | Description |
-|------|-------------|
-| `rek_tls` | Inspect SSL/TLS certificates |
 | `rek_tls_inspect` | Detailed TLS connection analysis |
-| `rek_rdap` | Modern WHOIS (RDAP) for domains and IPs |
 | `rek_rdap_lookup` | RDAP lookup with detailed info |
 | `rek_geoip_lookup` | IP geolocation with bogon detection (MaxMind) |
 | `rek_security_headers` | Analyze HTTP security headers (grade A+ to F) |
 | `rek_dns_toolkit` | Complete DNS security toolkit (SPF, DMARC, DKIM, CAA) |
+| `rek_domain_audit` | Comprehensive domain audit (DNS, TLS, HTTP headers, WHOIS) |
 
-### Scraping (1 tool)
-
-| Tool | Description |
-|------|-------------|
-| `rek_scrape` | Web scraping with CSS selectors, tables, forms, JSON-LD |
-
-### SEO (5 tools)
+### SEO (7 tools)
 
 | Tool | Description |
 |------|-------------|
+| `rek_site_audit` | **Quick website audit** - connectivity, SEO, security, TLS, DNS, WHOIS in one call |
 | `rek_seo_analyze` | Analyze page SEO with 400+ rules (score 0-100, grade A-F) |
 | `rek_seo_spider` | Crawl site and detect duplicates, orphan pages |
 | `rek_seo_quick_wins` | Get prioritized SEO fixes (high/medium/low) |
 | `rek_seo_sitemap` | Analyze sitemap.xml for SEO issues |
 | `rek_seo_schema` | Extract and validate JSON-LD structured data |
+| `rek_scrape` | Web scraping with CSS selectors, tables, forms, JSON-LD |
+
+### Scraping (2 tools)
+
+| Tool | Description |
+|------|-------------|
+| `rek_scrape` | Web scraping with CSS selectors, tables, forms, JSON-LD |
+| `rek_http_request` | Make HTTP requests (supports `headersOnly` for lightweight HEAD requests) |
 
 ### Video (5 tools)
 

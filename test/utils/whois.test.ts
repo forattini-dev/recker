@@ -184,10 +184,13 @@ OrgName:        Google LLC
 
       const resultPromise = whois('google.com', { timeout: 1000 });
 
-      // Advance past timeout and immediately catch the rejection
-      vi.advanceTimersByTime(1001);
+      // Attach error handler BEFORE advancing timers to avoid unhandled rejection
+      const expectation = expect(resultPromise).rejects.toThrow(/timed out/);
 
-      await expect(resultPromise).rejects.toThrow(/timed out/);
+      // Use async version to properly handle the async module load before timeout
+      await vi.advanceTimersByTimeAsync(1001);
+
+      await expectation;
       expect(mockSocket.destroy).toHaveBeenCalled();
     });
 

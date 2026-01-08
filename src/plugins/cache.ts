@@ -1,8 +1,263 @@
 import { CacheStorage, CacheStrategy, Middleware, Plugin, ReckerRequest, ReckerResponse, CacheEntry } from '../types/index.js';
-import { HttpResponse } from '../core/response.js';
 import { HttpRequest } from '../core/request.js';
-import { MemoryStorage } from '../cache/memory-storage.js';
-import { createHash } from 'node:crypto';
+import { SimpleMemoryStorage } from '../cache/simple-memory-storage.js';
+import { cleanHtml } from '../utils/html-cleaner.js';
+import { parseSSE } from '../utils/sse.js';
+import { parseHeaders } from '../utils/header-parser.js';
+import { parseLinkHeader } from '../utils/link-header.js';
+
+const textEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+const BufferCtor = (globalThis as any).Buffer as
+  | { from: (data: any, encoding?: string) => Uint8Array & { toString: (encoding?: string) => string } }
+  | undefined;
+
+function isNodeRuntime(): boolean {
+  return typeof globalThis !== 'undefined' && Boolean((globalThis as any).process?.versions?.node);
+}
+
+class LazyCacheStorage implements CacheStorage {
+  private storage?: CacheStorage;
+  private resolving?: Promise<CacheStorage>;
+
+  constructor(private factory: () => Promise<CacheStorage>) {}
+
+  private async getStorage(): Promise<CacheStorage> {
+    if (!this.storage) {
+      if (!this.resolving) {
+        this.resolving = this.factory().then((instance) => {
+          this.storage = instance;
+          return instance;
+        });
+      }
+      this.storage = await this.resolving;
+    }
+    return this.storage;
+  }
+
+  async get(key: string): Promise<CacheEntry | undefined | null> {
+    return (await this.getStorage()).get(key);
+  }
+
+  async set(key: string, value: CacheEntry, ttl: number): Promise<void> {
+    return (await this.getStorage()).set(key, value, ttl);
+  }
+
+  async delete(key: string): Promise<void> {
+    return (await this.getStorage()).delete(key);
+  }
+}
+
+function createDefaultStorage(): CacheStorage {
+  if (!isNodeRuntime()) {
+    return new SimpleMemoryStorage();
+  }
+
+  return new LazyCacheStorage(async () => {
+    const { MemoryStorage } = await import('../cache/memory-storage.js');
+    return new MemoryStorage();
+  });
+}
+
+function toBytes(value: unknown): Uint8Array | null {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'string') {
+    if (textEncoder) return textEncoder.encode(value);
+    if (BufferCtor) return BufferCtor.from(value, 'utf8');
+    return null;
+  }
+
+  if (typeof URLSearchParams !== 'undefined' && value instanceof URLSearchParams) {
+    const encoded = value.toString();
+    if (textEncoder) return textEncoder.encode(encoded);
+    if (BufferCtor) return BufferCtor.from(encoded, 'utf8');
+    return null;
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value);
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  }
+
+  if (typeof Blob !== 'undefined' && value instanceof Blob) {
+    // Blob requires async access; skip hashing to avoid blocking.
+    return null;
+  }
+
+  if (typeof value === 'object') {
+    try {
+      const json = JSON.stringify(value);
+      if (textEncoder) return textEncoder.encode(json);
+      if (BufferCtor) return BufferCtor.from(json, 'utf8');
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function hashBytes(bytes: Uint8Array): string {
+  // FNV-1a 64-bit for stable, fast hashing across runtimes.
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+
+  for (const byte of bytes) {
+    hash ^= BigInt(byte);
+    hash = (hash * prime) & 0xffffffffffffffffn;
+  }
+
+  return hash.toString(16).padStart(16, '0');
+}
+
+function isTextContentType(contentType: string | null): boolean {
+  if (!contentType) return true;
+  const value = contentType.toLowerCase();
+  if (value.startsWith('text/')) return true;
+  if (value.includes('json') || value.includes('xml')) return true;
+  if (value.includes('yaml') || value.includes('csv')) return true;
+  if (value.includes('javascript') || value.includes('ecmascript')) return true;
+  if (value.includes('x-www-form-urlencoded')) return true;
+  if (value.includes('graphql')) return true;
+  if (value.includes('event-stream')) return true;
+  if (value.includes('+json') || value.includes('+xml')) return true;
+  return false;
+}
+
+function encodeBase64(bytes: Uint8Array): string | null {
+  if (BufferCtor) {
+    return BufferCtor.from(bytes as any).toString('base64');
+  }
+  if (typeof btoa !== 'undefined') {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+  return null;
+}
+
+function decodeBase64(value: string): Uint8Array | null {
+  if (BufferCtor) {
+    return BufferCtor.from(value, 'base64');
+  }
+  if (typeof atob !== 'undefined') {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+  return null;
+}
+
+type CachedBody = { body: string; bodyEncoding?: 'utf8' | 'base64' };
+
+async function readResponseBody(response: Response): Promise<CachedBody | null> {
+  const contentType = response.headers.get('content-type');
+  if (isTextContentType(contentType)) {
+    return { body: await response.text(), bodyEncoding: 'utf8' };
+  }
+
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const encoded = encodeBase64(bytes);
+  if (encoded === null) return null;
+  return { body: encoded, bodyEncoding: 'base64' };
+}
+
+class CacheResponse<T = unknown> implements ReckerResponse<T> {
+  constructor(public raw: Response, public timings?: { total?: number; firstByte?: number }) {}
+
+  get status() { return this.raw.status; }
+  get statusText() { return this.raw.statusText; }
+  get headers() { return this.raw.headers; }
+  get ok() { return this.raw.ok; }
+  get url() { return this.raw.url; }
+  get connection() { return {}; }
+
+  get cache() {
+    return parseHeaders(this.headers, this.status).cache;
+  }
+
+  get rateLimit() {
+    return parseHeaders(this.headers, this.status).rateLimit;
+  }
+
+  links() {
+    return parseLinkHeader(this.headers);
+  }
+
+  get headerInfo() {
+    return parseHeaders(this.headers, this.status);
+  }
+
+  json<R = T>() {
+    return this.raw.json() as Promise<R>;
+  }
+
+  text() {
+    return this.raw.text();
+  }
+
+  async cleanText() {
+    return cleanHtml(await this.text());
+  }
+
+  blob() {
+    return this.raw.blob();
+  }
+
+  read() {
+    return this.raw.body;
+  }
+
+  clone(): ReckerResponse<T> {
+    return new CacheResponse(this.raw.clone(), this.timings);
+  }
+
+  sse() {
+    return parseSSE(this.raw);
+  }
+
+  async *download() {
+    if (!this.raw.body) return;
+    const reader = this.raw.body.getReader();
+    let loaded = 0;
+    const total = Number(this.raw.headers.get('content-length')) || undefined;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      loaded += value.length;
+      yield {
+        loaded,
+        transferred: loaded,
+        total,
+        percent: total ? (loaded / total) * 100 : undefined,
+        direction: 'download' as const
+      };
+    }
+  }
+
+  async *[Symbol.asyncIterator]() {
+    if (!this.raw.body) return;
+    const reader = this.raw.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      yield value;
+    }
+  }
+}
 
 export interface CacheOptions {
   storage?: CacheStorage;
@@ -293,7 +548,7 @@ async function storeCacheEntry(
 /**
  * Create cache entry from response
  */
-async function createCacheEntry(response: ReckerResponse, body: string, now: number): Promise<CacheEntry> {
+async function createCacheEntry(response: ReckerResponse, cachedBody: CachedBody, now: number): Promise<CacheEntry> {
   const headers: Record<string, string> = {};
   response.headers.forEach((v, k) => { headers[k] = v; });
 
@@ -313,7 +568,8 @@ async function createCacheEntry(response: ReckerResponse, body: string, now: num
     status: response.status,
     statusText: response.statusText,
     headers,
-    body,
+    body: cachedBody.body,
+    bodyEncoding: cachedBody.bodyEncoding,
     timestamp: now,
     etag: response.headers.get('ETag') || undefined,
     lastModified: response.headers.get('Last-Modified') || undefined,
@@ -342,19 +598,22 @@ function createCachedResponse(entry: CacheEntry, cacheStatus: 'hit' | 'stale' | 
     }
   }
 
+  const responseBody = entry.bodyEncoding === 'base64'
+    ? decodeBase64(entry.body) ?? entry.body
+    : entry.body;
+
   // Explicitly create Response with status/headers
-  const response = new Response(entry.body, {
+  const response = new Response(responseBody as BodyInit, {
     status: entry.status,
     statusText: entry.statusText,
     headers
   });
 
-  const httpResponse = new HttpResponse(response);
-  return httpResponse;
+  return new CacheResponse(response);
 }
 
 export function cachePlugin(options: CacheOptions = {}): Plugin {
-  const storage = options.storage || new MemoryStorage();
+  const storage = options.storage || createDefaultStorage();
   const strategy = options.strategy || 'cache-first';
   const ttl = options.ttl || 60 * 1000; // 1 minute default
   const methods = options.methods || ['GET'];
@@ -367,13 +626,9 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
     // Add body hash for non-GET methods to allow semantic caching (critical for AI/LLM prompts)
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
       try {
-        const bodyStr = typeof req.body === 'string'
-          ? req.body
-          : (req.body instanceof Buffer ? req.body.toString() : JSON.stringify(req.body));
-
-        if (bodyStr) {
-          const hash = createHash('sha256').update(bodyStr).digest('hex').substring(0, 16);
-          key += `:${hash}`;
+        const bytes = toBytes(req.body);
+        if (bytes && bytes.length > 0) {
+          key += `:${hashBytes(bytes)}`;
         }
       } catch {
         // If body serialization fails (e.g. circular structure or Stream), skip hash
@@ -488,7 +743,7 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
           status: 504,
           statusText: 'Gateway Timeout'
         });
-        return new HttpResponse(response);
+        return new CacheResponse(response);
       }
       // Have cached entry, check if it satisfies request directives
       const satisfaction = satisfiesRequestDirectives(cachedEntry, now, reqCacheControl);
@@ -498,7 +753,7 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
           status: 504,
           statusText: 'Gateway Timeout'
         });
-        return new HttpResponse(response);
+        return new CacheResponse(response);
       }
       // Return cached entry regardless of freshness (only-if-cached overrides freshness)
       return createCachedResponse(cachedEntry, isFresh(cachedEntry, now) ? 'hit' : 'stale');
@@ -524,8 +779,11 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
         const cacheControl = parseCacheControl(response.headers.get('Cache-Control'));
         if (!cacheControl.noStore) {
           const clonedResponse = response.raw.clone();
-          const body = await clonedResponse.text();
-          const entry = await createCacheEntry(response, body, now);
+          const cachedBody = await readResponseBody(clonedResponse);
+          if (!cachedBody) {
+            return response;
+          }
+          const entry = await createCacheEntry(response, cachedBody, now);
           const entryTtl = (entry.sMaxAge ?? entry.maxAge ?? ttl / 1000) * 1000;
           // Use storeCacheEntry helper
           await storeCacheEntry(storage, baseKey, req, entry, entryTtl, generateKey);
@@ -591,8 +849,11 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
             const cacheControl = parseCacheControl(response.headers.get('Cache-Control'));
             if (!cacheControl.noStore) {
               const clonedResponse = response.raw.clone();
-              const body = await clonedResponse.text();
-              const entry = await createCacheEntry(response, body, now);
+              const cachedBody = await readResponseBody(clonedResponse);
+              if (!cachedBody) {
+                return response;
+              }
+              const entry = await createCacheEntry(response, cachedBody, now);
               const freshnessTtl = (entry.sMaxAge ?? entry.maxAge ?? ttl / 1000) * 1000;
               // Ensure we store it long enough to allow revalidation of stale entries
               // Use the greater of freshness TTL or default/configured TTL
@@ -620,8 +881,11 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
         const cacheControl = parseCacheControl(response.headers.get('Cache-Control'));
         if (!cacheControl.noStore) {
           const clonedResponse = response.raw.clone();
-          const body = await clonedResponse.text();
-          const entry = await createCacheEntry(response, body, now);
+          const cachedBody = await readResponseBody(clonedResponse);
+          if (!cachedBody) {
+            return response;
+          }
+          const entry = await createCacheEntry(response, cachedBody, now);
           const freshnessTtl = (entry.sMaxAge ?? entry.maxAge ?? ttl / 1000) * 1000;
           const storageTtl = Math.max(freshnessTtl, ttl);
           // Use storeCacheEntry helper
@@ -642,8 +906,11 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
 
       if (response.ok) {
         const clonedResponse = response.raw.clone();
-        const body = await clonedResponse.text();
-        const entry = await createCacheEntry(response, body, now);
+        const cachedBody = await readResponseBody(clonedResponse);
+        if (!cachedBody) {
+          return response;
+        }
+        const entry = await createCacheEntry(response, cachedBody, now);
         // Use storeCacheEntry helper
         await storeCacheEntry(storage, baseKey, req, entry, ttl, generateKey);
       }
@@ -673,8 +940,11 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
               await storage.set(key, updatedEntry, ttl);
             } else if (freshResponse.ok) {
               const clonedResponse = freshResponse.raw.clone();
-              const body = await clonedResponse.text();
-              const entry = await createCacheEntry(freshResponse, body, Date.now());
+              const cachedBody = await readResponseBody(clonedResponse);
+              if (!cachedBody) {
+                return;
+              }
+              const entry = await createCacheEntry(freshResponse, cachedBody, Date.now());
               
               const freshnessTtl = (entry.sMaxAge ?? entry.maxAge ?? ttl / 1000) * 1000;
               const storageTtl = Math.max(freshnessTtl, ttl);
@@ -695,8 +965,11 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
 
       if (response.ok) {
         const clonedResponse = response.raw.clone();
-        const body = await clonedResponse.text();
-        const entry = await createCacheEntry(response, body, now);
+        const cachedBody = await readResponseBody(clonedResponse);
+        if (!cachedBody) {
+          return response;
+        }
+        const entry = await createCacheEntry(response, cachedBody, now);
         // Use storeCacheEntry helper
         await storeCacheEntry(storage, baseKey, req, entry, ttl, generateKey);
       }
@@ -711,8 +984,11 @@ export function cachePlugin(options: CacheOptions = {}): Plugin {
 
         if (response.ok) {
           const clonedResponse = response.raw.clone();
-          const body = await clonedResponse.text();
-          const entry = await createCacheEntry(response, body, now);
+          const cachedBody = await readResponseBody(clonedResponse);
+          if (!cachedBody) {
+            return response;
+          }
+          const entry = await createCacheEntry(response, cachedBody, now);
           
           const freshnessTtl = (entry.sMaxAge ?? entry.maxAge ?? ttl / 1000) * 1000;
           const storageTtl = Math.max(freshnessTtl, ttl);

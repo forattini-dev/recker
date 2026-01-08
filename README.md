@@ -48,14 +48,15 @@ Recker provides two browser builds: **Full** and **Slim**.
 
 | Build | Size | Includes |
 |:------|:-----|:---------|
-| **Full** | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, all plugins |
+| **Full** | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, portable plugins |
 | **Slim** | ~480 KB | HTTP, WebSocket, SSE, core plugins only |
 
 ```typescript
 // Full build - includes everything
 import { recker, get, post } from 'recker/browser';
 
-// Slim build - 57% smaller, no AI/SEO/scrape/presets
+// Slim build - 57% smaller, no AI/SEO/scrape
+// Presets and auth helpers are Node-only
 import { recker, get, post } from 'recker/browser-slim';
 ```
 
@@ -92,7 +93,7 @@ import { recker, get, post } from 'recker/browser-slim';
 | Need AI streaming (OpenAI, etc.) | `recker/browser` |
 | Need SEO analysis | `recker/browser` |
 | Need web scraping | `recker/browser` |
-| Need API presets (GitHub, Stripe) | `recker/browser` |
+| Need API presets (GitHub, Stripe) | Use Node build (`recker`) |
 | Bundle size is critical | `recker/browser-slim` |
 
 [→ Browser Documentation](https://forattini-dev.github.io/recker/#/browser/01-quickstart)
@@ -252,20 +253,20 @@ rek shell
 
 ## MCP Server
 
-57 tools for AI assistants like Claude Code, Cursor, and Windsurf:
+65 tools for AI assistants like Claude Code, Cursor, and Windsurf:
 
 ```bash
-# One-liner for Claude Code (uses minimal profile by default)
+# One-liner for Claude Code (uses minimal category by default)
 claude mcp add recker npx recker@latest mcp
 
-# Add more profiles as needed
-claude mcp add recker npx recker@latest mcp --profile=minimal,video,seo
+# Add more categories as needed
+claude mcp add recker npx recker@latest mcp --category=minimal,video,seo
 
-# Enable all 57 tools
-claude mcp add recker npx recker@latest mcp --profile=full
+# Enable all 65 tools
+claude mcp add recker npx recker@latest mcp --category=full
 ```
 
-**Profiles:** `minimal` (default) `docs` `network` `dns` `security` `seo` `scrape` `video` `ai` `protocols` `parsing` `streaming` `full`
+**Categories:** `minimal` (default) `docs` `network` `dns` `security` `seo` `scrape` `video` `ai` `protocols` `parsing` `streaming` `full`
 
 [→ MCP Documentation](https://forattini-dev.github.io/recker/#/getting-started/mcp)
 

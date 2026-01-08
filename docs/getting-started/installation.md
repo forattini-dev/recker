@@ -80,12 +80,12 @@ Recker provides **two browser builds** with different sizes and features:
 
 | Build | Import Path | Size | What's Included |
 |:------|:------------|:-----|:----------------|
-| **Full** | `recker/browser` | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, all 27 plugins, 48 presets |
+| **Full** | `recker/browser` | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, portable plugins |
 | **Slim** | `recker/browser-slim` | ~480 KB | HTTP, WebSocket, SSE, 18 core plugins |
 
 #### Full Browser Build
 
-Use when you need AI streaming, SEO analysis, web scraping, or API presets:
+Use when you need AI streaming, SEO analysis, or web scraping:
 
 ```typescript
 import { recker, get, post, createClient } from 'recker/browser';
@@ -116,12 +116,12 @@ await recker.get('/api/users').json();
 | HTTP (GET, POST, PUT, PATCH, DELETE) | AI providers (OpenAI, Anthropic, etc.) |
 | WebSocket | SEO analysis (400+ rules) |
 | SSE (Server-Sent Events) | Web scraping |
-| Response types (JSON, text, blob, stream) | 48 API presets |
+| Response types (JSON, text, blob, stream) | Auth helpers (Node-only) |
 | Retry plugin | Template engine |
 | Rate limit plugin | |
 | Circuit breaker plugin | |
 | Dedup plugin | |
-| Auth plugins (Basic, Bearer, OAuth2, etc.) | |
+| | Presets (Node-only) |
 | GraphQL plugin | |
 | Cache (Memory, IndexedDB) | |
 
@@ -235,12 +235,13 @@ Some features are **not available** in browser environments due to platform cons
 | DNS/WHOIS | Requires raw socket access |
 | FTP/SFTP/Telnet | Requires raw socket access |
 | Template Engine | Requires Node.js `fs` module |
-| HAR File Export | File system access |
+| Auth helpers | Node-only |
+| Presets | Node-only |
 | mTLS Auth | Client certificates |
 | Redis Cache | Server-side only |
 | CLI | Terminal access |
 
-> **Note:** AI, SEO, and Scraping work in the browser **only with the full build** (`recker/browser`).
+> **Note:** AI, SEO, and Scraping work in the browser **only with the full build** (`recker/browser`). Presets and auth helpers are Node-only.
 
 See [Node vs Browser Differences](/browser/02-differences.md) for the complete comparison.
 

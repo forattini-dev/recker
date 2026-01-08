@@ -61,11 +61,9 @@ export * from '../plugins/har-recorder.js';
 export * from '../plugins/network-simulation.js';
 
 // ============================================================================
-// Cache (Memory only for browser)
+// Cache (IndexedDB/Service Worker only for browser)
 // ============================================================================
-export * from '../cache/memory-storage.js';
 export * from '../cache/indexed-db.js';
-// NOTE: memory-limits.js uses Node.js APIs - excluded from browser
 
 // ============================================================================
 // Utilities (Browser-safe only)
@@ -95,7 +93,6 @@ export * as ai from '../ai/index.js';
 export * from '../constants/http-status.js';
 
 // NOTE: The following are excluded from browser build:
-// - websocket/client.js - uses Node.js EventEmitter and streams
 // - contract/index.js - uses Node.js streaming
 // - events/request-events.js - uses Node.js EventEmitter
 

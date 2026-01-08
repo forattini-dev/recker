@@ -464,6 +464,7 @@ export interface CacheEntry {
   statusText: string;
   headers: Record<string, string>;
   body: string;
+  bodyEncoding?: 'utf8' | 'base64';
   timestamp: number;
 
   // RFC 7232 validators for conditional requests

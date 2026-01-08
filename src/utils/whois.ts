@@ -3,8 +3,29 @@
  * Queries WHOIS servers for domain and IP information
  */
 
-import { createConnection, Socket } from 'net';
-import { ReckerError } from '../core/errors.js';
+import { ReckerError, UnsupportedError } from '../core/errors.js';
+
+function isNodeRuntime(): boolean {
+  return typeof globalThis !== 'undefined' && Boolean((globalThis as any).process?.versions?.node);
+}
+
+let netModulePromise: Promise<any> | null = null;
+
+async function getNetModule() {
+  if (!isNodeRuntime()) {
+    throw new UnsupportedError(
+      'WHOIS is only available in Node.js environments.',
+      { feature: 'whois' }
+    );
+  }
+
+  if (!netModulePromise) {
+    const moduleName = 'node:net';
+    netModulePromise = import(moduleName);
+  }
+
+  return netModulePromise;
+}
 
 export interface WhoisOptions {
   /**
@@ -191,9 +212,11 @@ async function queryWhoisServer(
   port: number,
   timeout: number
 ): Promise<string> {
+  const { createConnection } = await getNetModule();
+
   return new Promise((resolve, reject) => {
     let response = '';
-    let socket: Socket | null = null;
+    let socket: any = null;
 
     const timeoutId = setTimeout(() => {
       socket?.destroy();
@@ -213,7 +236,7 @@ async function queryWhoisServer(
       socket!.write(query + '\r\n');
     });
 
-    socket.on('data', (chunk) => {
+    socket.on('data', (chunk: any) => {
       response += chunk.toString('utf-8');
     });
 
@@ -222,9 +245,9 @@ async function queryWhoisServer(
       resolve(response);
     });
 
-    socket.on('error', (error: NodeJS.ErrnoException) => {
+    socket.on('error', (error: any) => {
       clearTimeout(timeoutId);
-      const errorDetail = error.message || error.code || 'Connection failed';
+      const errorDetail = error?.message || error?.code || 'Connection failed';
       const err = new ReckerError(
         `WHOIS query failed: ${errorDetail}`,
         undefined,
@@ -235,11 +258,11 @@ async function queryWhoisServer(
           'Retry the query; transient network issues can occur.'
         ]
       );
-      (err as any).code = error.code;
+      (err as any).code = error?.code;
       reject(err);
     });
 
-    socket.on('close', (hadError) => {
+    socket.on('close', (hadError: boolean) => {
       clearTimeout(timeoutId);
       if (hadError && !response) {
         const err = new ReckerError(

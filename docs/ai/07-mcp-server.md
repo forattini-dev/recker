@@ -166,14 +166,14 @@ Or add manually to `~/.claude.json`:
 }
 ```
 
-With a profile:
+With categories:
 
 ```json
 {
   "mcpServers": {
     "recker": {
       "command": "npx",
-      "args": ["recker@latest", "mcp", "--profile=minimal,video,ai"]
+      "args": ["recker@latest", "mcp", "--category=minimal,video,ai"]
     }
   }
 }

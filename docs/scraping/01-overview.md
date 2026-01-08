@@ -210,10 +210,10 @@ const links = doc.links({ absolute: true });
 ### 4. Use Rate Limiting for Respectful Scraping
 
 ```typescript
-import { createClient, rateLimit } from 'recker';
+import { createClient, rateLimitPlugin } from 'recker';
 
 const client = createClient();
-client.use(rateLimit({
+client.use(rateLimitPlugin({
   limit: 10,
   window: 60000  // 10 requests per minute
 }));

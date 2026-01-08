@@ -23,7 +23,7 @@ import { createCompressionMiddleware } from '../plugins/compression.js';
 import { serializeXML } from '../plugins/xml.js';
 import { serializeYaml } from '../plugins/yaml.js';
 import { serializeCsv } from '../plugins/csv.js';
-import { MemoryStorage } from '../cache/memory-storage.js';
+import { SimpleMemoryStorage } from '../cache/simple-memory-storage.js';
 import { RequestRunner } from '../runner/request-runner.js';
 import { ReckerWebSocket, type WebSocketOptions } from '../websocket/client.js';
 import { whois as performWhois, isDomainAvailable, type WhoisOptions, type WhoisResult } from '../utils/whois.js';
@@ -131,6 +131,17 @@ function createLazyFileStorage(path?: string): CacheStorage {
   return new LazyCacheStorage(async () => {
     const { FileStorage } = await import('../cache/basic-file-storage.js');
     return new FileStorage(path);
+  });
+}
+
+function createDefaultCacheStorage(): CacheStorage {
+  if (!isNodeRuntime()) {
+    return new SimpleMemoryStorage();
+  }
+
+  return new LazyCacheStorage(async () => {
+    const { MemoryStorage } = await import('../cache/memory-storage.js');
+    return new MemoryStorage();
   });
 }
 
@@ -385,7 +396,7 @@ export class Client {
       } else if (options.cache.driver === 'file') {
         storage = createLazyFileStorage(options.cache.fileStoragePath);
       } else {
-        storage = new MemoryStorage();
+        storage = createDefaultCacheStorage();
       }
 
       cachePlugin({
@@ -825,7 +836,7 @@ export class Client {
     const needsController = options.timeout || options.signal || this.defaultTimeout;
     let controller: AbortController | undefined;
     let signal: AbortSignal | undefined = options.signal;
-    let timeoutId: NodeJS.Timeout | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let externalAbortCleanup: (() => void) | undefined;
 
     if (needsController) {

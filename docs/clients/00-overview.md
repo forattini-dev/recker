@@ -14,7 +14,7 @@ Recker provides three HTTP clients for different use cases, all with consistent 
 | **Retry** | Yes | No | Yes |
 | **Cache** | Yes | No | Yes |
 | **Rate Limiting** | Yes | No | Yes |
-| **Auth Plugins** | Yes | No | Yes |
+| **Auth Plugins** | Yes | No | No (headers only) |
 | **Timeout Handling** | Yes | Manual | Yes |
 | **Chainable Response** | Yes | No | Yes |
 | **JSON Auto-parse** | Yes | Yes | Yes |
@@ -126,7 +126,7 @@ const ws = recker.ws('wss://api.example.com/ws');
 
 ## Browser Client Features
 
-The browser client has **full feature parity** with the Standard Client:
+The browser client has near-parity for HTTP core and portable plugins. Node-only features (auth helpers, presets, DNS/WHOIS, etc.) are excluded:
 
 ### Hooks
 
@@ -157,15 +157,16 @@ client.onError((error, req) => {
 ### Plugins
 
 ```typescript
-import { recker, retry, rateLimit, cache } from 'recker/browser';
+import { recker, retryPlugin, rateLimitPlugin } from 'recker/browser';
+import { cachePlugin } from 'recker/plugins/cache';
 import { IndexedDBStorage } from 'recker/browser';
 
 const client = recker.client({
   baseUrl: 'https://api.example.com',
   plugins: [
-    retry({ maxAttempts: 3 }),
-    rateLimit({ limit: 100, window: 60000 }),
-    cache({ storage: new IndexedDBStorage('my-cache'), ttl: 300000 })
+    retryPlugin({ maxAttempts: 3 }),
+    rateLimitPlugin({ limit: 100, window: 60000 }),
+    cachePlugin({ storage: new IndexedDBStorage('my-cache'), ttl: 300000 })
   ]
 });
 ```
@@ -173,16 +174,19 @@ const client = recker.client({
 ### Cache Storage Options
 
 ```typescript
-import { MemoryStorage, IndexedDBStorage, ServiceWorkerCache } from 'recker/browser';
+import { IndexedDBStorage, ServiceWorkerCache } from 'recker/browser';
+import { cachePlugin } from 'recker/plugins/cache';
 
 // Memory (lost on page reload)
-const memoryCache = new MemoryStorage();
+client.use(cachePlugin());
 
 // IndexedDB (persistent across sessions)
 const idbCache = new IndexedDBStorage('my-app-cache');
+client.use(cachePlugin({ storage: idbCache }));
 
 // Service Worker Cache (modern, fast, persistent)
 const swCache = new ServiceWorkerCache({ cacheName: 'api-cache-v1' });
+client.use(cachePlugin({ storage: swCache }));
 ```
 
 ## Performance Comparison
@@ -231,7 +235,7 @@ const client = recker.client({
 | Browser application | Browser |
 | Retry on failure | Standard or Browser |
 | Cache responses | Standard or Browser |
-| Complex auth flows | Standard or Browser |
+| Complex auth flows | Standard |
 | CDN cache purge | All three |
 | WebSocket in browser | Browser (native) |
 | One-off scripts | Mini |
@@ -245,16 +249,16 @@ const client = recker.client({
 
 | Aspect | Node.js | Browser |
 |--------|---------|---------|
-| **Features** | 100% | ~90% |
+| **Features** | 100% | ~80% |
 | **Bundle Size** | N/A | 800KB minified |
 | **Transport** | Undici (high-performance) | Fetch API |
 | **Crypto** | Node.js crypto (sync) | SubtleCrypto (async) |
 | **Cache** | Memory, File, Redis | Memory, IndexedDB, ServiceWorker |
 | **Protocols** | HTTP, WS, FTP, SFTP, DNS, WHOIS | HTTP, WS only |
 | **AI** | Full | Full |
-| **Presets** | 38 APIs | 38 APIs |
+| **Presets** | 38 APIs | Node-only |
 | **Hooks** | Full | Full |
-| **Plugins** | All | Most (18 portable) |
+| **Plugins** | All | Most (portable) |
 
 ## Complete Feature Matrix
 
@@ -290,15 +294,7 @@ const client = recker.client({
 
 ### Authentication
 
-| Auth Method | Node.js | Browser | Notes |
-|-------------|:-------:|:-------:|-------|
-| Basic | Yes | Yes | Base64 encoding |
-| Bearer | Yes | Yes | Token header |
-| API Key | Yes | Yes | Header or query |
-| Digest | Yes | Yes | Uses SubtleCrypto |
-| OAuth2 | Yes | Yes | Token refresh support |
-| AWS SigV4 | Yes | Yes | Uses SubtleCrypto |
-| mTLS | Yes | **No** | Requires client certificates |
+Auth helpers are Node-only. In the browser, set headers directly (or use your auth library).
 
 ### Cache Storage
 
@@ -397,7 +393,7 @@ client.beforeRequest((req) => {
   return req.withHeader('X-Custom', 'value');
 });
 
-client.use(retry({ maxAttempts: 3 }));
+client.use(retryPlugin({ maxAttempts: 3 }));
 ```
 
 ## Next Steps

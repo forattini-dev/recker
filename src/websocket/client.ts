@@ -1,16 +1,107 @@
 /**
- * WebSocket client built on Undici WebSocket
- * Provides easy-to-use interface for WebSocket connections
+ * WebSocket client built on Undici (Node) or native WebSocket (browser).
+ * Provides easy-to-use interface for WebSocket connections.
  */
 
-import { WebSocket } from 'undici';
-import { EventEmitter } from 'events';
 import type { TLSOptions, ProxyOptions } from '../types/index.js';
-import type { Dispatcher } from 'undici';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
-import { nodeToWebStream, webToNodeStream } from '../utils/streaming.js';
-import { StateError, StreamError, ConnectionError } from '../core/errors.js';
+import { StateError, StreamError, ConnectionError, UnsupportedError } from '../core/errors.js';
+
+type Listener = (...args: any[]) => void;
+
+class SimpleEmitter {
+  private listeners = new Map<string, Set<Listener>>();
+
+  on(event: string, listener: Listener) {
+    const set = this.listeners.get(event) ?? new Set<Listener>();
+    set.add(listener);
+    this.listeners.set(event, set);
+    return this;
+  }
+
+  once(event: string, listener: Listener) {
+    const wrapped: Listener = (...args) => {
+      this.off(event, wrapped);
+      listener(...args);
+    };
+    return this.on(event, wrapped);
+  }
+
+  off(event: string, listener: Listener) {
+    const set = this.listeners.get(event);
+    if (set) {
+      set.delete(listener);
+      if (set.size === 0) {
+        this.listeners.delete(event);
+      }
+    }
+    return this;
+  }
+
+  removeListener(event: string, listener: Listener) {
+    return this.off(event, listener);
+  }
+
+  emit(event: string, ...args: any[]) {
+    const set = this.listeners.get(event);
+    if (!set) return false;
+    for (const listener of [...set]) {
+      listener(...args);
+    }
+    return true;
+  }
+}
+
+const READY_STATE = {
+  CONNECTING: 0,
+  OPEN: 1,
+  CLOSING: 2,
+  CLOSED: 3
+};
+
+function isNodeRuntime(): boolean {
+  return typeof globalThis !== 'undefined' && Boolean((globalThis as any).process?.versions?.node);
+}
+
+let undiciModulePromise: Promise<any> | null = null;
+
+async function loadUndici() {
+  if (!undiciModulePromise) {
+    const moduleName = 'undici';
+    undiciModulePromise = import(moduleName);
+  }
+  return undiciModulePromise;
+}
+
+type WebSocketLike = {
+  readyState: number;
+  send: (data: any) => void;
+  close: (code?: number, reason?: string) => void;
+  addEventListener: (type: string, listener: (event: any) => void) => void;
+  removeEventListener: (type: string, listener: (event: any) => void) => void;
+  bufferedAmount?: number;
+  readable?: ReadableStream<Uint8Array>;
+  ping?: () => void;
+};
+
+type WebSocketConstructor = new (url: string, protocols?: string | string[], options?: any) => WebSocketLike;
+
+async function getWebSocketConstructor(): Promise<WebSocketConstructor> {
+  if (isNodeRuntime()) {
+    const undici = await loadUndici();
+    return undici.WebSocket as WebSocketConstructor;
+  }
+
+  const ws = (globalThis as any).WebSocket as WebSocketConstructor | undefined;
+  if (!ws) {
+    throw new UnsupportedError('WebSocket is not available in this environment.', { feature: 'websocket' });
+  }
+
+  return ws;
+}
+
+function isReadableStream(value: any): value is ReadableStream<Uint8Array> {
+  return Boolean(value && typeof value.getReader === 'function');
+}
 
 export interface WebSocketOptions {
   /**
@@ -26,7 +117,7 @@ export interface WebSocketOptions {
   /**
    * Undici dispatcher to use (supports ProxyAgent/AgentManager).
    */
-  dispatcher?: Dispatcher;
+  dispatcher?: unknown;
 
   /**
    * Proxy configuration (maps to ProxyAgent).
@@ -77,7 +168,7 @@ export interface WebSocketOptions {
 }
 
 export interface WebSocketMessage {
-  data: string | Buffer;
+  data: string | Uint8Array | ArrayBuffer | Blob;
   isBinary: boolean;
 }
 
@@ -91,16 +182,16 @@ interface BackoffOptions {
 /**
  * WebSocket client wrapper
  */
-export class ReckerWebSocket extends EventEmitter {
-  private ws: WebSocket | null = null;
+export class ReckerWebSocket extends SimpleEmitter {
+  private ws: WebSocketLike | null = null;
   private url: string;
   private options: Required<Pick<WebSocketOptions, 'protocols' | 'headers' | 'reconnect' | 'reconnectDelay' | 'maxReconnectAttempts' | 'heartbeatInterval' | 'heartbeatTimeout' | 'perMessageDeflate'>> & Pick<WebSocketOptions, 'dispatcher' | 'proxy' | 'tls'>;
   private reconnectAttempts = 0;
-  private reconnectTimer?: NodeJS.Timeout;
-  private heartbeatTimer?: NodeJS.Timeout;
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
+  private heartbeatTimer?: ReturnType<typeof setInterval>;
   private isClosed = false;
   private isReconnecting = false;
-  private pongWatchdog?: NodeJS.Timeout;
+  private pongWatchdog?: ReturnType<typeof setTimeout>;
   private backoff: BackoffOptions;
   private closedByUser = false;
 
@@ -133,30 +224,34 @@ export class ReckerWebSocket extends EventEmitter {
    * Connect to WebSocket server
    */
   async connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        const wsOptions: any = {
+    const WebSocketCtor = await getWebSocketConstructor();
+    const nodeEnv = isNodeRuntime();
+
+    const wsOptions: any = nodeEnv
+      ? {
           headers: this.options.headers,
           dispatcher: this.options.dispatcher,
           perMessageDeflate: this.options.perMessageDeflate,
-        };
-
-        // Proxy support via ProxyAgent if provided in options
-        if (this.options.proxy) {
-          const proxyConfig: ProxyOptions = typeof this.options.proxy === 'string'
-            ? { url: this.options.proxy }
-            : this.options.proxy;
-          // Lazy require to avoid circular deps
-          const { ProxyAgent } = require('undici');
-          wsOptions.dispatcher = new ProxyAgent(proxyConfig.url);
         }
+      : undefined;
 
-        if (this.options.tls) {
-          wsOptions.tls = this.options.tls;
-        }
+    if (nodeEnv && this.options.proxy) {
+      const proxyConfig: ProxyOptions = typeof this.options.proxy === 'string'
+        ? { url: this.options.proxy }
+        : this.options.proxy;
+      const undici = await loadUndici();
+      wsOptions.dispatcher = new undici.ProxyAgent(proxyConfig.url);
+    }
 
-        // @ts-expect-error - undici WebSocket accepts options as third argument
-        this.ws = new WebSocket(this.url, this.options.protocols, wsOptions);
+    if (nodeEnv && this.options.tls) {
+      wsOptions.tls = this.options.tls;
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        this.ws = nodeEnv
+          ? new WebSocketCtor(this.url, this.options.protocols, wsOptions)
+          : new WebSocketCtor(this.url, this.options.protocols);
 
         this.ws.addEventListener('open', () => {
           this.reconnectAttempts = 0;
@@ -167,9 +262,10 @@ export class ReckerWebSocket extends EventEmitter {
         });
 
         this.ws.addEventListener('message', (event) => {
+          const data = event.data;
           const message: WebSocketMessage = {
-            data: event.data,
-            isBinary: event.data instanceof Buffer
+            data,
+            isBinary: typeof data !== 'string'
           };
           this.emit('message', message);
           this.stopPongWatchdog(); // got data, connection is alive
@@ -186,7 +282,7 @@ export class ReckerWebSocket extends EventEmitter {
         });
 
         this.ws.addEventListener('error', (event) => {
-          const err = event.error instanceof Error
+          const err = event?.error instanceof Error
             ? event.error
             : new ConnectionError(
                 'WebSocket connection error',
@@ -208,8 +304,11 @@ export class ReckerWebSocket extends EventEmitter {
   /**
    * Send data through WebSocket
    */
-  async send(data: string | Buffer | ArrayBuffer | ArrayBufferView, options?: { awaitDrain?: boolean; highWaterMark?: number }): Promise<void> {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+  async send(
+    data: string | ArrayBuffer | ArrayBufferView | Blob,
+    options?: { awaitDrain?: boolean; highWaterMark?: number }
+  ): Promise<void> {
+    if (!this.ws || this.ws.readyState !== READY_STATE.OPEN) {
       throw new StateError(
         'WebSocket is not connected',
         {
@@ -230,12 +329,25 @@ export class ReckerWebSocket extends EventEmitter {
   }
 
   /**
-   * Send a Node.js Readable stream as a sequence of binary frames.
+   * Send a stream (ReadableStream or AsyncIterable) as a sequence of binary frames.
    * Optional backpressure wait based on bufferedAmount.
    */
-  async sendStream(stream: Readable, options?: { awaitDrain?: boolean; highWaterMark?: number }): Promise<void> {
+  async sendStream(
+    stream: ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>,
+    options?: { awaitDrain?: boolean; highWaterMark?: number }
+  ): Promise<void> {
+    if (isReadableStream(stream)) {
+      const reader = stream.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        await this.send(value, options);
+      }
+      return;
+    }
+
     for await (const chunk of stream) {
-      await this.send(chunk as Buffer, options);
+      await this.send(chunk, options);
     }
   }
 
@@ -266,7 +378,7 @@ export class ReckerWebSocket extends EventEmitter {
    * Note: Sends a heartbeat message. WebSocket protocol-level ping/pong is automatic.
    */
   ping(): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws || this.ws.readyState !== READY_STATE.OPEN) return;
 
     // If undici exposes ping, prefer it (Node-only).
     const anyWs = this.ws as any;
@@ -290,26 +402,24 @@ export class ReckerWebSocket extends EventEmitter {
    * Get current connection state
    */
   get readyState(): number {
-    return this.ws?.readyState ?? WebSocket.CLOSED;
+    return this.ws?.readyState ?? READY_STATE.CLOSED;
   }
 
   /**
    * Check if connected
    */
   get isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.ws?.readyState === READY_STATE.OPEN;
   }
 
   /**
-   * Convert the websocket into a duplex Node.js stream (adapter).
-   * Useful for piping data between WS and file/network streams.
+   * Expose a ReadableStream when supported by the runtime.
    */
-  toReadable(): Readable | null {
+  toReadable(): ReadableStream<Uint8Array> | null {
     if (!this.ws) return null;
-    // Undici exposes a WHATWG stream for incoming messages; wrap into Node stream.
     const wsAny = this.ws as any;
-    if (wsAny.readable) {
-      return webToNodeStream(wsAny.readable);
+    if (wsAny.readable && typeof wsAny.readable.getReader === 'function') {
+      return wsAny.readable as ReadableStream<Uint8Array>;
     }
     return null;
   }
@@ -317,14 +427,17 @@ export class ReckerWebSocket extends EventEmitter {
   /**
    * Pipe a Node.js Readable into the WebSocket (binary frames).
    */
-  async pipeFrom(source: Readable, options?: { awaitDrain?: boolean; highWaterMark?: number }): Promise<void> {
+  async pipeFrom(
+    source: ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>,
+    options?: { awaitDrain?: boolean; highWaterMark?: number }
+  ): Promise<void> {
     await this.sendStream(source, options);
   }
 
   /**
    * Pipe websocket incoming data to a destination writable stream.
    */
-  async pipeTo(destination: NodeJS.WritableStream): Promise<void> {
+  async pipeTo(destination: any): Promise<void> {
     const readable = this.toReadable();
     if (!readable) {
       throw new StreamError(
@@ -335,7 +448,32 @@ export class ReckerWebSocket extends EventEmitter {
         }
       );
     }
-    await pipeline(readable, destination);
+
+    if (destination && typeof destination.getWriter === 'function') {
+      await readable.pipeTo(destination as WritableStream<Uint8Array>);
+      return;
+    }
+
+    if (isNodeRuntime()) {
+      const streamModuleName = 'node:stream';
+      const pipelineModuleName = 'node:stream/promises';
+      const streamModule = await import(streamModuleName);
+      const pipelineModule = await import(pipelineModuleName);
+      const nodeReadable = typeof streamModule.Readable?.fromWeb === 'function'
+        ? streamModule.Readable.fromWeb(readable as any)
+        : streamModule.Readable.from(readable as any);
+
+      await pipelineModule.pipeline(nodeReadable, destination);
+      return;
+    }
+
+    throw new StreamError(
+      'Destination stream is not supported in this environment',
+      {
+        streamType: 'websocket',
+        retriable: false,
+      }
+    );
   }
 
   /**

@@ -1,5 +1,6 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
+import { LEGACY_TOOL_GROUPS } from '../../mcp/legacy-tool-groups.js';
 
 export function registerMcpCommand(program: Command) {
   const mcpCmd = program
@@ -31,7 +32,7 @@ export function registerMcpCommand(program: Command) {
     .option('category', {
       type: 'string',
       short: 'c',
-      description: 'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, full',
+      description: 'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, video, ai, protocols, parsing, streaming, full',
     })
     .option('list-categories', {
       type: 'boolean',
@@ -149,48 +150,26 @@ export function registerMcpCommand(program: Command) {
         toolsFilter.push(...patterns);
       }
 
-      // Tool categories for legacy disable flags
-      const TOOL_CATEGORIES = {
-        docs: [
-          'rek_search_docs',
-          'rek_get_doc',
-          'rek_code_examples',
-          'rek_api_schema',
-          'rek_suggest',
-        ],
-        http: ['rek_http_request'],
-        dns: ['rek_dns_lookup'],
-        whois: ['rek_whois_lookup'],
-        ping: ['rek_network_ping'],
-        ip: ['rek_ip_lookup'],
-        network: [
-          'rek_http_request',
-          'rek_dns_lookup',
-          'rek_whois_lookup',
-          'rek_network_ping',
-        ],
-      };
-
       // Handle category disable flags
       if (!options.only && !options.filter) {
         if (options.noDocs) {
-          TOOL_CATEGORIES.docs.forEach(tool => toolsFilter.push(`!${tool}`));
+          LEGACY_TOOL_GROUPS.docs.forEach(tool => toolsFilter.push(`!${tool}`));
         }
 
         if (options.noNetwork) {
-          TOOL_CATEGORIES.network.forEach(tool => toolsFilter.push(`!${tool}`));
+          LEGACY_TOOL_GROUPS.network.forEach(tool => toolsFilter.push(`!${tool}`));
         } else {
           if (options.noHttp) {
             toolsFilter.push('!rek_http_request');
           }
           if (options.noDns) {
-            toolsFilter.push('!rek_dns_lookup');
+            toolsFilter.push('!rek_dns');
           }
           if (options.noWhois) {
-            toolsFilter.push('!rek_whois_lookup');
+            toolsFilter.push('!rek_whois');
           }
           if (options.noPing) {
-            toolsFilter.push('!rek_network_ping');
+            toolsFilter.push('!rek_ping');
           }
         }
 

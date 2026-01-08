@@ -108,7 +108,7 @@ async function rdapLookup(args: Record<string, unknown>): Promise<MCPToolResult>
       return {
         content: [{
           type: 'text',
-          text: `RDAP is not available for .${tld} domains. Use rek_whois_lookup instead for traditional WHOIS data.`,
+          text: `RDAP is not available for .${tld} domains. Use rek_whois instead for traditional WHOIS data.`,
         }],
         isError: true,
       };
@@ -455,7 +455,7 @@ RDAP provides structured JSON data including:
 - DNSSEC status
 - Registrar/Registrant info
 
-Note: Some TLDs (.io, .ai, etc.) don't support RDAP yet - use rek_whois_lookup for those.`,
+Note: Some TLDs (.io, .ai, etc.) don't support RDAP yet - use rek_whois for those.`,
     inputSchema: {
       type: 'object',
       properties: {

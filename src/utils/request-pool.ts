@@ -41,7 +41,7 @@ export class RequestPool {
   private active = 0;
   private windowStart = 0;
   private startedInWindow = 0;
-  private waitingTimer?: NodeJS.Timeout;
+  private waitingTimer?: ReturnType<typeof setTimeout>;
 
   constructor(options: RequestPoolOptions = {}) {
     this.concurrency = options.concurrency ?? Number.POSITIVE_INFINITY;

@@ -5,7 +5,7 @@
 ### Multi-Protocol SDK for the AI Era
 
 Nine protocols unified: HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS.<br>
-AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 57 tools.<br>
+AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 65 tools.<br>
 48 service presets built-in. Zero config.
 
 **One SDK to connect your app to everything.**

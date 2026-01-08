@@ -10,8 +10,8 @@ Recker provides a browser-compatible build with ~70% of features. This guide cov
 - ✅ All HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
 - ✅ Streaming responses & SSE
 - ✅ Native WebSocket
-- ✅ 18 plugins (retry, rate-limit, circuit-breaker, graphql, auth, etc.)
-- ✅ 15/16 auth methods (all except mTLS)
+- ✅ Portable plugins (retry, rate-limit, circuit-breaker, graphql, etc.)
+- ✅ Manual auth via headers (Basic/Bearer/API key)
 - ✅ Memory & IndexedDB cache
 - ✅ All response types (JSON, text, blob, stream)
 - ✅ **AI Chat** (OpenAI, Anthropic, etc.)
@@ -24,6 +24,8 @@ Recker provides a browser-compatible build with ~70% of features. This guide cov
 - ❌ FTP/SFTP/Telnet (requires raw sockets)
 - ❌ mTLS Auth (client certificates)
 - ❌ File/Redis Cache (server-side only)
+- ❌ Auth plugins (OAuth2, SigV4, etc.)
+- ❌ Presets (GitHub, Stripe, etc.)
 - ❌ CLI (terminal)
 
 ## Installation
@@ -80,7 +82,8 @@ yarn add recker
 import { recker } from 'recker/browser-slim';
 ```
 
-> **Slim excludes:** AI providers, SEO analysis, web scraping, API presets.
+> **Slim excludes:** AI providers, SEO analysis, web scraping.
+> **Note:** Presets and auth helpers are Node-only (not in any browser build).
 > See [Bundle Sizes](#bundle-sizes) for the full comparison.
 
 ## Basic Usage
@@ -284,29 +287,29 @@ All portable plugins work in the browser:
 
 ```typescript
 import { recker, createClient, FetchTransport } from 'recker/browser';
-import { retry } from 'recker/plugins/retry';
-import { rateLimit } from 'recker/plugins/rate-limit';
-import { circuitBreaker } from 'recker/plugins/circuit-breaker';
+import { retryPlugin } from 'recker/plugins/retry';
+import { rateLimitPlugin } from 'recker/plugins/rate-limit';
+import { circuitBreakerPlugin } from 'recker/plugins/circuit-breaker';
 
 const client = recker.client({
   baseUrl: 'https://api.example.com'
 });
 
 // Add retry with exponential backoff
-client.use(retry({
+client.use(retryPlugin({
   maxAttempts: 3,
   backoff: 'exponential',
   delay: 1000
 }));
 
 // Add rate limiting
-client.use(rateLimit({
+client.use(rateLimitPlugin({
   limit: 100,
   window: 60000
 }));
 
 // Add circuit breaker
-client.use(circuitBreaker({
+client.use(circuitBreakerPlugin({
   threshold: 5,
   timeout: 30000
 }));
@@ -314,34 +317,24 @@ client.use(circuitBreaker({
 
 ## Authentication
 
-15 auth methods are available in browser:
+Auth helpers are Node-only. In the browser, set headers directly (or use your auth library):
 
 ```typescript
 import { createClient } from 'recker/browser';
-import { bearerAuth, apiKeyAuth, oauth2 } from 'recker/plugins/auth';
 
 const client = createClient({
   baseUrl: 'https://api.example.com'
 });
 
 // Bearer token
-client.use(bearerAuth({ token: 'your-token' }));
+const users = await client.get('/users', {
+  headers: { Authorization: 'Bearer your-token' }
+});
 
 // API Key
-client.use(apiKeyAuth({
-  key: 'your-api-key',
-  name: 'X-API-Key',
-  in: 'header'
-}));
-
-// OAuth2 with refresh
-client.use(oauth2({
-  accessToken: () => getStoredToken(),
-  onTokenExpired: async () => {
-    await refreshToken();
-    return getNewToken();
-  }
-}));
+const metrics = await client.get('/metrics', {
+  headers: { 'X-API-Key': 'your-api-key' }
+});
 ```
 
 ## IndexedDB Cache
@@ -350,7 +343,7 @@ Persistent cache using IndexedDB:
 
 ```typescript
 import { createClient, IndexedDBStorage } from 'recker/browser';
-import { cache } from 'recker/plugins/cache';
+import { cachePlugin } from 'recker/plugins/cache';
 
 // Create IndexedDB storage
 const storage = new IndexedDBStorage({
@@ -364,7 +357,7 @@ const client = createClient({
   baseUrl: 'https://api.example.com'
 });
 
-client.use(cache({ storage }));
+client.use(cachePlugin({ storage }));
 ```
 
 ## CORS Considerations
@@ -396,7 +389,7 @@ Recker provides two browser builds:
 
 | Build | Import Path | Minified | What's Included |
 |:------|:------------|:---------|:----------------|
-| **Full** | `recker/browser` | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, all plugins |
+| **Full** | `recker/browser` | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, portable plugins |
 | **Slim** | `recker/browser-slim` | ~480 KB | HTTP, WebSocket, SSE, core plugins only |
 
 ### Which Build to Choose?
@@ -407,7 +400,6 @@ Recker provides two browser builds:
 | Need AI streaming | `recker/browser` |
 | Need SEO analysis | `recker/browser` |
 | Need web scraping | `recker/browser` |
-| Need API presets | `recker/browser` |
 | Bundle size is critical | `recker/browser-slim` |
 
 ### Tree-Shaking
@@ -433,7 +425,7 @@ import { recker } from 'recker/browser';
 if (recker.isBrowser) {
   console.log('Running in browser');
   console.log('Unavailable features:', recker.unavailable);
-  // ['whois', 'dns', 'ai', 'whoisClient', 'dnsClient', 'aiClient', ...]
+  // ['whois', 'whoisAvailable', 'dns', 'dnsSecurity', 'dnsClient', 'whoisClient']
 }
 ```
 

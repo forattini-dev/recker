@@ -42,9 +42,8 @@ export * from '../plugins/network-simulation.js';
 
 // NOTE: Auth plugins are Node-focused and are not exported here.
 // ============================================================================
-// Cache (Memory/IndexedDB only for browser)
+// Cache (IndexedDB/Service Worker only for browser)
 // ============================================================================
-export * from '../cache/memory-storage.js';
 export * from '../cache/indexed-db.js';
 
 // ============================================================================

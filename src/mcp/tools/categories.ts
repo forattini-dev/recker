@@ -134,16 +134,14 @@ export const toolCategories: Record<string, ToolCategory> = {
   rek_dns_dkim: 'network',
   rek_dns_dig: 'network',
   rek_dns_system: 'network',
-  rek_dns_toolkit: 'network',
   rek_ping: 'network',
   rek_whois: 'network',
   rek_rdap: 'network',
-  rek_rdap_lookup: 'network',
   rek_ip_lookup: 'network',
-  rek_geoip_lookup: 'network',
   rek_tls: 'network',
 
   // SEO
+  rek_site_audit: 'seo',
   rek_seo_analyze: 'seo',
   rek_seo_spider: 'seo',
   rek_seo_quick_wins: 'seo',
@@ -152,6 +150,9 @@ export const toolCategories: Record<string, ToolCategory> = {
 
   // Security
   rek_tls_inspect: 'security',
+  rek_rdap_lookup: 'security',
+  rek_geoip_lookup: 'security',
+  rek_dns_toolkit: 'security',
   rek_security_headers: 'security',
 
   // AI
@@ -196,7 +197,6 @@ export const toolCategories: Record<string, ToolCategory> = {
   rek_hls_info: 'streaming',
   rek_hls_variants: 'streaming',
   rek_hls_download: 'streaming',
-  rek_sse_listen: 'streaming',
 
   // Unified (consolidated tools)
   rek_domain_audit: 'unified',

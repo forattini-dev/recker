@@ -34,32 +34,9 @@ import {
   estimateCategoryTokens,
   type CategoryName,
 } from './profiles.js';
+import { LEGACY_TOOL_GROUPS } from './legacy-tool-groups.js';
 
 const program = new Command('recker-mcp');
-
-/**
- * Tool categories and their corresponding patterns
- */
-const TOOL_CATEGORIES = {
-  docs: [
-    'rek_search_docs',
-    'rek_get_doc',
-    'rek_code_examples',
-    'rek_api_schema',
-    'rek_suggest',
-  ],
-  http: ['rek_http_request'],
-  dns: ['rek_dns_lookup'],
-  whois: ['rek_whois_lookup'],
-  ping: ['rek_network_ping'],
-  ip: ['rek_ip_lookup'],
-  network: [
-    'rek_http_request',
-    'rek_dns_lookup',
-    'rek_whois_lookup',
-    'rek_network_ping',
-  ],
-} as const;
 
 program
   .description('Start the Recker MCP server for AI agent integration')
@@ -71,7 +48,7 @@ program
   .option('--examples-path <path>', 'Path to examples directory')
   .option('--src-path <path>', 'Path to source directory')
   // Category-based filtering (recommended)
-  .option('-c, --category <categories>', 'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, full')
+  .option('-c, --category <categories>', 'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, video, ai, protocols, parsing, streaming, full')
   .option('--list-categories', 'List available categories and exit')
   // Legacy tool filtering flags
   .option('--no-docs', 'Disable documentation tools (search, get, examples, schema, suggest)')
@@ -146,24 +123,24 @@ program
       // Only apply disable flags if not using --only or --filter
 
       if (opts.docs === false) {
-        TOOL_CATEGORIES.docs.forEach(tool => toolsFilter.push(`!${tool}`));
+        LEGACY_TOOL_GROUPS.docs.forEach(tool => toolsFilter.push(`!${tool}`));
       }
 
       if (opts.network === false) {
-        TOOL_CATEGORIES.network.forEach(tool => toolsFilter.push(`!${tool}`));
+        LEGACY_TOOL_GROUPS.network.forEach(tool => toolsFilter.push(`!${tool}`));
       } else {
         // Individual network tool flags (only if --no-network not set)
         if (opts.http === false) {
           toolsFilter.push('!rek_http_request');
         }
         if (opts.dns === false) {
-          toolsFilter.push('!rek_dns_lookup');
+          toolsFilter.push('!rek_dns');
         }
         if (opts.whois === false) {
-          toolsFilter.push('!rek_whois_lookup');
+          toolsFilter.push('!rek_whois');
         }
         if (opts.ping === false) {
-          toolsFilter.push('!rek_network_ping');
+          toolsFilter.push('!rek_ping');
         }
       }
 
@@ -216,9 +193,9 @@ program
 
       // List which tools are enabled
       const allTools = [
-        ...TOOL_CATEGORIES.docs,
-        ...TOOL_CATEGORIES.network,
-        'rek_ip_lookup',
+        ...LEGACY_TOOL_GROUPS.docs,
+        ...LEGACY_TOOL_GROUPS.network,
+        ...LEGACY_TOOL_GROUPS.ip,
       ];
 
       const enabledTools = allTools.filter(tool => {

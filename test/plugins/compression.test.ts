@@ -1,20 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-// Hoisting-safe mock
-vi.mock('node:zlib', async () => {
-    const gzip = vi.fn((buf: any, cb: any) => cb(null, Buffer.from('gzipped')));
-    const deflate = vi.fn((buf: any, cb: any) => cb(null, Buffer.from('deflated')));
-    const brotliCompress = vi.fn((buf: any, cb: any) => cb(null, Buffer.from('brotlied')));
-    
-    return {
-        default: { gzip, deflate, brotliCompress }, // For default imports if any
-        gzip,
-        deflate,
-        brotliCompress
-    };
-});
-
-// Import plugin AFTER mock
+import { gunzipSync, inflateSync, brotliDecompressSync } from 'node:zlib';
 import { compression, createCompressionMiddleware } from '../../src/plugins/compression.js';
 
 describe('Compression Plugin', () => {
@@ -22,47 +7,41 @@ describe('Compression Plugin', () => {
 
     beforeEach(() => {
         mockNext = vi.fn().mockImplementation(req => Promise.resolve({ ok: true, req }));
-        vi.clearAllMocks(); // Reset call counts
+        vi.clearAllMocks();
     });
 
     it('should compress JSON body (gzip)', async () => {
-        const middleware = compression({ threshold: 0 });
-        const req = { 
-            method: 'POST', 
+        // Use force: true to ensure compression even if output is larger (gzip has overhead for small data)
+        const middleware = compression({ threshold: 0, force: true });
+        const req = {
+            method: 'POST',
             body: { foo: 'bar' },
-            headers: new Headers({ 'content-type': 'application/json' }) 
+            headers: new Headers({ 'content-type': 'application/json' })
         } as any;
 
         await middleware(req, mockNext);
 
         const lastCall = mockNext.mock.calls[0][0];
         expect(lastCall.headers.get('content-encoding')).toBe('gzip');
-        expect(lastCall.body.toString()).toBe('gzipped');
+        // Verify actual compression by decompressing
+        const decompressed = gunzipSync(Buffer.from(lastCall.body)).toString();
+        expect(JSON.parse(decompressed)).toEqual({ foo: 'bar' });
     });
 
-    // ... (keep other tests simple) ...
-
     it('should handle compression errors gracefully', async () => {
-        // Access the mocked module to change implementation
-        const zlib = await import('node:zlib');
-        
-        // Force error on next call
-        // @ts-ignore
-        zlib.gzip.mockImplementationOnce((buf, cb) => {
-            cb(new Error('Zip Fail'), null);
-        });
-
+        // Circular object can't be stringified, so toBytes returns null
         const middleware = compression({ threshold: 0 });
-        const req = { method: 'POST', body: 'data', headers: new Headers() } as any;
+        const circular: any = { };
+        circular.self = circular;
+        const req = { method: 'POST', body: circular, headers: new Headers() } as any;
 
         await middleware(req, mockNext);
         const lastCall = mockNext.mock.calls[0][0];
-        
-        // Should send uncompressed due to error
-        expect(lastCall.headers.has('content-encoding')).toBe(false);
-        expect(lastCall.body).toBe('data');
+
+        // Should pass through unchanged since toBytes returns null for circular
+        expect(lastCall.body).toBe(circular);
     });
-    
+
     it('should support deflate', async () => {
         const middleware = compression({ algorithm: 'deflate', threshold: 0, force: true });
         const req = { method: 'POST', body: 'test', headers: new Headers() } as any;
@@ -70,7 +49,9 @@ describe('Compression Plugin', () => {
         await middleware(req, mockNext);
         const lastCall = mockNext.mock.calls[0][0];
         expect(lastCall.headers.get('content-encoding')).toBe('deflate');
-        expect(lastCall.body.toString()).toBe('deflated');
+        // Verify actual compression by decompressing
+        const decompressed = inflateSync(Buffer.from(lastCall.body)).toString();
+        expect(decompressed).toBe('test');
     });
 
     it('should support brotli', async () => {
@@ -80,7 +61,9 @@ describe('Compression Plugin', () => {
         await middleware(req, mockNext);
         const lastCall = mockNext.mock.calls[0][0];
         expect(lastCall.headers.get('content-encoding')).toBe('br');
-        expect(lastCall.body.toString()).toBe('brotlied');
+        // Verify actual compression by decompressing
+        const decompressed = brotliDecompressSync(Buffer.from(lastCall.body)).toString();
+        expect(decompressed).toBe('test');
     });
     
     it('should skip small bodies', async () => {
@@ -216,29 +199,18 @@ describe('Compression Plugin', () => {
     });
 
     it('should skip compression when compressed is larger than original', async () => {
-        // Make compressed larger than original
-        const zlib = await import('node:zlib');
-        // @ts-ignore
-        zlib.gzip.mockImplementationOnce((buf, cb) => {
-            cb(null, Buffer.alloc(1000)); // Much larger than original
-        });
-
+        // Single character - gzip overhead makes it larger
         const middleware = compression({ threshold: 0 });
         const req = { method: 'POST', body: 'x', headers: new Headers() } as any;
 
         await middleware(req, mockNext);
         const lastCall = mockNext.mock.calls[0][0];
+        // Single char compressed will be larger than original, so skipped
         expect(lastCall.headers.has('content-encoding')).toBe(false);
     });
 
     it('should compress even if larger when force=true', async () => {
-        // Make compressed larger than original
-        const zlib = await import('node:zlib');
-        // @ts-ignore
-        zlib.gzip.mockImplementationOnce((buf, cb) => {
-            cb(null, Buffer.alloc(1000));
-        });
-
+        // Single character - gzip overhead makes it larger, but force=true
         const middleware = compression({ threshold: 0, force: true });
         const req = { method: 'POST', body: 'x', headers: new Headers() } as any;
 
@@ -280,7 +252,9 @@ describe('Compression Plugin', () => {
 
         await middleware(req, mockNext);
         const lastCall = mockNext.mock.calls[0][0];
-        expect(lastCall.headers.get('content-length')).toBe('7'); // 'gzipped' length
+        // Content-Length should be set to compressed body length
+        expect(lastCall.headers.has('content-length')).toBe(true);
+        expect(parseInt(lastCall.headers.get('content-length'), 10)).toBeGreaterThan(0);
     });
 
     it('should handle Blob body size', async () => {

@@ -3,14 +3,45 @@
  * Automatically compresses request bodies using gzip, deflate, or brotli
  */
 
-import { gzip, deflate, brotliCompress } from 'node:zlib';
-import { promisify } from 'node:util';
 import { Middleware, CompressionOptions } from '../types/index.js';
 import { UnsupportedError } from '../core/errors.js';
+ 
+const textEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+const BufferCtor = (globalThis as any).Buffer as { from: (data: any, encoding?: string) => Uint8Array } | undefined;
 
-const gzipAsync = promisify(gzip);
-const deflateAsync = promisify(deflate);
-const brotliAsync = promisify(brotliCompress);
+function isNodeRuntime(): boolean {
+  return typeof globalThis !== 'undefined' && Boolean((globalThis as any).process?.versions?.node);
+}
+
+let nodeCompressorsPromise:
+  | Promise<{
+      gzip: (input: Uint8Array) => Promise<Uint8Array>;
+      deflate: (input: Uint8Array) => Promise<Uint8Array>;
+      brotli: (input: Uint8Array) => Promise<Uint8Array>;
+    }>
+  | null = null;
+
+async function loadNodeCompressors() {
+  if (!nodeCompressorsPromise) {
+    nodeCompressorsPromise = (async () => {
+      const zlibModuleName = 'node:zlib';
+      const utilModuleName = 'node:util';
+      const zlibModule = await import(zlibModuleName);
+      const utilModule = await import(utilModuleName);
+      const gzipAsync = utilModule.promisify(zlibModule.gzip);
+      const deflateAsync = utilModule.promisify(zlibModule.deflate);
+      const brotliAsync = utilModule.promisify(zlibModule.brotliCompress);
+
+      return {
+        gzip: async (input: Uint8Array) => gzipAsync(BufferCtor ? BufferCtor.from(input as any) : input) as unknown as Uint8Array,
+        deflate: async (input: Uint8Array) => deflateAsync(BufferCtor ? BufferCtor.from(input as any) : input) as unknown as Uint8Array,
+        brotli: async (input: Uint8Array) => brotliAsync(BufferCtor ? BufferCtor.from(input as any) : input) as unknown as Uint8Array
+      };
+    })();
+  }
+
+  return nodeCompressorsPromise;
+}
 
 export type CompressionAlgorithm = 'gzip' | 'deflate' | 'br';
 
@@ -38,10 +69,8 @@ function getBodySize(body: any): number {
   if (!body) return 0;
 
   if (typeof body === 'string') {
-    return Buffer.byteLength(body, 'utf8');
-  }
-
-  if (body instanceof Buffer) {
+    if (textEncoder) return textEncoder.encode(body).length;
+    if (BufferCtor) return BufferCtor.from(body, 'utf8').length;
     return body.length;
   }
 
@@ -49,14 +78,20 @@ function getBodySize(body: any): number {
     return body.byteLength;
   }
 
-  if (body instanceof Blob) {
+  if (ArrayBuffer.isView(body)) {
+    return body.byteLength;
+  }
+
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
     return body.size;
   }
 
-  // For objects, estimate by stringifying
   if (typeof body === 'object') {
     try {
-      return Buffer.byteLength(JSON.stringify(body), 'utf8');
+      const json = JSON.stringify(body);
+      if (textEncoder) return textEncoder.encode(json).length;
+      if (BufferCtor) return BufferCtor.from(json, 'utf8').length;
+      return json.length;
     } catch {
       return 0;
     }
@@ -66,26 +101,43 @@ function getBodySize(body: any): number {
 }
 
 /**
- * Convert body to Buffer for compression
+ * Convert body to bytes for compression
  */
-function toBuffer(body: any): Buffer | null {
+function toBytes(body: any): Uint8Array | null {
   if (!body) return null;
 
-  if (Buffer.isBuffer(body)) {
-    return body;
+  if (typeof body === 'string') {
+    if (textEncoder) return textEncoder.encode(body);
+    if (BufferCtor) return BufferCtor.from(body, 'utf8');
+    return null;
   }
 
-  if (typeof body === 'string') {
-    return Buffer.from(body, 'utf8');
+  if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+    const encoded = body.toString();
+    if (textEncoder) return textEncoder.encode(encoded);
+    if (BufferCtor) return BufferCtor.from(encoded, 'utf8');
+    return null;
   }
 
   if (body instanceof ArrayBuffer) {
-    return Buffer.from(body);
+    return new Uint8Array(body);
+  }
+
+  if (ArrayBuffer.isView(body)) {
+    return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+  }
+
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    // Blob requires async access; skip to avoid blocking.
+    return null;
   }
 
   if (typeof body === 'object') {
     try {
-      return Buffer.from(JSON.stringify(body), 'utf8');
+      const json = JSON.stringify(body);
+      if (textEncoder) return textEncoder.encode(json);
+      if (BufferCtor) return BufferCtor.from(json, 'utf8');
+      return null;
     } catch {
       return null;
     }
@@ -97,22 +149,46 @@ function toBuffer(body: any): Buffer | null {
 /**
  * Compress data using specified algorithm
  */
-async function compress(data: Buffer, algorithm: CompressionAlgorithm): Promise<Buffer> {
-  switch (algorithm) {
-    case 'gzip':
-      return await gzipAsync(data);
-    case 'deflate':
-      return await deflateAsync(data);
-    case 'br':
-      return await brotliAsync(data);
-    default:
+async function compress(data: Uint8Array, algorithm: CompressionAlgorithm): Promise<Uint8Array> {
+  // For Node.js, prefer native zlib (especially for brotli which CompressionStream doesn't support)
+  if (isNodeRuntime()) {
+    const compressors = await loadNodeCompressors();
+    switch (algorithm) {
+      case 'gzip':
+        return compressors.gzip(data);
+      case 'deflate':
+        return compressors.deflate(data);
+      case 'br':
+        return compressors.brotli(data);
+      default:
+        break;
+    }
+  }
+
+  // Browser environment: use CompressionStream (gzip/deflate only)
+  if (typeof CompressionStream !== 'undefined') {
+    if (algorithm === 'br') {
       throw new UnsupportedError(
-        `Unsupported compression algorithm: ${algorithm}`,
-        {
-          feature: algorithm,
-        }
+        'Brotli compression is not available in browser environments.',
+        { feature: algorithm }
       );
     }
+
+    const stream = new CompressionStream(algorithm);
+    const writer = stream.writable.getWriter();
+    const payload = data.buffer instanceof ArrayBuffer ? data : new Uint8Array(data);
+    await writer.write(payload as unknown as BufferSource);
+    await writer.close();
+    const buffer = await new Response(stream.readable).arrayBuffer();
+    return new Uint8Array(buffer);
+  }
+
+  throw new UnsupportedError(
+    `Unsupported compression algorithm: ${algorithm}`,
+    {
+      feature: algorithm,
+    }
+  );
 }
 
 /**
@@ -179,18 +255,18 @@ export function compression(options: CompressionOptions = {}): Middleware {
       return next(req);
     }
 
-    // Convert body to buffer
-    const buffer = toBuffer(req.body);
-    if (!buffer) {
+    // Convert body to bytes
+    const bytes = toBytes(req.body);
+    if (!bytes) {
       return next(req);
     }
 
     try {
       // Compress the body
-      const compressed = await compress(buffer, algorithm);
+      const compressed = await compress(bytes, algorithm);
 
       // Only use compressed if it's actually smaller
-      if (!force && compressed.length >= buffer.length) {
+      if (!force && compressed.length >= bytes.length) {
         return next(req);
       }
 

@@ -101,6 +101,10 @@
       "types": "./dist/presets/index.d.ts",
       "import": "./dist/presets/index.js"
     },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
+    },
     "./plugins": {
       "types": "./dist/plugins/index.d.ts",
       "import": "./dist/plugins/index.js"
