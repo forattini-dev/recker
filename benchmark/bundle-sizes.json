@@ -1,0 +1,165 @@
+{
+  "timestamp": "2026-01-08T14:12:31.883Z",
+  "results": [
+    {
+      "name": "recker-browser-mini",
+      "category": "recker",
+      "raw": 3164,
+      "minified": 1895,
+      "gzipped": 617,
+      "rawFormatted": "3.09 KB",
+      "minifiedFormatted": "1.85 KB",
+      "gzippedFormatted": "617 B"
+    },
+    {
+      "name": "wretch",
+      "category": "competitor",
+      "raw": 9062,
+      "minified": 4116,
+      "gzipped": 1766,
+      "rawFormatted": "8.85 KB",
+      "minifiedFormatted": "4.02 KB",
+      "gzippedFormatted": "1.72 KB"
+    },
+    {
+      "name": "ky",
+      "category": "competitor",
+      "raw": 30675,
+      "minified": 14373,
+      "gzipped": 5155,
+      "rawFormatted": "29.96 KB",
+      "minifiedFormatted": "14.04 KB",
+      "gzippedFormatted": "5.03 KB"
+    },
+    {
+      "name": "@hapi/wreck",
+      "category": "competitor",
+      "raw": 74973,
+      "minified": 35671,
+      "gzipped": 11850,
+      "rawFormatted": "73.22 KB",
+      "minifiedFormatted": "34.83 KB",
+      "gzippedFormatted": "11.57 KB"
+    },
+    {
+      "name": "node-fetch",
+      "category": "competitor",
+      "raw": 260920,
+      "minified": 95185,
+      "gzipped": 26812,
+      "rawFormatted": "254.80 KB",
+      "minifiedFormatted": "92.95 KB",
+      "gzippedFormatted": "26.18 KB"
+    },
+    {
+      "name": "got",
+      "category": "competitor",
+      "raw": 359097,
+      "minified": 152697,
+      "gzipped": 46580,
+      "rawFormatted": "350.68 KB",
+      "minifiedFormatted": "149.12 KB",
+      "gzippedFormatted": "45.49 KB"
+    },
+    {
+      "name": "axios",
+      "category": "competitor",
+      "raw": 441985,
+      "minified": 239274,
+      "gzipped": 57726,
+      "rawFormatted": "431.63 KB",
+      "minifiedFormatted": "233.67 KB",
+      "gzippedFormatted": "56.37 KB"
+    },
+    {
+      "name": "superagent",
+      "category": "competitor",
+      "raw": 549252,
+      "minified": 312966,
+      "gzipped": 77144,
+      "rawFormatted": "536.38 KB",
+      "minifiedFormatted": "305.63 KB",
+      "gzippedFormatted": "75.34 KB"
+    },
+    {
+      "name": "undici",
+      "category": "competitor",
+      "raw": 971109,
+      "minified": 496129,
+      "gzipped": 155729,
+      "rawFormatted": "948.35 KB",
+      "minifiedFormatted": "484.50 KB",
+      "gzippedFormatted": "152.08 KB"
+    },
+    {
+      "name": "recker-mini",
+      "category": "recker",
+      "raw": 975728,
+      "minified": 498547,
+      "gzipped": 156572,
+      "rawFormatted": "952.86 KB",
+      "minifiedFormatted": "486.86 KB",
+      "gzippedFormatted": "152.90 KB"
+    },
+    {
+      "name": "needle",
+      "category": "competitor",
+      "raw": 644056,
+      "minified": 535155,
+      "gzipped": 208221,
+      "rawFormatted": "628.96 KB",
+      "minifiedFormatted": "522.61 KB",
+      "gzippedFormatted": "203.34 KB"
+    },
+    {
+      "name": "minipass-fetch",
+      "category": "competitor",
+      "raw": 667511,
+      "minified": 545438,
+      "gzipped": 209373,
+      "rawFormatted": "651.87 KB",
+      "minifiedFormatted": "532.65 KB",
+      "gzippedFormatted": "204.47 KB"
+    },
+    {
+      "name": "recker-browser",
+      "category": "recker",
+      "raw": 1590286,
+      "minified": 1029778,
+      "gzipped": 268148,
+      "rawFormatted": "1.52 MB",
+      "minifiedFormatted": "1005.64 KB",
+      "gzippedFormatted": "261.86 KB"
+    },
+    {
+      "name": "cross-fetch",
+      "category": "competitor",
+      "raw": 953668,
+      "minified": 805657,
+      "gzipped": 270202,
+      "rawFormatted": "931.32 KB",
+      "minifiedFormatted": "786.77 KB",
+      "gzippedFormatted": "263.87 KB"
+    },
+    {
+      "name": "make-fetch-happen",
+      "category": "competitor",
+      "raw": 1363926,
+      "minified": 834188,
+      "gzipped": 294859,
+      "rawFormatted": "1.30 MB",
+      "minifiedFormatted": "814.64 KB",
+      "gzippedFormatted": "287.95 KB"
+    },
+    {
+      "name": "recker",
+      "category": "recker",
+      "raw": 3555029,
+      "minified": 2070154,
+      "gzipped": 569423,
+      "rawFormatted": "3.39 MB",
+      "minifiedFormatted": "1.97 MB",
+      "gzippedFormatted": "556.08 KB"
+    }
+  ]
+}

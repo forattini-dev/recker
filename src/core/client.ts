@@ -53,20 +53,45 @@ function isNodeRuntime(): boolean {
 class LazyTransport implements Transport {
   private transport?: Transport;
   private resolving?: Promise<Transport>;
+  private dispatchFn: (req: ReckerRequest) => Promise<ReckerResponse>;
 
-  constructor(private factory: () => Promise<Transport>) {}
+  constructor(private factory: () => Promise<Transport>) {
+    // Initial dispatch function that resolves the transport
+    this.dispatchFn = this.initialDispatch.bind(this);
+  }
 
-  async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
+  private async initialDispatch(req: ReckerRequest): Promise<ReckerResponse> {
     if (!this.transport) {
       if (!this.resolving) {
         this.resolving = this.factory().then((instance) => {
           this.transport = instance;
+          // After first resolution, swap to direct dispatch (zero overhead)
+          this.dispatchFn = (r: ReckerRequest) => this.transport!.dispatch(r);
           return instance;
         });
       }
       this.transport = await this.resolving;
     }
     return this.transport.dispatch(req);
+  }
+
+  dispatch(req: ReckerRequest): Promise<ReckerResponse> {
+    return this.dispatchFn(req);
+  }
+
+  /**
+   * Pre-warm the transport by resolving it before the first request.
+   * Optional optimization for applications that want to minimize first-request latency.
+   */
+  async warmup(): Promise<void> {
+    if (!this.transport && !this.resolving) {
+      this.resolving = this.factory().then((instance) => {
+        this.transport = instance;
+        this.dispatchFn = (r: ReckerRequest) => this.transport!.dispatch(r);
+        return instance;
+      });
+    }
+    await this.resolving;
   }
 }
 
@@ -244,9 +269,11 @@ export class Client {
   private transport: Transport;
   private curlTransport?: Transport;
   private defaultHeaders: HeadersInit;
+  private defaultHeadersObj: Headers; // Pre-computed Headers object for fast path
   private defaultParams: Record<string, string | number>;
   private paginationConfig?: PaginationConfig;
   private handler: (req: ReckerRequest) => Promise<ReckerResponse>;
+  private fastHandler: (req: ReckerRequest) => Promise<ReckerResponse>; // Fast path handler (no hooks middleware)
   private logger?: Logger;
   private debugEnabled: boolean;
   private agentManager?: AgentManager;
@@ -258,6 +285,7 @@ export class Client {
   private defaultTimeout?: number | import('../types/index.js').TimeoutOptions;
   private http2Enabled: boolean = false;
   private transportKind: 'curl' | 'undici' | 'fetch' | 'custom' = 'custom';
+  private canFastPath: boolean = false; // Pre-computed flag for fast path eligibility
 
   // AI integration
   private _aiConfig?: PresetAIConfig;
@@ -280,6 +308,9 @@ export class Client {
       'User-Agent': getDefaultUserAgent(),
       ...(options.headers || {})
     };
+
+    // Pre-compute Headers object for fast path (avoid repeated new Headers() calls)
+    this.defaultHeadersObj = new Headers(this.defaultHeaders);
 
     this.defaultParams = options.defaults?.params || {};
     this.paginationConfig = options.pagination;
@@ -446,11 +477,27 @@ export class Client {
       this.middlewares.unshift(this.createLoggingMiddleware(this.logger));
     }
 
-    // Add internal error handling middleware at the end of the stack (before transport)
-    this.middlewares.push(this.httpErrorMiddleware);
+    // NOTE: httpErrorMiddleware is now inlined in handlers for performance
+    // (moved from middleware chain to avoid function call overhead)
 
-    // Pre-compose middleware chain
+    // Pre-compose middleware chains
     this.handler = this.composeMiddlewares();
+    this.fastHandler = this.composeFastHandler();
+
+    // Pre-compute fast path eligibility:
+    // Fast path is available when there are no middlewares (except internal ones),
+    // no hooks, no timeout, no cookie jar, and no max response size
+    const hasHooks = (this.hooks.beforeRequest?.length ?? 0) > 0 ||
+                     (this.hooks.afterResponse?.length ?? 0) > 0 ||
+                     (this.hooks.onError?.length ?? 0) > 0;
+    const hasComplexConfig = !!this.cookieJar ||
+                             !!this.defaultTimeout ||
+                             this.maxResponseSize !== undefined ||
+                             this.debugEnabled;
+    // middlewares array only has user/plugin middlewares now (no httpErrorMiddleware)
+    const hasUserMiddlewares = this.middlewares.length > 0;
+
+    this.canFastPath = !hasHooks && !hasComplexConfig && !hasUserMiddlewares;
   }
 
   private createLoggingMiddleware(logger: Logger): Middleware {
@@ -617,7 +664,17 @@ export class Client {
 
   private composeMiddlewares(): (req: ReckerRequest) => Promise<ReckerResponse> {
     const chain = [...this.middlewares];
-    const transportDispatch = this.dispatch.bind(this);
+    const self = this;
+
+    // Create transport dispatch with inline HTTP error check
+    const transportWithErrorCheck = async (req: ReckerRequest): Promise<ReckerResponse> => {
+      const response = await self.dispatch(req);
+      // Inline HTTP error check (moved from httpErrorMiddleware for performance)
+      if (req.throwHttpErrors !== false && !response.ok && response.status !== 304) {
+        throw new HttpError(response, req);
+      }
+      return response;
+    };
 
     // Optimization: Hooks integration with zero overhead if unused
     if (this.hooks.beforeRequest?.length || this.hooks.afterResponse?.length) {
@@ -625,7 +682,7 @@ export class Client {
     }
 
     if (chain.length === 0) {
-        return transportDispatch;
+        return transportWithErrorCheck;
     }
 
     // Composition: reduceRight to build nested functions
@@ -633,7 +690,23 @@ export class Client {
     // Previous middleware calls last middleware, etc.
     return chain.reduceRight<(req: ReckerRequest) => Promise<ReckerResponse>>((next, middleware) => {
       return (req) => middleware(req, next);
-    }, transportDispatch as any) as (req: ReckerRequest) => Promise<ReckerResponse>;
+    }, transportWithErrorCheck) as (req: ReckerRequest) => Promise<ReckerResponse>;
+  }
+
+  /**
+   * Fast path handler - bypasses all middleware for maximum performance
+   * Used when no hooks, middleware, or complex config is present
+   */
+  private composeFastHandler(): (req: ReckerRequest) => Promise<ReckerResponse> {
+    const self = this;
+    return async (req: ReckerRequest): Promise<ReckerResponse> => {
+      const response = await self.dispatch(req);
+      // Inline HTTP error check
+      if (req.throwHttpErrors !== false && !response.ok && response.status !== 304) {
+        throw new HttpError(response, req);
+      }
+      return response;
+    };
   }
 
   private hooksMiddleware: Middleware = async (req, next) => {
@@ -679,20 +752,15 @@ export class Client {
     }
   }
 
-  private httpErrorMiddleware: Middleware = async (req, next) => {
-    const response = await next(req);
-    // Conditional logic: only check if throwHttpErrors is true (default)
-    // Also, 304 Not Modified is NOT an error, even if response.ok is false, if throwHttpErrors is false
-    if (req.throwHttpErrors !== false && !response.ok && response.status !== 304) {
-      throw new HttpError(response, req);
-    }
-    return response;
-  }
+  // httpErrorMiddleware removed - now inlined in composeMiddlewares() and composeFastHandler()
+  // for better performance (avoids function call overhead)
 
   public use(middleware: Middleware) {
     this.middlewares.push(middleware);
     // Re-compose chain when new middleware is added
     this.handler = this.composeMiddlewares();
+    // Disable fast path since we now have user middleware
+    this.canFastPath = false;
     return this;
   }
 
@@ -707,6 +775,8 @@ export class Client {
     this.hooks.beforeRequest.push(hook);
     // Re-compose chain to include hooks middleware
     this.handler = this.composeMiddlewares();
+    // Disable fast path since we now have hooks
+    this.canFastPath = false;
     return this;
   }
 
@@ -721,6 +791,8 @@ export class Client {
     this.hooks.afterResponse.push(hook);
     // Re-compose chain to include hooks middleware
     this.handler = this.composeMiddlewares();
+    // Disable fast path since we now have hooks
+    this.canFastPath = false;
     return this;
   }
 
@@ -735,6 +807,8 @@ export class Client {
     this.hooks.onError.push(hook);
     // Re-compose chain to include hooks middleware
     this.handler = this.composeMiddlewares();
+    // Disable fast path since we now have hooks
+    this.canFastPath = false;
     return this;
   }
 
@@ -816,20 +890,46 @@ export class Client {
   request<T = unknown>(path: string, options: RequestOptions = {}): RequestPromise<T> {
     const url = this.buildUrl(path, options.params);
 
-    // Optimized: Merge headers efficiently (options override defaults)
+    // ========================================
+    // FAST PATH: Skip all overhead for simple requests
+    // ========================================
+    // Eligible when: no options.headers, no options.timeout, no options.signal,
+    // no options.maxResponseSize, and canFastPath is true
+    const usesFastPath = this.canFastPath &&
+      !options.headers &&
+      !options.timeout &&
+      !options.signal &&
+      options.maxResponseSize === undefined;
+
+    if (usesFastPath) {
+      // Fast path: minimal object creation
+      const req = new HttpRequest(url, {
+        method: options.method || 'GET',
+        body: options.body,
+        headers: this.defaultHeadersObj, // Reuse pre-computed Headers object
+        throwHttpErrors: options.throwHttpErrors,
+      });
+
+      const responsePromise = this.fastHandler(req) as Promise<ReckerResponse<T>>;
+      return new RequestPromise<T>(responsePromise);
+    }
+
+    // ========================================
+    // STANDARD PATH: Full feature support
+    // ========================================
+
+    // Optimized: Merge headers efficiently using pre-computed defaultHeadersObj
     let mergedHeaders: Headers;
     if (options.headers) {
-      mergedHeaders = this.defaultHeaders instanceof Headers
-        ? new Headers(this.defaultHeaders)
-        : new Headers(this.defaultHeaders);
+      // Clone defaultHeadersObj and merge with options.headers
+      mergedHeaders = new Headers(this.defaultHeadersObj);
       const optHeaders = options.headers instanceof Headers
         ? options.headers
         : new Headers(options.headers);
       optHeaders.forEach((value, key) => mergedHeaders.set(key, value));
     } else {
-      mergedHeaders = this.defaultHeaders instanceof Headers
-        ? this.defaultHeaders
-        : new Headers(this.defaultHeaders);
+      // Reuse pre-computed Headers object directly (no clone needed if not modified)
+      mergedHeaders = this.defaultHeadersObj;
     }
 
     // Optimized: Lazy AbortController - only create when needed
@@ -894,6 +994,25 @@ export class Client {
 
   get<T = unknown>(path: string, options: Omit<RequestOptions, 'method'> = {}) {
     return this.request<T>(path, { ...options, method: 'GET' });
+  }
+
+  /**
+   * Pre-warm the HTTP transport to minimize first-request latency.
+   *
+   * This optional method resolves the lazy-loaded transport (e.g., undici)
+   * before the first request, eliminating dynamic import overhead.
+   *
+   * @example
+   * ```typescript
+   * const client = createClient({ baseUrl: 'https://api.example.com' });
+   * await client.warmup(); // Pre-load transport
+   * await client.get('/users'); // First request is now fast
+   * ```
+   */
+  async warmup(): Promise<void> {
+    if (this.transport && 'warmup' in this.transport && typeof (this.transport as any).warmup === 'function') {
+      await (this.transport as any).warmup();
+    }
   }
 
   /**

@@ -19,11 +19,11 @@
  * - wreck (Hapi)
  */
 
-import { run, bench, group } from 'mitata';
+import { bench, group } from 'mitata';
+import { run, DEFAULT_RUN_OPTIONS, printMethodology, createHttpWarmup, WARMUP_ITERATIONS } from './mitata-config.js';
 import { createServer } from 'node:http';
 import { createClient } from '../src/index.js';
 import { createMiniClient } from '../src/mini.js';
-import { createClient as createBrowserClient } from '../dist/browser/browser/index.js';
 
 // HTTP Clients
 import axios from 'axios';
@@ -81,15 +81,55 @@ const url = `http://localhost:${port}`;
 // Setup Clients
 const recker = createClient({ baseUrl: url });
 const miniClient = createMiniClient({ baseUrl: url });
-const browserClient = createBrowserClient({ baseUrl: url });
+
+// Use preset from env: BENCH_PRESET=thorough pnpm bench:compare
+const preset = (process.env.BENCH_PRESET as 'quick' | 'default' | 'thorough' | 'publication') || 'default';
 
 if (!JSON_OUTPUT) {
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
   console.log('║           HTTP Clients Comprehensive Comparison                   ║');
   console.log('║                                                                   ║');
-  console.log('║   Testing 16 HTTP libraries for Node.js                          ║');
+  console.log('║   Testing 15 HTTP libraries for Node.js                          ║');
   console.log('╚═══════════════════════════════════════════════════════════════════╝\n');
-  console.log(`Server: ${url}\n`);
+  console.log(`Server: ${url}`);
+  console.log(`Preset: ${preset} (warmup: ${WARMUP_ITERATIONS[preset]} iterations)\n`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V8 JIT Warmup Phase
+// ─────────────────────────────────────────────────────────────────────────────
+// Run each HTTP client function multiple times to ensure V8's TurboFan JIT
+// compiler optimizes all code paths before we start measuring.
+
+if (!JSON_OUTPUT) {
+  console.log('Warming up V8 JIT for all HTTP clients...');
+}
+
+const warmup = createHttpWarmup(url, preset);
+
+// Register all HTTP client functions for warmup
+warmup
+  .add('undici', async () => { const { body } = await undiciRequest(url); await body.json(); })
+  .add('recker-mini', async () => { const res = await miniClient.get('/'); await res.json(); })
+  .add('fetch', async () => { const res = await fetch(url); await res.json(); })
+  .add('recker', async () => { await recker.get('/').json(); })
+  .add('axios', async () => { await axios.get(url); })
+  .add('got', async () => { await got.get(url).json(); })
+  .add('ky', async () => { await ky.get(url).json(); })
+  .add('node-fetch', async () => { const res = await nodeFetch(url); await res.json(); })
+  .add('cross-fetch', async () => { const res = await crossFetch(url); await res.json(); })
+  .add('superagent', async () => { await superagent.get(url); })
+  .add('needle', async () => { await needle('get', url, { json: true }); })
+  .add('wretch', async () => { await wretch(url).get().json(); })
+  .add('make-fetch-happen', async () => { const res = await makeFetchHappen(url); await res.json(); })
+  .add('minipass-fetch', async () => { const res = await minipassFetch(url); await res.json(); })
+  .add('wreck', async () => { await Wreck.get(url, { json: true }); });
+
+// Run warmup (verbose mode controlled by BENCH_VERBOSE env)
+await warmup.run({ verbose: !JSON_OUTPUT && process.env.BENCH_VERBOSE === '1' });
+
+if (!JSON_OUTPUT) {
+  console.log(`Warmup complete! (${warmup.count} clients × ${WARMUP_ITERATIONS[preset]} iterations)\n`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,10 +157,6 @@ group('GET JSON (simple)', () => {
   // High-level clients
   bench('recker', async () => {
     await recker.get('/').json();
-  });
-
-  bench('recker-browser', async () => {
-    await browserClient.get('/').json();
   });
 
   bench('axios', async () => {
@@ -205,10 +241,6 @@ group('POST JSON (with body)', () => {
 
   bench('recker', async () => {
     await recker.post('/', body).json();
-  });
-
-  bench('recker-browser', async () => {
-    await browserClient.post('/', body).json();
   });
 
   bench('axios', async () => {
@@ -306,12 +338,6 @@ group('Parallel GET (10 concurrent)', () => {
   bench('recker', async () => {
     await Promise.all(Array(10).fill(null).map(() =>
       recker.get('/').json()
-    ));
-  });
-
-  bench('recker-browser', async () => {
-    await Promise.all(Array(10).fill(null).map(() =>
-      browserClient.get('/').json()
     ));
   });
 
@@ -419,12 +445,6 @@ group('Sequential GET (5 requests)', () => {
     }
   });
 
-  bench('recker-browser', async () => {
-    for (let i = 0; i < 5; i++) {
-      await browserClient.get('/').json();
-    }
-  });
-
   bench('axios', async () => {
     for (let i = 0; i < 5; i++) {
       await axios.get(url);
@@ -497,35 +517,35 @@ group('Sequential GET (5 requests)', () => {
 });
 
 await run({
-  avg: true,
+  ...DEFAULT_RUN_OPTIONS,
   format: JSON_OUTPUT ? 'json' : undefined,
   colors: !JSON_OUTPUT,
-  min_max: true,
-  percentiles: true,
-});
+}, preset);
 
 server.close();
 
 if (!JSON_OUTPUT) {
   console.log('\n═══════════════════════════════════════════════════════════════════');
-  console.log('                         LEGEND (16 libraries)                      ');
+  console.log('                         LEGEND (15 libraries)                      ');
   console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
-  console.log('undici            - Node.js official HTTP client (fastest baseline)');
-  console.log('recker-mini       - Zero-overhead wrapper (~2% vs undici) ★');
-  console.log('fetch             - Native fetch API');
-  console.log('recker            - Batteries-included (retries, cache, rate-limit)');
-  console.log('recker-browser    - Browser build (using native fetch)');
-  console.log('axios             - Most popular, browser + Node');
-  console.log('got               - Full-featured, Node-focused');
-  console.log('ky                - Fetch-based, originally for browsers');
-  console.log('node-fetch        - Fetch polyfill for Node');
-  console.log('cross-fetch       - Universal fetch (browser + Node)');
-  console.log('superagent        - Mature, callback + promise');
-  console.log('needle            - Lightweight, streaming support');
-  console.log('wretch            - Fluent fetch wrapper');
-  console.log('make-fetch-happen - npm ecosystem (caching, retry)');
-  console.log('minipass-fetch    - Minipass-based fetch');
-  console.log('wreck             - Hapi ecosystem client');
+  console.log('undici               - Node.js official HTTP client (fastest baseline)');
+  console.log('recker-mini          - Zero-overhead undici wrapper ★');
+  console.log('fetch                - Native fetch API (Node.js 18+)');
+  console.log('recker               - Batteries-included (retry, cache, rate-limit)');
+  console.log('axios                - Most popular, browser + Node');
+  console.log('got                  - Full-featured, Node-focused');
+  console.log('ky                   - Fetch-based, originally for browsers');
+  console.log('node-fetch           - Fetch polyfill for Node');
+  console.log('cross-fetch          - Universal fetch (browser + Node)');
+  console.log('superagent           - Mature, callback + promise');
+  console.log('needle               - Lightweight, streaming support');
+  console.log('wretch               - Fluent fetch wrapper');
+  console.log('make-fetch-happen    - npm ecosystem (caching, retry)');
+  console.log('minipass-fetch       - Minipass-based fetch');
+  console.log('wreck                - Hapi ecosystem client');
   console.log('');
+
+  // Print methodology for transparency
+  printMethodology(preset);
 }

@@ -1,12 +1,12 @@
 /**
- * Recker Browser - Slim Unified API
+ * Recker Browser Mini - Zero Overhead Unified API
  *
  * Browser-compatible unified interface without AI, SEO, scrape, or presets.
- * Focused on core HTTP + browser-safe plugins.
+ * Focused on core HTTP + browser-safe plugins. Minimal overhead.
  *
  * @example
  * ```typescript
- * import { recker } from 'recker/browser-slim';
+ * import { recker } from 'recker/browser-mini';
  *
  * // HTTP
  * await recker.get('https://api.example.com/users').json();
@@ -124,20 +124,20 @@ export function ws(url: string, protocols?: string | string[]): WebSocket {
 }
 
 // ============================================================================
-// Unified 'recker' namespace (browser slim version)
+// Unified 'recker' namespace (browser mini version)
 // ============================================================================
 
 /**
- * The unified Recker interface (browser slim version).
+ * The unified Recker interface (browser mini version).
  *
  * Available features:
  * - HTTP: recker.get(), recker.post(), etc.
  * - WebSocket: recker.ws() (native browser WebSocket)
  * - HAR: recker.har - record/export HAR files
  *
- * NOT available in browser slim:
- * - AI: recker.ai() - not included in slim bundle
- * - SEO: recker.seo() - not included in slim bundle
+ * NOT available in browser mini:
+ * - AI: recker.ai() - not included in mini bundle
+ * - SEO: recker.seo() - not included in mini bundle
  */
 export const recker = {
   // ========== HTTP Methods ==========

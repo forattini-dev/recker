@@ -31,7 +31,10 @@ export class HttpRequest implements ReckerRequest {
   constructor(url: string, options: RequestOptions = {}) {
     this.url = url;
     this.method = options.method || 'GET';
-    this.headers = new Headers(options.headers);
+    // Optimization: Reuse Headers object if already provided, avoid unnecessary new Headers()
+    this.headers = options.headers instanceof Headers
+      ? options.headers
+      : new Headers(options.headers);
     this.body = options.body || null;
     this.signal = options.signal;
     this.throwHttpErrors = options.throwHttpErrors !== undefined ? options.throwHttpErrors : true;

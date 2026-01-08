@@ -1,9 +1,14 @@
 /**
- * Recker Browser Slim Build
+ * Recker Browser Mini Build
  *
  * Browser-compatible entry point with core + browser-safe plugins only.
- * Excludes AI, scrape, SEO, and presets.
+ * Excludes AI, scrape, SEO, and presets. Zero overhead wrapper.
  */
+
+// ============================================================================
+// Mini Client (zero-overhead, direct fetch wrapper)
+// ============================================================================
+export * from './mini.js';
 
 // ============================================================================
 // Core
@@ -64,9 +69,9 @@ export * from './cache.js';
 export * from './compression.js';
 
 // ============================================================================
-// Unified API - Browser slim version
+// Unified API - Browser mini version
 // ============================================================================
-export * from './recker-slim.js';
+export * from './recker-mini.js';
 
 // ============================================================================
 // Branded alias

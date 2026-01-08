@@ -81,7 +81,7 @@ Recker provides **two browser builds** with different sizes and features:
 | Build | Import Path | Size | What's Included |
 |:------|:------------|:-----|:----------------|
 | **Full** | `recker/browser` | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, portable plugins |
-| **Slim** | `recker/browser-slim` | ~480 KB | HTTP, WebSocket, SSE, 18 core plugins |
+| **Mini** | `recker/browser-mini` | ~480 KB | HTTP, WebSocket, SSE, 18 core plugins |
 
 #### Full Browser Build
 
@@ -96,12 +96,12 @@ await recker.ai.chat('Hello!');  // AI available
 const seo = await recker.seo(html);  // SEO available
 ```
 
-#### Slim Browser Build
+#### Mini Browser Build
 
 **Recommended for most projects.** Use when you only need HTTP requests and core plugins:
 
 ```typescript
-import { recker, get, post, createClient } from 'recker/browser-slim';
+import { recker, get, post, createClient } from 'recker/browser-mini';
 
 // Core features only
 await recker.get('/api/users').json();
@@ -109,9 +109,9 @@ await recker.get('/api/users').json();
 // recker.seo → undefined (not included)
 ```
 
-#### Slim Build: What's Included vs Excluded
+#### Mini Build: What's Included vs Excluded
 
-| ✅ Included in Slim | ❌ Excluded from Slim |
+| ✅ Included in Mini | ❌ Excluded from Mini |
 |:--------------------|:----------------------|
 | HTTP (GET, POST, PUT, PATCH, DELETE) | AI providers (OpenAI, Anthropic, etc.) |
 | WebSocket | SEO analysis (400+ rules) |
@@ -133,8 +133,8 @@ await recker.get('/api/users').json();
 <!-- Full build -->
 <script src="https://unpkg.com/recker/dist/browser/index.umd.min.js"></script>
 
-<!-- Slim build (recommended for smaller bundle) -->
-<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
+<!-- Mini build (recommended for smaller bundle) -->
+<script src="https://unpkg.com/recker/dist/browser/index.mini.umd.min.js"></script>
 
 <script>
   // Access via global 'Recker' object
@@ -155,8 +155,8 @@ await recker.get('/api/users').json();
   // Full build
   import { recker } from 'https://unpkg.com/recker/dist/browser/index.min.js';
 
-  // Slim build
-  import { recker } from 'https://unpkg.com/recker/dist/browser/index.slim.min.js';
+  // Mini build
+  import { recker } from 'https://unpkg.com/recker/dist/browser/index.mini.min.js';
 
   const data = await recker.get('https://api.example.com/users').json();
   console.log(data);
@@ -168,11 +168,11 @@ await recker.get('/api/users').json();
 ```html
 <!-- jsDelivr -->
 <script src="https://cdn.jsdelivr.net/npm/recker/dist/browser/index.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/recker/dist/browser/index.slim.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/recker/dist/browser/index.mini.umd.min.js"></script>
 
 <!-- unpkg -->
 <script src="https://unpkg.com/recker/dist/browser/index.umd.min.js"></script>
-<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
+<script src="https://unpkg.com/recker/dist/browser/index.mini.umd.min.js"></script>
 
 <!-- esm.sh (ESM only) -->
 <script type="module">
@@ -185,12 +185,12 @@ await recker.get('/api/users').json();
 | Your Use Case | Recommended Import |
 |:--------------|:-------------------|
 | **Node.js server/CLI** | `import { recker } from 'recker'` |
-| **React/Vue/Angular app (simple HTTP)** | `import { recker } from 'recker/browser-slim'` |
+| **React/Vue/Angular app (simple HTTP)** | `import { recker } from 'recker/browser-mini'` |
 | **Need AI streaming in browser** | `import { recker } from 'recker/browser'` |
 | **Need SEO analysis in browser** | `import { recker } from 'recker/browser'` |
 | **Need scraping in browser** | `import { recker } from 'recker/browser'` |
-| **Bundle size is critical** | `import { recker } from 'recker/browser-slim'` |
-| **Static HTML page** | `<script src="...index.slim.umd.min.js">` |
+| **Bundle size is critical** | `import { recker } from 'recker/browser-mini'` |
+| **Static HTML page** | `<script src="...index.mini.umd.min.js">` |
 
 ### Subpath Imports
 

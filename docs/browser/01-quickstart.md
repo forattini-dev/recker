@@ -61,17 +61,17 @@ yarn add recker
 </script>
 ```
 
-### Slim Bundle (~480 KB)
+### Mini Bundle (~480 KB)
 
 **Recommended for most projects.** Use when you only need HTTP requests and core plugins:
 
 ```html
-<!-- Slim UMD -->
-<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
+<!-- Mini UMD -->
+<script src="https://unpkg.com/recker/dist/browser/index.mini.umd.min.js"></script>
 
-<!-- Slim ESM -->
+<!-- Mini ESM -->
 <script type="module">
-  import { recker } from 'https://unpkg.com/recker/dist/browser/index.slim.min.js';
+  import { recker } from 'https://unpkg.com/recker/dist/browser/index.mini.min.js';
   const data = await recker.get('https://api.example.com/users').json();
   console.log(data);
 </script>
@@ -79,10 +79,10 @@ yarn add recker
 
 ```typescript
 // With bundlers (Vite, Webpack, etc.)
-import { recker } from 'recker/browser-slim';
+import { recker } from 'recker/browser-mini';
 ```
 
-> **Slim excludes:** AI providers, SEO analysis, web scraping.
+> **Mini excludes:** AI providers, SEO analysis, web scraping.
 > **Note:** Presets and auth helpers are Node-only (not in any browser build).
 > See [Bundle Sizes](#bundle-sizes) for the full comparison.
 
@@ -390,17 +390,17 @@ Recker provides two browser builds:
 | Build | Import Path | Minified | What's Included |
 |:------|:------------|:---------|:----------------|
 | **Full** | `recker/browser` | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, portable plugins |
-| **Slim** | `recker/browser-slim` | ~480 KB | HTTP, WebSocket, SSE, core plugins only |
+| **Mini** | `recker/browser-mini` | ~480 KB | HTTP, WebSocket, SSE, core plugins only |
 
 ### Which Build to Choose?
 
 | Use Case | Recommended |
 |:---------|:------------|
-| Simple HTTP requests | `recker/browser-slim` (57% smaller) |
+| Simple HTTP requests | `recker/browser-mini` (57% smaller) |
 | Need AI streaming | `recker/browser` |
 | Need SEO analysis | `recker/browser` |
 | Need web scraping | `recker/browser` |
-| Bundle size is critical | `recker/browser-slim` |
+| Bundle size is critical | `recker/browser-mini` |
 
 ### Tree-Shaking
 
@@ -410,11 +410,11 @@ For smallest possible bundle, import only what you need:
 // ❌ Large: imports everything
 import { recker } from 'recker/browser';
 
-// ✅ Smaller: use slim build
-import { recker } from 'recker/browser-slim';
+// ✅ Smaller: use mini build
+import { recker } from 'recker/browser-mini';
 
 // ✅ Smallest: import only functions
-import { get, post } from 'recker/browser-slim';
+import { get, post } from 'recker/browser-mini';
 ```
 
 ## Detecting Browser Build

@@ -268,9 +268,9 @@ const commonOptions = {
   plugins: [nodeStubPlugin],
 };
 
-const slimOptions = {
+const miniOptions = {
   ...commonOptions,
-  entryPoints: ['./dist/browser/browser/index-slim.js'],
+  entryPoints: ['./dist/browser/browser/index-mini.js'],
 };
 
 async function bundleBrowser() {
@@ -328,57 +328,57 @@ async function bundleBrowser() {
   });
   console.log('  IIFE minified: dist/browser/index.iife.min.js');
 
-  // Slim ESM minified
+  // Mini ESM minified
   await build({
-    ...slimOptions,
-    outfile: './dist/browser/index.slim.min.js',
+    ...miniOptions,
+    outfile: './dist/browser/index.mini.min.js',
     format: 'esm',
     minify: true,
     sourcemap: true,
   });
-  console.log('  Slim ESM minified: dist/browser/index.slim.min.js');
+  console.log('  Mini ESM minified: dist/browser/index.mini.min.js');
 
-  // Slim UMD (for <script> tags)
+  // Mini UMD (for <script> tags)
   await build({
-    ...slimOptions,
-    outfile: './dist/browser/index.slim.umd.js',
+    ...miniOptions,
+    outfile: './dist/browser/index.mini.umd.js',
     format: 'iife',
     globalName: 'recker',
     minify: false,
   });
-  console.log('  Slim UMD: dist/browser/index.slim.umd.js');
+  console.log('  Mini UMD: dist/browser/index.mini.umd.js');
 
-  // Slim UMD minified
+  // Mini UMD minified
   await build({
-    ...slimOptions,
-    outfile: './dist/browser/index.slim.umd.min.js',
+    ...miniOptions,
+    outfile: './dist/browser/index.mini.umd.min.js',
     format: 'iife',
     globalName: 'recker',
     minify: true,
     sourcemap: true,
   });
-  console.log('  Slim UMD minified: dist/browser/index.slim.umd.min.js');
+  console.log('  Mini UMD minified: dist/browser/index.mini.umd.min.js');
 
-  // Slim IIFE (for CDN)
+  // Mini IIFE (for CDN)
   await build({
-    ...slimOptions,
-    outfile: './dist/browser/index.slim.iife.js',
+    ...miniOptions,
+    outfile: './dist/browser/index.mini.iife.js',
     format: 'iife',
     globalName: 'recker',
     minify: false,
   });
-  console.log('  Slim IIFE: dist/browser/index.slim.iife.js');
+  console.log('  Mini IIFE: dist/browser/index.mini.iife.js');
 
-  // Slim IIFE minified
+  // Mini IIFE minified
   await build({
-    ...slimOptions,
-    outfile: './dist/browser/index.slim.iife.min.js',
+    ...miniOptions,
+    outfile: './dist/browser/index.mini.iife.min.js',
     format: 'iife',
     globalName: 'recker',
     minify: true,
     sourcemap: true,
   });
-  console.log('  Slim IIFE minified: dist/browser/index.slim.iife.min.js');
+  console.log('  Mini IIFE minified: dist/browser/index.mini.iife.min.js');
 
   console.log('\nBrowser bundles built successfully!');
 }

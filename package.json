@@ -79,10 +79,10 @@
       "import": "./dist/browser/browser/index.js",
       "default": "./dist/browser/browser/index.js"
     },
-    "./browser-slim": {
-      "types": "./dist/browser/browser/index-slim.d.ts",
-      "import": "./dist/browser/browser/index-slim.js",
-      "default": "./dist/browser/browser/index-slim.js"
+    "./browser-mini": {
+      "types": "./dist/browser/browser/index-mini.d.ts",
+      "import": "./dist/browser/browser/index-mini.js",
+      "default": "./dist/browser/browser/index-mini.js"
     },
     "./node": {
       "types": "./dist/index.d.ts",
@@ -215,13 +215,20 @@
     "test:browser:coverage": "vitest run --config vitest.config.browser.ts --coverage",
     "bench": "tsx benchmark/index.ts",
     "bench:compare": "tsx benchmark/http-clients-comparison.ts",
+    "bench:compare:quick": "BENCH_PRESET=quick tsx benchmark/http-clients-comparison.ts",
+    "bench:compare:thorough": "BENCH_PRESET=thorough tsx benchmark/http-clients-comparison.ts",
+    "bench:compare:publication": "BENCH_PRESET=publication tsx benchmark/http-clients-comparison.ts",
+    "bench:features": "tsx benchmark/feature-overhead.ts",
+    "bench:bundle": "tsx benchmark/bundle-size.ts",
     "bench:all": "tsx benchmark/run-all.ts",
-    "bench:averaged": "BENCH_ITERATIONS=5 tsx benchmark/averaged-runner.ts",
+    "bench:averaged": "BENCH_ITERATIONS=7 tsx benchmark/averaged-runner.ts",
     "bench:json": "tsx benchmark/json-runner.ts",
     "bench:json:save": "tsx benchmark/json-runner.ts --output benchmark/results/latest.json",
     "bench:compare:save": "BENCH_JSON=1 NO_COLOR=1 tsx benchmark/http-clients-comparison.ts > benchmark/results/http-clients-comparison.json",
+    "bench:compare:averaged": "BENCH_ITERATIONS=7 tsx benchmark/averaged-comparison.ts",
+    "bench:summary": "tsx benchmark/generate-summary.ts",
     "bench:report": "tsx benchmark/generate-report.ts",
-    "bench:full": "pnpm bench:compare:save && pnpm bench:report",
+    "bench:full": "pnpm bench:compare:save && pnpm bench:summary && pnpm bench:report",
     "bench:api": "tsx benchmark/api-simulation.ts",
     "docs": "pnpm serve docs -p 3000",
     "lint": "echo \"No linting configured for this project.\" && exit 0",

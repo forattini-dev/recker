@@ -44,20 +44,20 @@ const info = await whois('github.com');
 
 ### Browser
 
-Recker provides two browser builds: **Full** and **Slim**.
+Recker provides two browser builds: **Full** and **Mini**.
 
 | Build | Size | Includes |
 |:------|:-----|:---------|
 | **Full** | ~1.1 MB | HTTP, WebSocket, SSE, AI, SEO, Scrape, portable plugins |
-| **Slim** | ~480 KB | HTTP, WebSocket, SSE, core plugins only |
+| **Mini** | ~480 KB | HTTP, WebSocket, SSE, core plugins only |
 
 ```typescript
 // Full build - includes everything
 import { recker, get, post } from 'recker/browser';
 
-// Slim build - 57% smaller, no AI/SEO/scrape
+// Mini build - 57% smaller, no AI/SEO/scrape
 // Presets and auth helpers are Node-only
-import { recker, get, post } from 'recker/browser-slim';
+import { recker, get, post } from 'recker/browser-mini';
 ```
 
 #### CDN Usage
@@ -66,8 +66,8 @@ import { recker, get, post } from 'recker/browser-slim';
 <!-- Full build (UMD) -->
 <script src="https://unpkg.com/recker/dist/browser/index.umd.min.js"></script>
 
-<!-- Slim build (UMD) - recommended for most projects -->
-<script src="https://unpkg.com/recker/dist/browser/index.slim.umd.min.js"></script>
+<!-- Mini build (UMD) - recommended for most projects -->
+<script src="https://unpkg.com/recker/dist/browser/index.mini.umd.min.js"></script>
 
 <script>
   const { recker, get, post } = Recker;
@@ -80,8 +80,8 @@ import { recker, get, post } from 'recker/browser-slim';
 <script type="module">
   // Full
   import { get } from 'https://unpkg.com/recker/dist/browser/index.min.js';
-  // Slim
-  import { get } from 'https://unpkg.com/recker/dist/browser/index.slim.min.js';
+  // Mini
+  import { get } from 'https://unpkg.com/recker/dist/browser/index.mini.min.js';
 </script>
 ```
 
@@ -89,12 +89,12 @@ import { recker, get, post } from 'recker/browser-slim';
 
 | Use Case | Recommended Build |
 |:---------|:------------------|
-| Simple HTTP requests | `recker/browser-slim` |
+| Simple HTTP requests | `recker/browser-mini` |
 | Need AI streaming (OpenAI, etc.) | `recker/browser` |
 | Need SEO analysis | `recker/browser` |
 | Need web scraping | `recker/browser` |
 | Need API presets (GitHub, Stripe) | Use Node build (`recker`) |
-| Bundle size is critical | `recker/browser-slim` |
+| Bundle size is critical | `recker/browser-mini` |
 
 [→ Browser Documentation](https://forattini-dev.github.io/recker/#/browser/01-quickstart)
 
