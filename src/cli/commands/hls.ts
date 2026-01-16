@@ -1,4 +1,13 @@
+/**
+ * HLS CLI Commands
+ *
+ * This file registers HLS commands with the CLI router.
+ * Info command uses unified handler, download keeps complex features inline.
+ */
+
 import { RekCommand as Command } from '../router.js';
+import { createCliActionWithOptions } from '../cli-adapter.js';
+import { hlsInfoHandler } from '../handlers/streaming.js';
 import colors from '../../utils/colors.js';
 import { parseEnhancerPresets } from '../helpers.js';
 
@@ -9,6 +18,7 @@ export function registerHlsCommand(program: Command) {
     .example('rek hls info https://example.com/stream.m3u8', 'Analyze HLS playlist')
     .example('rek hls download https://example.com/stream.m3u8 -o video.ts', 'Download stream');
 
+  // Info command - uses unified handler
   hlsCmd
     .command('info')
     .description('Analyze an HLS playlist showing qualities, segments, and duration')
@@ -17,93 +27,24 @@ export function registerHlsCommand(program: Command) {
       description: 'HLS master or media playlist URL (.m3u8)',
       example: 'https://example.com/stream.m3u8',
     })
+    .option('quality', {
+      type: 'string',
+      short: 'Q',
+      default: 'highest',
+      description: 'Quality preset',
+    })
+    .option('live', {
+      short: 'l',
+      description: 'Enable live stream mode',
+    })
     .example('rek hls info https://example.com/master.m3u8', 'Show available qualities')
     .example('rek hls info https://example.com/live.m3u8', 'Check if stream is live or VOD')
-    .action(async (url) => {
-      const { Client } = await import('../../core/client.js');
-      const client = new Client();
+    .action(createCliActionWithOptions(hlsInfoHandler, {
+      positional: ['url'],
+      options: ['quality', 'live']
+    }));
 
-      console.log(colors.gray(`Fetching playlist from ${url}...`));
-
-      try {
-        const res = await client.get(url);
-        const content = await res.text();
-
-        // Parse the playlist
-        const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
-
-        if (!lines[0]?.startsWith('#EXTM3U')) {
-          console.error(colors.red('Not a valid HLS playlist'));
-          process.exit(1);
-        }
-
-        // Check if master playlist
-        const isMaster = lines.some(l => l.startsWith('#EXT-X-STREAM-INF'));
-
-        console.log('');
-        console.log(colors.bold(colors.cyan('HLS Stream Info')));
-        console.log(`${colors.gray('URL:')} ${url}`);
-        console.log(`${colors.gray('Type:')} ${isMaster ? 'Master Playlist' : 'Media Playlist'}`);
-        console.log('');
-
-        if (isMaster) {
-          // Parse variants
-          console.log(colors.bold('Available Qualities:'));
-          let i = 0;
-          for (let j = 0; j < lines.length; j++) {
-            if (lines[j].startsWith('#EXT-X-STREAM-INF')) {
-              const bandwidth = lines[j].match(/BANDWIDTH=(\d+)/)?.[1];
-              const resolution = lines[j].match(/RESOLUTION=([^,]+)/)?.[1];
-              const codecs = lines[j].match(/CODECS="([^"]+)"/)?.[1];
-              const variantUrl = lines[j + 1];
-
-              const bw = bandwidth ? `${Math.round(parseInt(bandwidth) / 1000)}kbps` : 'N/A';
-              console.log(`  ${colors.green(String(i + 1))}. ${resolution || 'Unknown'} - ${bw}`);
-              if (codecs) {
-                console.log(`     ${colors.gray('Codecs:')} ${codecs}`);
-              }
-              i++;
-            }
-          }
-        } else {
-          // Media playlist - count segments
-          const segments = lines.filter(l => !l.startsWith('#') && l.length > 0);
-          const targetDuration = lines.find(l => l.startsWith('#EXT-X-TARGETDURATION'))?.split(':')[1];
-          const endList = lines.some(l => l === '#EXT-X-ENDLIST');
-          const mediaSequence = lines.find(l => l.startsWith('#EXT-X-MEDIA-SEQUENCE'))?.split(':')[1];
-
-          console.log(`${colors.gray('Segments:')} ${segments.length}`);
-          if (targetDuration) {
-            console.log(`${colors.gray('Target Duration:')} ${targetDuration}s`);
-          }
-          if (mediaSequence) {
-            console.log(`${colors.gray('Media Sequence:')} ${mediaSequence}`);
-          }
-          console.log(`${colors.gray('Type:')} ${endList ? 'VOD' : 'Live'}`);
-
-          // Calculate total duration
-          let totalDuration = 0;
-          for (const line of lines) {
-            if (line.startsWith('#EXTINF:')) {
-              const duration = parseFloat(line.split(':')[1].split(',')[0]);
-              totalDuration += duration;
-            }
-          }
-
-          if (totalDuration > 0) {
-            const minutes = Math.floor(totalDuration / 60);
-            const seconds = Math.round(totalDuration % 60);
-            console.log(`${colors.gray('Total Duration:')} ${minutes}m ${seconds}s`);
-          }
-        }
-        console.log('');
-
-      } catch (err: any) {
-        console.error(colors.red(`HLS Error: ${err.message}`));
-        process.exit(1);
-      }
-    });
-
+  // Download command - keeps complex features inline (presets, headers, progress)
   hlsCmd
     .command('download')
     .description('Download an HLS stream to a local file, with quality selection and live support')
@@ -189,7 +130,6 @@ export function registerHlsCommand(program: Command) {
         if (arg.includes('=')) {
           const [key, value] = arg.split('=');
           if (key === 'quality' && !quality) quality = value;
-          // duration and concurrency now handled by SmartOption
         } else if (arg.includes(':') && !arg.startsWith('http')) {
           const colonIndex = arg.indexOf(':');
           const headerName = arg.slice(0, colonIndex).trim();
@@ -198,7 +138,7 @@ export function registerHlsCommand(program: Command) {
         }
       }
 
-      // 3. Create client with options (including retry, timeout from presets if any)
+      // Create client with options (including retry, timeout from presets if any)
       const client = new Client(clientOptions);
 
       console.log(colors.gray(`Downloading HLS stream from ${url}...`));
@@ -247,7 +187,7 @@ export function registerHlsCommand(program: Command) {
         console.log('');
         const msg = err.message || String(err);
         console.error(colors.red(`HLS Download Error: ${msg}`));
-        
+
         if (verbose) {
             console.error(colors.gray('\n--- Error Details ---'));
             if (err.cause) console.error('Cause:', err.cause);

@@ -1,9 +1,8 @@
 /**
  * Testing Commands
  *
- * Commands for load testing and traffic recording:
- * - load: Load/stress testing (runs as background job in TUI)
- * - har: HAR recording and playback
+ * Commands for load testing (runs as background job in TUI).
+ * NOTE: HAR command has been migrated to the unified CLI system.
  */
 
 import type { CommandContext, CommandResult } from './types.js';
@@ -155,21 +154,3 @@ async function runLoadTestAsync(
   }
 }
 
-// =============================================================================
-// HAR Command
-// =============================================================================
-
-export async function cmdHar(ctx: CommandContext, args: string[]): Promise<CommandResult> {
-  ctx.addHistoryItem({
-    type: 'info',
-    content: `HAR (HTTP Archive) Recording
-
-Commands:
-  har record <file>   Start recording to HAR file
-  har play <file>     Replay requests from HAR file
-  har info <file>     Show HAR file info
-
-Note: Full HAR recording available in 'rek shell:legacy'`,
-  });
-  return { success: true };
-}

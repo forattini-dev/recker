@@ -609,15 +609,23 @@ export class RekCommand {
         const params = [];
 
         let hasVariadic = false;
-        let reqArgsCount = 0;
+        let argCount = 0;
 
         for (const def of this.argsDefinition) {
           if (def.startsWith('[') && def.includes('...')) hasVariadic = true;
-          else if (def.startsWith('<')) reqArgsCount++;
+          else argCount++; // Count both required <arg> and optional [arg]
         }
 
-        for (let i = 0; i < reqArgsCount; i++) {
-          params.push(positionalArgs[i]);
+        // Pass all defined arguments (required + optional)
+        for (let i = 0; i < argCount; i++) {
+          // For optional args, use the default from resolvedArguments if not provided
+          if (i < positionalArgs.length) {
+            params.push(positionalArgs[i]);
+          } else if (this.resolvedArguments && this.resolvedArguments[i]) {
+            params.push(this.resolvedArguments[i].defaultValue);
+          } else {
+            params.push(undefined);
+          }
         }
 
         params.push(args);

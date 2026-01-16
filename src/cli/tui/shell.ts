@@ -37,6 +37,7 @@ import {
 } from './commands/dns.js';
 import { runFtp, runTelnet, runGraphQL, runJsonRpc, runHar } from './commands/protocols.js';
 import { JobManager, type Job } from './job-manager.js';
+import { routeUnifiedCommand, hasUnifiedCommand, getUnifiedCommandHelp } from './unified-router.js';
 import { DownloadJob } from './jobs/download-job.js';
 import { WatchJob } from './jobs/watch-job.js';
 import { SpiderJob } from './jobs/spider-job.js';
@@ -151,6 +152,42 @@ export class RekShell {
         this.renderStatusBar();
       }
     });
+  }
+
+  /**
+   * Create a CommandContext for unified command handlers.
+   * Bridges the shell to unified handlers.
+   */
+  private createCommandContext(): import('./executor-commands/types.js').CommandContext {
+    return {
+      client: this.client,
+      addHistoryItem: (item) => {
+        // In CLI shell mode, just print to console
+        if (item.type === 'error') {
+          console.error(colors.red(typeof item.content === 'string' ? item.content : JSON.stringify(item.content)));
+        } else if (item.type === 'response') {
+          if (typeof item.content === 'string') {
+            console.log(item.content);
+          } else {
+            console.log(JSON.stringify(item.content, null, 2));
+          }
+        } else {
+          console.log(typeof item.content === 'string' ? item.content : JSON.stringify(item.content, null, 2));
+        }
+      },
+      setIsLoading: () => {
+        // No-op in CLI shell mode (could add spinner later)
+      },
+      baseUrl: () => this.baseUrl || null,
+      setLastResponse: (response) => {
+        this.lastResponse = response;
+      },
+      trackDns: () => {},
+      trackSeo: () => {},
+      trackSpider: () => {},
+      trackRequest: () => {},
+      trackDownload: () => {},
+    };
   }
 
   /**
@@ -1005,6 +1042,17 @@ export class RekShell {
     }
 
     const cmd = parts[0].toLowerCase();
+
+    // Try unified command router first for migrated commands
+    // Shell-specific commands (help, clear, set, etc.) are handled by switch below
+    const shellCommands = ['help', 'clear', 'exit', 'quit', 'url', 'output', 'dir', 'set', 'vars', 'status', 'env', 'job', 'jobs', 'ai:clear', '?', 'search', 'suggest', 'example'];
+    if (!shellCommands.includes(cmd) && !cmd.startsWith('$')) {
+      const ctx = this.createCommandContext();
+      const { handled } = await routeUnifiedCommand(ctx, cmd, parts.slice(1));
+      if (handled) {
+        return;
+      }
+    }
 
     switch (cmd) {
       case 'help':

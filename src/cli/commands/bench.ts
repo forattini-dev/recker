@@ -1,5 +1,13 @@
+/**
+ * Bench CLI Commands
+ *
+ * Load testing and benchmarking.
+ * Delegates to unified handlers via the adapter.
+ */
+
 import { RekCommand as Command } from '../router.js';
-import colors from '../../utils/colors.js';
+import { createCliActionWithOptions } from '../cli-adapter.js';
+import { loadTestHandler } from '../handlers/bench.js';
 
 // Standalone load command (top-level)
 export function registerLoadCommand(program: Command) {
@@ -50,23 +58,10 @@ export function registerLoadCommand(program: Command) {
     .example('rek load api.com/heavy --mode stress', 'Run stress test')
     .example('rek load api.com --http2', 'Force HTTP/2')
     .example('rek load api.com -k', 'Allow self-signed certificates')
-    .action(async (url: string, args: string[], cmdObj: any) => {
-       const options = cmdObj.opts ? cmdObj.opts() : {};
-
-       if (!url.startsWith('http')) url = `https://${url}`;
-
-       const { startLoadDashboard } = await import('../tui/load-dashboard.js');
-
-       await startLoadDashboard({
-         url,
-         users: options.users || 50,
-         duration: options.duration || 300,
-         mode: options.mode || 'throughput',
-         http2: !!options.http2,
-         insecure: !!options.insecure,
-         rampUp: options.ramp || 5,
-       });
-    });
+    .action(createCliActionWithOptions(loadTestHandler, {
+      positional: ['url'],
+      options: ['users', 'duration', 'ramp', 'mode', 'http2', 'insecure']
+    }));
 }
 
 export function registerBenchCommand(program: Command) {
@@ -119,21 +114,8 @@ export function registerBenchCommand(program: Command) {
     .example('rek bench load api.com/heavy --mode stress', 'Run stress test')
     .example('rek bench load api.com --http2', 'Force HTTP/2')
     .example('rek bench load api.com -k', 'Allow self-signed certificates')
-    .action(async (url: string, args: string[], cmdObj: any) => {
-       const options = cmdObj.opts ? cmdObj.opts() : {};
-
-       if (!url.startsWith('http')) url = `https://${url}`;
-
-       const { startLoadDashboard } = await import('../tui/load-dashboard.js');
-
-       await startLoadDashboard({
-         url,
-         users: options.users || 50,
-         duration: options.duration || 300,
-         mode: options.mode || 'throughput',
-         http2: !!options.http2,
-         insecure: !!options.insecure,
-         rampUp: options.ramp || 5,
-       });
-    });
+    .action(createCliActionWithOptions(loadTestHandler, {
+      positional: ['url'],
+      options: ['users', 'duration', 'ramp', 'mode', 'http2', 'insecure']
+    }));
 }

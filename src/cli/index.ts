@@ -23,6 +23,7 @@ import { registerSeoCommand } from './commands/seo.js';
 import { registerVideoCommand } from './commands/video.js';
 import { registerLiveCommand } from './commands/live.js';
 import { registerMcpCommand } from './commands/mcp.js';
+import { registerCompletionCommand } from './commands/completion.js';
 import { parseEnhancerPresets, loadEnvFile, levenshtein } from './helpers.js';
 
 async function readStdin(): Promise<string | null> {
@@ -303,9 +304,7 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
       }
     });
 
-  program.command('completion').description('Generate shell completion').action(() => {
-      console.log('# Completion not fully supported in RekCommand yet');
-  });
+  // Note: completion command is now registered via registerCompletionCommand
 
   program.command('version').alias('info').action(async () => {
       const versionInfo = await formatVersionInfo(true);
@@ -367,11 +366,7 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
   registerServeCommand(program as any);
   registerUtilsCommands(program as any);
   registerMcpCommand(program as any);
-
-  const sftpCmd = program.command('sftp').description('SFTP client operations');
-  sftpCmd.command('ls').argument('<host>').action(async (host, args) => {
-      console.log('SFTP ls', host);
-  });
+  registerCompletionCommand(program as any);
 
   await program.parse();
 }

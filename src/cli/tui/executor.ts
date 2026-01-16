@@ -11,25 +11,6 @@ import type { Client } from '../../core/client.js';
 
 // Extracted command modules
 import {
-  // Protocol commands
-  cmdSeo,
-  cmdSpider,
-  cmdRobots,
-  cmdSitemap,
-  cmdDns,
-  cmdWhois,
-  cmdRdap,
-  cmdPing,
-  cmdTls,
-  cmdIp,
-  cmdWs,
-  cmdHttp,
-  cmdGraphql,
-  cmdSse,
-  cmdHls,
-  cmdLive,
-  cmdLoad,
-  cmdHar,
   // Shell commands
   cmdHelp,
   cmdClear,
@@ -42,7 +23,6 @@ import {
   cmdJobs,
   // AI commands
   cmdAi,
-  AI_PRESETS,
   // Background execution
   executeBackground,
   BACKGROUNDABLE_COMMANDS,
@@ -77,6 +57,12 @@ import {
   trackRequest,
   trackDownload,
 } from './hooks/useDomains.js';
+
+// Unified CLI integration (for migrated commands)
+import {
+  isUnifiedCommand,
+  executeUnifiedCommand,
+} from '../handlers.js';
 
 // =============================================================================
 // Types
@@ -170,14 +156,15 @@ export class ShellExecutor {
   ): Promise<CommandResult> {
     const ctx = this.getContext();
 
-    // HTTP methods
-    const httpMethods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
-    if (httpMethods.includes(cmd)) {
-      if (cmd === 'get' && (!args[0] || !looksLikeUrl(args[0]))) {
-        // Fall through to variable get
-      } else {
-        return await cmdHttp(ctx, cmd.toUpperCase(), args);
-      }
+    // Special case: "get" without URL-like arg is variable lookup, not HTTP GET
+    if (cmd === 'get' && (!args[0] || !looksLikeUrl(args[0]))) {
+      return cmdGetVariable(args[0]);
+    }
+
+    // Check if command has been migrated to unified CLI
+    // Enable commands by adding them to UNIFIED_COMMANDS in shell-integration.ts
+    if (isUnifiedCommand(cmd)) {
+      return await executeUnifiedCommand(ctx, cmd, args);
     }
 
     // AI chat (@preset message)
@@ -214,8 +201,8 @@ export class ShellExecutor {
       case 'set':
         return cmdSetVariable(args[0], args.slice(1).join(' '));
 
-      case 'get':
-        return cmdGetVariable(args[0]);
+      // Note: 'get' for variables is handled at the top of routeCommand()
+      // 'get' with URL-like args is routed through unified CLI as HTTP GET
 
       case 'vars':
       case 'variables':
@@ -228,69 +215,7 @@ export class ShellExecutor {
       case 'jobs':
         return cmdJobs(args);
 
-      // Network commands
-      case 'dns':
-        return await cmdDns(ctx, args);
-
-      case 'whois':
-        return await cmdWhois(ctx, args);
-
-      case 'rdap':
-        return await cmdRdap(ctx, args);
-
-      case 'ping':
-        return await cmdPing(ctx, args);
-
-      case 'tls':
-      case 'ssl':
-      case 'cert':
-        return await cmdTls(ctx, args);
-
-      case 'ip':
-      case 'geoip':
-        return await cmdIp(ctx, args);
-
-      // WebSocket
-      case 'ws':
-      case 'websocket':
-        return await cmdWs(ctx, args);
-
-      // Analysis commands
-      case 'seo':
-        return await cmdSeo(ctx, args);
-
-      case 'spider':
-      case 'crawl':
-        return await cmdSpider(ctx, args);
-
-      case 'robots':
-        return await cmdRobots(ctx, args);
-
-      case 'sitemap':
-        return await cmdSitemap(ctx, args);
-
-      // Streaming commands
-      case 'hls':
-        return await cmdHls(ctx, args);
-
-      case 'live':
-        return await cmdLive(ctx, args);
-
-      case 'sse':
-        return await cmdSse(ctx, args);
-
-      // API protocols
-      case 'graphql':
-      case 'gql':
-        return await cmdGraphql(ctx, args);
-
-      // Testing commands
-      case 'load':
-      case 'bench':
-        return await cmdLoad(ctx, args);
-
-      case 'har':
-        return await cmdHar(ctx, args);
+      // Note: load/bench now handled by unified CLI (isUnifiedCommand check above)
 
       // Mock servers
       case 'serve':
@@ -302,10 +227,10 @@ export class ShellExecutor {
           fullCommand
         );
 
-      // URL-like input (make GET request)
+      // URL-like input (make GET request via unified CLI)
       default:
         if (looksLikeUrl(cmd) || looksLikeDomain(cmd)) {
-          return await cmdHttp(ctx, 'GET', [cmd, ...args]);
+          return await executeUnifiedCommand(ctx, 'get', [cmd, ...args]);
         }
 
         addHistoryItem({

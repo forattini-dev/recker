@@ -2,7 +2,7 @@ import colors from '../../../utils/colors.js';
 import { analyzeSeo } from '../../../seo/index.js';
 import { formatSeoReport, formatSeoReportJson, type SeoFormatOptions } from '../../../seo/formatter.js';
 import { ShellContext } from './context.js';
-import { CommandSchema, RekArgs } from '../../parser/index.js';
+import { RekArgsAdapter as RekArgs, type CommandSchema } from '../../parser-adapter.js';
 
 const schema: CommandSchema = {
   name: 'seo',
