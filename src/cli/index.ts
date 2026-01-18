@@ -1,4 +1,17 @@
 #!/usr/bin/env node
+
+// Suppress Node.js experimental warnings (e.g., SQLite from undici's cache store)
+const originalEmit = process.emit.bind(process);
+process.emit = function (event: string, ...args: unknown[]) {
+  if (event === 'warning' && args[0] && typeof args[0] === 'object') {
+    const warning = args[0] as { name?: string; message?: string };
+    if (warning.name === 'ExperimentalWarning' && warning.message?.includes('SQLite')) {
+      return false;
+    }
+  }
+  return originalEmit(event, ...args);
+} as typeof process.emit;
+
 import { RekCommand } from './router.js';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
