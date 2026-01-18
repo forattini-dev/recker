@@ -52,6 +52,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
 
     steps:
       - name: Check if version bump commit
@@ -132,7 +133,7 @@ jobs:
 
       - name: Publish to NPM (Next)
         if: steps.check.outputs.skip != 'true'
-        run: pnpm publish --tag next --no-git-checks
+        run: pnpm publish --tag next --no-git-checks --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -232,6 +233,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
 
     steps:
       - name: Checkout
@@ -279,7 +281,7 @@ jobs:
           ls -la
 
       - name: Publish to NPM (Stable)
-        run: pnpm publish --no-git-checks
+        run: pnpm publish --no-git-checks --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

@@ -46,8 +46,15 @@
     "scraping",
     "seo"
   ],
-  "author": "filipeforattini",
+  "author": {
+    "name": "Filipe Forattini",
+    "url": "https://github.com/filipeforattini"
+  },
   "license": "MIT",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/filipeforattini"
+  },
   "homepage": "https://forattini-dev.github.io/recker",
   "repository": {
     "type": "git",
@@ -57,7 +64,14 @@
     "url": "https://github.com/forattini-dev/recker/issues"
   },
   "files": [
-    "dist",
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "!dist/bin/**",
+    "!dist/**/*.js.map",
+    "!dist/browser/index.iife.js",
+    "!dist/browser/index.umd.js",
+    "!dist/browser/index.slim.iife.js",
+    "!dist/browser/index.slim.umd.js",
     "README.md",
     "LICENSE"
   ],
@@ -240,7 +254,8 @@
     "node": ">=18"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {
     "@maxmind/geoip2-node": "^6.3.4",

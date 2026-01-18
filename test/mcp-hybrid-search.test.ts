@@ -147,7 +147,7 @@ describe('HybridSearch', () => {
   beforeEach(async () => {
     search = new HybridSearch({ debug: false });
     await search.initialize(sampleDocs);
-  });
+  }, 30000); // 30s timeout for CI environments
 
   describe('initialization', () => {
     it('initializes with documents', async () => {

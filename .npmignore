@@ -1,3 +1,15 @@
+# Binários compilados (pkg) - 50MB+ de Node embutido!
+dist/bin/recker-exec
+dist/bin/recker-linux-*
+dist/bin/recker-macos-*
+dist/bin/recker-win-*
+
+# Source maps - inflam sem necessidade (~20MB)
+**/*.js.map
+
+# CLI bundles duplicados (rek.cjs já é suficiente via bin)
+dist/bin/rek.js
+
 # Source files (only dist/ should be published)
 src/
 *.ts

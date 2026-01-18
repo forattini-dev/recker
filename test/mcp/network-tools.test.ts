@@ -15,7 +15,7 @@ describe('MCP Network Tools', () => {
       debug: false,
     });
     await server.start();
-  });
+  }, 30000); // 30s timeout for CI environments
 
   afterAll(async () => {
     await server.stop();
