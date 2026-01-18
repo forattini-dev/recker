@@ -11,6 +11,12 @@ import { StreamError } from './errors.js';
 import { parseYaml, type YamlParseOptions } from '../plugins/yaml.js';
 import { parseCsv, type CsvParseOptions } from '../plugins/csv.js';
 
+/**
+ * Status codes that must not have a body per Fetch API spec.
+ * See: https://fetch.spec.whatwg.org/#statuses
+ */
+const NULL_BODY_STATUS = [101, 103, 204, 205, 304];
+
 export class HttpResponse<T = unknown> implements ReckerResponse<T> {
   public readonly timings?: Timings;
   public readonly connection?: ConnectionInfo;
@@ -28,7 +34,11 @@ export class HttpResponse<T = unknown> implements ReckerResponse<T> {
     } else {
       // Reconstruct Web Response from Dispatcher.ResponseData
       // HeadersInit can be a plain object, which Dispatcher.ResponseData.headers is.
-      this.raw = new Response(undiciRawResponse.body as unknown as ReadableStream<Uint8Array>, {
+      // For null body status codes (101, 103, 204, 205, 304), body must be null
+      const body = NULL_BODY_STATUS.includes(undiciRawResponse.statusCode)
+        ? null
+        : undiciRawResponse.body as unknown as ReadableStream<Uint8Array>;
+      this.raw = new Response(body, {
         status: undiciRawResponse.statusCode,
         statusText: String(undiciRawResponse.statusCode), // Dispatcher.ResponseData might not have statusText directly
         headers: undiciRawResponse.headers as HeadersInit,
