@@ -209,8 +209,8 @@
   "unpkg": "./dist/browser/index.umd.min.js",
   "jsdelivr": "./dist/browser/index.umd.min.js",
   "bin": {
-    "rek": "./dist/cli/index.js",
-    "recker": "./dist/cli/index.js"
+    "rek": "./dist/cli/bootstrap.js",
+    "recker": "./dist/cli/bootstrap.js"
   },
   "scripts": {
     "build": "pnpm build:node && pnpm build:browser",
@@ -246,8 +246,8 @@
     "bench:api": "tsx benchmark/api-simulation.ts",
     "docs": "pnpm serve docs -p 3000",
     "lint": "echo \"No linting configured for this project.\" && exit 0",
-    "cli": "tsx src/cli/index.ts",
-    "mcp:start": "tsx src/mcp/cli.ts",
+    "cli": "tsx src/cli/bootstrap.ts",
+    "mcp:start": "tsx src/mcp/bootstrap.ts",
     "mcp:reindex": "tsx scripts/build-embeddings.ts"
   },
   "engines": {
