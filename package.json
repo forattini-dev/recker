@@ -246,8 +246,8 @@
     "bench:api": "tsx benchmark/api-simulation.ts",
     "docs": "pnpm serve docs -p 3000",
     "lint": "echo \"No linting configured for this project.\" && exit 0",
-    "cli": "tsx src/cli/bootstrap.ts",
-    "mcp:start": "tsx src/mcp/bootstrap.ts",
+    "cli": "NODE_OPTIONS='--disable-warning=ExperimentalWarning' tsx src/cli/bootstrap.ts",
+    "mcp:start": "NODE_OPTIONS='--disable-warning=ExperimentalWarning' tsx src/mcp/bootstrap.ts",
     "mcp:reindex": "tsx scripts/build-embeddings.ts"
   },
   "engines": {
