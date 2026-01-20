@@ -138,7 +138,7 @@ export async function handleRequest(options: RequestOptions) {
     // Status Line
     const statusColor = response.ok ? colors.green : colors.red;
     console.log(
-      `${statusColor(colors.bold(response.status))} ${statusColor(response.statusText)} ` +
+      `${statusColor(colors.bold(String(response.status)))} ${statusColor(response.statusText)} ` +
       `${colors.gray(`(${duration}ms)`)}`
     );
 

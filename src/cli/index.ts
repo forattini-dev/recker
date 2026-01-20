@@ -2,6 +2,7 @@ import { RekCommand } from './router.js';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import colors from '../utils/colors.js';
+import { theme, formatPreset } from './theme.js';
 import { formatColumns } from '../utils/columns.js';
 import { summarizeErrors, formatErrorSummary, printError } from './helpers.js';
 import { getVersion, formatVersionInfo } from '../version.js';
@@ -136,13 +137,13 @@ async function main() {
     .option('-j, --json', 'Force JSON content-type')
     .option('-e, --env [path]', 'Load .env file')
     .addHelpText('after', () => `
-${colors.bold(colors.yellow('Examples:'))}
-  ${colors.green('$ rek httpbin.org/json')}
-  ${colors.green('$ rek post api.com/users name="Cyber"')}
-  ${colors.green('$ rek @github/user')}
+${theme.header('Examples:')}
+  ${theme.example('$ rek httpbin.org/json')}
+  ${theme.example('$ rek post api.com/users name="Cyber"')}
+  ${theme.example('$ rek @github/user')}
 
-${colors.bold(colors.yellow('Available Presets:'))}
-${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform: colors.cyan })}
+${theme.header('Available Presets:')}
+${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform: colors.lightOrange })}
 `)
     .action(async (args: string[], options: any) => {
       if (args.length === 0) {
@@ -186,7 +187,7 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
              argsToParse = argsToParse.slice(1);
           }
         } else {
-          console.error(colors.red(`Error: Preset '@${presetName}' not found.`));
+          console.error(theme.error(`Error: Preset '@${presetName}' not found.`));
           process.exit(1);
         }
       }
@@ -237,36 +238,36 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
             payload = Buffer.from(JSON.stringify(bodyData));
         }
 
-        console.log(colors.gray(`Sending ${payload.length} bytes to ${host}:${port}...`));
+        console.log(theme.muted(`Sending ${payload.length} bytes to ${host}:${port}...`));
 
         client.on('message', (msg, rinfo) => {
             if (!options.quiet) {
-                console.log(colors.green(`\nResponse from ${rinfo.address}:${rinfo.port}:`));
+                console.log(theme.success(`\nResponse from ${rinfo.address}:${rinfo.port}:`));
             }
             console.log(msg.toString());
             client.close();
         });
 
         client.on('error', (err) => {
-            console.error(colors.red(`UDP Error: ${err.message}`));
+            console.error(theme.error(`UDP Error: ${err.message}`));
             client.close();
             process.exit(1);
         });
 
         client.send(payload, port, host, (err) => {
             if (err) {
-                console.error(colors.red(`Send Error: ${err.message}`));
+                console.error(theme.error(`Send Error: ${err.message}`));
                 client.close();
                 process.exit(1);
             }
             if (!options.quiet) {
-                console.log(colors.gray('Message sent. Waiting for response (2s timeout)...'));
+                console.log(theme.muted('Message sent. Waiting for response (2s timeout)...'));
             }
         });
 
         setTimeout(() => {
              if (!options.quiet) {
-                 console.log(colors.gray('\nNo response received (timeout).'));
+                 console.log(theme.muted('\nNo response received (timeout).'));
              }
              client.close();
              process.exit(0);
@@ -294,7 +295,7 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
         });
       } catch (error: any) {
         if (!options.quiet) {
-          console.error(colors.red(`\nError: ${error.message}`));
+          console.error(theme.error(`\nError: ${error.message}`));
           if (options.verbose && error.cause) {
             console.error(error.cause);
           }
@@ -307,8 +308,8 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
 
   program.command('version').alias('info').action(async () => {
       const versionInfo = await formatVersionInfo(true);
-      console.log(colors.bold(colors.cyan('recker')) + ' ' + colors.green(version));
-      console.log(colors.gray(versionInfo));
+      console.log(theme.brand('recker') + ' ' + theme.version(version));
+      console.log(theme.muted(versionInfo));
   });
 
   program.command('shell').alias('repl')

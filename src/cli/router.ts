@@ -1,4 +1,5 @@
 import colors from '../utils/colors.js';
+import { theme } from './theme.js';
 import { z } from 'zod';
 
 // =============================================================================
@@ -553,7 +554,7 @@ export class RekCommand {
     try {
       await this.dispatch(args);
     } catch (err: any) {
-      console.error(colors.red(`\nError: ${err.message}\n`));
+      console.error(theme.error(`\nError: ${err.message}\n`));
       process.exit(1);
     }
   }
@@ -638,8 +639,8 @@ export class RekCommand {
 
     // No match
     if (args.length > 0) {
-      console.error(colors.red(`Unknown command: '${args[0]}'`));
-      console.log(colors.gray(`Run 'rek --help' for available commands.`));
+      console.error(theme.error(`Unknown command: '${args[0]}'`));
+      console.log(theme.muted(`Run 'rek --help' for available commands.`));
       process.exit(1);
     }
 
@@ -941,10 +942,10 @@ export class RekCommand {
     }
 
     console.log(`
-${colors.bold(this.name)} - ${this._description}`);
+${theme.brand(this.name)} - ${theme.text(this._description)}`);
 
     console.log(`
-${colors.yellow('Usage:')}
+${theme.header('Usage:')}
   ${this.name} ${this.argsDefinition.join(' ')} [options] [command]`);
 
     // Compile examples from all sources: command, arguments, options
@@ -990,13 +991,13 @@ ${colors.yellow('Usage:')}
     // Show compiled examples
     if (allExamples.length > 0) {
       console.log(`
-${colors.yellow('Examples:')}`);
+${theme.header('Examples:')}`);
       for (const ex of allExamples) {
         if (ex.desc) {
-          console.log(`  ${colors.green(ex.cmd)}`);
-          console.log(`    ${colors.gray(ex.desc)}`);
+          console.log(`  ${theme.example(ex.cmd)}`);
+          console.log(`    ${theme.exampleDesc(ex.desc)}`);
         } else {
-          console.log(`  ${colors.green(ex.cmd)}`);
+          console.log(`  ${theme.example(ex.cmd)}`);
         }
       }
     }
@@ -1004,14 +1005,14 @@ ${colors.yellow('Examples:')}`);
     // Show arguments section with descriptions
     if (this.resolvedArguments.length > 0) {
       console.log(`
-${colors.yellow('Arguments:')}`);
+${theme.header('Arguments:')}`);
       for (const arg of this.resolvedArguments) {
         const marker = arg.required ? '<' : '[';
         const endMarker = arg.required ? '>' : ']';
         const variadicSuffix = arg.variadic ? '...' : '';
         const argName = `${marker}${arg.name}${variadicSuffix}${endMarker}`;
 
-        let line = `  ${colors.cyan(argName.padEnd(16))} ${arg.description}`;
+        let line = `  ${theme.positional(argName.padEnd(16))} ${arg.description}`;
 
         // Add metadata
         const meta: string[] = [];
@@ -1021,7 +1022,7 @@ ${colors.yellow('Arguments:')}`);
         if (arg.example && !arg.enumValues) meta.push(`e.g. ${arg.example}`);
 
         if (meta.length > 0) {
-          line += ` ${colors.gray(`(${meta.join(', ')})`)}`;
+          line += ` ${theme.dimmed(`(${meta.join(', ')})`)}`;
         }
 
         console.log(line);
@@ -1030,9 +1031,9 @@ ${colors.yellow('Arguments:')}`);
 
     if (this.subcommands.length > 0) {
       console.log(`
-${colors.yellow('Commands:')}`);
+${theme.header('Commands:')}`);
       for (const c of this.subcommands) {
-        console.log(`  ${colors.cyan(c.name.padEnd(12))} ${c._description}`);
+        console.log(`  ${theme.command(c.name.padEnd(12))} ${c._description}`);
       }
     }
 
@@ -1040,11 +1041,11 @@ ${colors.yellow('Commands:')}`);
     const hasOptions = this.options.length > 0 || this.resolvedOptions.length > 0;
     if (hasOptions) {
       console.log(`
-${colors.yellow('Options:')}`);
+${theme.header('Options:')}`);
 
       // Legacy format options
       for (const o of this.options) {
-        console.log(`  ${colors.green(o.flags.padEnd(24))} ${o.description}`);
+        console.log(`  ${theme.flag(o.flags.padEnd(24))} ${o.description}`);
       }
 
       // Smart format options - show all syntax variants
@@ -1068,10 +1069,10 @@ ${colors.yellow('Options:')}`);
         // Build description with default
         let desc = opt.description;
         if (opt.defaultValue !== undefined && !opt.enumValues) {
-          desc += ` ${colors.gray(`(default: ${opt.defaultValue})`)}`;
+          desc += ` ${theme.dimmed(`(default: ${opt.defaultValue})`)}`;
         }
 
-        console.log(`  ${colors.green(flags.padEnd(28))} ${desc}`);
+        console.log(`  ${theme.flag(flags.padEnd(28))} ${desc}`);
       }
     }
 

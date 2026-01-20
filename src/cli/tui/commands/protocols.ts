@@ -536,7 +536,7 @@ export async function runHar(ctx: ShellContext, args: string[]) {
           delay,
           overrideHeaders: headers,
           onProgress: (progress) => {
-            process.stdout.write(`\r  ${colors.cyan(progress.completed)}/${progress.total} requests completed`);
+            process.stdout.write(`\r  ${colors.cyan(String(progress.completed))}/${progress.total} requests completed`);
           },
         });
         process.stdout.write('\r' + ' '.repeat(80) + '\r');
