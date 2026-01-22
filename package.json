@@ -257,12 +257,12 @@
   },
   "dependencies": {
     "@maxmind/geoip2-node": "^6.3.4",
-    "cli-args-parser": "^1.0.3",
+    "cli-args-parser": "^1.0.6",
     "css-select": "^6.0.0",
     "he": "^1.2.0",
-    "tuiuiu.js": "^1.0.51",
-    "undici": "^7.18.2",
-    "zod": "^4.3.5"
+    "tuiuiu.js": "^1.0.53",
+    "undici": "^7.19.0",
+    "zod": "^4.3.6"
   },
   "peerDependencies": {
     "cardinal": "^2.1.0",
@@ -284,18 +284,18 @@
     "@hapi/wreck": "^18.1.0",
     "@types/he": "^1.2.3",
     "@types/needle": "^3.3.0",
-    "@types/node": "^25.0.9",
+    "@types/node": "^25.0.10",
     "@types/ssh2-sftp-client": "^9.0.6",
     "@types/superagent": "^8.1.9",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^4.0.17",
+    "@vitest/coverage-v8": "^4.0.18",
     "axios": "^1.13.2",
     "cardinal": "^2.1.1",
     "cross-fetch": "^4.1.0",
     "domhandler": "^5.0.3",
     "esbuild": "^0.27.2",
     "got": "^14.6.6",
-    "happy-dom": "^20.3.1",
+    "happy-dom": "^20.3.4",
     "husky": "^9.1.7",
     "ky": "^1.14.2",
     "make-fetch-happen": "^15.0.3",
@@ -310,9 +310,9 @@
     "superagent": "^10.3.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17",
+    "vitest": "^4.0.18",
     "wretch": "^3.0.6",
     "ws": "^8.19.0",
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   }
 }
