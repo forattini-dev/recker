@@ -363,33 +363,3 @@ export function QuickActionBar(props: QuickActionBarProps): VNode {
     ...actionTexts,
   );
 }
-
-// =============================================================================
-// Legacy exports for compatibility
-// =============================================================================
-
-/**
- * Navigate palette selection (legacy - use palette.selectNext/Prev instead)
- */
-export function navigatePalette(direction: 'up' | 'down', _maxItems: number): void {
-  if (!paletteState) return;
-  if (direction === 'up') {
-    paletteState.selectPrev();
-  } else {
-    paletteState.selectNext();
-  }
-}
-
-/**
- * Get current selection index (legacy)
- */
-export function getPaletteSelection(): number {
-  return paletteState?.selectedIndex() ?? 0;
-}
-
-/**
- * Get current palette query (legacy)
- */
-export function getPaletteQuery(): string {
-  return paletteState?.query() ?? '';
-}

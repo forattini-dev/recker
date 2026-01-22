@@ -201,17 +201,3 @@ export async function miniPost<T = unknown>(url: string, data?: unknown, headers
     blob: async () => new Blob([await body.arrayBuffer()])
   };
 }
-
-// Backwards compatibility aliases
-/** @deprecated Use createMiniClient instead */
-export const createBareClient = createMiniClient;
-/** @deprecated Use MiniClientOptions instead */
-export type BareClientOptions = MiniClientOptions;
-/** @deprecated Use MiniResponse instead */
-export type BareResponse<T = unknown> = MiniResponse<T>;
-/** @deprecated Use MiniClient instead */
-export type BareClient = MiniClient;
-/** @deprecated Use miniGet instead */
-export const bareGet = miniGet;
-/** @deprecated Use miniPost instead */
-export const barePost = miniPost;
