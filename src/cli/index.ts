@@ -18,7 +18,6 @@ import { registerNetworkCommands } from './commands/network.js';
 import { registerProtocolCommands } from './commands/protocols.js';
 import { registerUtilsCommands } from './commands/utils.js';
 import { registerHarCommand } from './commands/har.js';
-import { registerVectorCommand } from './commands/vector.js';
 import { registerSeoCommand } from './commands/seo.js';
 import { registerVideoCommand } from './commands/video.js';
 import { registerLiveCommand } from './commands/live.js';
@@ -356,7 +355,6 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
   registerDnsCommands(program as any);
   registerProtocolCommands(program as any);
   registerHarCommand(program as any);
-  registerVectorCommand(program as any);
   registerHlsCommand(program as any);
   registerVideoCommand(program as any);
   registerLiveCommand(program as any);

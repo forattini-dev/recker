@@ -9,8 +9,7 @@
  */
 
 import { createInterface, Interface } from 'readline';
-import { getShellSearch } from './shell-search.js';
-import type { SearchResult } from '../../mcp/search/types.js';
+import { getShellSearch, type SearchResult } from './shell-search.js';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';

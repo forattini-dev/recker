@@ -1,16 +1,12 @@
 /**
- * ShellSearch - Lazy-loaded HybridSearch wrapper for the Recker shell.
+ * ShellSearch - Simple fuzzy search wrapper for the Recker shell.
  *
  * Features:
- * - Loads embeddings only on first search (lazy loading)
+ * - Indexes documentation on first search
  * - Auto-unloads after idle time to save memory
  * - Provides search, suggest, and example commands
- * - Progress callbacks for UI feedback
  */
 
-import { HybridSearch, createHybridSearch, createEmbedder, isFastembedAvailable } from '../../mcp/search/index.js';
-import type { IndexedDoc, SearchResult } from '../../mcp/search/types.js';
-import { loadEmbeddings } from '../../mcp/embeddings-loader.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative, extname, basename, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -20,6 +16,29 @@ import { createSpinner, type Spinner } from './spinner.js';
 export type ProgressCallback = (stage: string, percent?: number) => void;
 
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Indexed documentation entry */
+interface IndexedDoc {
+  id: string;
+  path: string;
+  title: string;
+  category: string;
+  content: string;
+  keywords: string[];
+  section?: string;
+  parentPath?: string;
+}
+
+/** Search result */
+export interface SearchResult {
+  id: string;
+  path: string;
+  title: string;
+  content: string;
+  snippet: string;
+  score: number;
+  source: 'fuzzy';
+}
 
 interface CodeExample {
   id: string;
@@ -50,7 +69,6 @@ interface TypeDefinition {
  * Shell search module with lazy loading and auto-unload.
  */
 export class ShellSearch {
-  private hybridSearch: HybridSearch | null = null;
   private docsIndex: IndexedDoc[] = [];
   private codeExamples: CodeExample[] = [];
   private typeDefinitions: TypeDefinition[] = [];
@@ -61,7 +79,6 @@ export class ShellSearch {
   private examplesPath: string;
   private srcPath: string;
   private spinner: Spinner | null = null;
-  private hasSemanticSearch = false;
 
   constructor() {
     this.docsPath = this.findDocsPath();
@@ -80,18 +97,16 @@ export class ShellSearch {
 
   /**
    * Ensure the search engine is initialized (lazy loading).
-   * Shows spinner with progress for better UX.
    */
   private async ensureInitialized(): Promise<void> {
     this.resetIdleTimer();
 
-    if (this.initialized && this.hybridSearch) {
+    if (this.initialized) {
       return;
     }
 
     // Prevent multiple concurrent initializations
     if (this.initializing) {
-      // Wait for ongoing initialization
       while (this.initializing) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
@@ -102,27 +117,11 @@ export class ShellSearch {
     this.spinner = createSpinner({ text: 'Initializing search...' }).start();
 
     try {
-      this.updateSpinner('Creating search index...');
-      this.hybridSearch = createHybridSearch({ debug: false });
-
-      // Configure embedder for semantic search if fastembed is available
-      this.updateSpinner('Checking semantic search availability...');
-      const fastembedAvailable = await isFastembedAvailable();
-
-      if (fastembedAvailable) {
-        this.updateSpinner('Loading AI embedding model (first time may take a while)...');
-        this.hybridSearch.setEmbedder(createEmbedder());
-        this.hasSemanticSearch = true;
-      }
-
       this.updateSpinner('Indexing documentation...');
       await this.buildIndex();
 
-      this.updateSpinner('Finalizing search index...');
-      await this.hybridSearch.initialize(this.docsIndex);
-
       this.initialized = true;
-      this.spinner.succeed(`Search ready (${this.docsIndex.length} docs${this.hasSemanticSearch ? ', semantic enabled' : ''})`);
+      this.spinner.succeed(`Search ready (${this.docsIndex.length} docs)`);
     } catch (error) {
       this.spinner.fail(`Search initialization failed: ${error}`);
       throw error;
@@ -147,7 +146,6 @@ export class ShellSearch {
    */
   private unload(): void {
     if (this.initialized) {
-      this.hybridSearch = null;
       this.docsIndex = [];
       this.codeExamples = [];
       this.typeDefinitions = [];
@@ -156,41 +154,69 @@ export class ShellSearch {
   }
 
   /**
-   * Search documentation with visual feedback.
+   * Search documentation with fuzzy matching.
    */
   async search(query: string, options: { limit?: number; category?: string; silent?: boolean } = {}): Promise<SearchResult[]> {
     await this.ensureInitialized();
 
-    const { limit = 5, category, silent = false } = options;
+    const { limit = 5, category } = options;
+    const queryLower = query.toLowerCase();
+    const queryTerms = queryLower.split(/\s+/);
 
-    if (!this.hybridSearch) {
-      return [];
+    const scored = this.docsIndex
+      .filter(doc => !category || doc.category.toLowerCase().includes(category.toLowerCase()))
+      .map(doc => {
+        let score = 0;
+        for (const term of queryTerms) {
+          if (doc.title.toLowerCase().includes(term)) score += 10;
+          if (doc.path.toLowerCase().includes(term)) score += 5;
+          if (doc.keywords.some(k => k.includes(term))) score += 3;
+          if (doc.content.toLowerCase().includes(term)) score += 1;
+        }
+        return { doc, score };
+      })
+      .filter(r => r.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    return scored.map(r => ({
+      id: r.doc.id,
+      path: r.doc.path,
+      title: r.doc.title,
+      content: r.doc.content,
+      snippet: this.extractSnippet(r.doc.content, query),
+      score: Math.min(1, r.score / 20),
+      source: 'fuzzy' as const,
+    }));
+  }
+
+  /**
+   * Extract a snippet around the query terms.
+   */
+  private extractSnippet(content: string, query: string): string {
+    const lowerContent = content.toLowerCase();
+    const queryTerms = query.toLowerCase().split(/\s+/);
+
+    let bestIndex = -1;
+    for (const term of queryTerms) {
+      const idx = lowerContent.indexOf(term);
+      if (idx !== -1 && (bestIndex === -1 || idx < bestIndex)) {
+        bestIndex = idx;
+      }
     }
 
-    // Show spinner during search (embedding generation can take time)
-    let searchSpinner: Spinner | null = null;
-    if (!silent && this.hasSemanticSearch) {
-      searchSpinner = createSpinner({ text: 'Generating query embedding...' }).start();
+    if (bestIndex === -1) {
+      return content.slice(0, 150) + '...';
     }
 
-    try {
-      if (searchSpinner) {
-        searchSpinner.text = 'Searching documentation...';
-      }
+    const start = Math.max(0, bestIndex - 50);
+    const end = Math.min(content.length, bestIndex + 150);
+    let snippet = content.slice(start, end);
 
-      const results = await this.hybridSearch.search(query, { limit, category, mode: 'hybrid' });
+    if (start > 0) snippet = '...' + snippet;
+    if (end < content.length) snippet = snippet + '...';
 
-      if (searchSpinner) {
-        searchSpinner.succeed(`Found ${results.length} result${results.length !== 1 ? 's' : ''}`);
-      }
-
-      return results;
-    } catch (error) {
-      if (searchSpinner) {
-        searchSpinner.fail(`Search failed: ${error}`);
-      }
-      throw error;
-    }
+    return snippet.replace(/\n/g, ' ');
   }
 
   /**
@@ -203,7 +229,6 @@ export class ShellSearch {
       await this.ensureInitialized();
 
       spinner.text = 'Finding relevant documentation...';
-      // Find relevant documentation (silent to avoid double spinner)
       const results = await this.search(useCase, { limit: 3, silent: true });
 
       if (results.length === 0) {
@@ -213,11 +238,9 @@ export class ShellSearch {
 
       spinner.text = 'Building suggestions...';
 
-      // Analyze use case and build suggestion
       const useCaseLower = useCase.toLowerCase();
       const suggestions: string[] = [];
 
-      // Configuration suggestions based on keywords
       if (useCaseLower.includes('retry') || useCaseLower.includes('fail') || useCaseLower.includes('error')) {
         suggestions.push(`\n**Retry Configuration:**
 \`\`\`typescript
@@ -243,8 +266,8 @@ import { createClient } from 'recker';
 const client = createClient({
   baseUrl: 'https://api.example.com',
   cache: {
-    storage: 'memory', // or 'file'
-    ttl: 300000, // 5 minutes
+    storage: 'memory',
+    ttl: 300000,
     strategy: 'stale-while-revalidate'
   }
 });
@@ -258,32 +281,12 @@ import { createClient } from 'recker';
 
 const client = createClient({ baseUrl: 'https://api.openai.com' });
 
-// SSE streaming
 for await (const event of client.post('/v1/chat/completions', { body, stream: true }).sse()) {
   console.log(event.data);
 }
 \`\`\``);
       }
 
-      if (useCaseLower.includes('parallel') || useCaseLower.includes('batch') || useCaseLower.includes('concurrent')) {
-        suggestions.push(`\n**Batch/Parallel Requests:**
-\`\`\`typescript
-import { createClient } from 'recker';
-
-const client = createClient({
-  baseUrl: 'https://api.example.com',
-  concurrency: { max: 10 }
-});
-
-const { results, stats } = await client.batch([
-  { path: '/users/1' },
-  { path: '/users/2' },
-  { path: '/users/3' }
-], { mapResponse: r => r.json() });
-\`\`\``);
-      }
-
-      // Add relevant documentation
       let output = `**Suggestion for: "${useCase}"**\n`;
 
       if (suggestions.length > 0) {
@@ -315,7 +318,6 @@ const { results, stats } = await client.batch([
     const { limit = 3, complexity } = options;
     const featureLower = feature.toLowerCase();
 
-    // Filter examples
     let examples = this.codeExamples.filter(ex => {
       const matchesFeature =
         ex.feature.toLowerCase().includes(featureLower) ||
@@ -328,7 +330,6 @@ const { results, stats } = await client.batch([
     });
 
     if (examples.length === 0) {
-      // Try searching docs for examples
       const searchResults = await this.search(`${feature} example`, { limit: 3 });
 
       if (searchResults.length === 0) {
@@ -338,7 +339,6 @@ const { results, stats } = await client.batch([
       let output = `**Examples for "${feature}" (from docs):**\n\n`;
       for (const result of searchResults) {
         output += `### ${result.title}\n`;
-        // Extract code blocks from content
         const codeBlocks = result.content.match(/```[\s\S]*?```/g) || [];
         if (codeBlocks.length > 0) {
           output += codeBlocks.slice(0, 2).join('\n\n') + '\n\n';
@@ -349,7 +349,6 @@ const { results, stats } = await client.batch([
       return output;
     }
 
-    // Format examples
     examples = examples.slice(0, limit);
 
     let output = `**Code Examples for "${feature}":**\n\n`;
@@ -376,19 +375,16 @@ const { results, stats } = await client.batch([
 
   /**
    * Get full document content by path.
-   * Used by the help panel for preview.
    */
   async getDocContent(path: string): Promise<string | null> {
     await this.ensureInitialized();
 
-    // Find document in index
     const doc = this.docsIndex.find(d => d.path === path || d.id === path);
 
     if (doc && doc.content) {
       return doc.content;
     }
 
-    // Try to load from filesystem as fallback
     try {
       const fullPath = join(this.docsPath, path);
       if (existsSync(fullPath)) {
@@ -440,58 +436,9 @@ const { results, stats } = await client.batch([
   // ============ Indexing ============
 
   private async buildIndex(): Promise<void> {
-    await this.indexDocsFromEmbeddings();
+    this.indexDocsFromFilesystem();
     this.indexExamples();
     this.indexTypes();
-  }
-
-  /**
-   * Load docs from pre-computed embeddings (includes chunking).
-   * Uses embeddings-loader which handles:
-   * 1. Local cache (~/.cache/recker/)
-   * 2. Bundled file (development)
-   * 3. GitHub Releases download (production)
-   *
-   * Falls back to filesystem if embeddings not available.
-   */
-  private async indexDocsFromEmbeddings(): Promise<void> {
-    try {
-      // Use lazy loader (handles cache, bundled, and download from GitHub Releases)
-      this.updateSpinner('Loading documentation index...');
-      const data = await loadEmbeddings({ debug: false });
-
-      if (data && data.documents && data.documents.length > 0) {
-        for (const doc of data.documents) {
-          // Use content from embedding if available (new format), or load from filesystem
-          let content = doc.content || '';
-          
-          if (!content && !doc.section) {
-            const fullPath = join(this.docsPath, doc.path);
-            if (existsSync(fullPath)) {
-              content = readFileSync(fullPath, 'utf-8');
-            }
-          }
-
-          this.docsIndex.push({
-            id: doc.id,
-            path: doc.path,
-            title: doc.title,
-            content,
-            category: doc.category,
-            keywords: doc.keywords || [],
-            section: doc.section,
-            parentPath: doc.parentPath,
-          });
-        }
-        return;
-      }
-    } catch (error) {
-      // Fall through to filesystem indexing
-      this.updateSpinner('Downloading documentation index failed, trying filesystem...');
-    }
-
-    // Fallback: index from filesystem (for development or if download fails)
-    this.indexDocsFromFilesystem();
   }
 
   private indexDocsFromFilesystem(): void {
@@ -511,11 +458,9 @@ const { results, stats } = await client.batch([
           const parts = relPath.split('/');
           const category = parts.length > 1 ? parts[0] : 'general';
 
-          // Extract title from first heading
           const titleMatch = content.match(/^#\s+(.+)$/m);
           const title = titleMatch ? titleMatch[1] : basename(entry, '.md');
 
-          // Extract keywords from headings and code references
           const keywords = this.extractKeywords(content);
 
           this.docsIndex.push({
@@ -548,7 +493,6 @@ const { results, stats } = await client.batch([
           const code = readFileSync(fullPath, 'utf-8');
           const relPath = relative(this.examplesPath, fullPath);
 
-          // Parse example metadata from comments
           const meta = this.parseExampleMeta(code);
           const filename = basename(entry, extname(entry));
 
@@ -582,7 +526,6 @@ const { results, stats } = await client.batch([
       this.parseTypeDefinitions(content, tf);
     }
 
-    // Also check main export files
     const mainFiles = ['index.ts', 'core/client.ts', 'mcp/server.ts'];
     for (const mf of mainFiles) {
       const fullPath = join(this.srcPath, mf);
@@ -596,7 +539,6 @@ const { results, stats } = await client.batch([
   private extractKeywords(content: string): string[] {
     const keywords: Set<string> = new Set();
 
-    // Headings
     const headings = content.match(/^#+\s+(.+)$/gm) || [];
     for (const h of headings) {
       const text = h.replace(/^#+\s+/, '');
@@ -605,13 +547,11 @@ const { results, stats } = await client.batch([
       });
     }
 
-    // Code identifiers
     const identifiers = content.match(/`([a-zA-Z_][a-zA-Z0-9_]*)`/g) || [];
     for (const id of identifiers) {
       keywords.add(id.replace(/`/g, '').toLowerCase());
     }
 
-    // Common HTTP/API terms
     const terms = ['retry', 'cache', 'timeout', 'streaming', 'sse', 'websocket',
                    'middleware', 'plugin', 'hook', 'batch', 'pagination', 'http'];
     for (const term of terms) {
@@ -632,7 +572,6 @@ const { results, stats } = await client.batch([
   } {
     const meta: any = {};
 
-    // Parse JSDoc-style comments
     const docMatch = code.match(/\/\*\*[\s\S]*?\*\//);
     if (docMatch) {
       const doc = docMatch[0];
@@ -668,7 +607,6 @@ const { results, stats } = await client.batch([
   }
 
   private extractMainCode(code: string): string {
-    // Remove leading comments and imports, keep the main code
     const lines = code.split('\n');
     let startIndex = 0;
 
@@ -686,7 +624,6 @@ const { results, stats } = await client.batch([
   }
 
   private parseTypeDefinitions(content: string, path: string): void {
-    // Interface definitions
     const interfaceRegex = /(?:\/\*\*[\s\S]*?\*\/\s*)?(export\s+)?interface\s+(\w+)(?:<[^>]+>)?\s*(?:extends\s+[^{]+)?\{[\s\S]*?\n\}/g;
     let match;
 
@@ -694,7 +631,6 @@ const { results, stats } = await client.batch([
       const name = match[2];
       const definition = match[0];
 
-      // Extract description from JSDoc
       const docMatch = definition.match(/\/\*\*\s*([\s\S]*?)\s*\*\//);
       const description = docMatch
         ? docMatch[1].replace(/\s*\*\s*/g, ' ').trim()
@@ -709,7 +645,6 @@ const { results, stats } = await client.batch([
       });
     }
 
-    // Type aliases
     const typeRegex = /(?:\/\*\*[\s\S]*?\*\/\s*)?(export\s+)?type\s+(\w+)(?:<[^>]+>)?\s*=\s*[^;]+;/g;
     while ((match = typeRegex.exec(content)) !== null) {
       const name = match[2];

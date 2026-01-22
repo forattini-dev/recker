@@ -160,78 +160,6 @@ export const aiToolHandlers: Record<string, MCPToolHandler> = {
   },
 
   /**
-   * Generate embeddings
-   */
-  rek_ai_embed: async (args): Promise<MCPToolResult> => {
-    const input = args.input as string;
-    const model = args.model as string | undefined;
-    const provider = args.provider as string | undefined;
-
-    if (!input) {
-      return {
-        content: [{ type: 'text', text: 'Error: input text is required' }],
-        isError: true,
-      };
-    }
-
-    const availableProviders = getAvailableProviders();
-    if (availableProviders.length === 0) {
-      return {
-        content: [{
-          type: 'text',
-          text: 'Error: No AI provider configured for embeddings',
-        }],
-        isError: true,
-      };
-    }
-
-    // Prefer OpenAI for embeddings, then Cohere, then Google
-    const embeddingProviders = ['openai', 'cohere', 'google'];
-    const selectedProvider = provider ||
-      embeddingProviders.find(p => availableProviders.includes(p)) ||
-      availableProviders[0];
-
-    try {
-      const ai = getAIClient();
-
-      const embeddingModels: Record<string, string> = {
-        openai: 'text-embedding-3-small',
-        cohere: 'embed-english-v3.0',
-        google: 'text-embedding-004',
-      };
-
-      const response = await ai.embed({
-        input,
-        model: model || embeddingModels[selectedProvider] || 'text-embedding-3-small',
-        provider: selectedProvider as any,
-      });
-
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            dimensions: response.embeddings[0].length,
-            model: response.model,
-            provider: selectedProvider,
-            usage: response.usage,
-            // Return first 10 values as preview
-            preview: response.embeddings[0].slice(0, 10),
-            note: `Full embedding has ${response.embeddings[0].length} dimensions`,
-          }, null, 2),
-        }],
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error generating embedding: ${error instanceof Error ? error.message : String(error)}`,
-        }],
-        isError: true,
-      };
-    }
-  },
-
-  /**
    * List available AI providers
    */
   rek_ai_providers: async (): Promise<MCPToolResult> => {
@@ -346,28 +274,6 @@ export const aiTools: MCPTool[] = [
         },
       },
       required: ['prompt'],
-    },
-  },
-  {
-    name: 'rek_ai_embed',
-    description: 'Generate embeddings for text. Useful for semantic search, similarity comparison, and vector storage. Returns embedding dimensions and preview.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        input: {
-          type: 'string',
-          description: 'Text to generate embeddings for',
-        },
-        model: {
-          type: 'string',
-          description: 'Embedding model (e.g., text-embedding-3-small)',
-        },
-        provider: {
-          type: 'string',
-          description: 'Provider for embeddings (openai, cohere, google)',
-        },
-      },
-      required: ['input'],
     },
   },
   {

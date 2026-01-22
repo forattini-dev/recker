@@ -1,12 +1,12 @@
 /**
- * useHelp - Semantic Documentation Search Hook
+ * useHelp - Documentation Search Hook
  *
  * Provides reactive state for searching documentation using the ShellSearch
- * hybrid search engine (fuzzy + semantic via embeddings).
+ * fuzzy search engine.
  */
 
 import { createSignal } from 'tuiuiu.js';
-import type { SearchResult } from '../../../mcp/search/types.js';
+import type { SearchResult } from '../shell-search.js';
 
 // =============================================================================
 // Types

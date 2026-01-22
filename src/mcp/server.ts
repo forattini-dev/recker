@@ -3,9 +3,6 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative, extname, basename, dirname } from 'path';
 import { createInterface } from 'readline';
 import { fileURLToPath } from 'url';
-import { createAI, type AIClient } from '../ai/index.js';
-import { HybridSearch, createHybridSearch } from './search/index.js';
-import type { IndexedDoc, SearchResult } from './search/types.js';
 import type {
   JsonRpcRequest,
   JsonRpcResponse,
@@ -39,6 +36,28 @@ import {
   DEFAULT_CATEGORY,
   type CategoryName,
 } from './profiles.js';
+
+/** Indexed documentation entry */
+interface IndexedDoc {
+  id: string;
+  path: string;
+  title: string;
+  category: string;
+  content: string;
+  keywords: string[];
+  section?: string;
+}
+
+/** Search result */
+interface SearchResult {
+  id: string;
+  path: string;
+  title: string;
+  content: string;
+  snippet: string;
+  score: number;
+  source: 'fuzzy';
+}
 
 export type MCPTransportMode = 'stdio' | 'http' | 'sse';
 
@@ -95,7 +114,7 @@ interface TypeDefinition {
  * - **sse**: HTTP with Server-Sent Events for notifications
  *
  * Provides tools:
- * - `search_docs`: Hybrid search (fuzzy + semantic) for documentation
+ * - `search_docs`: Fuzzy search for documentation
  * - `get_doc`: Get full content of a specific doc file
  * - `recker_code_examples`: Get runnable code examples
  * - `recker_api_schema`: Get TypeScript types and interfaces
@@ -117,7 +136,6 @@ interface TypeDefinition {
 export class MCPServer {
   private options: Required<Omit<MCPServerOptions, 'category'>> & { category?: string | CategoryName[] };
   private server?: ReturnType<typeof createServer>;
-  private hybridSearch: HybridSearch;
   private docsIndex: IndexedDoc[] = [];
   private codeExamples: CodeExample[] = [];
   private typeDefinitions: TypeDefinition[] = [];
@@ -126,7 +144,6 @@ export class MCPServer {
   private toolRegistry: ToolRegistry;
   private promptRegistry: PromptRegistry;
   private resourceRegistry: ResourceRegistry;
-  private aiClient?: AIClient;
 
   constructor(options: MCPServerOptions = {}) {
     this.options = {
@@ -143,15 +160,6 @@ export class MCPServer {
       toolPaths: options.toolPaths || [],
       category: options.category,
     };
-
-    // Initialize AI client if available
-    this.aiClient = this.initAI();
-
-    this.hybridSearch = createHybridSearch({
-      debug: this.options.debug,
-      offline: this.options.offline,
-      embedder: (text, model) => this.generateEmbedding(text, model || 'BGESmallENV15'),
-    });
 
     this.toolRegistry = new ToolRegistry();
     this.promptRegistry = new PromptRegistry();
@@ -273,71 +281,6 @@ export class MCPServer {
     await this.indexReady;
   }
 
-  private initAI(): AIClient | undefined {
-    // Check for available keys or local configuration
-    // We prioritize OpenAI > Google > Ollama (local)
-    const hasKeys = process.env.OPENAI_API_KEY || process.env.GOOGLE_API_KEY;
-    const hasLocal = process.env.OLLAMA_HOST || true; // Always try Ollama if nothing else? No, only if requested or detected.
-    
-    // For now, only enable if explicitly configured via env for cloud, or if we want to default to Ollama?
-    // Let's be conservative: only if keys exist.
-    if (!hasKeys) {
-        // TODO: check if Ollama is running?
-        return undefined;
-    }
-
-    try {
-      return createAI({ debug: this.options.debug });
-    } catch (e) {
-      this.log('Failed to initialize AI client:', e);
-      return undefined;
-    }
-  }
-
-  private fastEmbedModel: any = null;
-
-  private async generateEmbedding(text: string, model: string): Promise<number[]> {
-    // 1. Try FastEmbed for BGE models (if installed)
-    if (model.toLowerCase().includes('bge')) {
-      if (!this.fastEmbedModel) {
-        try {
-          // Dynamic import to avoid hard dependency
-          const fastembed = await import('fastembed');
-          const { FlagEmbedding } = fastembed;
-          
-          this.fastEmbedModel = await FlagEmbedding.init({ 
-            model: model as any,
-            showDownloadProgress: false 
-          });
-        } catch (e) {
-          throw new Error(`FastEmbed required for model ${model}. Install with: pnpm add fastembed`);
-        }
-      }
-      
-      const vectors = this.fastEmbedModel.embed([text]);
-      for await (const v of vectors) return Array.from(v);
-      throw new Error('No vector generated');
-    }
-
-    // 2. Try AI Client (OpenAI, Google, Ollama)
-    if (!this.aiClient) {
-      throw new Error('No AI client available for external embeddings');
-    }
-
-    // Determine provider based on model name
-    let provider: any = 'openai';
-    if (model.includes('google') || model.includes('gecko')) provider = 'google';
-    else if (model.includes('nomic') || model.includes('llama')) provider = 'ollama';
-
-    const res = await this.aiClient.embed({ 
-      input: text, 
-      provider,
-      model 
-    });
-    
-    return res.embeddings[0];
-  }
-
   private log(message: string, data?: unknown): void {
     if (this.options.debug) {
       if (this.options.transport === 'stdio') {
@@ -424,91 +367,39 @@ export class MCPServer {
     // Index type definitions
     this.indexTypeDefinitions();
 
-    // Initialize hybrid search
-    await this.hybridSearch.initialize(this.docsIndex);
-
-    const stats = this.hybridSearch.getStats();
-    this.log(`Indexed ${stats.documents} docs, ${this.codeExamples.length} examples, ${this.typeDefinitions.length} types`);
-    if (stats.embeddings > 0) {
-      this.log(`Loaded ${stats.embeddings} embeddings (model: ${stats.model})`);
-    }
+    this.log(`Indexed ${this.docsIndex.length} docs, ${this.codeExamples.length} examples, ${this.typeDefinitions.length} types`);
   }
 
   private async indexDocs(): Promise<void> {
-    // Try to load from filesystem first
-    if (existsSync(this.options.docsPath)) {
-      const files = this.walkDir(this.options.docsPath);
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file.endsWith('.md')) continue;
-
-        try {
-          const content = readFileSync(file, 'utf-8');
-          const relativePath = relative(this.options.docsPath, file);
-          const category = relativePath.split('/')[0] || 'root';
-          const title = this.extractTitle(content) || relativePath;
-          const keywords = this.extractKeywords(content);
-
-          this.docsIndex.push({
-            id: `doc-${i}`,
-            path: relativePath,
-            title,
-            category,
-            content,
-            keywords,
-          });
-        } catch (err) {
-          this.log(`Failed to index ${file}:`, err);
-        }
-      }
+    if (!existsSync(this.options.docsPath)) {
+      this.log(`Docs path not found: ${this.options.docsPath}`);
       return;
     }
 
-    // Fallback: load docs from bundled embeddings data
-    this.log(`Docs path not found: ${this.options.docsPath}, loading from embeddings...`);
-    await this.loadDocsFromEmbeddings();
-  }
+    const files = this.walkDir(this.options.docsPath);
 
-  private async loadDocsFromEmbeddings(): Promise<void> {
-    try {
-      // Try bundled embeddings first
-      const bundledPath = join(dirname(fileURLToPath(import.meta.url)), 'data', 'embeddings.json');
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file.endsWith('.md')) continue;
 
-      let embeddingsData: any = null;
+      try {
+        const content = readFileSync(file, 'utf-8');
+        const relativePath = relative(this.options.docsPath, file);
+        const category = relativePath.split('/')[0] || 'root';
+        const title = this.extractTitle(content) || relativePath;
+        const keywords = this.extractKeywords(content);
 
-      if (existsSync(bundledPath)) {
-        const raw = readFileSync(bundledPath, 'utf-8');
-        embeddingsData = JSON.parse(raw);
-        this.log(`Loaded ${embeddingsData.documents?.length || 0} docs from bundled embeddings`);
-      } else {
-        // Try loading from cache via embeddings-loader
-        const { loadEmbeddings } = await import('./embeddings-loader.js');
-        embeddingsData = await loadEmbeddings({ offline: this.options.offline });
-        if (embeddingsData) {
-          this.log(`Loaded ${embeddingsData.documents?.length || 0} docs from cached embeddings`);
-        }
-      }
-
-      if (!embeddingsData?.documents) {
-        this.log('No embeddings data available');
-        return;
-      }
-
-      // Convert embeddings documents to IndexedDoc format
-      for (const doc of embeddingsData.documents) {
         this.docsIndex.push({
-          id: doc.id,
-          path: doc.path,
-          title: doc.title,
-          category: doc.category || 'root',
-          content: doc.content || '',
-          keywords: doc.keywords || [],
-          section: doc.section,
+          id: `doc-${i}`,
+          path: relativePath,
+          title,
+          category,
+          content,
+          keywords,
         });
+      } catch (err) {
+        this.log(`Failed to index ${file}:`, err);
       }
-    } catch (err) {
-      this.log(`Failed to load docs from embeddings: ${err}`);
     }
   }
 
@@ -1013,7 +904,6 @@ export class MCPServer {
     const query = String(args.query || '');
     const category = args.category ? String(args.category) : undefined;
     const limit = Math.min(Number(args.limit) || 5, 10);
-    const mode = (args.mode as 'hybrid' | 'fuzzy' | 'semantic') || 'hybrid';
 
     if (!query) {
       return {
@@ -1022,14 +912,7 @@ export class MCPServer {
       };
     }
 
-    // Use hybrid search (sync wrapper around async)
-    const searchPromise = this.hybridSearch.search(query, { limit, category, mode });
-
-    // Note: MCP is synchronous, but our search is async. We need to handle this.
-    // For now, we'll use the synchronous fallback
-    let results: SearchResult[] = [];
-
-    // Synchronous fallback using the indexed docs directly
+    // Fuzzy search using the indexed docs
     const queryLower = query.toLowerCase();
     const queryTerms = queryLower.split(/\s+/);
 
@@ -1049,7 +932,7 @@ export class MCPServer {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
-    results = scored.map(r => ({
+    const results = scored.map(r => ({
       id: r.doc.id,
       path: r.doc.path,
       title: r.doc.title,
@@ -1068,9 +951,6 @@ export class MCPServer {
       };
     }
 
-    const stats = this.hybridSearch.getStats();
-    const searchMode = stats.embeddings > 0 ? mode : 'fuzzy';
-
     const output = results.map((r, i) =>
       `${i + 1}. **${r.title}** (${(r.score * 100).toFixed(0)}% match)\n   Path: \`${r.path}\`\n   ${r.snippet}`
     ).join('\\n\\n');
@@ -1078,7 +958,7 @@ export class MCPServer {
     return {
       content: [{
         type: 'text',
-        text: `Found ${results.length} result(s) for "${query}" (${searchMode} search):\n\n${output}\n\nUse get_doc with the path to read full content.`,
+        text: `Found ${results.length} result(s) for "${query}":\n\n${output}\n\nUse get_doc with the path to read full content.`,
       }],
     };
   }
@@ -1722,16 +1602,14 @@ const client = createClient({
         }
 
         if (req.method === 'GET' && req.url === '/health') {
-          const stats = this.hybridSearch.getStats();
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             status: 'ok',
             name: this.options.name,
             version: this.options.version,
-            docsCount: stats.documents,
+            docsCount: this.docsIndex.length,
             examplesCount: this.codeExamples.length,
             typesCount: this.typeDefinitions.length,
-            embeddingsLoaded: stats.embeddings > 0,
             sseClients: this.sseClients.size,
           }));
           return;
@@ -1828,16 +1706,14 @@ const client = createClient({
         }
 
         if (req.method === 'GET' && url === '/health') {
-          const stats = this.hybridSearch.getStats();
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             status: 'ok',
             name: this.options.name,
             version: this.options.version,
-            docsCount: stats.documents,
+            docsCount: this.docsIndex.length,
             examplesCount: this.codeExamples.length,
             typesCount: this.typeDefinitions.length,
-            embeddingsLoaded: stats.embeddings > 0,
             sseClients: this.sseClients.size,
           }));
           return;

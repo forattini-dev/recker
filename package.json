@@ -214,14 +214,13 @@
   },
   "scripts": {
     "build": "pnpm build:node && pnpm build:browser",
-    "build:node": "tsc && mkdir -p dist/mcp/data && cp src/mcp/data/embeddings.json dist/mcp/data/embeddings.json 2>/dev/null || true",
+    "build:node": "tsc",
     "build:browser": "tsc -p tsconfig.browser.json",
     "build:browser:bundle": "pnpm build:browser && node scripts/bundle-browser.js",
     "build:cli": "node scripts/bundle-cli.js",
     "build:binary": "npx pkg ./dist/bin/rek.cjs --output dist/bin/recker --targets node18-linux-x64,node18-macos-x64,node18-win-x64",
-    "build:embeddings": "tsx scripts/build-embeddings.ts",
     "prepare": "husky",
-    "prepublishOnly": "pnpm build && pnpm build:browser:bundle && pnpm build:embeddings && mkdir -p dist/mcp/data && cp src/mcp/data/embeddings.json dist/mcp/data/embeddings.json && node scripts/inject-version.js",
+    "prepublishOnly": "pnpm build && pnpm build:browser:bundle && node scripts/inject-version.js",
     "test": "NODE_OPTIONS='--max-old-space-size=512' vitest run",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=512' vitest run --coverage",
     "test:light": "NODE_OPTIONS='--max-old-space-size=256' vitest run --maxWorkers=1 --fileParallelism=false",
@@ -247,8 +246,7 @@
     "docs": "pnpm serve docs -p 3000",
     "lint": "echo \"No linting configured for this project.\" && exit 0",
     "cli": "NODE_OPTIONS='--disable-warning=ExperimentalWarning' tsx src/cli/bootstrap.ts",
-    "mcp:start": "NODE_OPTIONS='--disable-warning=ExperimentalWarning' tsx src/mcp/bootstrap.ts",
-    "mcp:reindex": "tsx scripts/build-embeddings.ts"
+    "mcp:start": "NODE_OPTIONS='--disable-warning=ExperimentalWarning' tsx src/mcp/bootstrap.ts"
   },
   "engines": {
     "node": ">=18"
@@ -261,7 +259,6 @@
     "@maxmind/geoip2-node": "^6.3.4",
     "cli-args-parser": "^1.0.3",
     "css-select": "^6.0.0",
-    "fuse.js": "^7.1.0",
     "he": "^1.2.0",
     "tuiuiu.js": "^1.0.51",
     "undici": "^7.18.2",
@@ -297,7 +294,6 @@
     "cross-fetch": "^4.1.0",
     "domhandler": "^5.0.3",
     "esbuild": "^0.27.2",
-    "fastembed": "^2.1.0",
     "got": "^14.6.6",
     "happy-dom": "^20.3.1",
     "husky": "^9.1.7",

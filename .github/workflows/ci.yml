@@ -256,9 +256,6 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Embeddings
-        run: pnpm run build:embeddings
-
       - name: Build
         run: |
           pnpm run build
@@ -432,7 +429,6 @@ jobs:
           generate_release_notes: false
           files: |
             install.sh
-            src/mcp/data/embeddings.json
             dist/bin/recker-linux-x64
             dist/bin/recker-macos-x64
             dist/bin/recker-win-x64.exe

@@ -72,9 +72,6 @@ export { AnthropicProvider } from './providers/anthropic.js';
 export { GoogleProvider } from './providers/google.js';
 export { OllamaProvider } from './providers/ollama.js';
 
-// Vector Store
-export * from './vector/index.js';
-
 // Adaptive timeouts
 export { AdaptiveTimeoutManager, StreamTimeoutController, adaptiveTimeouts } from './adaptive-timeout.js';
 
