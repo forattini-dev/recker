@@ -29,8 +29,31 @@
  */
 
 import { EventEmitter } from 'node:events';
-import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { createServer, type Server as HttpServer } from 'node:http';
+
+// Lazy-loaded ws module (optional peer dependency)
+let wsModule: typeof import('ws') | null = null;
+let WebSocketServer: typeof import('ws').WebSocketServer;
+
+// WebSocket readyState constants (per WebSocket spec)
+const WS_OPEN = 1;
+
+async function loadWsModule(): Promise<typeof import('ws')> {
+  if (wsModule) return wsModule;
+
+  try {
+    wsModule = await import('ws');
+    WebSocketServer = wsModule.WebSocketServer;
+    return wsModule;
+  } catch {
+    throw new Error(
+      'MockWebSocketServer requires the "ws" package. Install it with:\n\n' +
+      '  pnpm add ws\n' +
+      '  # or\n' +
+      '  npm install ws\n'
+    );
+  }
+}
 
 // ============================================
 // Types
@@ -93,16 +116,16 @@ export interface MockWebSocketServerOptions {
 
 export interface MockWebSocketClient {
   id: string;
-  socket: WebSocket;
+  socket: import('ws').WebSocket;
   connectedAt: number;
   messageCount: number;
-  lastMessage?: RawData;
+  lastMessage?: import('ws').RawData;
   metadata: Record<string, any>;
 }
 
 export interface MockWebSocketMessage {
   clientId: string;
-  data: RawData;
+  data: import('ws').RawData;
   timestamp: number;
   isBinary: boolean;
 }
@@ -123,7 +146,7 @@ export interface MockWebSocketStats {
 export class MockWebSocketServer extends EventEmitter {
   private options: Required<MockWebSocketServerOptions>;
   private httpServer: HttpServer | null = null;
-  private wss: WebSocketServer | null = null;
+  private wss: import('ws').WebSocketServer | null = null;
   private clients: Map<string, MockWebSocketClient> = new Map();
   private responses: Map<string, string | Buffer | ((msg: string, client: MockWebSocketClient) => string | Buffer | null)> = new Map();
   private _port = 0;
@@ -194,6 +217,9 @@ export class MockWebSocketServer extends EventEmitter {
     if (this._started) {
       throw new Error('Server already started');
     }
+
+    // Load ws module (throws helpful error if not installed)
+    await loadWsModule();
 
     return new Promise((resolve, reject) => {
       this.httpServer = createServer();
@@ -321,7 +347,7 @@ export class MockWebSocketServer extends EventEmitter {
 
   send(clientId: string, data: string | Buffer | object): boolean {
     const client = this.clients.get(clientId);
-    if (!client || client.socket.readyState !== WebSocket.OPEN) {
+    if (!client || client.socket.readyState !== WS_OPEN) {
       return false;
     }
 
@@ -413,7 +439,7 @@ export class MockWebSocketServer extends EventEmitter {
   // Private
   // ============================================
 
-  private handleConnection(socket: WebSocket, _req: any): void {
+  private handleConnection(socket: import('ws').WebSocket, _req: any): void {
     // Check max connections
     if (this.options.maxConnections > 0 && this.clients.size >= this.options.maxConnections) {
       socket.close(1013, 'Max connections reached');
@@ -445,7 +471,7 @@ export class MockWebSocketServer extends EventEmitter {
     // Auto-close timer
     if (this.options.autoCloseAfter > 0) {
       setTimeout(() => {
-        if (socket.readyState === WebSocket.OPEN) {
+        if (socket.readyState === WS_OPEN) {
           socket.close(1000, 'Auto-close timeout');
         }
       }, this.options.autoCloseAfter);
@@ -474,7 +500,7 @@ export class MockWebSocketServer extends EventEmitter {
     });
   }
 
-  private async handleMessage(client: MockWebSocketClient, data: RawData, isBinary: boolean): Promise<void> {
+  private async handleMessage(client: MockWebSocketClient, data: import('ws').RawData, isBinary: boolean): Promise<void> {
     const bytes = Buffer.isBuffer(data) ? data.length : Buffer.byteLength(data.toString());
     this.stats.totalBytesReceived += bytes;
     this.stats.totalMessages++;
@@ -499,7 +525,7 @@ export class MockWebSocketServer extends EventEmitter {
 
     // Get response
     const response = this.getResponse(data.toString(), client);
-    if (response !== null && client.socket.readyState === WebSocket.OPEN) {
+    if (response !== null && client.socket.readyState === WS_OPEN) {
       client.socket.send(response);
       this.stats.totalBytesSent += Buffer.byteLength(response);
     }

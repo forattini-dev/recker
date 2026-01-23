@@ -267,7 +267,8 @@
   "peerDependencies": {
     "cardinal": "^2.1.0",
     "ioredis": "^5.0.0",
-    "ssh2-sftp-client": "^11.0.0"
+    "ssh2-sftp-client": "^11.0.0",
+    "ws": "^8.0.0"
   },
   "peerDependenciesMeta": {
     "cardinal": {
@@ -277,6 +278,9 @@
       "optional": true
     },
     "ssh2-sftp-client": {
+      "optional": true
+    },
+    "ws": {
       "optional": true
     }
   },
