@@ -7,6 +7,10 @@
  * - Prioritized quick wins for immediate action
  */
 
+import { promises as fs } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { createClient } from '../../core/client.js';
 import { analyzeSeo } from '../../seo/analyzer.js';
 import { seoSpider } from '../../seo/seo-spider.js';
@@ -17,6 +21,143 @@ import type { MCPTool, MCPToolResult } from '../types.js';
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+const DEFAULT_SEO_CACHE_TTL_SEC = 6 * 60 * 60;
+const SEO_REPORT_DIR = join(tmpdir(), 'recker', 'seo');
+
+type ReportMeta = {
+  reportPath: string | null;
+  cacheHit: boolean;
+  cacheAgeSec?: number;
+  savedAt?: string;
+  reportBytes?: number;
+  source: 'fresh' | 'cached';
+};
+
+type ReportPersistence = {
+  enabled: boolean;
+  reportPath: string | null;
+  cacheEnabled: boolean;
+  cacheTtlSec: number;
+  forceRefresh: boolean;
+};
+
+function normalizeStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.map(item => String(item).trim()).filter(Boolean);
+  if (items.length === 0) return undefined;
+  return items;
+}
+
+function safeHost(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname || parsed.host;
+    return host.replace(/[^a-z0-9.-]/gi, '_') || 'unknown';
+  } catch {
+    return url.replace(/[^a-z0-9.-]/gi, '_').slice(0, 64) || 'unknown';
+  }
+}
+
+function hashArgs(value: unknown): string {
+  return createHash('sha1').update(JSON.stringify(value)).digest('hex').slice(0, 12);
+}
+
+function resolveReportPersistence(args: Record<string, unknown>, options: {
+  toolSlug: string;
+  url: string;
+  cacheKey: Record<string, unknown>;
+}): ReportPersistence {
+  const output = typeof args.output === 'string' ? args.output : undefined;
+  const outputDir = typeof args.outputDir === 'string' ? args.outputDir : undefined;
+  const persist = args.persist === true;
+  const persistenceEnabled = Boolean(output || outputDir || persist);
+
+  const cacheEnabled = persistenceEnabled ? (typeof args.cache === 'boolean' ? args.cache : true) : false;
+  const forceRefresh = args.forceRefresh === true;
+  const cacheTtlInput = typeof args.cacheTtlSec === 'number'
+    ? args.cacheTtlSec
+    : Number.isFinite(Number(args.cacheTtlSec))
+      ? Number(args.cacheTtlSec)
+      : undefined;
+  const cacheTtlSec = cacheEnabled
+    ? Math.max(0, cacheTtlInput ?? DEFAULT_SEO_CACHE_TTL_SEC)
+    : 0;
+
+  if (!persistenceEnabled) {
+    return {
+      enabled: false,
+      reportPath: null,
+      cacheEnabled: false,
+      cacheTtlSec: 0,
+      forceRefresh,
+    };
+  }
+
+  const host = safeHost(options.url);
+  const hash = hashArgs(options.cacheKey);
+  const fileName = `${options.toolSlug}--${host}--${hash}.json`;
+  const reportPath = output
+    ? output
+    : outputDir
+      ? join(outputDir, fileName)
+      : join(SEO_REPORT_DIR, fileName);
+
+  return {
+    enabled: true,
+    reportPath,
+    cacheEnabled,
+    cacheTtlSec,
+    forceRefresh,
+  };
+}
+
+async function readCachedReport(path: string, ttlSec: number): Promise<{
+  report: Record<string, unknown>;
+  ageSec: number;
+  bytes: number;
+  savedAt: string;
+} | null> {
+  if (!path || ttlSec <= 0) return null;
+  try {
+    const stats = await fs.stat(path);
+    const ageSec = (Date.now() - stats.mtimeMs) / 1000;
+    if (ageSec > ttlSec) {
+      return null;
+    }
+    const text = await fs.readFile(path, 'utf8');
+    const report = JSON.parse(text) as Record<string, unknown>;
+    if (report && typeof report === 'object') {
+      delete (report as Record<string, unknown>).reportMeta;
+      delete (report as Record<string, unknown>).note;
+    }
+    return {
+      report,
+      ageSec,
+      bytes: stats.size,
+      savedAt: new Date(stats.mtimeMs).toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function writeReport(path: string, payload: string): Promise<{ bytes: number; savedAt: string }> {
+  await fs.mkdir(dirname(path), { recursive: true });
+  await fs.writeFile(path, payload, 'utf8');
+  return { bytes: Buffer.byteLength(payload), savedAt: new Date().toISOString() };
+}
+
+function buildReportMeta(params: Partial<ReportMeta> & { source: 'fresh' | 'cached' }): ReportMeta {
+  return {
+    reportPath: params.reportPath ?? null,
+    cacheHit: params.cacheHit ?? false,
+    source: params.source,
+    ...(params.cacheAgeSec !== undefined ? { cacheAgeSec: params.cacheAgeSec } : {}),
+    ...(params.savedAt ? { savedAt: params.savedAt } : {}),
+    ...(params.reportBytes !== undefined ? { reportBytes: params.reportBytes } : {}),
+  };
+}
 
 /**
  * Format a single SEO check result for display
@@ -142,7 +283,7 @@ function generateQuickWins(report: SeoReport): Array<{
  */
 async function seoAnalyze(args: Record<string, unknown>): Promise<MCPToolResult> {
   const url = String(args.url || '');
-  const categories = args.categories as string[] | undefined;
+  const categories = normalizeStringArray(args.categories);
 
   if (!url) {
     return {
@@ -151,7 +292,41 @@ async function seoAnalyze(args: Record<string, unknown>): Promise<MCPToolResult>
     };
   }
 
+  const persistence = resolveReportPersistence(args, {
+    toolSlug: 'seo',
+    url,
+    cacheKey: {
+      url,
+      categories: categories ? [...categories].sort() : [],
+    },
+  });
+
   try {
+    if (persistence.enabled && persistence.cacheEnabled && !persistence.forceRefresh && persistence.reportPath) {
+      const cached = await readCachedReport(persistence.reportPath, persistence.cacheTtlSec);
+      if (cached) {
+        const reportMeta = buildReportMeta({
+          reportPath: persistence.reportPath,
+          cacheHit: true,
+          cacheAgeSec: cached.ageSec,
+          savedAt: cached.savedAt,
+          reportBytes: cached.bytes,
+          source: 'cached',
+        });
+        const output = {
+          ...cached.report,
+          reportMeta,
+          note: `Cache hit: report loaded from ${persistence.reportPath}`,
+        };
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(output, null, 2),
+          }],
+        };
+      }
+    }
+
     // Fetch the page
     const client = createClient({ timeout: 30000 });
     const response = await client.get(url);
@@ -222,10 +397,57 @@ async function seoAnalyze(args: Record<string, unknown>): Promise<MCPToolResult>
       technical: report.technical,
     };
 
+    const reportPayload = JSON.stringify(output, null, 2);
+
+    let reportMeta = buildReportMeta({
+      reportPath: persistence.reportPath,
+      cacheHit: false,
+      source: 'fresh',
+    });
+    let note = persistence.enabled
+      ? `Report generated (not yet saved).`
+      : 'Report generated (not persisted). Set persist=true to save and enable caching.';
+
+    if (persistence.enabled && persistence.reportPath) {
+      try {
+        const saved = await writeReport(persistence.reportPath, reportPayload);
+        reportMeta = buildReportMeta({
+          reportPath: persistence.reportPath,
+          cacheHit: false,
+          savedAt: saved.savedAt,
+          reportBytes: saved.bytes,
+          source: 'fresh',
+        });
+        note = `Report saved to ${persistence.reportPath}`;
+      } catch (error) {
+        const message = `Failed to save report to ${persistence.reportPath}: ${(error as Error).message}`;
+        const failedOutput = {
+          ...output,
+          reportMeta,
+          note: message,
+        };
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(failedOutput, null, 2),
+          }],
+          isError: true,
+        };
+      }
+    } else {
+      reportMeta = buildReportMeta({
+        reportPath: null,
+        cacheHit: false,
+        reportBytes: Buffer.byteLength(reportPayload),
+        savedAt: new Date().toISOString(),
+        source: 'fresh',
+      });
+    }
+
     return {
       content: [{
         type: 'text',
-        text: JSON.stringify(output, null, 2),
+        text: JSON.stringify({ ...output, reportMeta, note }, null, 2),
       }],
     };
   } catch (error) {
@@ -257,6 +479,43 @@ async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolRes
   }
 
   try {
+    const persistence = resolveReportPersistence(args, {
+      toolSlug: 'seo-spider',
+      url,
+      cacheKey: {
+        url,
+        maxPages,
+        maxDepth,
+        concurrency,
+        transport,
+      },
+    });
+
+    if (persistence.enabled && persistence.cacheEnabled && !persistence.forceRefresh && persistence.reportPath) {
+      const cached = await readCachedReport(persistence.reportPath, persistence.cacheTtlSec);
+      if (cached) {
+        const reportMeta = buildReportMeta({
+          reportPath: persistence.reportPath,
+          cacheHit: true,
+          cacheAgeSec: cached.ageSec,
+          savedAt: cached.savedAt,
+          reportBytes: cached.bytes,
+          source: 'cached',
+        });
+        const output = {
+          ...cached.report,
+          reportMeta,
+          note: `Cache hit: report loaded from ${persistence.reportPath}`,
+        };
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(output, null, 2),
+          }],
+        };
+      }
+    }
+
     const result = await seoSpider(url, {
       seo: true,
       maxPages,
@@ -332,10 +591,57 @@ async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolRes
       output.recommendations = recommendations;
     }
 
+    const reportPayload = JSON.stringify(output, null, 2);
+
+    let reportMeta = buildReportMeta({
+      reportPath: persistence.reportPath,
+      cacheHit: false,
+      source: 'fresh',
+    });
+    let note = persistence.enabled
+      ? 'Report generated (not yet saved).'
+      : 'Report generated (not persisted). Set persist=true to save and enable caching.';
+
+    if (persistence.enabled && persistence.reportPath) {
+      try {
+        const saved = await writeReport(persistence.reportPath, reportPayload);
+        reportMeta = buildReportMeta({
+          reportPath: persistence.reportPath,
+          cacheHit: false,
+          savedAt: saved.savedAt,
+          reportBytes: saved.bytes,
+          source: 'fresh',
+        });
+        note = `Report saved to ${persistence.reportPath}`;
+      } catch (error) {
+        const message = `Failed to save report to ${persistence.reportPath}: ${(error as Error).message}`;
+        const failedOutput = {
+          ...output,
+          reportMeta,
+          note: message,
+        };
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(failedOutput, null, 2),
+          }],
+          isError: true,
+        };
+      }
+    } else {
+      reportMeta = buildReportMeta({
+        reportPath: null,
+        cacheHit: false,
+        reportBytes: Buffer.byteLength(reportPayload),
+        savedAt: new Date().toISOString(),
+        source: 'fresh',
+      });
+    }
+
     return {
       content: [{
         type: 'text',
-        text: JSON.stringify(output, null, 2),
+        text: JSON.stringify({ ...output, reportMeta, note }, null, 2),
       }],
     };
   } catch (error) {
@@ -454,6 +760,7 @@ Returns:
 - Warnings and recommendations
 - OpenGraph/social meta analysis
 - Request timing breakdown
+- Optional report persistence and caching for AI agent workflows
 
 Perfect for analyzing your localhost dev server or any public URL. Categories include: meta, content, links, images, technical, security, performance, mobile, accessibility, schema, structural, i18n, PWA, social, e-commerce, local SEO, Core Web Vitals, readability, crawlability, internal linking, and best practices.`,
     inputSchema: {
@@ -468,6 +775,30 @@ Perfect for analyzing your localhost dev server or any public URL. Categories in
           items: { type: 'string' },
           description: 'Filter by specific categories (e.g., ["meta", "security", "performance"]). Leave empty for all.',
         },
+        output: {
+          type: 'string',
+          description: 'Save report to explicit file path',
+        },
+        outputDir: {
+          type: 'string',
+          description: 'Save report to directory with auto-generated filename',
+        },
+        persist: {
+          type: 'boolean',
+          description: 'Save report to default temp path (os.tmpdir()/recker/seo)',
+        },
+        cache: {
+          type: 'boolean',
+          description: 'Reuse existing saved report if present and within TTL (default: true when persistence enabled)',
+        },
+        cacheTtlSec: {
+          type: 'number',
+          description: `Cache TTL in seconds (default: ${DEFAULT_SEO_CACHE_TTL_SEC})`,
+        },
+        forceRefresh: {
+          type: 'boolean',
+          description: 'Bypass cache and recompute even if a saved report exists',
+        },
       },
       required: ['url'],
     },
@@ -481,7 +812,7 @@ Detects site-wide issues:
 - Orphan pages (no internal links pointing to them)
 - Pages with low SEO scores
 
-Returns per-page scores and prioritized recommendations for improving overall site SEO. Great for auditing a full site before launch or finding issues across your dev environment.`,
+Returns per-page scores and prioritized recommendations for improving overall site SEO. Great for auditing a full site before launch or finding issues across your dev environment. Supports optional report persistence and caching for AI agent workflows.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -509,6 +840,30 @@ Returns per-page scores and prioritized recommendations for improving overall si
           enum: ['auto', 'undici', 'curl'],
           description: 'HTTP transport: auto (try undici, fallback to curl on WAF block), undici (fast), curl (curl-impersonate for protected sites)',
           default: 'auto',
+        },
+        output: {
+          type: 'string',
+          description: 'Save report to explicit file path',
+        },
+        outputDir: {
+          type: 'string',
+          description: 'Save report to directory with auto-generated filename',
+        },
+        persist: {
+          type: 'boolean',
+          description: 'Save report to default temp path (os.tmpdir()/recker/seo)',
+        },
+        cache: {
+          type: 'boolean',
+          description: 'Reuse existing saved report if present and within TTL (default: true when persistence enabled)',
+        },
+        cacheTtlSec: {
+          type: 'number',
+          description: `Cache TTL in seconds (default: ${DEFAULT_SEO_CACHE_TTL_SEC})`,
+        },
+        forceRefresh: {
+          type: 'boolean',
+          description: 'Bypass cache and recompute even if a saved report exists',
         },
       },
       required: ['url'],

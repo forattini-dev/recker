@@ -159,8 +159,8 @@ Some tools appear in multiple categories based on use case.
 | Tool | Description |
 |------|-------------|
 | `rek_site_audit` | **Quick website audit** - connectivity, SEO, security, TLS, DNS, WHOIS in one call |
-| `rek_seo_analyze` | Analyze page SEO with 400+ rules (score 0-100, grade A-F) |
-| `rek_seo_spider` | Crawl site and detect duplicates, orphan pages |
+| `rek_seo_analyze` | Analyze page SEO with 400+ rules (score 0-100, grade A-F). Supports report persistence + cache. |
+| `rek_seo_spider` | Crawl site and detect duplicates, orphan pages. Supports report persistence + cache. |
 | `rek_seo_quick_wins` | Get prioritized SEO fixes (high/medium/low) |
 | `rek_seo_sitemap` | Analyze sitemap.xml for SEO issues |
 | `rek_seo_schema` | Extract and validate JSON-LD structured data |

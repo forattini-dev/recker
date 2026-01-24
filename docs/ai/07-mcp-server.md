@@ -693,10 +693,22 @@ Analyze page SEO with 400+ rules:
   "name": "rek_seo_analyze",
   "arguments": {
     "url": "https://example.com",
-    "categories": ["meta", "content", "performance"]
+    "categories": ["meta", "content", "performance"],
+    "persist": true,
+    "cacheTtlSec": 21600
   }
 }
 ```
+
+**Optional persistence/caching:**
+- `output`: Save report to explicit file path
+- `outputDir`: Save report to directory with auto-generated filename
+- `persist`: Save report to default temp path (`os.tmpdir()/recker/seo`)
+- `cache`: Reuse existing saved report (default true when persistence enabled)
+- `cacheTtlSec`: Cache TTL in seconds (default 21600)
+- `forceRefresh`: Bypass cache and recompute
+
+**Response:** Includes `reportMeta` with `reportPath`, `cacheHit`, `savedAt`, and `reportBytes` so agents can reuse the saved report without re-running analysis.
 
 #### rek_seo_spider
 
@@ -708,7 +720,9 @@ Crawl entire website:
   "arguments": {
     "url": "https://example.com",
     "maxPages": 50,
-    "maxDepth": 3
+    "maxDepth": 3,
+    "outputDir": "/tmp/recker",
+    "cache": true
   }
 }
 ```
