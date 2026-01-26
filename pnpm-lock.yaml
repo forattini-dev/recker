@@ -28,7 +28,7 @@ importers:
         version: 1.0.53
       undici:
         specifier: ^7.19.0
-        version: 7.19.0
+        version: 7.19.1
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -56,10 +56,10 @@ importers:
         version: 8.18.1
       '@vitest/coverage-v8':
         specifier: ^4.0.18
-        version: 4.0.18(vitest@4.0.18(@types/node@25.0.10)(happy-dom@20.3.4)(tsx@4.21.0))
+        version: 4.0.18(vitest@4.0.18(@types/node@25.0.10)(happy-dom@20.3.9)(tsx@4.21.0))
       axios:
         specifier: ^1.13.2
-        version: 1.13.2
+        version: 1.13.3
       cardinal:
         specifier: ^2.1.1
         version: 2.1.1
@@ -77,13 +77,13 @@ importers:
         version: 14.6.6
       happy-dom:
         specifier: ^20.3.4
-        version: 20.3.4
+        version: 20.3.9
       husky:
         specifier: ^9.1.7
         version: 9.1.7
       ky:
         specifier: ^1.14.2
-        version: 1.14.2
+        version: 1.14.3
       make-fetch-happen:
         specifier: ^15.0.3
         version: 15.0.3
@@ -122,7 +122,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@25.0.10)(happy-dom@20.3.4)(tsx@4.21.0)
+        version: 4.0.18(@types/node@25.0.10)(happy-dom@20.3.9)(tsx@4.21.0)
       wretch:
         specifier: ^3.0.6
         version: 3.0.6
@@ -641,8 +641,8 @@ packages:
   asynckit@0.4.0:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
 
-  axios@1.13.2:
-    resolution: {integrity: sha512-VPk9ebNqPcy5lRGuSlKx752IlDatOjT9paPlm8A7yOuW2Fbvp4X3JznJtT4f0GzGLLiWE9W8onz51SqLYwzGaA==}
+  axios@1.13.3:
+    resolution: {integrity: sha512-ERT8kdX7DZjtUm7IitEyV7InTHAF42iJuMArIiDIV5YtPanJkgw4hw5Dyg9fh0mihdWNn1GKaeIWErfe56UQ1g==}
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
@@ -999,8 +999,8 @@ packages:
     resolution: {integrity: sha512-QLV1qeYSo5l13mQzWgP/y0LbMr5Plr5fJilgAIwgnwseproEbtNym8xpLsDzeZ6MWXgNE6kdWGBjdh3zT/Qerg==}
     engines: {node: '>=20'}
 
-  happy-dom@20.3.4:
-    resolution: {integrity: sha512-rfbiwB6OKxZFIFQ7SRnCPB2WL9WhyXsFoTfecYgeCeFSOBxvkWLaXsdv5ehzJrfqwXQmDephAKWLRQoFoJwrew==}
+  happy-dom@20.3.9:
+    resolution: {integrity: sha512-OIoj0PcK2JaxQuANHxWkxFRSNXAuSgO1vCzCT66KItE0W/ieZLG+/iW8OetlxB+F9EaPB7DoFYKAubFG1f4Mvw==}
     engines: {node: '>=20.0.0'}
 
   has-flag@4.0.0:
@@ -1121,8 +1121,8 @@ packages:
   keyv@5.6.0:
     resolution: {integrity: sha512-CYDD3SOtsHtyXeEORYRx2qBtpDJFjRTGXUtmNEMGyzYOKj1TE3tycdlho7kA1Ufx9OYWZzg52QFBGALTirzDSw==}
 
-  ky@1.14.2:
-    resolution: {integrity: sha512-q3RBbsO5A5zrPhB6CaCS8ZUv+NWCXv6JJT4Em0i264G9W0fdPB8YRfnnEi7Dm7X7omAkBIPojzYJ2D1oHTHqug==}
+  ky@1.14.3:
+    resolution: {integrity: sha512-9zy9lkjac+TR1c2tG+mkNSVlyOpInnWdSMiue4F+kq8TwJSgv6o8jhLRg8Ho6SnZ9wOYUq/yozts9qQCfk7bIw==}
     engines: {node: '>=18'}
 
   lodash.defaults@4.2.0:
@@ -1681,8 +1681,8 @@ packages:
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
-  undici@7.19.0:
-    resolution: {integrity: sha512-Heho1hJD81YChi+uS2RkSjcVO+EQLmLSyUlHyp7Y/wFbxQaGb4WXVKD073JytrjXJVkSZVzoE2MCSOKugFGtOQ==}
+  undici@7.19.1:
+    resolution: {integrity: sha512-Gpq0iNm5M6cQWlyHQv9MV+uOj1jWk7LpkoE5vSp/7zjb4zMdAcUD+VL5y0nH4p9EbUklq00eVIIX/XcDHzu5xg==}
     engines: {node: '>=20.18.1'}
 
   unique-filename@5.0.0:
@@ -2131,7 +2131,7 @@ snapshots:
     dependencies:
       '@types/node': 25.0.10
 
-  '@vitest/coverage-v8@4.0.18(vitest@4.0.18(@types/node@25.0.10)(happy-dom@20.3.4)(tsx@4.21.0))':
+  '@vitest/coverage-v8@4.0.18(vitest@4.0.18(@types/node@25.0.10)(happy-dom@20.3.9)(tsx@4.21.0))':
     dependencies:
       '@bcoe/v8-coverage': 1.0.2
       '@vitest/utils': 4.0.18
@@ -2143,7 +2143,7 @@ snapshots:
       obug: 2.1.1
       std-env: 3.10.0
       tinyrainbow: 3.0.3
-      vitest: 4.0.18(@types/node@25.0.10)(happy-dom@20.3.4)(tsx@4.21.0)
+      vitest: 4.0.18(@types/node@25.0.10)(happy-dom@20.3.9)(tsx@4.21.0)
 
   '@vitest/expect@4.0.18':
     dependencies:
@@ -2231,7 +2231,7 @@ snapshots:
 
   asynckit@0.4.0: {}
 
-  axios@1.13.2:
+  axios@1.13.3:
     dependencies:
       follow-redirects: 1.15.11
       form-data: 4.0.5
@@ -2639,7 +2639,7 @@ snapshots:
       responselike: 4.0.2
       type-fest: 4.41.0
 
-  happy-dom@20.3.4:
+  happy-dom@20.3.9:
     dependencies:
       '@types/node': 25.0.10
       '@types/whatwg-mimetype': 3.0.2
@@ -2755,7 +2755,7 @@ snapshots:
     dependencies:
       '@keyv/serialize': 1.1.1
 
-  ky@1.14.2: {}
+  ky@1.14.3: {}
 
   lodash.defaults@4.2.0: {}
 
@@ -3316,7 +3316,7 @@ snapshots:
 
   undici-types@7.16.0: {}
 
-  undici@7.19.0: {}
+  undici@7.19.1: {}
 
   unique-filename@5.0.0:
     dependencies:
@@ -3359,7 +3359,7 @@ snapshots:
       fsevents: 2.3.3
       tsx: 4.21.0
 
-  vitest@4.0.18(@types/node@25.0.10)(happy-dom@20.3.4)(tsx@4.21.0):
+  vitest@4.0.18(@types/node@25.0.10)(happy-dom@20.3.9)(tsx@4.21.0):
     dependencies:
       '@vitest/expect': 4.0.18
       '@vitest/mocker': 4.0.18(vite@7.3.1(@types/node@25.0.10)(tsx@4.21.0))
@@ -3383,7 +3383,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 25.0.10
-      happy-dom: 20.3.4
+      happy-dom: 20.3.9
     transitivePeerDependencies:
       - jiti
       - less
