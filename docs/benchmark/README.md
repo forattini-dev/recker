@@ -90,7 +90,7 @@ Comprehensive API workflow simulation with realistic patterns.
 - Mixed workload (realistic SPA session)
 - Large response handling (~500KB JSON)
 
-**Expected results:** Recker should beat axios, got, and ky in all scenarios.
+**Expected results:** Recker should outperform axios, got, and ky in the modeled API workflow paths.
 
 ### 8. Averaged Runner (`averaged-runner.ts`)
 Multi-iteration benchmark runner for statistical reliability.

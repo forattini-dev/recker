@@ -610,6 +610,73 @@ Allow: /
       expect(result.sitemap).toBeDefined();
     }, 15000);
 
+    it('should normalize sitemap URLs and link URLs before orphan comparison', async () => {
+      server.get('/sitemap-normalize-home', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+        body: `
+          <html>
+          <head><title>Normalize Home</title></head>
+          <body>
+            <a href="/sitemap-normalize-about?utm_source=campaign">About</a>
+            <a href="/sitemap-normalize-unlinked?utm_source=internal">Missing</a>
+          </body>
+          </html>
+        `,
+      });
+
+      server.get('/sitemap-normalize-about', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+        body: `
+          <html>
+          <head><title>Normalize About</title></head>
+          <body>
+            <a href="/sitemap-normalize-home">Home</a>
+          </body>
+          </html>
+        `,
+      });
+
+      server.get('/sitemap-normalize-unlinked', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+        body: '<html><head><title>Unlinked</title></head><body><a href="/sitemap-normalize-home">Home</a></body></html>',
+      });
+
+      server.get('/sitemap-normalize-orphan', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+        body: '<html><head><title>Orphan</title></head><body><a href="/sitemap-normalize-home">Home</a></body></html>',
+      });
+
+      server.get('/sitemap-normalize.xml', {
+        status: 200,
+        headers: { 'content-type': 'application/xml' },
+        body: `<?xml version="1.0" encoding="UTF-8"?>
+          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+            <url><loc>${baseUrl}/sitemap-normalize-home/</loc></url>
+            <url><loc>${baseUrl}/sitemap-normalize-about?utm_source=sitemap#top</loc></url>
+            <url><loc>${baseUrl}/sitemap-normalize-orphan?utm_source=ignored</loc></url>
+          </urlset>
+        `,
+      });
+
+      const result = await spider(`${baseUrl}/sitemap-normalize-home`, {
+        maxPages: 20,
+        useSitemap: true,
+        sitemapUrl: `${baseUrl}/sitemap-normalize.xml`,
+        respectRobotsTxt: false,
+      });
+
+      expect(result.sitemap?.found).toBe(true);
+      expect(result.sitemap?.totalUrls).toBe(3);
+      expect(result.sitemap?.crawledFromSitemap).toBe(3);
+      expect(result.sitemap?.orphanUrls).toContain(`${baseUrl}/sitemap-normalize-orphan`);
+      expect(result.sitemap?.orphanUrls).not.toContain(`${baseUrl}/sitemap-normalize-orphan?utm_source=ignored`);
+      expect(result.sitemap?.missingFromSitemap).toContain(`${baseUrl}/sitemap-normalize-unlinked`);
+    }, 15000);
+
     it('should include sitemap analysis in result', async () => {
       server.get('/sitemap.xml', {
         status: 200,

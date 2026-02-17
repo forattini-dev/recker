@@ -52,6 +52,7 @@ export * from './plugins/auth.js';
 export * from './plugins/proxy-rotator.js';
 export * from './plugins/interface-rotator.js';
 export * from './plugins/hls.js';
+export * from './search/index.js';
 export * from './plugins/jsonrpc.js';
 export * from './plugins/grpc-web.js';
 export * from './plugins/soap.js';
@@ -115,6 +116,7 @@ export {
   video,
   isVideoSupported,
   extractVideo,
+  searchGoogle,
   recker,
 } from './recker.js';
 

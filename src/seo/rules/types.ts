@@ -4,6 +4,7 @@
 
 import type { SeoStatus } from '../types.js';
 import type { ExtractedLink } from '../../scrape/types.js';
+import type { SeoPageType } from '../types.js';
 
 export type RuleSeverity = 'error' | 'warning' | 'info';
 
@@ -30,6 +31,7 @@ export type RuleCategory =
   | 'canonicalization';
 
 export interface RuleContext {
+  pageType?: SeoPageType;
   // Keywords
   keywordsInTitle?: boolean;
   keywordsInDescription?: boolean;

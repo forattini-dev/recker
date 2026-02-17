@@ -12,15 +12,12 @@ import { ScrapeDocument } from './document.js';
 import { RequestPool } from '../utils/request-pool.js';
 import type { ExtractedLink, ExtractionSchema } from './types.js';
 import {
-  parseSitemap,
   discoverSitemaps,
   fetchAndValidateSitemap,
   type SitemapUrl,
-  type SitemapParseResult,
   type SitemapValidationResult,
 } from '../seo/validators/sitemap.js';
 import {
-  parseRobotsTxt,
   fetchAndValidateRobotsTxt,
   isPathAllowed,
   type RobotsParseResult,
@@ -301,13 +298,6 @@ function shouldCrawl(
 }
 
 /**
- * Sleep for specified milliseconds
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
  * Spider class for crawling websites
  */
 /**
@@ -371,6 +361,14 @@ export class Spider {
   private robotsData: RobotsParseResult | null = null;
   private sitemapValidation: SitemapValidationResult | null = null;
   private robotsValidation: { found: boolean; issues: Array<{ type: string; message: string }> } | null = null;
+
+  private toHeaderRecord(headers: Headers): Record<string, string> {
+    const headerRecord: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      headerRecord[key] = value;
+    });
+    return headerRecord;
+  }
 
   constructor(options: SpiderOptions = {}) {
     // Parse extract option - convert simple selectors to schema
@@ -483,7 +481,7 @@ export class Spider {
     const pending = new Map<string, Promise<void>>();
 
     // Helper to schedule a URL for crawling
-    const scheduleUrl = (item: QueueItem, fromSitemap = false): void => {
+    const scheduleUrl = (item: QueueItem): void => {
       const normalized = normalizeUrl(item.url);
 
       // Skip if already visited or pending
@@ -533,7 +531,7 @@ export class Spider {
         try {
           const urlHost = new URL(sitemapUrl.loc).hostname;
           if (urlHost === this.baseHost) {
-            scheduleUrl({ url: sitemapUrl.loc, depth: 1 }, true);
+            scheduleUrl({ url: sitemapUrl.loc, depth: 1 });
           }
         } catch {
           // Invalid URL, skip
@@ -627,7 +625,7 @@ export class Spider {
       return {
         status: response.status,
         text: await response.text(),
-        headers: Object.fromEntries([...response.headers.entries()]),
+        headers: this.toHeaderRecord(response.headers),
       };
     };
 
@@ -690,15 +688,33 @@ export class Spider {
    */
   private buildSitemapAnalysis(): SitemapAnalysis {
     const crawledUrls = new Set(this.results.map(r => normalizeUrl(r.url)));
+    const sitemapUrlSet = this.sitemapUrlSet.size > 0
+      ? this.sitemapUrlSet
+      : new Set(this.sitemapUrls.map((u) => normalizeUrl(u.loc)));
 
     // URLs in sitemap that were crawled
-    const crawledFromSitemap = this.sitemapUrls.filter(u =>
-      crawledUrls.has(normalizeUrl(u.loc))
-    ).length;
+    const crawledFromSitemap = Array.from(sitemapUrlSet)
+      .filter(url => crawledUrls.has(url))
+      .length;
 
     // URLs in sitemap but NOT discovered via links (orphans)
     // These are URLs only reachable via sitemap, not linked from any page
     const linkedUrls = new Set<string>();
+    const blockedBySitemapRobotsSet = new Set<string>();
+    if (this.robotsData) {
+      for (const sitemapUrl of this.sitemapUrls) {
+        try {
+          const normalized = normalizeUrl(sitemapUrl.loc);
+          const urlPath = new URL(sitemapUrl.loc).pathname;
+          if (!isPathAllowed(this.robotsData, urlPath, this.options.userAgent)) {
+            blockedBySitemapRobotsSet.add(normalized);
+          }
+        } catch {
+          // Invalid URL
+        }
+      }
+    }
+
     for (const page of this.results) {
       for (const link of page.links) {
         if (link.href) {
@@ -707,37 +723,27 @@ export class Spider {
       }
     }
 
-    const orphanUrls = this.sitemapUrls
-      .filter(u => {
-        const normalized = normalizeUrl(u.loc);
-        // URL is in sitemap but not linked from any crawled page
-        return !linkedUrls.has(normalized) && crawledUrls.has(normalized);
-      })
-      .map(u => u.loc);
+    const orphanUrlSet = new Set<string>();
+    for (const u of this.sitemapUrls) {
+      const normalized = normalizeUrl(u.loc);
+      // URL is in sitemap but not linked from any crawled page
+      if (!linkedUrls.has(normalized) && !blockedBySitemapRobotsSet.has(normalized)) {
+        orphanUrlSet.add(normalized);
+      }
+    }
+    const orphanUrls = Array.from(orphanUrlSet);
 
     // URLs discovered but NOT in sitemap
     const missingFromSitemap = Array.from(crawledUrls)
-      .filter(url => !this.sitemapUrlSet.has(url));
+      .filter(url => !sitemapUrlSet.has(url));
 
     // URLs in sitemap blocked by robots.txt
-    const blockedBySitemapRobots: string[] = [];
-    if (this.robotsData) {
-      for (const sitemapUrl of this.sitemapUrls) {
-        try {
-          const urlPath = new URL(sitemapUrl.loc).pathname;
-          if (!isPathAllowed(this.robotsData, urlPath, this.options.userAgent)) {
-            blockedBySitemapRobots.push(sitemapUrl.loc);
-          }
-        } catch {
-          // Invalid URL
-        }
-      }
-    }
+    const blockedBySitemapRobots = Array.from(blockedBySitemapRobotsSet);
 
     return {
       found: this.sitemapUrls.length > 0,
-      url: this.sitemapValidation?.parseResult ? undefined : undefined,
-      totalUrls: this.sitemapUrls.length,
+      url: this.sitemapUrls[0]?.loc,
+      totalUrls: sitemapUrlSet.size,
       crawledFromSitemap,
       orphanUrls,
       missingFromSitemap,

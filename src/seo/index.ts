@@ -68,6 +68,7 @@ export type {
   SeoReport,
   SeoCheckResult,
   SeoStatus,
+  SeoPageType,
   SeoTiming,
   HeadingAnalysis,
   HeadingInfo,

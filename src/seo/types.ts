@@ -3,6 +3,7 @@ import { KeywordCloud } from './keywords.js';
 export type { KeywordCloud, KeywordItem } from './keywords.js';
 
 export type SeoStatus = 'pass' | 'warn' | 'fail' | 'info';
+export type SeoPageType = 'homepage' | 'product' | 'article' | 'category' | 'search' | 'other';
 
 export interface SeoCheckEvidence {
   found?: string | number | string[];
@@ -19,6 +20,7 @@ export interface SeoCheckResult {
   name: string;
   category: string;
   status: SeoStatus;
+  severity?: 'error' | 'warning' | 'info';
   message: string;
   value?: string | number;
   recommendation?: string;
@@ -134,6 +136,8 @@ export interface SeoTiming {
  * Summary statistics for the SEO report
  */
 export interface SeoSummary {
+  /** Inferred page type (for context in CI dashboards) */
+  pageType?: SeoPageType;
   /** Total rules evaluated */
   totalChecks: number;
 
@@ -198,6 +202,7 @@ export interface SeoReport {
   timestamp: Date;
   grade: string;
   score: number;
+  pageType?: SeoPageType;
 
   /** High-level summary with big numbers */
   summary: SeoSummary;
@@ -309,4 +314,3 @@ export interface ExtractedImage {
   /** Loading strategy */
   loading?: 'lazy' | 'eager';
 }
-

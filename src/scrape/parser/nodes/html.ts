@@ -160,6 +160,7 @@ class DOMTokenList {
 export default class HTMLElement extends Node {
   private _attrs?: Attributes;
   private _rawAttrs?: RawAttributes;
+  private _queryCache?: Map<string, QueryCacheEntry>;
   private _parseOptions: Partial<Options>;
   public rawTagName: string; // there is not friend funciton in es
   public id: string;
@@ -169,6 +170,29 @@ export default class HTMLElement extends Node {
    * Node Type declaration.
    */
   public nodeType = NodeType.ELEMENT_NODE;
+
+  private get isSelectorCacheEnabled(): boolean {
+    return this._parseOptions?.selectorCache !== false;
+  }
+
+  private getQueryCache(): Map<string, QueryCacheEntry> {
+    if (!this._queryCache) {
+      this._queryCache = new Map();
+    }
+    return this._queryCache;
+  }
+
+  private clearQueryCache() {
+    this._queryCache = undefined;
+  }
+
+  public invalidateSelectorCacheRecursively(): void {
+    let current: HTMLElement | null = this;
+    while (current) {
+      current.clearQueryCache();
+      current = current.parentNode;
+    }
+  }
 
   /**
    * Quote attribute values
@@ -239,6 +263,7 @@ export default class HTMLElement extends Node {
     this.childNodes = this.childNodes.filter((child) => {
       return child !== node;
     });
+    this.invalidateSelectorCacheRecursively();
     return this;
   }
   /**
@@ -254,6 +279,7 @@ export default class HTMLElement extends Node {
       }
       return child;
     });
+    this.invalidateSelectorCacheRecursively();
     return this;
   }
   public get tagName() {
@@ -289,6 +315,7 @@ export default class HTMLElement extends Node {
   public set textContent(val: string) {
     const content = [new TextNode(val, this as any)];
     this.childNodes = content;
+    this.invalidateSelectorCacheRecursively();
   }
   /**
    * Get unescaped text value of current node and its children.
@@ -368,6 +395,7 @@ export default class HTMLElement extends Node {
     resetParent(nodes, this);
     resetParent(this.childNodes, null);
     this.childNodes = nodes;
+    this.invalidateSelectorCacheRecursively();
   }
 
   public set_content(
@@ -386,6 +414,7 @@ export default class HTMLElement extends Node {
     resetParent(this.childNodes, null);
     resetParent(content, this);
     this.childNodes = content;
+    this.invalidateSelectorCacheRecursively();
     return this;
   }
 
@@ -414,6 +443,7 @@ export default class HTMLElement extends Node {
       ...resetParent(content, parent),
       ...parent.childNodes.slice(idx + 1),
     ];
+    parent.invalidateSelectorCacheRecursively();
     return this;
   }
 
@@ -433,13 +463,14 @@ export default class HTMLElement extends Node {
         (childNode as HTMLElement).trimRight(pattern);
       } else {
         const index = childNode.rawText.search(pattern);
-        if (index > -1) {
+      if (index > -1) {
           childNode.rawText = childNode.rawText.substr(0, index);
           // trim all following nodes.
           this.childNodes.length = i + 1;
         }
       }
     }
+    this.invalidateSelectorCacheRecursively();
     return this;
   }
   /**
@@ -492,6 +523,7 @@ export default class HTMLElement extends Node {
       this.childNodes[o++] = node;
     });
     this.childNodes.length = o;
+    this.invalidateSelectorCacheRecursively();
 
     // remove whitespace between attributes
     const attrs = Object.keys(this.rawAttributes)
@@ -511,10 +543,28 @@ export default class HTMLElement extends Node {
    * @return {HTMLElement[]}  matching elements
    */
   public querySelectorAll(selector: string): HTMLElement[] {
-    return selectAll(selector, this as HTMLElement, {
-      xmlMode: false,  // HTML mode = case-insensitive tag/attribute names
+    if (this.isSelectorCacheEnabled) {
+      const cached = this.getQueryCache().get(selector);
+      if (cached?.all) {
+        return cached.all.slice();
+      }
+    }
+
+    const nodes = selectAll(selector, this as HTMLElement, {
+      xmlMode: false, // HTML mode = case-insensitive tag/attribute names
       adapter: Matcher,
     });
+
+    if (this.isSelectorCacheEnabled) {
+      const cacheEntry = this.getQueryCache().get(selector) || {};
+      cacheEntry.all = nodes;
+      if (cacheEntry.first === undefined) {
+        cacheEntry.first = nodes[0] || null;
+      }
+      this.getQueryCache().set(selector, cacheEntry);
+    }
+
+    return nodes;
   }
 
   /**
@@ -523,10 +573,31 @@ export default class HTMLElement extends Node {
    * @return {(HTMLElement|null)}    matching node
    */
   public querySelector(selector: string): HTMLElement | null {
-    return selectOne(selector, this as HTMLElement, {
-      xmlMode: false,  // HTML mode = case-insensitive tag/attribute names
+    if (this.isSelectorCacheEnabled) {
+      const cached = this.getQueryCache().get(selector);
+      if (cached?.first !== undefined) {
+        return cached.first || null;
+      }
+      if (cached?.all) {
+        const first = cached.all[0] || null;
+        cached.first = first;
+        this.getQueryCache().set(selector, cached);
+        return first;
+      }
+    }
+
+    const result = selectOne(selector, this as HTMLElement, {
+      xmlMode: false, // HTML mode = case-insensitive tag/attribute names
       adapter: Matcher,
     });
+
+    if (this.isSelectorCacheEnabled) {
+      const cacheEntry = this.getQueryCache().get(selector) || {};
+      cacheEntry.first = result;
+      this.getQueryCache().set(selector, cacheEntry);
+    }
+
+    return result;
   }
 
   /**
@@ -632,27 +703,9 @@ export default class HTMLElement extends Node {
    * @returns {HTMLElement | null} the element with the given id or null if not found
    */
   public closest(selector: string): HTMLElement | null {
-    type Predicate = (node: Node) => node is HTMLElement;
-
     const mapChild = new Map<Node, Node>();
     let el = this as Node | null;
     let old = null as Node | null;
-    function findOne(test: Predicate, elems: Node[]) {
-      let elem = null as HTMLElement | null;
-
-      for (let i = 0, l = elems.length; i < l && !elem; i++) {
-        const el = elems[i];
-        if (test(el)) {
-          elem = el;
-        } else {
-          const child = mapChild.get(el);
-          if (child) {
-            elem = findOne(test, [child]);
-          }
-        }
-      }
-      return elem;
-    }
     while (el) {
       if (old) mapChild.set(el, old);
       old = el;
@@ -763,6 +816,7 @@ export default class HTMLElement extends Node {
     if (key === 'id') {
       this.id = '';
     }
+    this.invalidateSelectorCacheRecursively();
     return this;
   }
 
@@ -812,6 +866,7 @@ export default class HTMLElement extends Node {
     if (key === 'id') {
       this.id = value;
     }
+    this.invalidateSelectorCacheRecursively();
     return this;
   }
 
@@ -836,6 +891,7 @@ export default class HTMLElement extends Node {
         return `${name}=${this.quoteAttribute(String(val))}`;
       })
       .join(' ');
+    this.invalidateSelectorCacheRecursively();
     return this;
   }
 
@@ -865,12 +921,14 @@ export default class HTMLElement extends Node {
     const nodes = resolveInsertable(insertable, this._parseOptions);
     resetParent(nodes, this);
     this.childNodes.unshift(...nodes);
+    this.invalidateSelectorCacheRecursively();
   }
   /** Append nodes or strings to this node's children. Strings containing HTML will be parsed. */
   public append(...insertable: NodeInsertable[]) {
     const nodes = resolveInsertable(insertable, this._parseOptions);
     resetParent(nodes, this);
     this.childNodes.push(...nodes);
+    this.invalidateSelectorCacheRecursively();
   }
   /** Insert nodes or strings before this node. Strings containing HTML will be parsed. */
   public before(...insertable: NodeInsertable[]) {
@@ -879,6 +937,7 @@ export default class HTMLElement extends Node {
     const siblings = this.parentNode.childNodes;
     resetParent(nodes, this.parentNode as HTMLElement);
     siblings.splice(siblings.indexOf(this), 0, ...nodes);
+    this.parentNode.invalidateSelectorCacheRecursively();
   }
   /** Insert nodes or strings after this node. Strings containing HTML will be parsed. */
   public after(...insertable: NodeInsertable[]) {
@@ -887,6 +946,7 @@ export default class HTMLElement extends Node {
     const siblings = this.parentNode.childNodes;
     resetParent(nodes, this.parentNode as HTMLElement);
     siblings.splice(siblings.indexOf(this) + 1, 0, ...nodes);
+    this.parentNode.invalidateSelectorCacheRecursively();
   }
 
   public get nextSibling(): Node | null {
@@ -1054,6 +1114,11 @@ const kElementsClosedByClosing = {
   TH: { tr: true, table: true, TR: true, TABLE: true },
 } as Record<string, Record<string, boolean>>;
 
+type QueryCacheEntry = {
+  all?: HTMLElement[];
+  first?: HTMLElement | null;
+};
+
 export interface Options {
   lowerCaseTagName?: boolean;
   comment?: boolean;
@@ -1075,6 +1140,11 @@ export interface Options {
      */
     closingSlash?: boolean;
   };
+  /**
+   * Enable selector cache for parsed nodes.
+   * @default true
+   */
+  selectorCache?: boolean;
 }
 
 const frameflag = 'documentfragmentcontainer';

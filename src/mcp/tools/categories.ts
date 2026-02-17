@@ -157,7 +157,6 @@ export const toolCategories: Record<string, ToolCategory> = {
 
   // AI
   rek_ai_chat: 'ai',
-  rek_ai_embed: 'ai',
   rek_ai_providers: 'ai',
   rek_ai_tokens: 'ai',
   rek_ai_compare: 'ai',

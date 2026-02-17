@@ -1,12 +1,16 @@
-import { ClientOptions, Middleware, NextFunction, ReckerRequest, ReckerResponse, RequestOptions, Transport, CacheStorage, CacheEntry, Hooks, PaginationConfig, HTTP2Options, PageResult, CookieJar, CookieOptions, Logger, consoleLogger } from '../types/index.js';
+import { ClientOptions, Middleware, ReckerRequest, ReckerResponse, RequestOptions, Transport, CacheStorage, CacheEntry, Hooks, PaginationConfig, PageResult, CookieJar, CookieOptions, Logger, consoleLogger } from '../types/index.js';
+import type { Plugin } from '../types/index.js';
 import type { ClientAI, PresetAIConfig, ClientOptionsWithAI } from '../types/ai-client.js';
 import { ClientAIImpl } from '../ai/client-ai.js';
 import { HttpRequest } from './request.js';
 import { RequestPromise } from './request-promise.js';
 import { HttpError, MaxSizeExceededError, ConfigurationError, ValidationError, TimeoutError, UnsupportedError } from '../core/errors.js';
-import { processBody, createFormData, createMultipart, isPlainObject } from '../utils/body.js';
+import { processBody, createFormData, isPlainObject } from '../utils/body.js';
 import type { AgentManager } from '../utils/agent-manager.js';
 import { RequestPool } from '../utils/request-pool.js';
+import { createRequestContext, attachRequestContext, getRequestContext } from '../core-runtime/request-context.js';
+import { createNoopEventBus, type RuntimeEventName, type RuntimeEventPayloads, type TypedEventBus } from '../core-runtime/typed-events.js';
+import { attachPluginManifest, getPluginManifest, normalizePlugins, toSortedPlugins } from '../core-runtime/plugin-manifest.js';
 import { normalizeConcurrency, expandHTTP2Options, type NormalizedConcurrencyConfig } from '../utils/concurrency.js';
 import { getGlobalProtocolCache } from '../utils/protocol-cache.js';
 import { getDefaultUserAgent } from '../utils/user-agent.js';
@@ -18,7 +22,7 @@ import { paginate, PaginationOptions, streamPages } from '../plugins/pagination.
 import { retryPlugin, RetryOptions } from '../plugins/retry.js';
 import { cachePlugin, CacheOptions } from '../plugins/cache.js';
 import { dedupPlugin, DedupOptions } from '../plugins/dedup.js';
-import { createXSRFMiddleware, XSRFPluginOptions } from '../plugins/xsrf.js';
+import { createXSRFMiddleware } from '../plugins/xsrf.js';
 import { createCompressionMiddleware } from '../plugins/compression.js';
 import { serializeXML } from '../plugins/xml.js';
 import { serializeYaml } from '../plugins/yaml.js';
@@ -29,7 +33,6 @@ import { ReckerWebSocket, type WebSocketOptions } from '../websocket/client.js';
 import { whois as performWhois, isDomainAvailable, type WhoisOptions, type WhoisResult } from '../utils/whois.js';
 import { MemoryCookieJar } from '../cookies/memory-cookie-jar.js';
 import { scrape as scrapeHelper, type ScrapePromise } from '../plugins/scrape.js';
-import type { ScrapeOptions, ExtractedLink, ExtractedImage, ExtractedMeta, OpenGraphData, TwitterCardData, JsonLdData, ExtractedForm, ExtractedTable, ExtractedScript, ExtractedStyle, ExtractionSchema, LinkExtractionOptions, ImageExtractionOptions } from '../scrape/types.js';
 import type { HlsPromise, HlsOptions } from '../plugins/hls.js';
 
 // Extended Cache Config for Client
@@ -37,6 +40,13 @@ interface ClientCacheConfig extends Omit<CacheOptions, 'storage'> {
   storage?: CacheStorage;
   driver?: 'memory' | 'file';
   fileStoragePath?: string; // For file driver
+}
+
+interface BatchRequestOptions<T = ReckerResponse> {
+  concurrency?: number;
+  mapResponse?: (res: ReckerResponse) => Promise<T> | T;
+  signal?: AbortSignal;
+  deadlineMs?: number;
 }
 
 // Merge into ClientOptions (augmenting the interface from types)
@@ -280,6 +290,10 @@ export class Client {
   private concurrencyConfig: NormalizedConcurrencyConfig;
   private requestPool?: RequestPool;
   private maxResponseSize?: number;
+  public readonly runtimeEventBus: TypedEventBus;
+  private shouldEmitRuntimeEvents: boolean;
+  private runtimeEventBusProviderAttached: boolean = false;
+  private runtimeEventListenerCount = 0;
   private cookieJar?: CookieJar;
   private cookieIgnoreInvalid: boolean = false;
   private defaultTimeout?: number | import('../types/index.js').TimeoutOptions;
@@ -315,6 +329,17 @@ export class Client {
     this.defaultParams = options.defaults?.params || {};
     this.paginationConfig = options.pagination;
     this.maxResponseSize = options.maxResponseSize;
+    const runtimeEventBus = options.runtimeEventBus;
+    if (runtimeEventBus) {
+      this.runtimeEventBus = {
+        on: (name, handler) => runtimeEventBus.on(name, handler as (event: unknown) => void),
+        emit: (name, event) => runtimeEventBus.emit(name as string, event),
+      };
+    } else {
+      this.runtimeEventBus = createNoopEventBus();
+    }
+    this.shouldEmitRuntimeEvents = runtimeEventBus !== undefined;
+    this.runtimeEventBusProviderAttached = runtimeEventBus !== undefined;
 
     // Debug mode - use provided logger or console as default
     this.debugEnabled = options.debug === true;
@@ -387,9 +412,34 @@ export class Client {
       this.transportKind = 'fetch';
     }
 
+    const registerPlugin = (plugin: Plugin, manifest: {
+      name?: string;
+      priority?: number;
+      scope?: 'request' | 'protocol' | 'transport' | 'runtime';
+      dependsOn?: string[];
+    } = {}) => {
+      const existingManifest = getPluginManifest(plugin);
+      pluginRegistrations.push(attachPluginManifest(
+        plugin,
+        {
+          ...existingManifest,
+          ...manifest
+        }
+      ));
+    };
+
+    const pluginRegistrations: Plugin[] = [];
+
     // 1. Auto-wire plugins based on config
     if (options.retry) {
-      retryPlugin(options.retry)(this);
+      registerPlugin(
+        retryPlugin(options.retry),
+        {
+          name: 'recker:retry',
+          priority: 120,
+          scope: 'request'
+        }
+      );
     }
 
     // ========================================
@@ -404,7 +454,17 @@ export class Client {
         requestsPerInterval: this.concurrencyConfig.requestsPerInterval,
         interval: this.concurrencyConfig.interval
       });
-      this.middlewares.unshift(this.requestPool.asMiddleware());
+
+      registerPlugin(
+        (client: any) => {
+          client.middlewares.unshift(this.requestPool!.asMiddleware());
+        },
+        {
+          name: 'recker:request-pool',
+          priority: 130,
+          scope: 'runtime'
+        }
+      );
 
       if (this.debugEnabled && this.logger) {
         this.logger.debug(`Global concurrency limit: ${this.concurrencyConfig.max} concurrent requests`);
@@ -416,7 +476,14 @@ export class Client {
     }
 
     if (options.dedup) {
-      dedupPlugin(options.dedup)(this);
+      registerPlugin(
+        dedupPlugin(options.dedup),
+        {
+          name: 'recker:dedup',
+          priority: 110,
+          scope: 'request'
+        }
+      );
     }
 
     if (options.cache) {
@@ -430,15 +497,38 @@ export class Client {
         storage = createDefaultCacheStorage();
       }
 
-      cachePlugin({
-        ...options.cache,
-        storage
-      })(this);
+      registerPlugin(
+        cachePlugin({
+          ...options.cache,
+          storage
+        }),
+        {
+          name: 'recker:cache',
+          priority: 100,
+          scope: 'request'
+        }
+      );
     }
 
-    // 2. Manual plugins
+    // 2. Manual plugins (explicit order preserved by registration index)
     if (options.plugins) {
-      options.plugins.forEach((plugin) => plugin(this));
+      options.plugins.forEach((plugin, index) => {
+        const existingManifest = getPluginManifest(plugin);
+        registerPlugin(plugin, {
+          name: existingManifest?.name || `user-plugin:${index}`,
+          priority: existingManifest?.priority ?? 90 - index,
+          scope: existingManifest?.scope || 'request'
+        });
+      });
+    }
+
+    const { ordered, debugOrder } = normalizePlugins(toSortedPlugins(pluginRegistrations));
+    ordered.forEach(({ plugin }) => {
+      plugin(this);
+    });
+
+    if (this.debugEnabled && this.logger) {
+      this.logger.debug(`Applied plugins in order: ${debugOrder.join(' | ')}`);
     }
 
     // 3. Compression (if enabled)
@@ -652,14 +742,49 @@ export class Client {
   }
 
   private async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
-    // Check per-request override for Curl
-    if (req.useCurl && this.transportKind !== 'curl') {
-      if (!this.curlTransport) {
-        this.curlTransport = createLazyCurlTransport();
-      }
-      return this.curlTransport.dispatch(req);
+    const context = getRequestContext(req);
+    const transportStart = context ? Date.now() : 0;
+
+    if (context) {
+      this.runtimeEventBus.emit('transport:start', { context, req });
     }
-    return this.transport.dispatch(req);
+
+    // Check per-request override for Curl
+    try {
+      if (req.useCurl && this.transportKind !== 'curl') {
+        if (!this.curlTransport) {
+          this.curlTransport = createLazyCurlTransport();
+        }
+        const response = await this.curlTransport.dispatch(req);
+        if (context) {
+          this.runtimeEventBus.emit('transport:finish', {
+            context,
+            req,
+            durationMs: Date.now() - transportStart
+          });
+        }
+        return response;
+      }
+
+      const response = await this.transport.dispatch(req);
+      if (context) {
+        this.runtimeEventBus.emit('transport:finish', {
+          context,
+          req,
+          durationMs: Date.now() - transportStart
+        });
+      }
+      return response;
+    } catch (error) {
+      if (context) {
+        this.runtimeEventBus.emit('transport:error', {
+          context,
+          req,
+          error: error instanceof Error ? error : new Error(String(error))
+        });
+      }
+      throw error;
+    }
   }
 
   private composeMiddlewares(): (req: ReckerRequest) => Promise<ReckerResponse> {
@@ -812,6 +937,24 @@ export class Client {
     return this;
   }
 
+  public onRuntimeEvent<K extends RuntimeEventName>(
+    name: K,
+    handler: (event: RuntimeEventPayloads[K]) => void
+  ): () => void {
+    this.shouldEmitRuntimeEvents = true;
+    this.runtimeEventListenerCount += 1;
+    const unsubscribe = this.runtimeEventBus.on(name, handler);
+    return () => {
+      unsubscribe();
+      if (this.runtimeEventListenerCount > 0) {
+        this.runtimeEventListenerCount -= 1;
+      }
+      if (!this.runtimeEventBusProviderAttached && this.runtimeEventListenerCount === 0) {
+        this.shouldEmitRuntimeEvents = false;
+      }
+    };
+  }
+
   // Removed per-request runMiddlewares iteration
   // private async runMiddlewares(req: ReckerRequest): Promise<ReckerResponse> { ... }
 
@@ -841,7 +984,7 @@ export class Client {
 
     // Only scan for path params if path contains ':'
     if (finalPath.includes(':')) {
-      finalPath = finalPath.replace(/:([a-zA-Z0-9_]+)/g, (match, paramName) => {
+      finalPath = finalPath.replace(/:([a-zA-Z0-9_]+)/g, (_match, paramName) => {
         if (mergedParams && paramName in mergedParams) {
           usedParams.add(paramName);
           return encodeURIComponent(String(mergedParams[paramName]));
@@ -889,6 +1032,24 @@ export class Client {
 
   request<T = unknown>(path: string, options: RequestOptions = {}): RequestPromise<T> {
     const url = this.buildUrl(path, options.params);
+    const canRequestMutateHeaders =
+      (this.hooks.beforeRequest?.length ?? 0) > 0 ||
+      this.middlewares.length > 0;
+    const shouldAttachContext =
+      this.shouldEmitRuntimeEvents ||
+      !!options.correlationId ||
+      !!options.tenant ||
+      !!options.traceId ||
+      !!options.policySource ||
+      (options.policyTags?.length ?? 0) > 0;
+
+    const createContextSeed = () => createRequestContext({
+      correlationId: options.correlationId,
+      tenant: options.tenant,
+      policyTags: options.policyTags,
+      policySource: options.policySource,
+      traceId: options.traceId
+    });
 
     // ========================================
     // FAST PATH: Skip all overhead for simple requests
@@ -902,15 +1063,47 @@ export class Client {
       options.maxResponseSize === undefined;
 
     if (usesFastPath) {
-      // Fast path: minimal object creation
-      const req = new HttpRequest(url, {
+      let req = new HttpRequest(url, {
         method: options.method || 'GET',
         body: options.body,
         headers: this.defaultHeadersObj, // Reuse pre-computed Headers object
         throwHttpErrors: options.throwHttpErrors,
       });
+      if (shouldAttachContext) {
+        req = attachRequestContext(req, createContextSeed());
+      }
 
-      const responsePromise = this.fastHandler(req) as Promise<ReckerResponse<T>>;
+      const requestContext = getRequestContext(req);
+      const startTime = Date.now();
+      if (requestContext) {
+        this.runtimeEventBus.emit('request:start', { context: requestContext, req });
+      }
+
+      let responsePromise = this.fastHandler(req) as Promise<ReckerResponse<T>>;
+      if (requestContext) {
+        responsePromise = responsePromise.then(
+          (response) => {
+            this.runtimeEventBus.emit('request:success', {
+              context: requestContext,
+              req,
+              res: response,
+              durationMs: Date.now() - startTime
+            });
+            return response;
+          },
+          (error) => {
+            const requestError = error instanceof Error ? error : new Error(String(error));
+            this.runtimeEventBus.emit('request:failed', {
+              context: requestContext,
+              req,
+              error: requestError,
+              durationMs: Date.now() - startTime
+            });
+            throw error;
+          }
+        );
+      }
+
       return new RequestPromise<T>(responsePromise);
     }
 
@@ -919,6 +1112,7 @@ export class Client {
     // ========================================
 
     // Optimized: Merge headers efficiently using pre-computed defaultHeadersObj
+    // Clone default headers when request middleware/hooks are used to avoid cross-request mutation.
     let mergedHeaders: Headers;
     if (options.headers) {
       // Clone defaultHeadersObj and merge with options.headers
@@ -927,8 +1121,11 @@ export class Client {
         ? options.headers
         : new Headers(options.headers);
       optHeaders.forEach((value, key) => mergedHeaders.set(key, value));
+    } else if (canRequestMutateHeaders) {
+      // Avoid sharing mutable header instances with plugin middleware that can mutate req.headers
+      mergedHeaders = new Headers(this.defaultHeadersObj);
     } else {
-      // Reuse pre-computed Headers object directly (no clone needed if not modified)
+      // Reuse pre-computed Headers object directly (no hooks/middleware mutating headers)
       mergedHeaders = this.defaultHeadersObj;
     }
 
@@ -970,14 +1167,46 @@ export class Client {
       }
     }
 
-    const req = new HttpRequest(url, {
+    let req = new HttpRequest(url, {
       ...options,
       headers: mergedHeaders,
       signal,
       maxResponseSize: options.maxResponseSize ?? this.maxResponseSize
     });
+    if (shouldAttachContext) {
+      req = attachRequestContext(req, createContextSeed());
+    }
 
-    const responsePromise = this.handler(req) as Promise<ReckerResponse<T>>;
+    const requestContext = getRequestContext(req);
+    const startTime = Date.now();
+    if (requestContext) {
+      this.runtimeEventBus.emit('request:start', { context: requestContext, req });
+    }
+
+    let responsePromise = this.handler(req) as Promise<ReckerResponse<T>>;
+    if (requestContext) {
+      responsePromise = responsePromise.then(
+        (response) => {
+          this.runtimeEventBus.emit('request:success', {
+            context: requestContext,
+            req,
+            res: response,
+            durationMs: Date.now() - startTime
+          });
+          return response;
+        },
+        (error) => {
+          const requestError = error instanceof Error ? error : new Error(String(error));
+          this.runtimeEventBus.emit('request:failed', {
+            context: requestContext,
+            req,
+            error: requestError,
+            durationMs: Date.now() - startTime
+          });
+          throw error;
+        }
+      );
+    }
 
     if (timeoutId || externalAbortCleanup) {
       // Cleanup handlers - use catch to prevent unhandled rejection
@@ -1065,7 +1294,7 @@ export class Client {
    */
   async batch<T = ReckerResponse>(
     requests: Array<{ path: string; options?: RequestOptions }>,
-    options: { concurrency?: number; mapResponse?: (res: ReckerResponse) => Promise<T> | T } = {}
+    options: BatchRequestOptions<T> = {}
   ): Promise<{ results: (T | Error)[]; stats: { total: number; successful: number; failed: number; duration: number } }> {
     const mapResponse = options.mapResponse ?? ((res: ReckerResponse) => res as unknown as T);
 
@@ -1085,6 +1314,9 @@ export class Client {
     const runnerResult = await runner.run(requests, async (item) => {
       const res = await this.request(item.path, item.options);
       return mapResponse(res);
+    }, {
+      signal: options.signal,
+      deadlineMs: options.deadlineMs
     });
 
     return runnerResult;
@@ -1096,7 +1328,7 @@ export class Client {
    */
   multi<T = ReckerResponse>(
     requests: Array<{ path: string; options?: RequestOptions }>,
-    options: { concurrency?: number; mapResponse?: (res: ReckerResponse) => Promise<T> | T } = {}
+    options: BatchRequestOptions<T> = {}
   ) {
     return this.batch<T>(requests, options);
   }
@@ -1428,11 +1660,6 @@ export class Client {
    */
   page<T = any>(path: string, pageNumber: number, options: RequestOptions & { pageParam?: string } = {}): RequestPromise<T> {
       const pageParam = options.pageParam || this.paginationConfig?.pageParam || 'page';
-      const url = new URL(path.startsWith('http') ? path : `http://base${path}`);
-      
-      // Handle relative path reconstruction correctly if needed, but simple approach:
-      // We inject the param into the options.params or the url string.
-      // Let's use options.params merging.
       
       const params = { ...options.params, [pageParam]: pageNumber };
       

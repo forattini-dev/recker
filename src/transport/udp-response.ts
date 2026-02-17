@@ -5,7 +5,7 @@
  * and async iteration for streaming UDP.
  */
 
-import type { ReckerResponse, SSEEvent, ProgressEvent } from '../types/index.js';
+import type { SSEEvent, ProgressEvent } from '../types/index.js';
 import type { UDPTimings, UDPConnection, UDPResponse } from '../types/udp.js';
 import { UnsupportedError, StreamError } from '../core/errors.js';
 

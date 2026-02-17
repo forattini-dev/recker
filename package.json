@@ -127,6 +127,14 @@
       "types": "./dist/plugins/*.d.ts",
       "import": "./dist/plugins/*.js"
     },
+    "./search": {
+      "types": "./dist/search/index.d.ts",
+      "import": "./dist/search/index.js"
+    },
+    "./search/*": {
+      "types": "./dist/search/*.d.ts",
+      "import": "./dist/search/*.js"
+    },
     "./scrape": {
       "types": "./dist/scrape/index.d.ts",
       "import": "./dist/scrape/index.js"

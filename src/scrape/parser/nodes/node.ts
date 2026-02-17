@@ -28,6 +28,9 @@ export default abstract class Node {
    */
   public remove() {
     if (this.parentNode) {
+      if (typeof this.parentNode.invalidateSelectorCacheRecursively === 'function') {
+        this.parentNode.invalidateSelectorCacheRecursively();
+      }
       const children = this.parentNode.childNodes;
       this.parentNode.childNodes = children.filter((child) => {
         return this !== child;
@@ -35,6 +38,10 @@ export default abstract class Node {
       this.parentNode = null;
     }
     return this;
+  }
+
+  public invalidateSelectorCacheRecursively(): void {
+    // Default no-op for non-HTMLElement nodes.
   }
   public get innerText() {
     return this.rawText;

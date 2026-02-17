@@ -1,6 +1,7 @@
 import { RekCommand as Command } from '../router.js';
 import colors from '../../utils/colors.js';
 import { LEGACY_TOOL_GROUPS } from '../../mcp/legacy-tool-groups.js';
+import { DEFAULT_CATEGORY } from '../../mcp/profiles.js';
 
 export function registerMcpCommand(program: Command) {
   const mcpCmd = program
@@ -32,7 +33,7 @@ export function registerMcpCommand(program: Command) {
     .option('category', {
       type: 'string',
       short: 'c',
-      description: 'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, video, ai, protocols, parsing, streaming, full',
+      description: 'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, video, ai, protocols, parsing, streaming, template, full',
     })
     .option('list-categories', {
       type: 'boolean',
@@ -126,6 +127,8 @@ export function registerMcpCommand(program: Command) {
       }
 
       // Validate category names if provided
+      const useExplicitCategory = Boolean(options.category);
+
       if (options.category) {
         const categoryNames = options.category.split(',').map((p: string) => p.trim());
         const validation = validateCategories(categoryNames);
@@ -196,8 +199,8 @@ export function registerMcpCommand(program: Command) {
         docsPath: options.docsPath,
         examplesPath: options.examplesPath,
         srcPath: options.srcPath,
-        category: options.category, // Category takes precedence
-        toolsFilter: !options.category && toolsFilter.length > 0 ? toolsFilter : undefined,
+        category: useExplicitCategory ? options.category : (!options.only && !options.filter ? DEFAULT_CATEGORY : undefined),
+        toolsFilter: !(useExplicitCategory || (!options.only && !options.filter)) && toolsFilter.length > 0 ? toolsFilter : undefined,
       });
 
       // Log startup info (not in stdio mode to avoid polluting the protocol)

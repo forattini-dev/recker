@@ -15,7 +15,6 @@
  * - wretch
  * - make-fetch-happen (npm ecosystem)
  * - minipass-fetch
- * - popsicle
  * - wreck (Hapi)
  */
 

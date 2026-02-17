@@ -33,6 +33,7 @@ export type CategoryName =
   | 'protocols'
   | 'parsing'
   | 'streaming'
+  | 'template'
   | 'full';
 
 /**
@@ -218,11 +219,10 @@ export const categories: Record<CategoryName, Category> = {
    */
   ai: {
     name: 'ai',
-    description: 'Multi-provider AI chat, embeddings, and comparison',
+    description: 'Multi-provider AI chat and comparison',
     icon: '🤖',
     tools: [
       'rek_ai_chat',
-      'rek_ai_embed',
       'rek_ai_providers',
       'rek_ai_tokens',
       'rek_ai_compare', // Compare responses across providers
@@ -290,17 +290,50 @@ export const categories: Record<CategoryName, Category> = {
   },
 
   /**
-   * Full category - All available tools
-   * Warning: High context cost (~18K tokens with all categories)
+   * Template category - Template rendering and validation
+   * Best for: HTML/text templating, reusable payload generation, and validation
    */
+  template: {
+    name: 'template',
+    description: 'Template rendering, validation, parsing, and helper metadata',
+    icon: '📝',
+    tools: [
+      'rek_template_render',
+      'rek_template_validate',
+      'rek_template_parse',
+      'rek_template_variables',
+      'rek_template_check',
+      'rek_template_helpers',
+    ],
+    estimatedTokens: 1800,
+  },
+
+  /**
+ * Full category - All available tools
+ * Warning: High context cost (estimated from profile exposure)
+ */
   full: {
     name: 'full',
     description: 'All available tools (high context cost)',
     icon: '🌟',
     tools: ['*'], // Wildcard for all tools
-    estimatedTokens: 18000,
+    estimatedTokens: 0,
   },
 };
+
+function getAllConcreteProfileTools(): Set<string> {
+  const toolNames = new Set<string>();
+
+  for (const category of Object.values(categories)) {
+    for (const tool of category.tools) {
+      if (tool !== '*') {
+        toolNames.add(tool);
+      }
+    }
+  }
+
+  return toolNames;
+}
 
 /**
  * Default category when none specified
@@ -389,7 +422,7 @@ export function estimateCategoryTokens(categoryNames: string | string[]): number
 
     // For 'full', just return its estimate
     if (category.tools.includes('*')) {
-      return category.estimatedTokens;
+      return getAllConcreteProfileTools().size * 300;
     }
 
     for (const tool of category.tools) {
@@ -417,12 +450,13 @@ export function listCategories(): Array<{
   toolCount: number;
   estimatedTokens: number;
 }> {
+  const toolCount = getAllConcreteProfileTools().size;
   return Object.values(categories).map((p) => ({
     name: p.name,
     description: p.description,
     icon: p.icon,
-    toolCount: p.tools.includes('*') ? -1 : p.tools.length,
-    estimatedTokens: p.estimatedTokens,
+    toolCount: p.tools.includes('*') ? toolCount : p.tools.length,
+    estimatedTokens: p.estimatedTokens || (p.tools.includes('*') ? toolCount * 300 : p.tools.length * 300),
   }));
 }
 

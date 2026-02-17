@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   aws,
   awsS3,
+  s3,
   awsDynamoDB,
   awsLambda,
   awsSQS,
@@ -132,6 +133,18 @@ describe('AWS Presets', () => {
     it('should create S3 preset', () => {
       const config = awsS3(baseOptions);
       expect(config.baseUrl).toBe('https://s3.us-east-1.amazonaws.com');
+      expect(config.http2).toBe('performance');
+      expect(config.observability).toBe(false);
+      expect(config.expectContinue).toBe(2 * 1024 * 1024);
+      expect(config.concurrency).toMatchObject({
+        agent: {
+          connections: 100,
+          pipelining: 10,
+        },
+      });
+      expect(config.timeout).toMatchObject({
+        request: 60000,
+      });
     });
 
     it('should pass through all options', () => {
@@ -141,6 +154,12 @@ describe('AWS Presets', () => {
         endpoint: 'http://minio:9000'
       });
       expect(config.baseUrl).toBe('http://minio:9000');
+    });
+  });
+
+  describe('s3', () => {
+    it('should create the same optimized S3 preset as awsS3', () => {
+      expect(s3(baseOptions)).toEqual(awsS3(baseOptions));
     });
   });
 

@@ -28,6 +28,68 @@ export interface AWSPresetOptions {
   endpoint?: string;
 }
 
+const S3_STORAGE_PRESET: Omit<ClientOptions, 'plugins' | 'baseUrl' | 'headers'> = {
+  timeout: {
+    lookup: 5000,
+    connect: 10000,
+    secureConnect: 10000,
+    response: 30000,
+    request: 60000,
+  },
+  http2: 'performance',
+  expectContinue: 2 * 1024 * 1024, // 2MB threshold for large uploads
+  observability: false,
+  concurrency: {
+    agent: {
+      connections: 100,
+      pipelining: 10,
+      keepAlive: true,
+      keepAliveTimeout: 4000,
+      keepAliveMaxTimeout: 600000,
+      keepAliveTimeoutThreshold: 1000,
+      maxRequestsPerClient: 100,
+      clientTtl: null,
+      maxCachedSessions: 100,
+    },
+  },
+  retry: {
+    maxDelay: 30000,
+  },
+};
+
+function createAwsS3Preset(options: Omit<AWSPresetOptions, 'service'>): ClientOptions {
+  const baseConfig = aws({
+    ...options,
+    service: 's3',
+  });
+  const baseConcurrency = baseConfig.concurrency;
+  let concurrency: ClientOptions['concurrency'];
+
+  if (typeof baseConcurrency === 'number') {
+    concurrency = baseConcurrency;
+  } else {
+    const mergedConcurrency: ClientOptions['concurrency'] = {};
+
+    if (baseConcurrency && typeof baseConcurrency === 'object') {
+      Object.assign(mergedConcurrency, S3_STORAGE_PRESET.concurrency, baseConcurrency);
+    } else {
+      Object.assign(mergedConcurrency, S3_STORAGE_PRESET.concurrency);
+    }
+
+    concurrency = mergedConcurrency;
+  }
+
+  return {
+    ...baseConfig,
+    ...S3_STORAGE_PRESET,
+    retry: {
+      ...baseConfig.retry,
+      ...S3_STORAGE_PRESET.retry,
+    },
+    concurrency,
+  };
+}
+
 export type AWSService =
   | 's3'
   | 'dynamodb'
@@ -151,7 +213,15 @@ export function aws(options: AWSPresetOptions): ClientOptions {
  * AWS S3 preset (convenience alias)
  */
 export function awsS3(options: Omit<AWSPresetOptions, 'service'>): ClientOptions {
-  return aws({ ...options, service: 's3' });
+  return createAwsS3Preset(options);
+}
+
+/**
+ * S3 preset (convenience alias without provider prefix)
+ * with object-storage-optimized transport defaults.
+ */
+export function s3(options: Omit<AWSPresetOptions, 'service'>): ClientOptions {
+  return createAwsS3Preset(options);
 }
 
 /**

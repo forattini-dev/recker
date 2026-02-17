@@ -4,7 +4,7 @@ Comprehensive HTTP performance analysis comparing Recker against industry-standa
 
 > Recker: Multi-Protocol SDK for the AI Era — Nine protocols unified with top-tier HTTP performance.
 
-> **Methodology**: All benchmarks run with V8 JIT warmup for consistent results. 15 HTTP libraries tested across 12 scenarios.
+> **Methodology**: All benchmarks run with V8 JIT warmup for consistent results. 15 HTTP libraries tested across 12 scenarios on a local loopback server.
 
 ## Executive Summary
 
@@ -457,7 +457,7 @@ recker ★               ██████████████████�
 5. **Caching** provides 13x performance improvement on cache hits
 6. **Feature overhead** is minimal (~4-15% per feature, except cache which improves performance)
 7. **Gzip decompression** varies by library - axios, got, node-fetch auto-decompress; others require manual handling
-8. **All 15 competitors tested** - fair comparison across entire HTTP client ecosystem
+8. **All 15 included clients were tested on the same harness** - fair comparison within this benchmark set (not a full ecosystem survey)
 
 ---
 

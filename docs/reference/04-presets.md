@@ -188,7 +188,7 @@ const client = createClient(azureOpenai({
 ### AWS (Amazon Web Services)
 
 ```typescript
-import { aws, awsS3, awsDynamoDB, awsLambda, awsBedrock } from 'recker/presets';
+import { aws, s3, awsS3, awsDynamoDB, awsLambda, awsBedrock } from 'recker/presets';
 
 // Generic AWS client (specify service)
 const ec2 = createClient(aws({
@@ -200,7 +200,14 @@ const ec2 = createClient(aws({
 }));
 
 // Convenience aliases for popular services
-const s3 = createClient(awsS3({
+// 's3' is the object-storage-optimized alias (performance defaults included)
+const legacyS3 = createClient(awsS3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: 'us-east-1'
+}));
+
+const s3Optimized = createClient(s3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   region: 'us-east-1'

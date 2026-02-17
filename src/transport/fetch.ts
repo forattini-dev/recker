@@ -1,5 +1,6 @@
 import { ReckerRequest, ReckerResponse, Transport, Timings, ProgressEvent, RedirectInfo, ProgressCallback } from '../types/index.js';
 import { createProgressStream } from '../utils/progress.js';
+import { TimeoutError } from '../core/errors.js';
 
 export interface FetchTransportOptions {
   /** Default credentials mode for all requests */
@@ -15,6 +16,23 @@ function parseContentLength(headers: Headers): number | undefined {
   if (!raw) return undefined;
   const parsed = parseInt(raw, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function getAbortReason(error: unknown): unknown {
+  return (error as any)?.cause ?? (error as any)?.reason;
+}
+
+function isTimeoutReason(reason: unknown): reason is TimeoutError {
+  if (reason instanceof TimeoutError) {
+    return true;
+  }
+
+  if (!reason || typeof reason !== 'object') {
+    return false;
+  }
+
+  const timeoutReason = reason as { name?: unknown };
+  return timeoutReason.name === 'TimeoutError';
 }
 
 function wrapDownloadResponse(response: Response, onProgress?: ProgressCallback): Response {
@@ -92,10 +110,17 @@ export class FetchTransport implements Transport {
 
     // Use provided signal or create one for timeout
     let signal = req.signal;
+    const requestTimeoutError = timeoutMs ? new TimeoutError(req, {
+      phase: 'request',
+      timeout: timeoutMs
+    }) : undefined;
+
     if (timeoutMs && !signal) {
       abortController = new AbortController();
       signal = abortController.signal;
-      timeoutId = setTimeout(() => abortController!.abort(), timeoutMs);
+      timeoutId = setTimeout(() => {
+        timeoutControllerAbort(abortController!, requestTimeoutError);
+      }, timeoutMs);
     }
 
     const followRedirects = req.followRedirects !== false;
@@ -191,14 +216,29 @@ export class FetchTransport implements Transport {
       }
     } catch (error: any) {
       // Handle timeout abort
-      if (error.name === 'AbortError' && abortController) {
-        const timeoutError = new Error(`Request timeout after ${timeoutMs}ms`);
-        timeoutError.name = 'TimeoutError';
-        throw timeoutError;
+      if (timeoutMs && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+        const timeoutReason = getAbortReason(error);
+        if (
+          isTimeoutReason(timeoutReason) ||
+          isTimeoutReason(getAbortReason(signal)) ||
+          (abortController && isTimeoutReason(requestTimeoutError))
+        ) {
+          throw timeoutReason instanceof TimeoutError ? timeoutReason : requestTimeoutError ?? error;
+        }
       }
       throw error;
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+}
+
+function timeoutControllerAbort(controller: AbortController, reason?: TimeoutError) {
+  if (!controller.signal.aborted) {
+    if (reason) {
+      controller.abort(reason);
+    } else {
+      controller.abort();
     }
   }
 }

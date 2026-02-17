@@ -84,6 +84,14 @@ const VALID_CHANGEFREQ = ['always', 'hourly', 'daily', 'weekly', 'monthly', 'yea
 const MAX_URLS_PER_SITEMAP = 50000;
 const MAX_SITEMAP_SIZE = 50 * 1024 * 1024; // 50MB uncompressed
 
+function toHeaderRecord(headers: Headers): Record<string, string> {
+  const headerRecord: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    headerRecord[key] = value;
+  });
+  return headerRecord;
+}
+
 /**
  * Parse sitemap XML content
  */
@@ -249,7 +257,7 @@ export function parseSitemap(content: string, compressed = false): SitemapParseR
     warnings,
     urls,
     sitemaps,
-    urlCount: type === 'urlset' ? urls.length : sitemaps.reduce((sum, s) => sum + 1, 0),
+    urlCount: type === 'urlset' ? urls.length : sitemaps.length,
     size: content.length,
     compressed,
   };
@@ -497,7 +505,7 @@ export async function fetchAndValidateSitemap(
       response = {
         status: fetchResponse.status,
         text: await fetchResponse.text(),
-        headers: Object.fromEntries(fetchResponse.headers.entries()),
+        headers: toHeaderRecord(fetchResponse.headers),
       };
     }
 

@@ -16,6 +16,7 @@ import type {
   ImageAnalysis,
   SocialMetaAnalysis,
   TechnicalSeo,
+  SeoPageType,
   SeoAnalyzerOptions,
   SeoStatus,
 } from './types.js';
@@ -32,6 +33,7 @@ import {
   SeoRulesEngine,
   createRulesEngine,
   SEO_THRESHOLDS,
+  calculateWeightedScore,
   type RuleContext,
   type RuleResult,
   type RulesEngineOptions,
@@ -124,9 +126,11 @@ export class SeoAnalyzer {
 
     // Conversion elements (CTAs, forms, contact)
     const conversion = this.analyzeConversionElements(links, visibleText);
+    const pageType = this.detectPageType(jsonLd);
 
     // Build rule context from all extracted data
     const context = this.buildRuleContext({
+      pageType,
       meta,
       og,
       twitter,
@@ -153,7 +157,7 @@ export class SeoAnalyzer {
     const checks = this.convertToCheckResults(ruleResults);
 
     // Calculate score
-    const { score, grade } = this.calculateScore(checks);
+    const { score, grade } = this.calculateScore(ruleResults);
 
     // Build summary with big numbers
     const summary = this.buildSummary(ruleResults, checks, {
@@ -164,6 +168,8 @@ export class SeoAnalyzer {
       og,
       twitter,
       technical,
+      pageType,
+      timings: this.options.timings,
     });
 
     return {
@@ -171,7 +177,9 @@ export class SeoAnalyzer {
       timestamp: new Date(),
       grade,
       score,
+      timing: this.options.timings,
       summary,
+      pageType,
       checks,
       title: meta.title
         ? { text: meta.title, length: meta.title.length }
@@ -232,6 +240,65 @@ export class SeoAnalyzer {
   }
 
   /**
+   * Detect the likely page type from URL and DOM hints.
+   */
+  private detectPageType(jsonLd: ReturnType<typeof extractJsonLd>): SeoPageType {
+    if (!this.options.baseUrl) {
+      return 'other';
+    }
+
+    try {
+      const parsed = new URL(this.options.baseUrl);
+      const pathname = parsed.pathname.toLowerCase();
+      const hasQueryKeyword = (value: string): boolean =>
+        parsed.searchParams.has(value);
+
+      if (pathname === '/' || pathname === '') {
+        return 'homepage';
+      }
+
+      if (
+        /(^|\/)(search|busca|s|results|query)\b/.test(pathname) ||
+        hasQueryKeyword('q') ||
+        hasQueryKeyword('query') ||
+        hasQueryKeyword('search')
+      ) {
+        return 'search';
+      }
+
+      const productSignals = ['product', 'produto', 'item', 'sku', 'shop'];
+      if (productSignals.some((segment) => pathname.includes(`/${segment}/`))) {
+        return 'product';
+      }
+
+      const articleSignals = ['article', 'post', 'blog', 'noticia', 'news'];
+      if (
+        articleSignals.some((segment) => pathname.includes(`/${segment}/`)) ||
+        this.root.querySelectorAll('article').length > 0
+      ) {
+        return 'article';
+      }
+
+      if (
+        /(^|\/)(categoria|category|tag|section|topic)\b/.test(pathname)
+      ) {
+        return 'category';
+      }
+
+      const hasProductJsonLd = jsonLd
+        .map((node) => node['@type'])
+        .some((type) => typeof type === 'string' && type.toLowerCase() === 'product');
+      if (hasProductJsonLd) {
+        return 'product';
+      }
+
+      return 'other';
+    } catch {
+      return 'other';
+    }
+  }
+
+  /**
    * Extract visible text from body (excluding scripts, styles, etc.)
    */
   private getVisibleText(): string {
@@ -287,6 +354,7 @@ export class SeoAnalyzer {
       imagePerWordRatio: number;
       keywordDensity?: number;
     };
+    pageType: SeoPageType;
     linkAnalysis: LinkAnalysis;
     imageAnalysis: ImageAnalysis;
     links: ReturnType<typeof extractLinks>;
@@ -306,6 +374,7 @@ export class SeoAnalyzer {
       jsonLd,
       headings,
       content,
+      pageType,
       linkAnalysis,
       imageAnalysis,
       links,
@@ -382,8 +451,6 @@ export class SeoAnalyzer {
     const h1Text = 
       h1Elements.length > 0 ? h1Elements[0].text.trim() : '';
 
-    const iframeCount = this.root.querySelectorAll('iframe').length;
-
     // Keyword Analysis
     const topKeywords = keywords.topKeywords.slice(0, 5).map(k => k.word);
     const mainKeyword = topKeywords.length > 0 ? topKeywords[0] : undefined;
@@ -445,7 +512,6 @@ export class SeoAnalyzer {
             const structuralHtml = this.analyzeStructuralHtml();
             const breadcrumbs = this.analyzeBreadcrumbs(jsonLd.map((j) => j['@type'] as string).filter(Boolean));
             const multimedia = this.analyzeMultimedia();
-            const advancedImages = this.analyzeAdvancedImages();
             const responsiveImages = this.analyzeResponsiveImages();
             const inlineImages = this.analyzeInlineImages();
             const trustSignals = this.analyzeTrustSignals(links);
@@ -462,6 +528,8 @@ export class SeoAnalyzer {
     const textHtmlRatio = this.calculateTextHtmlRatio(content.characterCount);
 
     return {
+      pageType,
+
       // Resources
       jsFilesCount: resources.jsFilesCount,
       cssFilesCount: resources.cssFilesCount,
@@ -1348,7 +1416,6 @@ export class SeoAnalyzer {
     analyticsProviders: string[];
   } {
     const providers: string[] = [];
-    const html = this.root.innerHTML || '';
     const scripts = this.root.querySelectorAll('script');
 
     // Collect all script content and src attributes
@@ -1554,33 +1621,6 @@ export class SeoAnalyzer {
   }
 
   /**
-   * Analyze advanced image metrics (srcset, base64 bloat)
-   */
-  private analyzeAdvancedImages(): {
-    imagesWithSrcset: number;
-    largeBase64ImagesCount: number;
-  } {
-    let imagesWithSrcset = 0;
-    let largeBase64ImagesCount = 0;
-
-    const imgs = this.root.querySelectorAll('img');
-    imgs.forEach((img: any) => {
-      // Check srcset
-      if (img.getAttribute('srcset') || (img.parentNode && img.parentNode.tagName === 'PICTURE')) {
-        imagesWithSrcset++;
-      }
-      
-      // Check base64 bloat (> 5KB)
-      const src = img.getAttribute('src') || '';
-      if (src.startsWith('data:image') && src.length > 5 * 1024) {
-        largeBase64ImagesCount++;
-      }
-    });
-
-    return { imagesWithSrcset, largeBase64ImagesCount };
-  }
-
-  /**
    * Calculate text to HTML ratio.
    */
   private calculateTextHtmlRatio(bodyTextLength: number): number | undefined {
@@ -1599,6 +1639,7 @@ export class SeoAnalyzer {
       id: r.id,
       name: r.name,
       category: r.category,
+      severity: r.severity,
       status: r.status,
       message: r.message,
       value: r.value,
@@ -1614,6 +1655,7 @@ export class SeoAnalyzer {
     ruleResults: RuleResult[],
     checks: SeoCheckResult[],
     data: {
+      pageType: SeoPageType;
       content: ContentMetrics & {
         paragraphWordCounts: number[];
         avgSentenceLength: number;
@@ -1626,8 +1668,19 @@ export class SeoAnalyzer {
       og: ReturnType<typeof extractOpenGraph>;
       twitter: ReturnType<typeof extractTwitterCard>;
       technical: TechnicalSeo;
+      timings?: {
+        ttfb?: number;
+        dns?: number;
+        tcp?: number;
+        tls?: number;
+        download?: number;
+        total?: number;
+      };
     }
   ): SeoSummary {
+    const pageType = data.pageType;
+    const timings = data.timings;
+
     // Count by status
     const passed = checks.filter((c) => c.status === 'pass').length;
     const warnings = checks.filter((c) => c.status === 'warn').length;
@@ -1655,20 +1708,26 @@ export class SeoAnalyzer {
       else if (result.status === 'fail') issuesByCategory[cat].errors++;
     }
 
-    // Top issues (errors first, then warnings)
-    const topIssues = ruleResults
-      .filter((r) => r.status === 'fail' || r.status === 'warn')
+    // Top issues (errors first, then warnings), with severity awareness
+    const topIssues = checks
+      .filter((c) => c.status === 'fail' || c.status === 'warn')
       .sort((a, b) => {
-        if (a.status === 'fail' && b.status !== 'fail') return -1;
-        if (a.status !== 'fail' && b.status === 'fail') return 1;
-        return 0;
+        const severityOrder = (status: SeoStatus) =>
+          status === 'fail' ? 2 : 1;
+        const statusDiff = severityOrder(b.status) - severityOrder(a.status);
+        if (statusDiff !== 0) return statusDiff;
+
+        const aSeverity = a.severity || (a.status === 'fail' ? 'error' : 'warning');
+        const bSeverity = b.severity || (b.status === 'fail' ? 'error' : 'warning');
+        if (aSeverity === bSeverity) return 0;
+        return aSeverity === 'error' ? -1 : 1;
       })
       .slice(0, 5)
       .map((r) => ({
         name: r.name,
         message: r.message,
         category: r.category,
-        severity: (r.status === 'fail' ? 'error' : 'warning') as
+        severity: (r.severity || (r.status === 'fail' ? 'error' : 'warning')) as
           | 'error'
           | 'warning',
       }));
@@ -1703,8 +1762,8 @@ export class SeoAnalyzer {
     const vitals = {
       htmlSize,
       domElements,
-      ttfb: this.options.responseHeaders ? undefined : undefined, // Would need timing data
-      totalTime: undefined,
+      ttfb: timings?.ttfb,
+      totalTime: timings?.total,
       wordCount: data.content.wordCount,
       totalWordCount: data.content.totalWordCount,
       readingTime: data.content.readingTimeMinutes,
@@ -1730,6 +1789,7 @@ export class SeoAnalyzer {
       infos,
       passRate,
       issuesByCategory,
+      pageType: pageType,
       topIssues,
       quickWins: limitedQuickWins,
       vitals,
@@ -2230,29 +2290,15 @@ export class SeoAnalyzer {
   /**
    * Calculate overall SEO score
    */
-  private calculateScore(checks: SeoCheckResult[]): {
+  private calculateScore(results: RuleResult[]): {
     score: number;
     grade: string;
   } {
-    // Weight by status
-    const weights: Record<SeoStatus, number> = {
-      pass: 100,
-      warn: 50,
-      fail: 0,
-      info: 100, // Info doesn't affect score negatively
-    };
+    if (results.length === 0) return { score: 100, grade: 'A' };
 
-    // Only count non-info checks for scoring
-    const scoringChecks = checks.filter((c) => c.status !== 'info');
-    if (scoringChecks.length === 0) return { score: 100, grade: 'A' };
+    const { score: weightedScore } = calculateWeightedScore(results);
+    const score = weightedScore;
 
-    const totalWeight = scoringChecks.reduce(
-      (sum, check) => sum + weights[check.status],
-      0
-    );
-    const score = Math.round(totalWeight / scoringChecks.length);
-
-    // Determine grade
     let grade: string;
     if (score >= 90) grade = 'A';
     else if (score >= 80) grade = 'B';

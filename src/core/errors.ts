@@ -1,17 +1,46 @@
 import { ReckerRequest, ReckerResponse } from '../types/index.js';
 
+export type CanonicalErrorCategory =
+  | 'http'
+  | 'network'
+  | 'timeout'
+  | 'protocol'
+  | 'validation'
+  | 'state'
+  | 'filesystem'
+  | 'resource'
+  | 'policy'
+  | 'queue'
+  | 'unknown';
+
+export type ErrorSource = 'client' | 'transport' | 'server' | 'upstream';
+
+export type CanonicalErrorSeverity = 'low' | 'medium' | 'high';
+
+export interface CanonicalErrorMetadata {
+  category: CanonicalErrorCategory;
+  source: ErrorSource;
+  severity: CanonicalErrorSeverity;
+  canRetry: boolean;
+  reason: string;
+  statusCode?: number;
+  retryAfterMs?: number;
+}
+
 export class ReckerError extends Error {
   request?: ReckerRequest;
   response?: ReckerResponse;
   suggestions: string[];
   retriable: boolean;
+  classification?: CanonicalErrorMetadata;
 
   constructor(
     message: string,
     request?: ReckerRequest,
     response?: ReckerResponse,
     suggestions: string[] = [],
-    retriable = false
+    retriable = false,
+    classification?: CanonicalErrorMetadata
   ) {
     super(message);
     this.name = 'ReckerError';
@@ -19,6 +48,7 @@ export class ReckerError extends Error {
     this.response = response;
     this.suggestions = suggestions;
     this.retriable = retriable;
+    this.classification = classification;
   }
 }
 
@@ -27,12 +57,21 @@ export class HttpError extends ReckerError {
   statusText: string;
 
   constructor(response: ReckerResponse, request?: ReckerRequest) {
+    const retriable = isRetryableStatus(response.status);
     super(
       `Request failed with status code ${response.status} ${response.statusText}`,
       request,
       response,
       ['Check the upstream service response body for error details.', 'Inspect request headers/body to ensure they match the API contract.', 'Retry if this is a transient 5xx/429 error.'],
-      isRetryableStatus(response.status)
+      retriable,
+      {
+        category: 'http',
+        source: 'server',
+        severity: response.status >= 500 ? 'high' : 'medium',
+        canRetry: retriable,
+        reason: `HTTP ${response.status}`,
+        statusCode: response.status
+      }
     );
     this.name = 'HttpError';
     this.status = response.status;
@@ -115,7 +154,13 @@ export class TimeoutError extends ReckerError {
       'Reduce concurrent requests if the connection pool is exhausted.'
     ];
 
-    super(message, request, undefined, suggestions, true);
+    super(message, request, undefined, suggestions, true, {
+      category: 'timeout',
+      source: 'transport',
+      severity: 'medium',
+      canRetry: true,
+      reason: `Timeout while ${phase}`
+    });
     this.name = 'TimeoutError';
     this.phase = phase;
     this.timeout = timeout ?? 0;
@@ -133,7 +178,13 @@ export class NetworkError extends ReckerError {
       'Check proxy/VPN/firewall settings that might block the request.',
       'Retry the request or switch transport if this is transient.'
     ];
-    super(message, request, undefined, suggestions, true);
+    super(message, request, undefined, suggestions, true, {
+      category: 'network',
+      source: 'transport',
+      severity: code ? 'medium' : 'low',
+      canRetry: true,
+      reason: code ? `Network error (${code})` : message
+    });
     this.name = 'NetworkError';
     this.code = code;
   }
@@ -189,7 +240,14 @@ export class Http2Error extends ReckerError {
 
     const suggestions = getHttp2ErrorSuggestions(errorCode, suggestFallback);
 
-    super(message, options.request, undefined, suggestions, retriable);
+    super(message, options.request, undefined, suggestions, retriable, {
+      category: 'protocol',
+      source: 'transport',
+      severity: retriable ? 'medium' : 'high',
+      canRetry: retriable,
+      reason: `HTTP/2 ${errorCode}`,
+      statusCode: errorCode ? Number.parseInt(String(errorCode), 10) || undefined : undefined
+    });
     this.name = 'Http2Error';
     this.errorCode = errorCode;
     this.level = options.level ?? 'stream';
@@ -324,6 +382,103 @@ export function parseHttp2Error(error: Error): Http2Error | null {
   return null;
 }
 
+/**
+ * Derive retry policy and standardized category for transport/runtime errors.
+ * Returns classification metadata when an error shape is recognized.
+ */
+export function classifyTransportError(error: unknown): CanonicalErrorMetadata | undefined {
+  if (error instanceof ReckerError && error.classification) {
+    return error.classification;
+  }
+
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  const anyError = error as {
+    name?: string;
+    message?: string;
+    code?: string;
+  };
+
+  const name = anyError.name || '';
+  const message = anyError.message || '';
+  const code = (anyError.code as string | undefined)?.toUpperCase();
+
+  if (name === 'AbortError' || code === 'ABORT_ERR' || code === 'UND_ERR_ABORTED' || message.includes('aborted') || message.includes('AbortError')) {
+    return {
+      category: 'queue',
+      source: 'client',
+      severity: 'low',
+      canRetry: true,
+      reason: 'Request was aborted'
+    };
+  }
+
+  if (name === 'TimeoutError' || code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'UND_ERR_HEADERS_TIMEOUT' || code === 'UND_ERR_BODY_TIMEOUT' || message.includes('timeout')) {
+    return {
+      category: 'timeout',
+      source: 'transport',
+      severity: 'medium',
+      canRetry: true,
+      reason: message || 'Request timed out'
+    };
+  }
+
+  const networkCodes = new Set([
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ENOTFOUND',
+    'EPIPE',
+    'ETIMEDOUT',
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+    'ENETDOWN',
+    'EAI_AGAIN'
+  ]);
+  if (code && networkCodes.has(code)) {
+    return {
+      category: 'network',
+      source: 'transport',
+      severity: 'medium',
+      canRetry: true,
+      reason: message || `Network error (${code})`
+    };
+  }
+
+  if (name === 'Http2Error' || message.includes('HTTP/2') || message.includes('RST_STREAM') || message.includes('GOAWAY')) {
+    return {
+      category: 'protocol',
+      source: 'transport',
+      severity: 'medium',
+      canRetry: true,
+      reason: message || 'HTTP/2 protocol error'
+    };
+  }
+
+  if (name === 'MaxSizeExceededError' || name === 'ParseError') {
+    return {
+      category: 'resource',
+      source: 'server',
+      severity: 'low',
+      canRetry: false,
+      reason: message || 'Resource limitation'
+    };
+  }
+
+  if (name === 'ConfigurationError' || name === 'ValidationError' || name === 'StateError') {
+    return {
+      category: 'state',
+      source: 'client',
+      severity: 'high',
+      canRetry: false,
+      reason: message || 'Request cannot be retried'
+    };
+  }
+
+  return undefined;
+}
+
 export class MaxSizeExceededError extends ReckerError {
   maxSize: number;
   actualSize?: number;
@@ -341,7 +496,14 @@ export class MaxSizeExceededError extends ReckerError {
         'Add pagination/streaming to reduce payload size.',
         'Ensure the upstream is not returning unexpected large responses.'
       ],
-      false
+      false,
+      {
+        category: 'resource',
+        source: 'server',
+        severity: 'medium',
+        canRetry: false,
+        reason: 'Response size exceeded configured max'
+      }
     );
     this.name = 'MaxSizeExceededError';
     this.maxSize = maxSize;
@@ -369,7 +531,14 @@ export class AbortError extends ReckerError {
         'Increase timeout if the request needs more time to complete.',
         'Ensure AbortController is not being triggered prematurely.'
       ],
-      true
+      true,
+      {
+        category: 'timeout',
+        source: 'client',
+        severity: 'low',
+        canRetry: true,
+        reason: reason ? `Request was aborted: ${reason}` : 'Request was aborted'
+      }
     );
     this.name = 'AbortError';
     this.reason = reason;
@@ -403,7 +572,14 @@ export class ConnectionError extends ReckerError {
         'Check network connectivity and firewall rules.',
         'Ensure the service is accepting connections on the specified port.'
       ],
-      options?.retriable ?? true
+      options?.retriable ?? true,
+      {
+        category: 'network',
+        source: 'transport',
+        severity: options?.retriable === false ? 'high' : 'medium',
+        canRetry: options?.retriable ?? true,
+        reason: options?.code ? `Connection error (${options.code})` : 'Connection error'
+      }
     );
     this.name = 'ConnectionError';
     this.host = options?.host;
@@ -716,7 +892,14 @@ export class QueueCancelledError extends ReckerError {
         'Check if the queue was manually cleared.',
         'Retry the operation if the queue is still active.'
       ],
-      true
+      true,
+      {
+        category: 'queue',
+        source: 'client',
+        severity: 'low',
+        canRetry: true,
+        reason: message || 'Queue was cancelled'
+      }
     );
     this.name = 'QueueCancelledError';
     this.queueName = options?.queueName;

@@ -30,6 +30,7 @@ import { RekCommand as Command } from '../cli/router.js';
 import { MCPServer, type MCPTransportMode } from './server.js';
 import {
   listCategories,
+  DEFAULT_CATEGORY,
   validateCategories,
   estimateCategoryTokens,
   type CategoryName,
@@ -48,7 +49,10 @@ program
   .option('--examples-path <path>', 'Path to examples directory')
   .option('--src-path <path>', 'Path to source directory')
   // Category-based filtering (recommended)
-  .option('-c, --category <categories>', 'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, video, ai, protocols, parsing, streaming, full')
+  .option(
+    '-c, --category <categories>',
+    'Tool categories to enable (comma-separated): minimal, docs, network, dns, seo, security, scrape, video, ai, protocols, parsing, streaming, template, full'
+  )
   .option('--list-categories', 'List available categories and exit')
   // Legacy tool filtering flags
   .option('--no-docs', 'Disable documentation tools (search, get, examples, schema, suggest)')
@@ -93,6 +97,8 @@ program
       console.log('');
       process.exit(0);
     }
+
+    const useExplicitCategory = Boolean(opts.category);
 
     // Validate category names if provided
     if (opts.category) {
@@ -158,6 +164,8 @@ program
       process.exit(1);
     }
 
+    const effectiveCategory = useExplicitCategory ? opts.category : (!opts.only && !opts.filter ? DEFAULT_CATEGORY : undefined);
+
     // Create server with category or legacy toolsFilter
     const server = new MCPServer({
       transport,
@@ -166,8 +174,8 @@ program
       docsPath: opts.docsPath,
       examplesPath: opts.examplesPath,
       srcPath: opts.srcPath,
-      category: opts.category, // Category takes precedence
-      toolsFilter: !opts.category && toolsFilter.length > 0 ? toolsFilter : undefined,
+      category: effectiveCategory,
+      toolsFilter: !effectiveCategory && toolsFilter.length > 0 ? toolsFilter : undefined,
     });
 
     // Log startup info (not in stdio mode to avoid polluting the protocol)
@@ -180,13 +188,13 @@ program
       console.log(`  Port:      ${port}`);
       console.log(`  Debug:     ${opts.debug ? 'enabled' : 'disabled'}`);
 
-      if (opts.category) {
-        const tokens = estimateCategoryTokens(opts.category);
-        console.log(`  Category:  ${opts.category} (~${tokens} tokens)`);
+      if (effectiveCategory) {
+        const tokens = estimateCategoryTokens(effectiveCategory);
+        console.log(`  Category:  ${effectiveCategory} (~${tokens} tokens)`);
       } else if (toolsFilter.length > 0) {
         console.log(`  Filters:   ${toolsFilter.join(', ')}`);
       } else {
-        console.log(`  Category:  full (all tools enabled)`);
+        console.log(`  Category:  minimal (default)`);
       }
       console.log('');
       console.log('  Available tools:');

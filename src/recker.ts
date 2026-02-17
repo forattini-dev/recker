@@ -52,6 +52,7 @@ import { uploadFile } from './utils/upload.js';
 import { createVideoBuilder, VideoBuilder } from './video/builder.js';
 import { extract, extractors, isSupported, getExtractorName, listExtractors } from './extractors/index.js';
 import type { ExtractorResult } from './extractors/base.js';
+import { searchGoogleAdvanced, type GoogleSearchAdvancedOptions, type GoogleSearchResponse } from './search/index.js';
 
 // ============================================================================
 // Singleton instances (lazy-loaded)
@@ -205,6 +206,17 @@ export async function extractVideo(url: string): Promise<ExtractorResult> {
   return extract(url, getDefaultClient());
 }
 
+/**
+ * Advanced Google Search
+ * @example await searchGoogle('recker network sdk', { asSitesearch: 'github.com', num: 10, transport: 'auto' })
+ */
+export function searchGoogle(
+  query: string,
+  options?: GoogleSearchAdvancedOptions
+): Promise<GoogleSearchResponse> {
+  return searchGoogleAdvanced(query, options);
+}
+
 // ============================================================================
 // Unified 'recker' namespace
 // ============================================================================
@@ -325,6 +337,11 @@ export const recker = {
    * @example new recker.extractors.Chaturbate(client).extract(url)
    */
   extractors,
+
+  /**
+   * Google search (advanced filters + optional transport fallback)
+   */
+  searchGoogle,
 
   /**
    * List all available extractor names

@@ -1,5 +1,5 @@
 import { request as undiciRequest, errors as undiciErrors, ProxyAgent, Agent, Client } from 'undici';
-import { ConnectionInfo, ReckerRequest, ReckerResponse, Timings, Transport, ProxyOptions, HTTP2Options, DNSOptions, AgentOptions, TLSOptions, ProgressCallback, RedirectInfo, TimeoutOptions } from '../types/index.js';
+import { ConnectionInfo, ReckerRequest, ReckerResponse, Timings, Transport, ProxyOptions, HTTP2Options, DNSOptions, TLSOptions, ProgressCallback, RedirectInfo, TimeoutOptions } from '../types/index.js';
 import { HttpResponse } from '../core/response.js';
 import { NetworkError, TimeoutError, MaxSizeExceededError, parseHttp2Error } from '../core/errors.js';
 import { performance } from 'perf_hooks';
@@ -10,7 +10,7 @@ import { AgentManager } from '../utils/agent-manager.js';
 import { createProgressStream } from '../utils/progress.js';
 import { nodeToWebStream } from '../utils/streaming.js';
 import { ProtocolCache, getGlobalProtocolCache, normalizeProtocol } from '../utils/protocol-cache.js';
-import { getTimingForHost, clearTimingForHost, getConnectionId, isNewConnection } from '../utils/timing-connector.js';
+import { getTimingForHost, getConnectionId, isNewConnection } from '../utils/timing-connector.js';
 
 // Define the shape of undici's internal diagnostic events
 interface UndiciRequestStartEvent {
@@ -86,6 +86,57 @@ const undiciConnectChannel = channel('undici:client:connect');
 
 const requestStorage = new AsyncLocalStorage<RequestContext>();
 
+function getAbortReason(error: unknown): unknown {
+  return (error as any)?.cause ?? (error as any)?.reason;
+}
+
+function isTimeoutAbortReason(reason: unknown): reason is TimeoutError {
+  if (reason instanceof TimeoutError) {
+    return true;
+  }
+
+  if (!reason || typeof reason !== 'object') {
+    return false;
+  }
+
+  const timeoutReason = reason as { name?: unknown };
+  return timeoutReason.name === 'TimeoutError';
+}
+
+function isTotalRequestTimeoutError(
+  error: any,
+  timeoutReason: unknown,
+  timeoutMs?: number
+): boolean {
+  if (!timeoutMs) {
+    return false;
+  }
+
+  // If any timeout-specific reason exists, this request is inside the total-timeout path.
+  if (timeoutReason !== undefined) {
+    return true;
+  }
+
+  const causeOrReason = getAbortReason(error);
+  const message = (error as { message?: unknown })?.message;
+  const hasTimeoutMessage = typeof message === 'string' && (
+    message.includes('Request timed out (total time exceeded)') ||
+    message.includes('timed out (total time exceeded)')
+  );
+  const hasRequestAbortMessage = typeof message === 'string' && message.toLowerCase() === 'request was aborted';
+
+  return (
+    error instanceof TimeoutError ||
+    isTimeoutAbortReason(causeOrReason) ||
+    isTimeoutAbortReason(error) ||
+    error instanceof undiciErrors.RequestAbortedError ||
+    hasTimeoutMessage ||
+    hasRequestAbortMessage ||
+    error?.code === 'ABORT_ERR' ||
+    error?.code === 'UND_ERR_REQUEST_TIMEOUT'
+  );
+}
+
 undiciRequestChannel.subscribe((message: unknown) => {
   const store = requestStorage.getStore();
   if (store) {
@@ -116,7 +167,7 @@ undiciRequestChannel.subscribe((message: unknown) => {
   }
 });
 
-undiciBodySentChannel.subscribe((message: unknown) => {
+undiciBodySentChannel.subscribe((_message: unknown) => {
     const store = requestStorage.getStore();
     // Dispatch onRequestSent hook
     if (store?.hooks && store.hooks.onRequestSent) {
@@ -587,6 +638,9 @@ export class UndiciTransport implements Transport {
     // Handle total request timeout with AbortSignal
     let timeoutController: AbortController | undefined;
     let timeoutId: NodeJS.Timeout | undefined;
+    let timeoutReason: unknown;
+    let timeoutError: TimeoutError | undefined;
+    let cancelOriginalAbortListener: (() => void) | undefined;
 
     // FAST PATH: Skip AsyncLocalStorage when observability is disabled
     if (!this.observability) {
@@ -609,14 +663,18 @@ export class UndiciTransport implements Transport {
             requestContext.requestStartTime = startTime;
         }
 
-        let redirectCount = 0;
-        let currentMethod = req.method;
-        let currentBody = req.body;
-        let currentHeaders = { ...headers };
-        let effectiveSignal = req.signal;
+          let redirectCount = 0;
+          let currentMethod = req.method;
+          let currentBody = req.body;
+          let currentHeaders = { ...headers };
+          let effectiveSignal = req.signal;
 
         if (timeouts.totalTimeout) {
           timeoutController = new AbortController();
+          timeoutError = new TimeoutError(req, {
+            phase: 'request',
+            timeout: timeouts.totalTimeout
+          });
 
           // If there's an existing signal, combine them
           if (req.signal) {
@@ -625,13 +683,16 @@ export class UndiciTransport implements Transport {
             effectiveSignal = timeoutController.signal;
 
             const onOriginalAbort = () => {
-              timeoutController!.abort();
+              timeoutReason = originalSignal.reason ?? new Error('Request aborted by external signal');
+              timeoutController!.abort(timeoutReason);
             };
 
             if (originalSignal.aborted) {
-              timeoutController.abort();
+              timeoutReason = originalSignal.reason ?? new Error('Request aborted by external signal');
+              timeoutController.abort(timeoutReason);
             } else {
               originalSignal.addEventListener('abort', onOriginalAbort, { once: true });
+              cancelOriginalAbortListener = () => originalSignal.removeEventListener('abort', onOriginalAbort);
             }
           } else {
             effectiveSignal = timeoutController.signal;
@@ -639,7 +700,8 @@ export class UndiciTransport implements Transport {
 
           // Set timeout
           timeoutId = setTimeout(() => {
-            timeoutController!.abort();
+            timeoutReason = timeoutError;
+            timeoutController!.abort(timeoutReason);
           }, timeouts.totalTimeout);
         }
 
@@ -951,8 +1013,8 @@ export class UndiciTransport implements Transport {
         }
 
         // Handle AbortSignal timeout (total request timeout)
-        if (error.name === 'AbortError' || error.code === 'ABORT_ERR') {
-          throw new TimeoutError(req, {
+        if (isTotalRequestTimeoutError(error, timeoutReason, timeouts.totalTimeout)) {
+          throw timeoutError ?? new TimeoutError(req, {
             phase: 'request',
             timeout: timeouts.totalTimeout
           });
@@ -978,6 +1040,9 @@ export class UndiciTransport implements Transport {
         throw new NetworkError(error.message, code, req);
       } finally {
         // Clean up total timeout
+        if (typeof cancelOriginalAbortListener === 'function') {
+          cancelOriginalAbortListener();
+        }
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -1001,6 +1066,9 @@ export class UndiciTransport implements Transport {
   ): Promise<ReckerResponse> {
     let timeoutController: AbortController | undefined;
     let timeoutId: NodeJS.Timeout | undefined;
+    let timeoutReason: unknown;
+    let timeoutError: TimeoutError | undefined;
+    let cancelOriginalAbortListener: (() => void) | undefined;
 
     try {
       let redirectCount = 0;
@@ -1011,27 +1079,35 @@ export class UndiciTransport implements Transport {
 
       if (timeouts.totalTimeout) {
         timeoutController = new AbortController();
+        timeoutError = new TimeoutError(req, {
+          phase: 'request',
+          timeout: timeouts.totalTimeout
+        });
 
         if (req.signal) {
           const originalSignal = req.signal;
           effectiveSignal = timeoutController.signal;
 
           const onOriginalAbort = () => {
-            timeoutController!.abort();
+            timeoutReason = originalSignal.reason ?? new Error('Request aborted by external signal');
+            timeoutController!.abort(timeoutReason);
           };
 
           if (originalSignal.aborted) {
-            timeoutController.abort();
+            timeoutReason = originalSignal.reason ?? new Error('Request aborted by external signal');
+            timeoutController.abort(timeoutReason);
           } else {
             originalSignal.addEventListener('abort', onOriginalAbort, { once: true });
+            cancelOriginalAbortListener = () => originalSignal.removeEventListener('abort', onOriginalAbort);
           }
         } else {
           effectiveSignal = timeoutController.signal;
         }
 
         timeoutId = setTimeout(() => {
-          timeoutController!.abort();
-        }, timeouts.totalTimeout);
+            timeoutReason = timeoutError;
+            timeoutController!.abort(timeoutReason);
+          }, timeouts.totalTimeout);
       }
 
       while (true) {
@@ -1237,8 +1313,8 @@ export class UndiciTransport implements Transport {
         });
       }
 
-      if (error.name === 'AbortError' || error.code === 'ABORT_ERR') {
-        throw new TimeoutError(req, {
+      if (isTotalRequestTimeoutError(error, timeoutReason, timeouts.totalTimeout)) {
+        throw timeoutError ?? new TimeoutError(req, {
           phase: 'request',
           timeout: timeouts.totalTimeout
         });
@@ -1263,6 +1339,9 @@ export class UndiciTransport implements Transport {
 
       throw new NetworkError(error.message, code, req);
     } finally {
+      if (typeof cancelOriginalAbortListener === 'function') {
+        cancelOriginalAbortListener();
+      }
       if (timeoutId) {
         clearTimeout(timeoutId);
       }

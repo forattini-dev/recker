@@ -122,7 +122,7 @@ export class WorkerTransport implements Transport {
   }> = new Map();
   private workerUrl: string;
 
-  constructor(private options: WorkerTransportOptions = {}) {
+  constructor(options: WorkerTransportOptions = {}) {
     const poolSize = options.poolSize ?? (
       typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 4
     ) ?? 4;
@@ -253,7 +253,7 @@ export class WorkerTransport implements Transport {
     URL.revokeObjectURL(this.workerUrl);
 
     // Reject any pending requests
-    for (const [id, pending] of this.pendingRequests) {
+    for (const pending of this.pendingRequests.values()) {
       pending.reject(new Error('Transport terminated'));
     }
     this.pendingRequests.clear();

@@ -7,7 +7,8 @@
 
 import { Spider, SpiderOptions, SpiderResult, SpiderPageResult } from '../scrape/spider.js';
 import { analyzeSeo } from './analyzer.js';
-import type { SeoReport, SeoCheckResult } from './types.js';
+import type { SeoReport } from './types.js';
+import { type RuleCategory } from './rules/index.js';
 import { createClient } from '../core/client.js';
 import { discoverFeeds } from './validators/rss.js';
 import { fetchAndValidateSitemap, type SitemapValidationResult } from './validators/sitemap.js';
@@ -89,9 +90,28 @@ export interface SeoSpiderResult extends Omit<SpiderResult, 'pages'> {
 export class SeoSpider {
   private spider: Spider;
   private options: SeoSpiderOptions;
-  private seoResults: Map<string, SeoReport> = new Map();
   private seoPages: SeoPageResult[] = [];
   private homeHtml: string = '';
+  private normalizeUrl(url: string): string {
+    try {
+      const parsed = new URL(url);
+      parsed.hash = '';
+      parsed.searchParams.sort();
+      if (parsed.pathname !== '/' && parsed.pathname.endsWith('/')) {
+        parsed.pathname = parsed.pathname.slice(0, -1);
+      }
+      return parsed.toString();
+    } catch {
+      return url;
+    }
+  }
+  private toHeaderRecord(headers: Headers): Record<string, string> {
+    const headerRecord: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      headerRecord[key] = value;
+    });
+    return headerRecord;
+  }
 
   constructor(options: SeoSpiderOptions = {}) {
     this.options = options;
@@ -129,19 +149,19 @@ export class SeoSpider {
     try {
       // Build rules options based on focus categories
       const rulesOptions = this.options.focusCategories?.length
-        ? { categories: this.options.focusCategories as any[] }
+        ? { categories: this.options.focusCategories as RuleCategory[] }
         : undefined;
 
       // Run full SEO analysis on the HTML we already have
       const seoReport = await analyzeSeo(html, {
         baseUrl: pageResult.url,
+        timings: pageResult.timings,
+        htmlSize: pageResult.metrics?.htmlSize,
         rules: rulesOptions,
       });
 
       const seoPage: SeoPageResult = { ...pageResult, seoReport };
       this.seoPages.push(seoPage);
-      this.seoResults.set(pageResult.url, seoReport);
-
       // Call callback if provided
       this.options.onSeoAnalysis?.(seoPage);
     } catch {
@@ -156,7 +176,6 @@ export class SeoSpider {
   async crawl(startUrl: string): Promise<SeoSpiderResult> {
     // Reset state
     this.seoPages = [];
-    this.seoResults.clear();
     this.homeHtml = '';
 
     // Crawl with SEO analysis happening during crawl (via onPageWithHtml)
@@ -368,7 +387,7 @@ export class SeoSpider {
         return {
           status: res.status,
           text,
-          headers: Object.fromEntries([...res.headers.entries()]),
+          headers: this.toHeaderRecord(res.headers),
         };
       };
 
@@ -377,201 +396,6 @@ export class SeoSpider {
     } catch {
       return undefined;
     }
-  }
-
-  /**
-   * Create a basic SEO report from spider page data
-   * Note: This is limited since we don't have full HTML access
-   */
-  private createReportFromPageData(page: SpiderPageResult): SeoReport {
-    const checks: SeoCheckResult[] = [];
-
-    // Title check
-    if (page.title) {
-      const titleLength = page.title.length;
-      if (titleLength < 30) {
-        checks.push({
-          id: 'title-length',
-          name: 'Title Length',
-          category: 'title',
-          status: 'warn',
-          message: `Title is ${titleLength} characters`,
-          value: titleLength,
-          recommendation: 'Title should be 50-60 characters',
-        });
-      } else if (titleLength > 60) {
-        checks.push({
-          id: 'title-length',
-          name: 'Title Length',
-          category: 'title',
-          status: 'warn',
-          message: `Title is too long (${titleLength} chars)`,
-          value: titleLength,
-          recommendation: 'Title should be 50-60 characters',
-        });
-      } else {
-        checks.push({
-          id: 'title-length',
-          name: 'Title Length',
-          category: 'title',
-          status: 'pass',
-          message: `Good title length (${titleLength} chars)`,
-          value: titleLength,
-        });
-      }
-    } else {
-      checks.push({
-        id: 'title-missing',
-        name: 'Title',
-        category: 'title',
-        status: 'fail',
-        message: 'Page has no title',
-        recommendation: 'Add a descriptive <title> tag',
-      });
-    }
-
-    // Link analysis
-    const internalLinks = page.links.filter(l => l.type === 'internal').length;
-    const externalLinks = page.links.filter(l => l.type === 'external').length;
-
-    if (internalLinks === 0) {
-      checks.push({
-        id: 'internal-links',
-        name: 'Internal Links',
-        category: 'links',
-        status: 'warn',
-        message: 'No internal links found',
-        recommendation: 'Add internal links to improve site structure',
-      });
-    } else {
-      checks.push({
-        id: 'internal-links',
-        name: 'Internal Links',
-        category: 'links',
-        status: 'pass',
-        message: `${internalLinks} internal links found`,
-        value: internalLinks,
-      });
-    }
-
-    // Calculate score based on checks
-    // pass = 100%, warn = 50%, fail = 0%
-    const scoreSum = checks.reduce((sum, c) => {
-      if (c.status === 'pass') return sum + 100;
-      if (c.status === 'warn') return sum + 50;
-      return sum; // fail = 0
-    }, 0);
-    const score = checks.length > 0 ? Math.round(scoreSum / checks.length) : 0;
-
-    // Build basic summary for spider reports
-    const passed = checks.filter(c => c.status === 'pass').length;
-    const warnings = checks.filter(c => c.status === 'warn').length;
-    const errors = checks.filter(c => c.status === 'fail').length;
-    const infos = checks.filter(c => c.status === 'info').length;
-    const passRate = checks.length > 0 ? Math.round((passed / checks.length) * 100) : 0;
-
-    return {
-      url: page.url,
-      timestamp: new Date(),
-      grade: this.scoreToGrade(score),
-      score,
-      summary: {
-        totalChecks: checks.length,
-        passed,
-        warnings,
-        errors,
-        infos,
-        passRate,
-        issuesByCategory: {},
-        topIssues: checks
-          .filter(c => c.status === 'fail' || c.status === 'warn')
-          .slice(0, 5)
-          .map(c => ({
-            name: c.name,
-            message: c.message,
-            category: 'general',
-            severity: c.status === 'fail' ? 'error' as const : 'warning' as const,
-          })),
-        quickWins: [],
-        vitals: {
-          wordCount: 0,
-          readingTime: 0,
-          imageCount: 0,
-          linkCount: page.links.length,
-        },
-        completeness: {
-          meta: 0,
-          social: 0,
-          technical: 0,
-          content: 0,
-          images: 0,
-          links: 0,
-        },
-      },
-      checks,
-      title: page.title ? { text: page.title, length: page.title.length } : undefined,
-      headings: {
-        structure: [],
-        h1Count: 0,
-        hasProperHierarchy: false,
-        issues: [],
-      },
-      content: {
-        wordCount: 0,
-        characterCount: 0,
-        sentenceCount: 0,
-        paragraphCount: 0,
-        readingTimeMinutes: 0,
-        avgWordsPerSentence: 0,
-        avgParagraphLength: 0,
-        listCount: 0,
-        strongTagCount: 0,
-        emTagCount: 0,
-      },
-      links: {
-        total: page.links.length,
-        internal: internalLinks,
-        external: externalLinks,
-        nofollow: 0,
-        broken: 0,
-        withoutText: page.links.filter(l => !l.text?.trim()).length,
-        sponsoredLinks: 0,
-        ugcLinks: 0,
-      },
-      images: {
-        total: 0,
-        withAlt: 0,
-        withoutAlt: 0,
-        lazy: 0,
-        missingDimensions: 0,
-        modernFormats: 0,
-        altTextLengths: [],
-        imageAltTexts: [],
-        imageFilenames: [],
-        imagesWithAsyncDecoding: 0,
-      },
-      social: {
-        openGraph: {
-            present: false, hasTitle: false, hasDescription: false, hasImage: false, hasUrl: false, issues: []
-        },
-        twitterCard: {
-            present: false, hasCard: false, hasTitle: false, hasDescription: false, hasImage: false, issues: []
-        },
-      },
-      keywords: { totalWords: 0, uniqueWords: 0, topKeywords: [] },
-      technical: {
-        hasCanonical: false,
-        hasRobotsMeta: false,
-        hasViewport: false,
-        hasCharset: false,
-        hasLang: false,
-      },
-      structuredData: {
-        count: 0,
-        types: [],
-        items: [],
-      },
-    };
   }
 
   /**
@@ -657,13 +481,13 @@ export class SeoSpider {
     for (const page of pages) {
       for (const link of page.links) {
         if (link.type === 'internal' && link.href) {
-          linkedUrls.add(link.href);
+          linkedUrls.add(this.normalizeUrl(link.href));
         }
       }
     }
 
     const orphanPages = pages
-      .filter(p => !linkedUrls.has(p.url) && p.depth > 0) // depth 0 is the start URL
+      .filter(p => p.depth > 0 && !linkedUrls.has(this.normalizeUrl(p.url))) // depth 0 is the start URL
       .map(p => p.url);
 
     if (orphanPages.length > 0) {
@@ -716,17 +540,6 @@ export class SeoSpider {
       duplicateH1s,
       orphanPages,
     };
-  }
-
-  /**
-   * Convert score to letter grade
-   */
-  private scoreToGrade(score: number): string {
-    if (score >= 90) return 'A';
-    if (score >= 80) return 'B';
-    if (score >= 70) return 'C';
-    if (score >= 60) return 'D';
-    return 'F';
   }
 
   /**

@@ -2,7 +2,6 @@ import { ConnectionInfo, ReckerResponse, Timings, SSEEvent, ProgressEvent } from
 import type { Dispatcher } from 'undici'; // Import Dispatcher
 import { parseSSE } from '../utils/sse.js';
 import { cleanHtml } from '../utils/html-cleaner.js';
-import { calculateProgress } from '../utils/progress.js';
 import { webToNodeStream } from '../utils/streaming.js';
 import { parseHeaders, type HeaderInfo, type CacheInfo, type RateLimitInfo } from '../utils/header-parser.js';
 import { parseLinkHeader, type LinkHeaderParser } from '../utils/link-header.js';

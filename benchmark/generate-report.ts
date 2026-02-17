@@ -165,7 +165,7 @@ function main() {
 - **Iterations**: Multiple samples until statistically significant
 - **Metrics**: All times in milliseconds (ms)
 
-## Libraries Tested (16)
+## Libraries Tested (15)
 
 | Category | Libraries |
 |----------|-----------|
@@ -174,7 +174,7 @@ function main() {
 | **Full-featured** | recker, axios, got, ky |
 | **Fetch-based** | node-fetch, cross-fetch, wretch, make-fetch-happen, minipass-fetch |
 | **Legacy/Callback** | superagent, needle |
-| **Ecosystem** | popsicle, wreck (Hapi) |
+| **Ecosystem** | wreck (Hapi) |
 
 ## Benchmark Scenarios
 
@@ -196,9 +196,9 @@ Tests connection reuse and latency accumulation.
 
 ## Key Findings
 
-1. **recker-mini** achieves ~2% overhead vs raw undici - effectively zero overhead!
+1. **recker-mini** is typically very close to raw undici in low-overhead scenarios in this suite.
 2. **undici** is the fastest baseline (Node.js official HTTP client)
-3. **recker** adds ~86% overhead vs undici but includes retry, cache, rate-limiting
+3. **recker** adds more overhead than recker-mini and includes retry, cache, rate-limiting features
 4. **got** has significant overhead due to extensive feature set
 5. **ky** is slower than expected despite being fetch-based
 `;

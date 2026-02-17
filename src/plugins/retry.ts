@@ -1,5 +1,6 @@
 import { Middleware, Plugin } from '../types/index.js';
-import { HttpError, NetworkError, TimeoutError } from '../core/errors.js';
+import { HttpError, NetworkError, TimeoutError, classifyTransportError } from '../core/errors.js';
+import { getRequestContext } from '../core-runtime/request-context.js';
 
 export type BackoffStrategy = 'linear' | 'exponential' | 'decorrelated';
 
@@ -108,8 +109,17 @@ export function retryPlugin(options: RetryOptions = {}): Plugin {
     if (error instanceof NetworkError) return true;
     if (error instanceof TimeoutError) return true;
     if (error instanceof HttpError) {
-        return statusCodes.includes(error.status);
+      return statusCodes.includes(error.status);
     }
+
+    const classification = classifyTransportError(error);
+    if (classification && classification.canRetry === false) {
+      return false;
+    }
+    if (classification) {
+      return classification.canRetry;
+    }
+
     if (error && typeof error === 'object' && 'code' in error) {
         const code = (error as any).code;
         return code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ENOTFOUND';
@@ -120,6 +130,27 @@ export function retryPlugin(options: RetryOptions = {}): Plugin {
   const shouldRetry = options.shouldRetry || defaultShouldRetry;
 
   return (client: any) => {
+    const emitRequestRetry = (error: unknown, attempt: number, delayMs: number, req: any) => {
+      const eventBus = client.runtimeEventBus;
+      if (!eventBus?.emit) {
+        return;
+      }
+
+      const context = getRequestContext(req);
+      if (!context) {
+        return;
+      }
+
+      const classification = classifyTransportError(error);
+      eventBus.emit('request:retry', {
+        context,
+        req,
+        attempt,
+        delayMs,
+        reason: classification?.reason || (error as any)?.message || 'retry requested'
+      });
+    };
+
     const middleware: Middleware = async (req, next) => {
         let attempt = 0;
 
@@ -142,6 +173,7 @@ export function retryPlugin(options: RetryOptions = {}): Plugin {
                 delayMs = calculateDelay(attempt, baseDelay, maxDelay, backoffStrategy, useJitter);
             }
             const err = new HttpError(res, req);
+            emitRequestRetry(err, attempt, delayMs, req);
 
             if (onRetry) {
                 onRetry(attempt, err, delayMs);
@@ -163,6 +195,7 @@ export function retryPlugin(options: RetryOptions = {}): Plugin {
             // Retry based on Error Type
             if (attempt < maxAttempts && shouldRetry(error)) {
             const delayMs = calculateDelay(attempt, baseDelay, maxDelay, backoffStrategy, useJitter);
+            emitRequestRetry(error, attempt, delayMs, req);
 
             if (onRetry) {
                 onRetry(attempt, error, delayMs);

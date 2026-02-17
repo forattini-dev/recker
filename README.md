@@ -6,7 +6,7 @@
 
 Nine protocols unified: HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS.
 <br>
-AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 65 tools.
+AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 70 tools.
 <br>
 48 service presets built-in. Zero config.
 
@@ -121,7 +121,7 @@ recker.ws('wss://example.com/socket'); // WebSocket
 | **SEO** | 400+ rules, 19 categories, site-wide spider crawler |
 | **Testing** | 10 mock servers (HTTP, Proxy, WebSocket, DNS, FTP, HLS, SSE...) |
 | **CLI** | `rek` - curl replacement with superpowers |
-| **MCP** | 65 tools for AI assistants (Claude, Cursor, Windsurf) |
+| **MCP** | 70 tools for AI assistants (Claude, Cursor, Windsurf) |
 
 ## Highlights
 
@@ -253,7 +253,7 @@ rek shell
 
 ## MCP Server
 
-65 tools for AI assistants like Claude Code, Cursor, and Windsurf:
+70 tools for AI assistants like Claude Code, Cursor, and Windsurf:
 
 ```bash
 # One-liner for Claude Code (uses minimal category by default)
@@ -262,11 +262,11 @@ claude mcp add recker npx recker@latest mcp
 # Add more categories as needed
 claude mcp add recker npx recker@latest mcp --category=minimal,video,seo
 
-# Enable all 65 tools
+# Enable all 70 tools
 claude mcp add recker npx recker@latest mcp --category=full
 ```
 
-**Categories:** `minimal` (default) `docs` `network` `dns` `security` `seo` `scrape` `video` `ai` `protocols` `parsing` `streaming` `full`
+**Categories:** `minimal` (default) `docs` `network` `dns` `security` `seo` `scrape` `video` `ai` `protocols` `parsing` `streaming` `template` `full`
 
 [→ MCP Documentation](https://forattini-dev.github.io/recker/#/getting-started/mcp)
 
@@ -293,7 +293,7 @@ claude mcp add recker npx recker@latest mcp --category=full
 | Plugins | 30+ |
 | Auth Methods | 15 |
 | API Presets | 48 |
-| MCP Tools | 65 |
+| MCP Tools | 70 |
 | SEO Rules | 400+ |
 | Mock Servers | 10 |
 | Tests | 4200+ |

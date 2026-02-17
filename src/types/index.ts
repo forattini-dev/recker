@@ -98,6 +98,11 @@ export interface RedirectInfo {
   headers: Headers;
 }
 
+export interface ReckerRuntimeEventBus {
+  on<K extends string>(name: K, handler: (event: unknown) => void): () => void;
+  emit<K extends string>(name: K, event: unknown): void;
+}
+
 export interface RequestOptions {
   method?: Method;
   headers?: HeadersInit;
@@ -201,6 +206,26 @@ export interface RequestOptions {
   onDownloadProgress?: ProgressCallback;
   maxResponseSize?: number;
   /**
+   * DevX request correlation identifier for observability/tracing.
+   */
+  correlationId?: string;
+  /**
+   * Tenant scoping for policy routing and observability.
+   */
+  tenant?: string;
+  /**
+   * Policy labels used by retry/circuit/cache decisions.
+   */
+  policyTags?: string[];
+  /**
+   * Source of policy decisions (e.g. "global", "tenant", "route").
+   */
+  policySource?: string;
+  /**
+   * Trace identifier propagated across retries/related operations.
+   */
+  traceId?: string;
+  /**
    * Hook called before following a redirect
    * Allows inspection/modification of redirect or cancellation
    *
@@ -274,6 +299,11 @@ export interface ReckerRequest {
   onUploadProgress?: ProgressCallback;
   onDownloadProgress?: ProgressCallback;
   maxResponseSize?: number;
+  correlationId?: string;
+  tenant?: string;
+  policyTags?: string[];
+  policySource?: string;
+  traceId?: string;
   beforeRedirect?: (info: RedirectInfo) => void | false | string | Promise<void | false | string>;
   maxRedirects?: number;
   followRedirects?: boolean;
@@ -298,6 +328,19 @@ export interface ReckerRequest {
       onHttp2Session?: (info: any) => void;
       onHttp2Stream?: (info: any) => void;
       onHttp2FlowControl?: (info: any) => void;
+  };
+  /**
+   * Internal runtime context used by diagnostics and policy hooks.
+   * @internal
+   */
+  _runtime?: {
+    requestId: string;
+    correlationId: string;
+    tenant?: string;
+    policyTags: string[];
+    policySource?: string;
+    createdAt: number;
+    traceId?: string;
   };
 }
 
@@ -1417,13 +1460,21 @@ export interface ClientOptions {
    *   observability: true
    * });
    * ```
-   */
+  */
   observability?: boolean;
+
+  /**
+   * Optional runtime event bus for DEVX/performance instrumentation hooks.
+   * Use with `client.onRuntimeEvent()` for request lifecycle telemetry.
+   *
+   * Default: internal noop bus (no-op)
+   */
+  runtimeEventBus?: ReckerRuntimeEventBus;
 
   /**
    * Retry configuration for failed requests
    * @see RetryOptions from plugins/retry
-   */
+  */
   retry?: {
     maxAttempts?: number;
     delay?: number;
