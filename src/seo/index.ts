@@ -140,3 +140,23 @@ export type {
   LlmsTxtValidationIssue,
   LlmsTxtValidationResult,
 } from './validators/llms-txt.js';
+
+export {
+  analyzeKeywordCampaign,
+  extractKeywordCampaignSeedsFromReport,
+} from './keyword-campaign.js';
+export type {
+  CampaignActivitySignal,
+  CampaignResultPlacement,
+  KeywordCampaignCompetitorResult,
+  KeywordCampaignCompetitorSummary,
+  KeywordCampaignExtractionOptions,
+  KeywordCampaignOptions,
+  KeywordCampaignPageStats,
+  KeywordCampaignReport,
+  KeywordCampaignResult,
+  KeywordCampaignSeed,
+  KeywordCampaignSeedInput,
+  KeywordCampaignSource,
+  KeywordCampaignSummary,
+} from './keyword-campaign.js';

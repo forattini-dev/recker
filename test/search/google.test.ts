@@ -175,6 +175,42 @@ describe('searchGoogleAdvanced', () => {
     expect(response.transport.impersonateAvailable).toBe(false);
   });
 
+  it('detects ad placement and organic placement in search results', async () => {
+    mockGet.mockResolvedValueOnce(
+      makeResponse(`
+        <html>
+          <body>
+            <div class="g xpd ad" data-text-ad="1">
+              <a href="/url?q=https://docs.example.com/ad-keyword">
+                <h3>Brand ad</h3>
+                <span>Ad example</span>
+                <div class="aCOpRe">Ad keyword snippet with enough length to be parsed as a valid snippet candidate and checked by tests.</div>
+              </a>
+            </div>
+            <div class="g" data-hveid="2">
+              <a href="/url?q=https://docs.example.com/organic-keyword">
+                <h3>Organic keyword</h3>
+                <span>Organic example</span>
+                <div class="aCOpRe">Organic snippet with enough length to be parsed as a valid snippet candidate and checked by tests.</div>
+              </a>
+            </div>
+          </body>
+        </html>
+      `)
+    );
+
+    const response = await searchGoogleAdvanced('campaign keyword');
+
+    expect(response.results).toHaveLength(2);
+    expect(response.results[0]).toMatchObject({
+      placement: 'ad',
+      placementHint: expect.any(String),
+    });
+    expect(response.results[1]).toMatchObject({
+      placement: 'organic',
+    });
+  });
+
   it('uses impersonate-first flow in auto mode', async () => {
     mockHasImpersonate.mockReturnValue(true);
     mockCurlDispatch.mockResolvedValueOnce(

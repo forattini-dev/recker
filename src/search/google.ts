@@ -22,6 +22,7 @@ import { createClient } from '../core/client.js';
 import { ValidationError } from '../core/errors.js';
 import { HttpRequest } from '../core/request.js';
 import { ScrapeDocument } from '../scrape/document.js';
+import type { ScrapeElement } from '../scrape/element.js';
 import { detectBlock, type BlockDetectionResult } from '../utils/block-detector.js';
 import { getRandomUserAgent } from '../utils/user-agent.js';
 
@@ -46,6 +47,31 @@ const GOOGLE_RESULT_LINK_SELECTORS = [
 
 const GOOGLE_RESULT_CONTAINER_SELECTORS =
   '[data-hveid], [data-ved], div[class*="g"], div[class*="MjjY"], div[class*="tF2Cxc"], [class*="xpd"]';
+
+const GOOGLE_AD_CONTAINER_CLASS_HINTS = [
+  'ad',
+  'ads',
+  'sponsored',
+  'ad_cx',
+  'pla',
+  'shopping',
+  'uEierd',
+];
+
+const GOOGLE_AD_TEXT_HINTS = [
+  'anúncio',
+  'anuncio',
+  'sponsored',
+  'patrocinado',
+  'patrocinada',
+  'patrocínio',
+  'publi',
+  'publicidade',
+  'ad',
+  'ads',
+  'anúncios',
+  'anunciante',
+];
 
 const COUNTRY_CODE_PATTERN = /^[a-z]{2}$/;
 const COUNTRY_ALIASES: Record<string, string> = {
@@ -165,12 +191,16 @@ export interface GoogleSearchAdvancedOptions {
   includeRawHtml?: boolean;
 }
 
+export type GoogleSearchResultPlacement = 'ad' | 'organic' | 'unknown';
+
 export interface GoogleSearchResult {
   rank: number;
   title: string;
   url: string;
   snippet?: string;
   displayedUrl?: string;
+  placement?: GoogleSearchResultPlacement;
+  placementHint?: string;
   source?: string;
 }
 
@@ -545,6 +575,132 @@ function looksLikeSnippet(text: string, title: string): boolean {
   return true;
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasAdHintText(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = cleanText(value).toLowerCase();
+  if (!normalized) return false;
+
+  return GOOGLE_AD_TEXT_HINTS.some((hint) => {
+    const pattern = new RegExp(`(^|\\W)${escapeRegex(hint)}(\\W|$)`, 'i');
+    return pattern.test(normalized);
+  });
+}
+
+function hasAdClassHint(className: string | undefined): boolean {
+  if (!className) return false;
+  const normalized = cleanText(className).toLowerCase();
+  if (!normalized) return false;
+
+  return GOOGLE_AD_CONTAINER_CLASS_HINTS.some((hint) => {
+    const classes = normalized.split(/\s+/);
+    return classes.some((token) => token === hint || token.startsWith(`${hint}-`));
+  });
+}
+
+function detectResultPlacement(
+  anchor: ScrapeElement,
+  container: ScrapeElement
+): {
+  placement: GoogleSearchResultPlacement;
+  placementHint?: string;
+} {
+  const isScrapeElementLike = (value: unknown): value is ScrapeElement => {
+    if (value === null || value === undefined) return false;
+    if (typeof value !== 'object') return false;
+
+    const candidate = value as { length?: unknown; attrs?: unknown };
+    return 'length' in candidate
+      && typeof candidate.length === 'number'
+      && typeof candidate.attrs === 'function';
+  };
+
+  const isResultContainer = (node: ScrapeElement): boolean => {
+    const tag = (() => {
+      const raw = node as unknown as { tagName?: string | (() => string) };
+      if (typeof raw.tagName === 'function') return raw.tagName().toLowerCase();
+      if (typeof raw.tagName === 'string') return raw.tagName.toLowerCase();
+      return '';
+    })();
+    return tag !== 'body' && tag !== 'html';
+  };
+
+  const anchorParent = typeof anchor.parent === 'function' ? anchor.parent() : undefined;
+  const containerParent = typeof container.parent === 'function' ? container.parent() : undefined;
+  const anchorNext = typeof anchor.next === 'function' ? anchor.next() : undefined;
+  const anchorPrev = typeof anchor.prev === 'function' ? anchor.prev() : undefined;
+
+  const checkList = [
+    anchor,
+    anchorParent,
+    container,
+    containerParent,
+    anchorNext,
+    anchorPrev,
+  ].filter((node): node is ScrapeElement => {
+    if (!isScrapeElementLike(node) || node.length === 0) return false;
+    return isResultContainer(node);
+  });
+
+  for (const node of checkList) {
+
+    const attributes = node.attrs();
+    const className = node.attr('class');
+    const dataAttributeKeys = Object.keys(attributes).filter((key) => {
+      const normalized = key.toLowerCase();
+      return normalized === 'data-text-ad'
+        || normalized === 'data-rw'
+        || normalized === 'data-snc'
+        || normalized.startsWith('data-ad-')
+        || normalized === 'data-ved'
+        || normalized === 'data-pcu';
+    });
+    if (dataAttributeKeys.length > 0) {
+      return {
+        placement: 'ad',
+        placementHint: cleanText(`${dataAttributeKeys.join(' ')} ${node.text()}`.slice(0, 120)),
+      };
+    }
+
+    const dataAttributes = Object.entries(attributes)
+      .filter(([key]) => key.startsWith('data-'))
+      .map(([, value]) => value)
+      .filter((value): value is string => typeof value === 'string');
+
+    const text = cleanText(node.text());
+    const dataText = dataAttributes.join(' ');
+
+    if (hasAdHintText(node.attr('data-ved'))) {
+      return {
+        placement: 'ad',
+        placementHint: cleanText(`${text} ${dataText}`.slice(0, 120)),
+      };
+    }
+
+    if (hasAdClassHint(className) || hasAdHintText(dataText)) {
+      return {
+        placement: 'ad',
+        placementHint: cleanText(`${className} ${dataText}`.slice(0, 120)),
+      };
+    }
+
+    if (hasAdHintText(text)) {
+      return {
+        placement: 'ad',
+        placementHint: text,
+      };
+    }
+  }
+
+  return {
+    placement: 'organic',
+    placementHint: undefined,
+  };
+}
+
 function parseResultStats(text: string): number | undefined {
   const normalized = text.replace(/,/g, '');
   const match = normalized.match(/([0-9]+)\s*(?:result|resultado)/i);
@@ -586,6 +742,8 @@ function parseSearchPage(
     if (!titleText) continue;
 
     const resultContainer = anchor.parents(GOOGLE_RESULT_CONTAINER_SELECTORS).first();
+    const placement = detectResultPlacement(anchor, resultContainer);
+
     const snippet = (() => {
       for (const selector of GOOGLE_RESULT_SNIPPET_SELECTOR_ORDER) {
         const snippetNode = resultContainer.find(selector).first();
@@ -617,6 +775,8 @@ function parseSearchPage(
       url: resultUrl,
       snippet,
       displayedUrl: extractDisplayedUrl(resultUrl, anchor.text()),
+      placement: placement.placement,
+      placementHint: placement.placementHint,
     };
 
     results.push(item);
