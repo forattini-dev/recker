@@ -2,201 +2,231 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Spider, spider } from '../../src/scrape/spider.js';
 import { MockHttpServer } from '../../src/testing/mock-http-server.js';
 
-describe('Spider - Web Crawler', () => {
-  let server: MockHttpServer;
-  let baseUrl: string;
+type MockPage = {
+  status?: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+};
 
-  beforeAll(async () => {
-    server = new MockHttpServer();
-    await server.start();
-    baseUrl = server.url;
+let baseUrl = 'http://local.recker.test';
+let sharedServer: MockHttpServer;
+let activeServer: MockHttpServer | null = null;
 
-    // Setup mock pages
-    server.get('/', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <title>Home Page</title>
-          <meta name="description" content="Welcome to home">
-          <meta property="og:title" content="OG Home">
-        </head>
-        <body>
-          <h1>Home</h1>
-          <nav>
-            <a href="/about">About</a>
-            <a href="/products">Products</a>
-            <a href="/contact">Contact</a>
-          </nav>
-        </body>
-        </html>
-      `,
-    });
+function useMockServer(server: MockHttpServer): void {
+  activeServer = server;
+  baseUrl = server.url;
+}
 
-    server.get('/about', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `
-        <!DOCTYPE html>
-        <html>
-        <head><title>About Us</title></head>
-        <body>
-          <h1>About Us</h1>
-          <a href="/">Home</a>
-          <a href="/team">Team</a>
-        </body>
-        </html>
-      `,
-    });
+function setMockPage(path: string, response: MockPage): void {
+  if (!activeServer) {
+    throw new Error('No active mock server configured');
+  }
 
-    server.get('/products', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `
-        <!DOCTYPE html>
-        <html>
-        <head><title>Products</title></head>
-        <body>
-          <h1>Products</h1>
-          <a href="/">Home</a>
-          <a href="/products/item-1">Item 1</a>
-          <a href="/products/item-2">Item 2</a>
-        </body>
-        </html>
-      `,
-    });
+  activeServer.removeRoute('GET', path);
+  activeServer.get(path, response);
+}
 
-    server.get('/products/item-1', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `
-        <!DOCTYPE html>
-        <html>
-        <head><title>Item 1</title></head>
-        <body>
-          <h1>Item 1</h1>
-          <a href="/products">Back to Products</a>
-        </body>
-        </html>
-      `,
-    });
-
-    server.get('/products/item-2', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `
-        <!DOCTYPE html>
-        <html>
-        <head><title>Item 2</title></head>
-        <body>
-          <h1>Item 2</h1>
-          <a href="/products">Back to Products</a>
-        </body>
-        </html>
-      `,
-    });
-
-    server.get('/contact', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `
-        <!DOCTYPE html>
-        <html>
-        <head><title>Contact</title></head>
-        <body>
-          <h1>Contact</h1>
-          <a href="/">Home</a>
-        </body>
-        </html>
-      `,
-    });
-
-    server.get('/team', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `
-        <!DOCTYPE html>
-        <html>
-        <head><title>Team</title></head>
-        <body>
-          <h1>Our Team</h1>
+function setupDefaultPages(): void {
+  // Setup default mock pages
+  setMockPage('/', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <title>Home Page</title>
+        <meta name="description" content="Welcome to home">
+        <meta property="og:title" content="OG Home">
+      </head>
+      <body>
+        <h1>Home</h1>
+        <nav>
           <a href="/about">About</a>
-        </body>
-        </html>
-      `,
-    });
+          <a href="/products">Products</a>
+          <a href="/contact">Contact</a>
+        </nav>
+      </body>
+      </html>
+    `,
+  });
 
-    // Deep page for depth testing
-    server.get('/deep/level1', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `<html><head><title>Level 1</title></head><body><a href="/deep/level2">Next</a></body></html>`,
-    });
+  setMockPage('/about', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `
+      <!DOCTYPE html>
+      <html>
+      <head><title>About Us</title></head>
+      <body>
+        <h1>About Us</h1>
+        <a href="/">Home</a>
+        <a href="/team">Team</a>
+      </body>
+      </html>
+    `,
+  });
 
-    server.get('/deep/level2', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `<html><head><title>Level 2</title></head><body><a href="/deep/level3">Next</a></body></html>`,
-    });
+  setMockPage('/products', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `
+      <!DOCTYPE html>
+      <html>
+      <head><title>Products</title></head>
+      <body>
+        <h1>Products</h1>
+        <a href="/">Home</a>
+        <a href="/products/item-1">Item 1</a>
+        <a href="/products/item-2">Item 2</a>
+      </body>
+      </html>
+    `,
+  });
 
-    server.get('/deep/level3', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `<html><head><title>Level 3</title></head><body><a href="/deep/level4">Next</a></body></html>`,
-    });
+  setMockPage('/products/item-1', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `
+      <!DOCTYPE html>
+      <html>
+      <head><title>Item 1</title></head>
+      <body>
+        <h1>Item 1</h1>
+        <a href="/products">Back to Products</a>
+      </body>
+      </html>
+    `,
+  });
 
-    server.get('/deep/level4', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `<html><head><title>Level 4</title></head><body>End</body></html>`,
-    });
+  setMockPage('/products/item-2', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `
+      <!DOCTYPE html>
+      <html>
+      <head><title>Item 2</title></head>
+      <body>
+        <h1>Item 2</h1>
+        <a href="/products">Back to Products</a>
+      </body>
+      </html>
+    `,
+  });
 
-    // Error page
-    server.get('/error', {
-      status: 500,
-      body: 'Internal Server Error',
-    });
+  setMockPage('/contact', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `
+      <!DOCTYPE html>
+      <html>
+      <head><title>Contact</title></head>
+      <body>
+        <h1>Contact</h1>
+        <a href="/">Home</a>
+      </body>
+      </html>
+    `,
+  });
 
-    // Non-HTML page (should be skipped)
-    server.get('/data.json', {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-      body: '{"test": true}',
-    });
+  setMockPage('/team', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `
+      <!DOCTYPE html>
+      <html>
+      <head><title>Team</title></head>
+      <body>
+        <h1>Our Team</h1>
+        <a href="/about">About</a>
+      </body>
+      </html>
+    `,
+  });
 
-    // robots.txt
-    server.get('/robots.txt', {
-      status: 200,
-      headers: { 'content-type': 'text/plain' },
-      body: `
+  // Deep page for depth testing
+  setMockPage('/deep/level1', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `<html><head><title>Level 1</title></head><body><a href="/deep/level2">Next</a></body></html>`,
+  });
+
+  setMockPage('/deep/level2', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `<html><head><title>Level 2</title></head><body><a href="/deep/level3">Next</a></body></html>`,
+  });
+
+  setMockPage('/deep/level3', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `<html><head><title>Level 3</title></head><body><a href="/deep/level4">Next</a></body></html>`,
+  });
+
+  setMockPage('/deep/level4', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `<html><head><title>Level 4</title></head><body>End</body></html>`,
+  });
+
+  // Error page
+  setMockPage('/error', {
+    status: 500,
+    body: 'Internal Server Error',
+  });
+
+  // Non-HTML page (should be skipped)
+  setMockPage('/data.json', {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+    body: '{"test": true}',
+  });
+
+  // robots.txt
+  setMockPage('/robots.txt', {
+    status: 200,
+    headers: { 'content-type': 'text/plain' },
+    body: `
 User-agent: *
 Disallow: /private/
 Allow: /
-      `,
-    });
-
-    // Page with external links
-    server.get('/external-links', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-      body: `
-        <html>
-        <head><title>External Links</title></head>
-        <body>
-          <a href="https://external.com/page">External</a>
-          <a href="/">Home</a>
-        </body>
-        </html>
-      `,
-    });
+    `,
   });
 
-  afterAll(async () => {
-    await server.stop();
+  // Page with external links
+  setMockPage('/external-links', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: `
+      <html>
+      <head><title>External Links</title></head>
+      <body>
+        <a href="https://external.com/page">External</a>
+        <a href="/">Home</a>
+      </body>
+      </html>
+    `,
   });
+}
 
+beforeAll(async () => {
+  sharedServer = new MockHttpServer();
+  await sharedServer.start();
+  useMockServer(sharedServer);
+  setupDefaultPages();
+});
+
+beforeEach(() => {
+  useMockServer(sharedServer);
+  sharedServer.reset();
+  setupDefaultPages();
+});
+
+afterAll(async () => {
+  await sharedServer.stop();
+});
+
+describe('Spider - Web Crawler', () => {
   describe('Basic crawling', () => {
     it('should crawl starting page', async () => {
       const result = await spider(baseUrl, {
@@ -355,18 +385,18 @@ Allow: /
       if (aboutPage) {
         expect(aboutPage.depth).toBe(1);
       }
-    });
+    }, 15000);
   });
 
   describe('Error handling', () => {
     it('should handle 500 errors gracefully', async () => {
-      server.get('/error-page', {
+      setMockPage('/error-page', {
         status: 500,
         headers: { 'content-type': 'text/html' },
         body: '<html><body>Error</body></html>',
       });
 
-      server.get('/with-error-link', {
+      setMockPage('/with-error-link', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: `<html><head><title>Test</title></head><body><a href="/error-page">Error</a></body></html>`,
@@ -500,7 +530,7 @@ Allow: /
     });
 
     it('should remove tracking parameters', async () => {
-      server.get('/tracking', {
+      setMockPage('/tracking', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: `<html><head><title>Tracking Test</title></head><body><a href="/?utm_source=test">Home</a></body></html>`,
@@ -533,7 +563,7 @@ Allow: /
 
     it('should respect robots.txt disallow rules', async () => {
       // robots.txt disallows /private/
-      server.get('/with-private-link', {
+      setMockPage('/with-private-link', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: `
@@ -546,7 +576,7 @@ Allow: /
         `,
       });
 
-      server.get('/private/secret', {
+      setMockPage('/private/secret', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: `<html><head><title>Secret</title></head><body>Secret page</body></html>`,
@@ -566,7 +596,7 @@ Allow: /
   describe('sitemap', () => {
     it('should include sitemap analysis when useSitemap is enabled', async () => {
       // Setup sitemap at explicit path
-      server.get('/test-sitemap.xml', {
+      setMockPage('/test-sitemap.xml', {
         status: 200,
         headers: { 'content-type': 'application/xml' },
         body: `<?xml version="1.0" encoding="UTF-8"?>
@@ -590,7 +620,7 @@ Allow: /
     });
 
     it('should use custom sitemap URL', async () => {
-      server.get('/custom-sitemap.xml', {
+      setMockPage('/custom-sitemap.xml', {
         status: 200,
         headers: { 'content-type': 'application/xml' },
         body: `<?xml version="1.0" encoding="UTF-8"?>
@@ -611,7 +641,7 @@ Allow: /
     }, 15000);
 
     it('should normalize sitemap URLs and link URLs before orphan comparison', async () => {
-      server.get('/sitemap-normalize-home', {
+      setMockPage('/sitemap-normalize-home', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: `
@@ -625,7 +655,7 @@ Allow: /
         `,
       });
 
-      server.get('/sitemap-normalize-about', {
+      setMockPage('/sitemap-normalize-about', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: `
@@ -638,19 +668,19 @@ Allow: /
         `,
       });
 
-      server.get('/sitemap-normalize-unlinked', {
+      setMockPage('/sitemap-normalize-unlinked', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: '<html><head><title>Unlinked</title></head><body><a href="/sitemap-normalize-home">Home</a></body></html>',
       });
 
-      server.get('/sitemap-normalize-orphan', {
+      setMockPage('/sitemap-normalize-orphan', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: '<html><head><title>Orphan</title></head><body><a href="/sitemap-normalize-home">Home</a></body></html>',
       });
 
-      server.get('/sitemap-normalize.xml', {
+      setMockPage('/sitemap-normalize.xml', {
         status: 200,
         headers: { 'content-type': 'application/xml' },
         body: `<?xml version="1.0" encoding="UTF-8"?>
@@ -678,7 +708,7 @@ Allow: /
     }, 15000);
 
     it('should include sitemap analysis in result', async () => {
-      server.get('/sitemap.xml', {
+      setMockPage('/sitemap.xml', {
         status: 200,
         headers: { 'content-type': 'application/xml' },
         body: `<?xml version="1.0" encoding="UTF-8"?>
@@ -689,7 +719,7 @@ Allow: /
         `,
       });
 
-      server.get('/orphan-page', {
+      setMockPage('/orphan-page', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: `<html><head><title>Orphan</title></head><body>Orphan page</body></html>`,
@@ -710,12 +740,8 @@ Allow: /
 
 describe('Spider content type handling', () => {
   it('should skip non-HTML responses', async () => {
-    const testServer = new MockHttpServer();
-    await testServer.start();
-    const testUrl = testServer.url;
-
     // Index page links to a JSON endpoint
-    testServer.get('/', {
+    setMockPage('/', {
       status: 200,
       headers: { 'content-type': 'text/html' },
       body: `
@@ -729,19 +755,19 @@ describe('Spider content type handling', () => {
     });
 
     // JSON response (should be skipped for link extraction)
-    testServer.get('/data.json', {
+    setMockPage('/data.json', {
       status: 200,
       headers: { 'content-type': 'application/json' },
       body: '{"foo": "bar"}',
     });
 
-    testServer.get('/page', {
+    setMockPage('/page', {
       status: 200,
       headers: { 'content-type': 'text/html' },
       body: '<html><head><title>HTML Page</title></head><body>Content</body></html>',
     });
 
-    const result = await spider(testUrl, {
+    const result = await spider(baseUrl, {
       maxPages: 10,
       respectRobotsTxt: false,
     });
@@ -750,7 +776,6 @@ describe('Spider content type handling', () => {
     const htmlPages = result.pages.filter(p => p.title); // HTML pages have titles
     expect(htmlPages.length).toBeGreaterThanOrEqual(1);
 
-    await testServer.stop();
   });
 });
 
@@ -758,11 +783,7 @@ describe('Spider utility functions', () => {
   describe('URL filtering', () => {
     it('should skip non-HTTP URLs', async () => {
       // Create a page with mailto and tel links
-      const testServer = new MockHttpServer();
-      await testServer.start();
-      const testUrl = testServer.url;
-
-      testServer.get('/', {
+      setMockPage('/', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: `
@@ -777,13 +798,13 @@ describe('Spider utility functions', () => {
         `,
       });
 
-      testServer.get('/valid', {
+      setMockPage('/valid', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: '<html><head><title>Valid</title></head><body>Valid page</body></html>',
       });
 
-      const result = await spider(testUrl, {
+      const result = await spider(baseUrl, {
         maxPages: 10,
         respectRobotsTxt: false,
       });
@@ -791,15 +812,10 @@ describe('Spider utility functions', () => {
       const urls = result.pages.map(p => p.url);
       expect(urls.every(u => u.startsWith('http'))).toBe(true);
 
-      await testServer.stop();
     });
 
     it('should skip file extensions like images and PDFs', async () => {
-      const testServer = new MockHttpServer();
-      await testServer.start();
-      const testUrl = testServer.url;
-
-      testServer.get('/', {
+      setMockPage('/', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: `
@@ -813,13 +829,13 @@ describe('Spider utility functions', () => {
         `,
       });
 
-      testServer.get('/page', {
+      setMockPage('/page', {
         status: 200,
         headers: { 'content-type': 'text/html' },
         body: '<html><head><title>Page</title></head><body>Page</body></html>',
       });
 
-      const result = await spider(testUrl, {
+      const result = await spider(baseUrl, {
         maxPages: 10,
         respectRobotsTxt: false,
       });
@@ -828,7 +844,6 @@ describe('Spider utility functions', () => {
       expect(urls.some(u => u.endsWith('.jpg'))).toBe(false);
       expect(urls.some(u => u.endsWith('.pdf'))).toBe(false);
 
-      await testServer.stop();
     });
   });
 });
