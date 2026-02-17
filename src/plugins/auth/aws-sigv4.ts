@@ -166,8 +166,29 @@ export function awsSignatureV4(options: AWSSignatureV4Options): Middleware {
 /**
  * AWS Signature V4 Authentication Plugin
  */
+const awsSigV4PluginCache = new Map<string, Plugin>();
+
 export function awsSignatureV4Plugin(options: AWSSignatureV4Options): Plugin {
-  return (client) => {
-    client.use(awsSignatureV4(options));
+  const cacheKey = [
+    options.accessKeyId,
+    options.secretAccessKey,
+    options.region,
+    options.service,
+    options.sessionToken || '',
+  ].join('|');
+
+  const cached = awsSigV4PluginCache.get(cacheKey);
+  if (cached) return cached;
+
+  const safeOptions = { ...options };
+  const plugin: Plugin = (client) => {
+    client.use(awsSignatureV4(safeOptions));
   };
+
+  awsSigV4PluginCache.set(cacheKey, plugin);
+  return plugin;
+}
+
+export function clearAwsSigV4PluginCache(): void {
+  awsSigV4PluginCache.clear();
 }
