@@ -285,19 +285,6 @@ claude mcp add recker npx recker@latest mcp --category=full
 | Mock Servers | [→ Testing](https://forattini-dev.github.io/recker/#/cli/08-mock-servers) |
 | API Reference | [→ Full API](https://forattini-dev.github.io/recker/#/reference/01-api) |
 
-## Numbers
-
-| Metric | Value |
-|:-------|:------|
-| Protocols | 9 (HTTP, WS, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS) |
-| Plugins | 30+ |
-| Auth Methods | 15 |
-| API Presets | 48 |
-| MCP Tools | 70 |
-| SEO Rules | 400+ |
-| Mock Servers | 10 |
-| Tests | 4200+ |
-
 ## License
 
 MIT © [Forattini](https://github.com/forattini-dev)

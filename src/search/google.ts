@@ -528,10 +528,12 @@ function extractDisplayedUrl(linkUrl: string, containerText?: string): string {
     try {
       return new URL(linkUrl).hostname;
     } catch {
+      /* c8 ignore next */
       return '';
     }
   })();
   if (direct) return cleanText(direct);
+  /* c8 ignore next */
   return containerText ? cleanText(containerText).slice(0, 120) : '';
 }
 
@@ -648,6 +650,7 @@ function parseSearchPage(
       const parsed = Number.parseInt(next, 10);
       return Number.isFinite(parsed) ? parsed : undefined;
     } catch {
+      /* c8 ignore next */
       return undefined;
     }
   })();

@@ -423,6 +423,7 @@
   <div style="background: rgba(0,0,0,0.15); padding: 0; display: flex; gap: 0; border-bottom: 1px solid var(--border-color);">
     <button onclick="window.switchMode('terminal')" id="btn-terminal" class="tab-btn active" style="font-weight: 600; border: none; background: rgba(255, 138, 0, 0.15); color: #ff8a00; cursor: pointer; padding: 12px 24px; border-bottom: 2px solid #ff8a00; transition: all 0.2s;">HTTP Client</button>
     <button onclick="window.switchMode('seo')" id="btn-seo" class="tab-btn" style="font-weight: 600; border: none; background: none; color: var(--text-color); cursor: pointer; padding: 12px 24px; opacity: 0.7; transition: all 0.2s;">SEO Analyzer</button>
+    <button onclick="window.switchMode('search')" id="btn-search" class="tab-btn" style="font-weight: 600; border: none; background: none; color: var(--text-color); cursor: pointer; padding: 12px 24px; opacity: 0.7; transition: all 0.2s;">Google Search</button>
     <button onclick="window.switchMode('chat')" id="btn-chat" class="tab-btn" style="font-weight: 600; border: none; background: none; color: var(--text-color); cursor: pointer; padding: 12px 24px; opacity: 0.7; transition: all 0.2s;">AI Chat</button>
   </div>
   <div id="mode-terminal" style="padding: 20px;">
@@ -544,6 +545,39 @@
       <div id="seo-engine-info" style="background: rgba(255,138,0,0.05); border-radius: 8px; padding: 12px 15px; border: 1px solid rgba(255,138,0,0.2);"><div style="font-size: 12px; opacity: 0.8;"><span style="color: #ff8a00; font-weight: 600;">Recker SEO Engine</span> — Powered by 400+ SEO rules across 25+ categories. Only applicable rules are shown for each page. <a href="#/seo/01-overview" style="color: #60a5fa;">Learn more</a></div></div>
     </div>
     <div id="seo-placeholder" style="text-align: center; padding: 60px 20px; color: var(--text-color); opacity: 0.5;"><div style="font-size: 48px; margin-bottom: 15px;">🔍</div><div>Enter a URL above to analyze its SEO</div></div>
+  </div>
+  <div id="mode-search" style="display: none; padding: 20px;">
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+      <input type="text" id="google-query" value="recker framework" style="flex: 1; padding: 10px 12px; border-radius: 6px; background: var(--code-background-color); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'JetBrains Mono', monospace; font-size: 14px;" placeholder="Search for something on Google" onkeydown="if(event.key === 'Enter') window.runGoogleSearch()">
+      <button onclick="window.runGoogleSearch()" id="google-search-btn" style="padding: 10px 20px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: transform 0.1s; display: flex; align-items: center; gap: 6px;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'"><span>Search</span><span style="font-size: 16px;">🔎</span></button>
+    </div>
+    <div style="margin-bottom: 15px; display: flex; gap: 15px; flex-wrap: wrap; padding: 10px 15px; background: rgba(0,0,0,0.1); border-radius: 6px; align-items: center;">
+      <input type="text" id="google-country" value="us" style="padding: 9px 10px; border-radius: 6px; background: var(--code-background-color); color: var(--text-color); border: 1px solid var(--border-color); font-size: 12px; max-width: 90px;" placeholder="Country (us)">
+      <input type="text" id="google-site" style="flex: 1; min-width: 160px; padding: 9px 10px; border-radius: 6px; background: var(--code-background-color); color: var(--text-color); border: 1px solid var(--border-color); font-size: 12px;" placeholder="Site filter: example.com">
+      <input type="number" id="google-limit" value="8" min="1" max="20" style="width: 90px; padding: 9px 10px; border-radius: 6px; background: var(--code-background-color); color: var(--text-color); border: 1px solid var(--border-color); font-size: 12px;" placeholder="Results">
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-color); font-size: 13px; margin-left: auto;"><input type="checkbox" id="google-use-proxy" checked style="accent-color: #2563eb;"><span>Use CORS Proxy</span></label>
+    </div>
+    <div id="google-placeholder" style="text-align: center; padding: 40px 20px; color: var(--text-color); opacity: 0.5;"><div style="font-size: 44px; margin-bottom: 15px;">🔎</div><div>Type a query and run a search</div></div>
+    <div id="google-results-wrapper" style="display: none; background: var(--code-background-color); border-radius: 8px; border: 1px solid var(--border-color); padding: 12px; max-height: 610px; overflow: auto;">
+      <div id="google-meta" style="margin-bottom: 12px; padding: 10px 12px; border-radius: 6px; background: rgba(37, 99, 235, 0.12); display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: #93c5fd;">
+        <span id="google-summary">Ready</span>
+        <span id="google-timing" style="opacity: 0.8;"></span>
+      </div>
+      <div id="google-compare-controls" style="display: none; margin-bottom: 12px; border-radius: 6px; border: 1px solid rgba(96, 165, 250, 0.3); background: rgba(37, 99, 235, 0.08); padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;">
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <button id="google-compare-btn" onclick="window.compareGoogleSearchSeo()" style="padding: 7px 12px; background: linear-gradient(135deg, #1d4ed8, #2563eb); color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 12px;" disabled>Compare selected SEO</button>
+          <button id="google-select-all-btn" onclick="window.selectAllGoogleResults(true)" style="padding: 7px 12px; background: rgba(96,165,250,0.2); color: #93c5fd; border: 1px solid rgba(96,165,250,0.3); border-radius: 5px; cursor: pointer; font-size: 12px;">Select all</button>
+          <button onclick="window.selectAllGoogleResults(false)" style="padding: 7px 12px; background: rgba(37,99,235,0.18); color: #93c5fd; border: 1px solid rgba(96,165,250,0.35); border-radius: 5px; cursor: pointer; font-size: 12px;">Clear all</button>
+          <button onclick="window.selectTopGoogleResults(3)" style="padding: 7px 12px; background: rgba(16,185,129,0.22); color: #86efac; border: 1px solid rgba(16,185,129,0.4); border-radius: 5px; cursor: pointer; font-size: 12px;">Top 3</button>
+        </div>
+        <div style="font-size: 12px; opacity: 0.8;"><span id="google-selected-count">0</span> selected</div>
+      </div>
+      <div id="google-results" style="display: flex; flex-direction: column; gap: 10px;"></div>
+    </div>
+    <div id="google-compare-wrapper" style="display: none; margin-top: 14px; background: var(--code-background-color); border-radius: 8px; border: 1px solid var(--border-color); padding: 12px;">
+      <div id="google-compare-summary" style="margin-bottom: 12px; padding: 10px 12px; border-radius: 6px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); font-size: 12px; color: #86efac; font-weight: 600;"></div>
+      <div id="google-compare-results" style="display: flex; flex-direction: column; gap: 10px;"></div>
+    </div>
   </div>
   <div id="mode-chat" style="display: none; padding: 20px;">
     <div style="margin-bottom: 10px;"><input type="password" id="ai-key" style="width: 100%; padding: 10px 12px; border-radius: 6px; background: var(--code-background-color); color: var(--text-color); border: 1px solid var(--border-color); font-size: 14px;" placeholder="Enter OpenAI API Key (sk-...) to activate" onchange="window.saveKey()"></div>
@@ -1441,10 +1475,474 @@
       }
     };
 
+    function escapeHtml(value) {
+      return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function normalizeGoogleLimit(rawValue) {
+      const parsed = Number(rawValue);
+      if (!Number.isFinite(parsed)) return 8;
+      return Math.max(1, Math.min(20, Math.floor(parsed)));
+    }
+
+    function cleanText(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function parseGoogleSearchResults(html, maxResults) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const results = [];
+      const seen = new Set();
+      const links = Array.from(doc.querySelectorAll('a[href^="/url?q="], a[href^="https://www.google.com/url?"], a[href^="http://www.google.com/url?"]'));
+      const snippetSelectors = [
+        '[data-sncf="1"]',
+        'span.aCOpRe',
+        'div.VwiC3b',
+        'span.VwiC3b',
+        'div.BNeawe',
+        'div[data-attrid="wa:/description"]',
+      ];
+      const containerSelectors = '[data-hveid], [data-ved], div[class*="g"], div[class*="MjjY"], div[class*="tF2Cxc"], [class*="xpd"]';
+
+      const looksLikeSnippet = (text) => {
+        const cleaned = cleanText(text);
+        return cleaned.length > 8 && cleaned.length < 260;
+      };
+
+      const resolveResultUrl = (rawHref) => {
+        try {
+          const normalized = rawHref.startsWith('//') ? `https:${rawHref}` : rawHref;
+          const parsed = new URL(normalized, 'https://www.google.com');
+          const candidate = parsed.searchParams.get('q') || parsed.searchParams.get('url');
+          if (!candidate) return null;
+          const decoded = decodeURIComponent(candidate);
+          const url = new URL(decoded, 'https://www.google.com');
+          if (!url.protocol.startsWith('http')) return null;
+          if (url.hostname === 'www.google.com' && url.pathname === '/search') return null;
+          return url.toString();
+        } catch {
+          return null;
+        }
+      };
+
+      for (const link of links) {
+        const href = link.getAttribute('href');
+        if (!href) continue;
+
+        const resultUrl = resolveResultUrl(href);
+        if (!resultUrl || seen.has(resultUrl)) continue;
+
+        const title = cleanText(link.querySelector('h3')?.textContent || link.textContent);
+        if (!title) continue;
+
+        const container = link.closest(containerSelectors) || link.parentElement;
+        const snippet = (() => {
+          if (!container) return '';
+          for (const selector of snippetSelectors) {
+            const snippetNode = container.querySelector(selector);
+            const candidate = cleanText(snippetNode?.textContent);
+            if (looksLikeSnippet(candidate) && !candidate.includes('http')) {
+              return candidate;
+            }
+          }
+
+          const fallbackNodes = Array.from(container.querySelectorAll('span, div'));
+          for (const node of fallbackNodes) {
+            const candidate = cleanText(node.textContent);
+            if (looksLikeSnippet(candidate) && !candidate.includes('http')) {
+              return candidate;
+            }
+          }
+
+          return '';
+        })();
+
+        let displayedUrl = '';
+        try {
+          displayedUrl = new URL(resultUrl).hostname;
+        } catch {
+          displayedUrl = resultUrl;
+        }
+
+        results.push({
+          rank: results.length + 1,
+          title,
+          url: resultUrl,
+          snippet: snippet,
+          displayedUrl,
+        });
+        seen.add(resultUrl);
+
+        if (results.length >= maxResults) {
+          break;
+        }
+      }
+
+      return {
+        results,
+        resultStats: cleanText(doc.querySelector('#result-stats')?.textContent),
+        nextPageUrl: cleanText(doc.querySelector('a#pnnext, a[aria-label="Next"], a[id="pnnext"]')?.getAttribute('href')),
+      };
+    }
+
+    async function fetchGoogleSearchHtml(searchUrl, useProxy) {
+      if (!useProxy) {
+        const response = await recker.get(searchUrl);
+        return response.text();
+      }
+
+      const proxyCandidates = [
+        'https://api.allorigins.win/raw?url=',
+        'https://r.jina.ai/http://',
+        'https://corsproxy.io/?',
+      ];
+      let lastError = null;
+
+      for (const candidate of proxyCandidates) {
+        try {
+          const finalUrl = candidate.includes('r.jina.ai') ? `${candidate}${searchUrl}` : `${candidate}${encodeURIComponent(searchUrl)}`;
+          const response = await recker.get(finalUrl);
+          const html = await response.text();
+          if (html && (html.includes('<html') || html.includes('<body') || html.includes('<head'))) {
+            return html;
+          }
+        } catch (err) {
+          lastError = err;
+          console.warn('Google proxy failed:', candidate, err.message);
+        }
+      }
+
+      throw lastError || new Error('Unable to fetch Google results with available proxies');
+    }
+
+    async function fetchSeoPageHtml(url, useProxy) {
+      const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+      if (!useProxy) {
+        const response = await recker.get(normalizedUrl);
+        const html = await response.text();
+        if (!html || (!html.includes('<html') && !html.includes('<body') && !html.includes('<head'))) {
+          throw new Error('Could not fetch valid HTML from target URL');
+        }
+        return { url: normalizedUrl, html };
+      }
+
+      const proxyCandidates = [
+        'https://api.allorigins.win/raw?url=',
+        'https://r.jina.ai/http://',
+        'https://corsproxy.io/?',
+      ];
+      let lastError = null;
+
+      for (const candidate of proxyCandidates) {
+        try {
+          const proxyUrl = candidate.includes('r.jina.ai') ? `${candidate}${normalizedUrl}` : `${candidate}${encodeURIComponent(normalizedUrl)}`;
+          const response = await recker.get(proxyUrl);
+          const html = await response.text();
+          if (html && (html.includes('<html') || html.includes('<body') || html.includes('<head'))) {
+            return { url: normalizedUrl, html };
+          }
+          throw new Error('Invalid HTML payload returned from proxy');
+        } catch (err) {
+          lastError = err;
+          console.warn('SEO proxy failed:', candidate, err.message);
+        }
+      }
+
+      throw lastError || new Error('Unable to fetch SEO page with available proxies');
+    }
+
+    async function runGoogleSeoAnalysis(url, useProxy) {
+      const start = performance.now();
+      const { url: resolvedUrl, html } = await fetchSeoPageHtml(url, useProxy);
+      const report = await recker.seo(html, { baseUrl: resolvedUrl });
+      const checks = report.checks || [];
+
+      const topIssues = checks
+        .filter(c => c.status === 'fail' || c.status === 'warn')
+        .slice(0, 3)
+        .map(c => `${c.name}: ${c.message}`);
+
+      return {
+        url: resolvedUrl,
+        title: report.title?.text || '',
+        grade: report.grade || 'N/A',
+        score: Number(report.score) || 0,
+        passed: checks.filter(c => c.status === 'pass').length,
+        warnings: checks.filter(c => c.status === 'warn').length,
+        errors: checks.filter(c => c.status === 'fail').length,
+        wordCount: report.content?.wordCount || 0,
+        linkCount: report.links?.total || report.links?.internal || 0,
+        imageCount: report.images?.total || 0,
+        topIssues,
+        duration: Math.round(performance.now() - start),
+      };
+    }
+
+    window.updateGoogleSelectionSummary = function() {
+      const compareBtn = document.getElementById('google-compare-btn');
+      const selectedCountEl = document.getElementById('google-selected-count');
+      const checks = Array.from(document.querySelectorAll('#google-results .google-result-check'));
+      const selectedChecks = checks.filter(el => el.checked);
+      const selectedCount = selectedChecks.length;
+      const total = checks.length;
+
+      if (compareBtn) compareBtn.disabled = selectedCount < 2;
+      if (selectedCountEl) selectedCountEl.textContent = `${selectedCount} / ${total}`;
+    };
+
+    window.selectAllGoogleResults = function(selectAll = true) {
+      const checks = Array.from(document.querySelectorAll('#google-results .google-result-check'));
+      checks.forEach((checkbox) => {
+        checkbox.checked = !!selectAll;
+      });
+      window.updateGoogleSelectionSummary();
+    };
+
+    window.selectTopGoogleResults = function(limit = 3) {
+      const checks = Array.from(document.querySelectorAll('#google-results .google-result-check'));
+      checks.forEach((checkbox, index) => {
+        checkbox.checked = index < limit;
+      });
+      window.updateGoogleSelectionSummary();
+    };
+
+    window.compareGoogleSearchSeo = async function() {
+      const selectedChecks = Array.from(document.querySelectorAll('#google-results .google-result-check:checked'));
+      const compareSummary = document.getElementById('google-compare-summary');
+      const compareResults = document.getElementById('google-compare-results');
+      const compareWrapper = document.getElementById('google-compare-wrapper');
+      const compareBtn = document.getElementById('google-compare-btn');
+
+      if (!selectedChecks.length || !compareSummary || !compareResults || !compareWrapper) return;
+      if (selectedChecks.length < 2) {
+        compareSummary.textContent = 'Select at least 2 pages to compare.';
+        compareWrapper.style.display = 'block';
+        return;
+      }
+
+      compareWrapper.style.display = 'block';
+      compareSummary.textContent = `Comparing ${selectedChecks.length} pages...`;
+      compareResults.innerHTML = '<div style="padding: 12px; opacity: 0.7;">Running SEO analysis for selected URLs...</div>';
+      if (compareBtn) compareBtn.disabled = true;
+
+      try {
+        const useProxy = document.getElementById('google-use-proxy')?.checked ?? true;
+        const runStart = performance.now();
+        const outcomes = [];
+
+        for (const checkbox of selectedChecks) {
+          const url = checkbox.getAttribute('data-url');
+          if (!url) continue;
+          try {
+            outcomes.push(await runGoogleSeoAnalysis(url, useProxy));
+          } catch (err) {
+            outcomes.push({ url, error: err.message || 'Unknown error' });
+          }
+        }
+
+        const valid = outcomes.filter(item => !item.error);
+        const failed = outcomes.filter(item => item.error);
+        const duration = Math.round(performance.now() - runStart);
+        const avgScore = valid.length > 0 ? Math.round(valid.reduce((acc, item) => acc + item.score, 0) / valid.length) : 0;
+        const best = valid.slice().sort((a, b) => b.score - a.score)[0];
+        const worst = valid.slice().sort((a, b) => a.score - b.score)[0];
+        const validRows = valid.map((item) => {
+          const warnings = item.warnings || 0;
+          const errors = item.errors || 0;
+          const passed = item.passed || 0;
+          const rowTitle = item.title || item.url;
+          const scoreColor = item.score >= 90 ? '#4ade80' : item.score >= 70 ? '#fbbf24' : '#ef4444';
+          const issues = item.topIssues?.length ? item.topIssues.map(text => escapeHtml(text)).join(' | ') : 'No critical issues';
+          return `
+            <div style="border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 10px; background: rgba(30,41,59,0.65);">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                <a href="${escapeHtml(item.url)}" target="_blank" style="color: #60a5fa; text-decoration: none; font-size: 14px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(rowTitle)}</a>
+                <span style="font-weight: 700; color: ${scoreColor}; min-width: 72px; text-align: right;">${item.score}/100</span>
+              </div>
+              <div style="margin-top: 8px; font-size: 11px; display: flex; flex-wrap: wrap; gap: 10px; opacity: 0.8;">
+                <span>Grade: <strong style="color: #60a5fa;">${escapeHtml(item.grade)}</strong></span>
+                <span>✅ ${escapeHtml(String(passed))}</span>
+                <span>⚠️ ${escapeHtml(String(warnings))}</span>
+                <span>❌ ${escapeHtml(String(errors))}</span>
+                <span>🔗 ${escapeHtml(String(item.linkCount || 0))}</span>
+                <span>🖼 ${escapeHtml(String(item.imageCount || 0))}</span>
+                <span>📝 ${escapeHtml(String(item.wordCount || 0))}</span>
+                <span>⏱️ ${escapeHtml(String(item.duration))}ms</span>
+              </div>
+              <div style="margin-top: 6px; font-size: 11px; opacity: 0.7;">${escapeHtml(issues)}</div>
+            </div>
+          `;
+        }).join('');
+
+        const failedRows = failed.map(item => `
+          <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; padding: 10px; background: rgba(239,68,68,0.06);">
+            <div style="font-size: 14px; font-weight: 600; color: #fca5a5; margin-bottom: 4px;"><a href="${escapeHtml(item.url)}" target="_blank" style="color: #fca5a5; text-decoration: none;">${escapeHtml(item.url)}</a></div>
+            <div style="font-size: 11px; opacity: 0.8;">❌ ${escapeHtml(item.error || 'Failed to analyze')}</div>
+          </div>
+        `).join('');
+
+        compareSummary.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <span>SEO comparison completed in ${duration}ms · ${valid.length} analyzed · ${failed.length} failed</span>
+            <span>Avg score: <strong>${avgScore}</strong> · Best: ${best ? `${best.grade}/${best.score} · ${best.title || best.url}` : 'N/A'} · Worst: ${worst ? `${worst.grade}/${worst.score} · ${worst.title || worst.url}` : 'N/A'}</span>
+          </div>
+        `;
+        compareResults.innerHTML = validRows + (failedRows ? `<div style="margin-top: 8px;">${failedRows}</div>` : '');
+      } catch (err) {
+        if (compareSummary) compareSummary.textContent = `Comparison failed: ${escapeHtml(err.message || err)}`;
+        if (compareResults) compareResults.innerHTML = '';
+        console.error(err);
+      } finally {
+        if (compareBtn) compareBtn.disabled = false;
+      }
+    };
+
+    window.runGoogleSearch = async function() {
+      const queryInput = document.getElementById('google-query');
+      const siteInput = document.getElementById('google-site');
+      const countryInput = document.getElementById('google-country');
+      const limitInput = document.getElementById('google-limit');
+      const useProxyInput = document.getElementById('google-use-proxy');
+      const placeholder = document.getElementById('google-placeholder');
+      const resultsWrapper = document.getElementById('google-results-wrapper');
+      const resultsList = document.getElementById('google-results');
+      const searchButton = document.getElementById('google-search-btn');
+      const compareControls = document.getElementById('google-compare-controls');
+      const compareWrapper = document.getElementById('google-compare-wrapper');
+      const summary = document.getElementById('google-summary');
+      const timing = document.getElementById('google-timing');
+
+      if (!queryInput || !resultsWrapper || !resultsList || !placeholder) return;
+
+      const query = queryInput.value.trim();
+      const siteFilter = siteInput?.value.trim() || '';
+      const country = countryInput?.value.trim() || '';
+      const maxResults = normalizeGoogleLimit(limitInput?.value);
+      const useProxy = useProxyInput?.checked ?? true;
+
+      if (!query) return;
+
+      resultsList.innerHTML = '<div style="padding: 16px; opacity: 0.7;">Running search...</div>';
+      if (summary) summary.textContent = `Searching Google for "${query}"...`;
+      if (timing) timing.textContent = '';
+      placeholder.style.display = 'none';
+      resultsWrapper.style.display = 'block';
+      if (compareControls) compareControls.style.display = 'none';
+      if (compareWrapper) compareWrapper.style.display = 'none';
+      if (searchButton) searchButton.disabled = true;
+
+      const start = performance.now();
+
+      try {
+        const searchParams = new URLSearchParams();
+        searchParams.set('q', query);
+        searchParams.set('ie', 'UTF-8');
+        searchParams.set('oe', 'UTF-8');
+        searchParams.set('num', String(maxResults));
+        if (siteFilter) searchParams.set('as_sitesearch', siteFilter);
+        if (country) searchParams.set('gl', country);
+
+        const searchUrl = `https://www.google.com/search?${searchParams.toString()}`;
+        let results = [];
+        let metadata = {
+          source: useProxy ? 'proxy parser' : 'direct parser',
+          requestUrl: searchUrl,
+          resultStats: null,
+        };
+
+        if (!useProxy && recker?.searchGoogle) {
+          const response = await recker.searchGoogle(query, {
+            as_sitesearch: siteFilter || undefined,
+            country: country || undefined,
+            num: maxResults,
+            maxResults,
+          });
+          results = response.results || [];
+          metadata = {
+            source: `recker.searchGoogle (${response.transport?.used || 'undici'})`,
+            requestUrl: response.searchUrl,
+            resultStats: response.resultStats || null,
+          };
+        } else {
+          const html = await fetchGoogleSearchHtml(searchUrl, useProxy);
+          const parsed = parseGoogleSearchResults(html, maxResults);
+          results = parsed.results;
+          metadata.requestUrl = searchUrl;
+          metadata.resultStats = parsed.resultStats;
+        }
+
+        const duration = Math.round(performance.now() - start);
+        const resultCount = results.length;
+        resultsList.innerHTML = '';
+        if (resultCount === 0) {
+          resultsList.innerHTML = '<div style="padding: 20px; text-align: center; opacity: 0.6;">No results found for this query.</div>';
+        } else {
+          resultsList.innerHTML = results.map((result) => {
+            const title = escapeHtml(result.title);
+            const url = escapeHtml(result.url);
+            const displayedUrl = escapeHtml(result.displayedUrl || '');
+            const snippet = escapeHtml(result.snippet || '');
+            const stats = result.snippet ? '' : 'No snippet';
+
+            return `
+              <div style="border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 12px; background: rgba(37,99,235,0.05);">
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                  <label style="display: inline-flex; margin-top: 2px; cursor: pointer; opacity: 0.9; user-select: none;">
+                    <input class="google-result-check" type="checkbox" data-url="${url}" onchange="window.updateGoogleSelectionSummary()" />
+                  </label>
+                  <div style="flex: 1; min-width: 0;">
+                    <a href="${url}" target="_blank" style="color: #60a5fa; text-decoration: none; font-size: 15px; font-weight: 600; display: block; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${title}</a>
+                    <div style="font-size: 11px; opacity: 0.75; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayedUrl}</div>
+                    <div style="font-size: 12px; line-height: 1.4; opacity: 0.9;">${snippet || stats}</div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+
+        if (compareControls) {
+          compareControls.style.display = resultCount > 0 ? 'flex' : 'none';
+        }
+        if (compareWrapper) {
+          compareWrapper.style.display = 'none';
+          const compareSummary = document.getElementById('google-compare-summary');
+          const compareResults = document.getElementById('google-compare-results');
+          if (compareSummary) compareSummary.innerHTML = '';
+          if (compareResults) compareResults.innerHTML = '';
+        }
+        window.selectTopGoogleResults(3);
+
+        if (summary) {
+          const statsLabel = metadata.resultStats ? ` • ${metadata.resultStats}` : '';
+          summary.textContent = `${resultCount} result(s) • ${metadata.source}${statsLabel}`;
+        }
+        if (timing) timing.textContent = `${duration}ms`;
+      } catch (err) {
+        placeholder.style.display = 'block';
+        if (placeholder) {
+          placeholder.innerHTML = `<div style="font-size: 46px; margin-bottom: 15px;">⚠️</div><div>Error: ${escapeHtml(err.message)}</div>`;
+        }
+        resultsWrapper.style.display = 'none';
+        if (compareControls) compareControls.style.display = 'none';
+        if (compareWrapper) {
+          compareWrapper.style.display = 'none';
+          const compareSummary = document.getElementById('google-compare-summary');
+          const compareResults = document.getElementById('google-compare-results');
+          if (compareSummary) compareSummary.innerHTML = '';
+          if (compareResults) compareResults.innerHTML = '';
+        }
+        console.error(err);
+      } finally {
+        if (searchButton) searchButton.disabled = false;
+      }
+    };
+
     // ===== Tabs Logic =====
     window.switchMode = function(mode) {
-      const modes = ['terminal', 'seo', 'chat'];
-      const colors = { terminal: '#ff8a00', seo: '#10b981', chat: '#ff8a00' };
+      const modes = ['terminal', 'seo', 'search', 'chat'];
+      const colors = { terminal: '#ff8a00', seo: '#10b981', search: '#2563eb', chat: '#ff8a00' };
 
       modes.forEach(m => {
         const modeDiv = document.getElementById(`mode-${m}`);
@@ -1455,7 +1953,12 @@
           if (m === mode) {
             btn.style.color = colors[m];
             btn.style.borderBottom = `2px solid ${colors[m]}`;
-            btn.style.background = `rgba(${m === 'seo' ? '16,185,129' : '255,138,0'}, 0.15)`;
+            const activeRgb = m === 'seo'
+              ? '16,185,129'
+              : m === 'search'
+              ? '37,99,235'
+              : '255,138,0';
+            btn.style.background = `rgba(${activeRgb}, 0.15)`;
             btn.style.opacity = '1';
           } else {
             btn.style.color = 'var(--text-color)';
