@@ -385,7 +385,7 @@ describe('Spider - Web Crawler', () => {
       if (aboutPage) {
         expect(aboutPage.depth).toBe(1);
       }
-    }, 15000);
+    });
   });
 
   describe('Error handling', () => {

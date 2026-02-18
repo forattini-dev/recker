@@ -540,7 +540,11 @@ export class Spider {
     }
 
     // Process until no more pending crawls or aborted
-    while ((pending.size > 0 || this.queue.length > 0) && !this.aborted) {
+    while (
+      (pending.size > 0 || this.queue.length > 0)
+      && !this.aborted
+      && this.results.length < this.options.maxPages
+    ) {
       // Schedule any URLs discovered from completed crawls
       while (this.queue.length > 0 && !this.aborted) {
         const item = this.queue.shift()!;
