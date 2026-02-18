@@ -159,6 +159,8 @@ export const seoAnalyzeHandler = withHandler(
           warnings: report.summary.warnings,
           errors: report.summary.errors,
           infos: report.summary.infos,
+          notApplicable: report.summary.notApplicable,
+          suggestions: report.summary.suggestions,
           vitals: report.summary.vitals,
           topIssues: report.summary.topIssues,
           quickWins: report.summary.quickWins,
@@ -186,6 +188,10 @@ export const seoAnalyzeHandler = withHandler(
         { text: `Passed: ${report.summary.passed}`, checked: true },
         { text: `Warnings: ${report.summary.warnings}`, checked: report.summary.warnings === 0 },
         { text: `Errors: ${report.summary.errors}`, checked: report.summary.errors === 0 },
+        {
+          text: `Info: ${report.summary.infos} (N/A: ${report.summary.notApplicable || 0}, Sugestões: ${report.summary.suggestions || 0})`,
+          checked: report.summary.infos === 0,
+        },
       ])
       out.blank()
 

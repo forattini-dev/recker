@@ -19,6 +19,7 @@ import type {
   SeoPageType,
   SeoAnalyzerOptions,
   SeoStatus,
+  SeoInfoType,
 } from './types.js';
 import {
   extractMeta,
@@ -160,7 +161,7 @@ export class SeoAnalyzer {
     const { score, grade } = this.calculateScore(ruleResults);
 
     // Build summary with big numbers
-    const summary = this.buildSummary(ruleResults, checks, {
+    const summary = this.buildSummary(checks, {
       content,
       imageAnalysis,
       linkAnalysis,
@@ -1632,6 +1633,35 @@ export class SeoAnalyzer {
   }
 
   /**
+   * Classify informational check as actionable suggestion or N/A.
+   */
+  private classifyInfoCheck(result: RuleResult): SeoInfoType | undefined {
+    if (result.status !== 'info') return undefined;
+
+    const message = (result.message || '').toLowerCase();
+    const evidenceIssue = (result.evidence?.issue || '').toLowerCase();
+    const recommendation = (result.recommendation || '').toLowerCase();
+    const context = `${message} ${evidenceIssue} ${recommendation}`;
+
+    if (
+      /not\s+applicable/.test(context) ||
+      /not\s+available/.test(context) ||
+      /data\s+unavailable/.test(context) ||
+      /context\s+unavailable/.test(context) ||
+      /unable\s+to\s+check/.test(context) ||
+      /cannot\s+verify/.test(context) ||
+      /cannot\s+be\s+determined/.test(context) ||
+      /\bunavailable\b/.test(context) ||
+      /not\s+set/.test(context) ||
+      /not\s+present/.test(context)
+    ) {
+      return 'not_applicable';
+    }
+
+    return 'suggestion';
+  }
+
+  /**
    * Convert rule results to check results
    */
   private convertToCheckResults(results: RuleResult[]): SeoCheckResult[] {
@@ -1642,6 +1672,7 @@ export class SeoAnalyzer {
       severity: r.severity,
       status: r.status,
       message: r.message,
+      infoType: this.classifyInfoCheck(r),
       value: r.value,
       recommendation: r.recommendation,
       evidence: r.evidence,
@@ -1652,7 +1683,6 @@ export class SeoAnalyzer {
    * Build summary with big numbers and key metrics
    */
   private buildSummary(
-    ruleResults: RuleResult[],
     checks: SeoCheckResult[],
     data: {
       pageType: SeoPageType;
@@ -1686,6 +1716,12 @@ export class SeoAnalyzer {
     const warnings = checks.filter((c) => c.status === 'warn').length;
     const errors = checks.filter((c) => c.status === 'fail').length;
     const infos = checks.filter((c) => c.status === 'info').length;
+    const notApplicable = checks.filter(
+      (c) => c.status === 'info' && c.infoType === 'not_applicable'
+    ).length;
+    const suggestions = checks.filter(
+      (c) => c.status === 'info' && c.infoType !== 'not_applicable'
+    ).length;
     const totalChecks = checks.length;
 
     // Pass rate (excluding info)
@@ -1696,16 +1732,38 @@ export class SeoAnalyzer {
     // Issues by category
     const issuesByCategory: Record<
       string,
-      { passed: number; warnings: number; errors: number }
+      {
+        passed: number;
+        warnings: number;
+        errors: number;
+        infos: number;
+        notApplicable: number;
+        suggestions: number;
+      }
     > = {};
-    for (const result of ruleResults) {
+    for (const result of checks) {
       const cat = result.category;
       if (!issuesByCategory[cat]) {
-        issuesByCategory[cat] = { passed: 0, warnings: 0, errors: 0 };
+        issuesByCategory[cat] = {
+          passed: 0,
+          warnings: 0,
+          errors: 0,
+          infos: 0,
+          notApplicable: 0,
+          suggestions: 0,
+        };
       }
       if (result.status === 'pass') issuesByCategory[cat].passed++;
       else if (result.status === 'warn') issuesByCategory[cat].warnings++;
       else if (result.status === 'fail') issuesByCategory[cat].errors++;
+      else if (result.status === 'info') {
+        issuesByCategory[cat].infos++;
+        if (result.infoType === 'not_applicable') {
+          issuesByCategory[cat].notApplicable++;
+        } else {
+          issuesByCategory[cat].suggestions++;
+        }
+      }
     }
 
     // Top issues (errors first, then warnings), with severity awareness
@@ -1787,6 +1845,8 @@ export class SeoAnalyzer {
       warnings,
       errors,
       infos,
+      notApplicable,
+      suggestions,
       passRate,
       issuesByCategory,
       pageType: pageType,

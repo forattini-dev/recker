@@ -56,6 +56,8 @@ export interface SEORunnerResult {
     errors: number;
     warnings: number;
     infos: number;
+    notApplicable?: number;
+    suggestions?: number;
     passed: number;
     totalChecks: number;
   };
@@ -181,6 +183,8 @@ export class SEORunner extends CommandEmitter {
           errors: report.summary.errors,
           warnings: report.summary.warnings,
           infos: report.summary.infos,
+          notApplicable: report.summary.notApplicable,
+          suggestions: report.summary.suggestions,
           passed: report.summary.passed,
           totalChecks: report.summary.totalChecks,
         },
@@ -263,6 +267,8 @@ export class SEORunner extends CommandEmitter {
         errors: report.summary.errors,
         warnings: report.summary.warnings,
         passed: report.summary.passed,
+        notApplicable: report.summary.notApplicable,
+        suggestions: report.summary.suggestions,
       });
 
       return result;

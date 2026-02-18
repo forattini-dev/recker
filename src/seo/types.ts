@@ -3,6 +3,7 @@ import { KeywordCloud } from './keywords.js';
 export type { KeywordCloud, KeywordItem } from './keywords.js';
 
 export type SeoStatus = 'pass' | 'warn' | 'fail' | 'info';
+export type SeoInfoType = 'not_applicable' | 'suggestion';
 export type SeoPageType = 'homepage' | 'product' | 'article' | 'category' | 'search' | 'other';
 
 export interface SeoCheckEvidence {
@@ -22,6 +23,8 @@ export interface SeoCheckResult {
   status: SeoStatus;
   severity?: 'error' | 'warning' | 'info';
   message: string;
+  /** Informational check subtype for clearer reporting */
+  infoType?: SeoInfoType;
   value?: string | number;
   recommendation?: string;
   evidence?: SeoCheckEvidence;
@@ -146,12 +149,24 @@ export interface SeoSummary {
   warnings: number;
   errors: number;
   infos: number;
+  notApplicable: number;
+  suggestions: number;
 
   /** Pass rate percentage (0-100) */
   passRate: number;
 
   /** Issues by category */
-  issuesByCategory: Record<string, { passed: number; warnings: number; errors: number }>;
+  issuesByCategory: Record<
+    string,
+    {
+      passed: number;
+      warnings: number;
+      errors: number;
+      infos: number;
+      notApplicable: number;
+      suggestions: number;
+    }
+  >;
 
   /** Top issues (most critical) */
   topIssues: Array<{

@@ -735,6 +735,8 @@ interface SeoResponseData {
     warnings?: number;
     errors?: number;
     infos?: number;
+    notApplicable?: number;
+    suggestions?: number;
     vitals?: { wordCount?: number; imageCount?: number; linkCount?: number; htmlSize?: number };
     topIssues?: { name: string; message: string; severity: string; category?: string }[];
     quickWins?: string[];
@@ -889,6 +891,10 @@ function renderSeoResponse(data: SeoResponseData, width: number): VNode {
           Text({ color: themeColor('warning') }, `⚠ Warnings: ${s.warnings || 0}   `),
           Text({ color: themeColor('error') }, `✖ Errors: ${s.errors || 0}   `),
           Text({ color: themeColor('accent') }, `ℹ Info: ${s.infos || 0}`),
+          Text(
+            { color: themeColor('mutedForeground'), dim: true },
+            ` (N/A: ${s.notApplicable || 0}, Sugestões: ${s.suggestions || 0})`
+          ),
         )
       );
 

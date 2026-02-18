@@ -69,8 +69,16 @@ export function statusIcon(status: string): string {
 export function formatCheck(check: SeoCheckResult, showEvidence = false): string[] {
   const lines: string[] = [];
   const icon = statusIcon(check.status);
+  let infoLabel = '';
+  if (check.status === 'info') {
+    if (check.infoType === 'not_applicable') {
+      infoLabel = colors.magenta(' [N/A]');
+    } else if (check.infoType === 'suggestion') {
+      infoLabel = colors.cyan(' [SUGGESTION]');
+    }
+  }
 
-  lines.push(` ${icon} ${check.message}`);
+  lines.push(` ${icon} ${check.message}${infoLabel}`);
 
   if (check.value !== undefined) {
     lines.push(`    ${colors.gray('Value:')} ${check.value}`);
@@ -394,7 +402,12 @@ export function formatSeoReport(
   // Summary counts
   lines.push('');
   lines.push(` ${colors.bold('Summary')}`);
-  lines.push(` ${colors.green('✔ Passed:')} ${s.passed}   ${colors.yellow('⚠ Warnings:')} ${s.warnings}   ${colors.red('✖ Errors:')} ${s.errors}   ${colors.blue('ℹ Info:')} ${s.infos}`);
+  const infoSummary = (s.notApplicable !== undefined || s.suggestions !== undefined)
+    ? ` (${s.notApplicable ?? 0} not applicable, ${s.suggestions ?? 0} suggestions)`
+    : '';
+  lines.push(
+    ` ${colors.green('✔ Passed:')} ${s.passed}   ${colors.yellow('⚠ Warnings:')} ${s.warnings}   ${colors.red('✖ Errors:')} ${s.errors}   ${colors.blue('ℹ Info:')} ${s.infos}${infoSummary}`
+  );
 
   // Vitals
   if (s.vitals) {
@@ -585,6 +598,8 @@ function groupChecksByCategory(checks: SeoCheckResult[]): Record<string, {
   warnings: number;
   errors: number;
   infos: number;
+  notApplicable: number;
+  suggestions: number;
   passRate: number;
   checks: SeoCheckResult[];
 }> {
@@ -602,6 +617,12 @@ function groupChecksByCategory(checks: SeoCheckResult[]): Record<string, {
     const warnings = catChecks.filter(c => c.status === 'warn').length;
     const errors = catChecks.filter(c => c.status === 'fail').length;
     const infos = catChecks.filter(c => c.status === 'info').length;
+    const notApplicable = catChecks.filter(
+      c => c.status === 'info' && c.infoType === 'not_applicable'
+    ).length;
+    const suggestions = catChecks.filter(
+      c => c.status === 'info' && c.infoType !== 'not_applicable'
+    ).length;
     const total = catChecks.length - infos; // Don't count info in pass rate
 
     result[cat] = {
@@ -609,6 +630,8 @@ function groupChecksByCategory(checks: SeoCheckResult[]): Record<string, {
       warnings,
       errors,
       infos,
+      notApplicable,
+      suggestions,
       passRate: total > 0 ? Math.round((passed / total) * 100) : 100,
       checks: catChecks,
     };
@@ -649,6 +672,12 @@ export function formatSeoReportJson(
       warnings: report.checks.filter(c => c.status === 'warn').length,
       errors: report.checks.filter(c => c.status === 'fail').length,
       infos: report.checks.filter(c => c.status === 'info').length,
+      notApplicable: report.checks.filter(
+        c => c.status === 'info' && c.infoType === 'not_applicable'
+      ).length,
+      suggestions: report.checks.filter(
+        c => c.status === 'info' && c.infoType !== 'not_applicable'
+      ).length,
       passRate: report.summary.passRate,
       completeness: report.summary.completeness,
       topIssues: report.summary.topIssues,
