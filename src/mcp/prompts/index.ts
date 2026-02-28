@@ -1,4 +1,5 @@
 import type { MCPPrompt, MCPPromptMessage } from '../types.js';
+import { ValidationError } from '../../core/errors.js';
 
 export interface PromptHandler {
   (args?: Record<string, string>): Promise<MCPPromptMessage[]> | MCPPromptMessage[];
@@ -27,7 +28,7 @@ export class PromptRegistry {
   async getPrompt(name: string, args?: Record<string, string>): Promise<MCPPromptMessage[]> {
     const prompt = this.prompts.get(name);
     if (!prompt) {
-      throw new Error(`Prompt not found: ${name}`);
+      throw new ValidationError(`Prompt not found: ${name}`, { field: 'name', value: name });
     }
     return prompt.handler(args);
   }
