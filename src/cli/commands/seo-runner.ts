@@ -21,6 +21,7 @@
 import { createClient, type Client } from '../../core/client.js';
 import { CommandEmitter } from '../events/emitter.js';
 import type { SeoReport, SeoCheckResult, SeoStatus } from '../../seo/types.js';
+import { AbortError } from '../../core/errors.js';
 
 // =============================================================================
 // Types
@@ -89,8 +90,7 @@ export class SEORunner extends CommandEmitter {
     super('seo');
     this.client = client ?? createClient({
       timeout: 30000,
-      checkHooks: false,
-    } as any);
+    });
   }
 
   /**
@@ -113,7 +113,7 @@ export class SEORunner extends CommandEmitter {
     try {
       // Check for abort
       if (signal?.aborted) {
-        throw new Error('Aborted');
+        throw new AbortError('SEO run aborted');
       }
 
       // Emit progress: fetching
@@ -125,7 +125,8 @@ export class SEORunner extends CommandEmitter {
       });
 
       // Fetch the page
-      const response = await this.client.get(targetUrl, { signal } as any);
+      const requestOptions = signal ? { signal } : undefined;
+      const response = await this.client.get(targetUrl, requestOptions);
       const html = await response.text();
 
       // Emit data event for fetch info
@@ -145,7 +146,7 @@ export class SEORunner extends CommandEmitter {
 
       // Check for abort
       if (signal?.aborted) {
-        throw new Error('Aborted');
+        throw new AbortError('SEO run aborted');
       }
 
       // Emit progress: analyzing
@@ -273,16 +274,17 @@ export class SEORunner extends CommandEmitter {
 
       return result;
 
-    } catch (err: any) {
-      if (signal?.aborted || err.message === 'Aborted') {
+    } catch (err: unknown) {
+      if (signal?.aborted || err instanceof AbortError) {
         this.emitError('SEO analysis stopped by user', { code: 'ABORT' });
       } else {
-        this.emitError(err.message || 'SEO analysis failed', {
-          stack: err.stack,
+        const error = err instanceof Error ? err : new Error('SEO analysis failed')
+        this.emitError(error.message || 'SEO analysis failed', {
+          stack: error.stack,
           context: targetUrl,
-        });
+        })
       }
-      throw err;
+      throw err as Error;
     }
   }
 

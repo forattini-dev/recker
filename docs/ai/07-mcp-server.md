@@ -722,10 +722,186 @@ Crawl entire website:
     "maxPages": 50,
     "maxDepth": 3,
     "outputDir": "/tmp/recker",
-    "cache": true
+    "cache": true,
+    "transport": "curl",
+    "preferCurlFirst": true,
+    "timeout": 12000,
+    "delay": 150,
+    "maxRetryAttempts": 5,
+    "baseRetryDelayMs": 1000,
+    "maxRetryDelayMs": 14000,
+    "retryBackoffMultiplier": 2,
+    "retryJitterMs": 250,
+    "maxDomainBlockStrikes": 2,
+    "rotateUserAgent": true,
+    "randomizeHeaders": true
   }
 }
 ```
+
+```json
+{
+  "name": "rek_seo_spider",
+  "arguments": {
+    "url": "https://example.com",
+    "maxPages": 150,
+    "maxDepth": 4,
+    "serp": true,
+    "serpTopKeywords": 10,
+    "serpQueryLimit": 20,
+    "serpResultsPerQuery": 15,
+    "serpCountry": "br",
+    "serpGl": "br",
+    "serpHl": "pt-BR",
+    "serpTransport": "curl",
+    "serpTimeout": 25000
+  }
+}
+```
+
+```json
+{
+  "name": "rek_seo_spider",
+  "arguments": {
+    "url": "https://example.com",
+    "serp": true,
+    "serpTopKeywords": 8,
+    "serpQueryLimit": 12,
+    "serpResultsPerQuery": 25,
+    "serpSafe": "strict",
+    "serpTbm": "images",
+    "serpTbs": "qdr:w",
+    "serpAsFiletype": "pdf",
+    "serpAsSitesearch": "example.com",
+    "serpAsQ": "site:example.com manual",
+    "serpExtra": "as_nlo=1,as_nhi=10"
+  }
+}
+```
+
+Resposta esperada (resumo):
+```json
+{
+  "url": "https://example.com",
+  "crawlDuration": 8.42,
+  "summary": {
+    "totalPages": 96,
+    "avgScore": 74
+  },
+  "serp": {
+    "summary": {
+      "queriesRequested": 20,
+      "queriesFound": 9,
+      "top3Count": 3,
+      "top10Count": 6,
+      "topOrganicCompetitors": [
+        {
+          "domain": "concorrente.com",
+          "matchedKeywords": 12,
+          "totalOutperformedQueries": 4,
+          "organicQueries": 16,
+          "avgOutperformedGap": 2
+        }
+      ],
+      "topPaidCompetitors": [
+        {
+          "domain": "anuncio.com",
+          "matchedKeywords": 5,
+          "totalOutperformedQueries": 1,
+          "paidQueries": 7,
+          "avgOutperformedGap": 3.5
+        }
+      ],
+      "competitorCoverage": {
+        "organicUniqueDomains": 4,
+        "paidUniqueDomains": 1
+      }
+    },
+    "campaign": {
+      "active": true,
+      "confidence": "high",
+      "evidence": ["2 top10 results for core service keywords", "steady appearance in branded queries"]
+    },
+    "results": [
+      {
+        "keyword": "gestao seo",
+        "found": true,
+        "position": 2,
+        "targetUrl": "https://example.com/servicos/seo",
+        "searchUrl": "https://www.google.com/search?q=gestao+seo&..."
+      }
+    ],
+    "seedPlan": {
+      "short": ["gestão", "seo", "conta", "pagamento", "pix"],
+      "longTail": ["como fazer gestão de pagamentos", "serviços de SEO para empresas", "conta digital para varejo"],
+      "ordered": ["gestão", "seo", "conta", "pagamento", "pix", "como fazer gestão de pagamentos"]
+    },
+    "pageComparison": [
+      {
+        "pageUrl": "https://example.com/servicos/seo",
+        "tracked": 6,
+        "found": 4,
+        "appearanceRate": "66.7%",
+        "avgPosition": "4",
+        "top3": 2,
+        "top10": 4
+      }
+    ]
+  }
+}
+```
+
+**Supported crawler arguments (all optional):**
+- `transport` (`auto` | `undici` | `curl`)
+- `preferCurlFirst` (default: true)
+- `timeout` (default: 30000)
+- `delay` (default: 200)
+- `maxRetryAttempts` (default: 3)
+- `baseRetryDelayMs` (default: 1000)
+- `maxRetryDelayMs` (default: 12000)
+- `retryBackoffMultiplier` (default: 2)
+- `retryJitterMs` (default: 250)
+- `maxDomainBlockStrikes` (default: 2)
+- `rotateUserAgent` (default: true)
+- `randomizeHeaders` (default: true)
+
+**Supported SERP arguments (all optional):**
+- `serp` (boolean)
+- `serpTopKeywords` (default: 5)
+- `serpQueryLimit` (default: 10)
+- `serpResultsPerQuery` (default: 10)
+- `serpTransport` (`auto` | `undici` | `curl`)
+- `serpCountry`
+- `serpRegion`
+- `serpGl`
+- `serpHl`
+- `serpTimeout` (ms)
+- `serpSafe`
+- `serpLr`
+- `serpCr`
+- `serpTbs`
+- `serpTbm`
+- `serpAsQ`
+- `serpAsEpq`
+- `serpAsOq`
+- `serpAsEq`
+- `serpAsSitesearch`
+- `serpAsFiletype`
+- `serpAsRights`
+- `serpAsNlo`
+- `serpAsNhi`
+- `serpExtra` (comma-separated `key=value`)
+
+`serpTopKeywords` is the short-tail seed cap per page. Long-tail seeds are generated automatically from semantic context (title, description, headings/sections, anchors, URL path, and schema signals such as FAQ/HowTo/Product/BreadcrumbList), constrained to 2–4 words, de-noised for connector-heavy phrases, then deduplicated (including permutation-insensitive matching) before execution. Final query order is `short` + `longTail` (`ordered` in output).
+
+When `serp` is enabled, the MCP output includes:
+- `serp.summary` - global counters, top3/top10 matches, competitor coverage and competitor arrays (`topOrganicCompetitors`, `topPaidCompetitors`)
+- `serp.campaign` - campaign confidence and evidence
+- `serp.results` - per-keyword top 12 visibility rows (`keyword`, `found`, `position`, `targetUrl`, `searchUrl`)
+- `serp.seedPlan` - selected seed buckets (`short`, `longTail`, `ordered`) and final execution order
+- `serp.pageComparison` - per-page presence and average position stats (`tracked`, `found`, `appearanceRate`, `avgPosition`, `top3`, `top10`)
+
+When `--transport` is set to `curl` or anti-block controls are tightened, MCP output also keeps a complete `security` block (blocked/captcha count, attempts/retries, transport split, timings), useful for operational monitoring in agents.
 
 #### rek_seo_quick_wins
 

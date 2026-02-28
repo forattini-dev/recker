@@ -33,8 +33,7 @@ type IRawTagName =
   | 'h6';
 
 function decode(val: string) {
-  // clone string
-  return JSON.parse(JSON.stringify(he.decode(val))) as string;
+  return he.decode(val);
 }
 
 export interface KeyAttributes {

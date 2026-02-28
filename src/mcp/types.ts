@@ -1,3 +1,5 @@
+import type { ReckerRequest, ReckerResponse } from '../types/index.js';
+
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
   id?: string | number;
@@ -195,10 +197,14 @@ export interface MCPProgressNotification {
   total?: number;
 }
 
+export interface MCPTransport {
+  dispatch(req: ReckerRequest): Promise<ReckerResponse>;
+}
+
 export interface MCPTransportOptions {
   endpoint: string;
   headers?: Record<string, string>;
   timeout?: number;
   retries?: number;
-  transport?: any;
+  transport?: MCPTransport;
 }

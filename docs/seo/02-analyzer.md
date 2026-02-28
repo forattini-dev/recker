@@ -165,6 +165,46 @@ interface SeoReport {
 }
 ```
 
+### Keyword outputs
+
+`report.keywords` is the short-tail keyword cloud generated from visible text plus title, description, and `meta keywords`:
+
+- `keywords.totalWords` = total token count used to compute density
+- `keywords.uniqueWords` = unique terms after stop-word filtering
+- `keywords.topKeywords` = ranked short terms (`{ word, count, density }`)
+
+When `--serp` is used in `rek seo spider`, keywords power two extraction layers:
+
+- **Short-tail layer**: top words from each crawled page (`--serp-top-keywords`, default 5)
+- **Long-tail layer**: 2–4 word phrases synthesized from:
+  - title and description
+  - heading hierarchy + section context (heading path and section source)
+  - URL path segments
+  - link anchors and URL samples
+  - FAQ/HowTo/Product/BreadcrumbList signals extracted from JSON-LD
+  - heading-path composition (parent × child heading, full heading path, and heading + body term blends)
+  - top short-tail anchors + frequent modifier terms found in nearby context
+- **Signal quality controls**:
+  - permutation dedupe (`conta aberta` and `aberta conta`)
+  - connector/noise filtering (prepositions and very short terms)
+  - source weighting by section prominence (H1/H2 > paragraph/list/figure)
+
+Before execution, both layers are normalized, sorted, and deduplicated:
+
+- **Permutation-insensitive dedupe** (so `conta aberta` and `aberta conta` collapse to one).
+- **Length guard** keeps multiword phrases between 2 and 4 words.
+- **Execution order** (`seedPlan.ordered`) is globally sorted by word count ascending — 1-word seeds first, then 2-word, then 3-word, then 4-word. Within each word-count group, seeds are ranked by weight DESC (higher-frequency terms come first).
+
+Important: `report.keywords` alone is short-tail only. Long-tail candidates are exposed only in the SERP campaign layer (`seedPlan.longTail` and `SERP seed keywords` output), and are built from section context, schema and heading-path composition.
+
+This is the keyword engine used in SERP mode:
+
+- DOM-first sectioning (title / headings / sections / anchors)
+- No external corpus or generative model required
+- Deterministic candidate ranking from local signals (position + frequency + schema + contextual coherence)
+- Deterministic dedupe by signature (`conta aberta` == `aberta conta`)
+- Deterministic execution order: globally sorted by word count ASC (1 → 2 → 3 → 4 words), weight DESC within each group
+
 ## Check Results
 
 Each check returns:

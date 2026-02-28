@@ -40,6 +40,23 @@ export interface SeoIntelligence {
   lastAnalyzed: Date;
 }
 
+export interface SpiderSecuritySnapshot {
+  pages: number;
+  blockedPages: number;
+  captchaPages: number;
+  captchaProviders?: Record<string, number>;
+  attempts: number;
+  retries: number;
+  transportUsage?: {
+    undici?: number;
+    curl?: number;
+  };
+  avgAttempts?: number;
+  avgTtfbMs?: number;
+  avgTotalMs?: number;
+  avgDownloadMs?: number;
+}
+
 export interface SpiderIntelligence {
   pagesFound: number;
   externalLinks: number;
@@ -48,6 +65,7 @@ export interface SpiderIntelligence {
   scripts: number;
   stylesheets: number;
   errors: number;
+  security?: SpiderSecuritySnapshot;
   lastCrawled: Date;
 }
 

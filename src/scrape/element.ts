@@ -36,11 +36,17 @@ export class ScrapeElement {
    */
   find(selector: string): ScrapeElement {
     const found: HTMLElement[] = [];
+    const seen = new Set<HTMLElement>();
+
     this.elements.forEach((el) => {
-      found.push(...el.querySelectorAll(selector));
+      el.querySelectorAll(selector).forEach((match) => {
+        if (!seen.has(match)) {
+          seen.add(match);
+          found.push(match);
+        }
+      });
     });
-    // Deduplicate? querySelectorAll usually returns unique nodes per root, but multiple roots might overlap?
-    // For now simple concat.
+
     return new ScrapeElement(found);
   }
 

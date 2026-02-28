@@ -165,12 +165,6 @@ export interface RawExpressionNode extends ASTNode {
   filters: FilterExpression[];
 }
 
-// Backwards compatibility aliases
-/** @deprecated Use ExpressionNode instead */
-export type MustacheNode = ExpressionNode;
-/** @deprecated Use RawExpressionNode instead */
-export type RawMustacheNode = RawExpressionNode;
-
 /**
  * Block node - {{#helper}}...{{/helper}}
  */

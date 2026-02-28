@@ -65,6 +65,36 @@ const doc = await parseHtml('<html><body><h1>Hello</h1></body></html>');
 console.log(doc.selectFirst('h1').text()); // "Hello"
 ```
 
+### Custom parser behavior
+
+`parserOptions` lets you control low-level parser behavior when you need deterministic extraction.
+
+```typescript
+import { parseHtml } from 'recker/plugins/scrape';
+
+const doc = await parseHtml('<DIV><A HREF="/Produto">Produto</A></DIV>', {
+  parserOptions: {
+    lowerCaseTagName: true,
+    selectorCache: true,
+  },
+});
+
+console.log(doc.select('a').text()); // normalized parse works even with uppercase tags/attrs
+```
+
+```typescript
+import { ScrapeDocument } from 'recker/scrape';
+
+const raw = '<a><a>nested</a></a>';
+const doc = ScrapeDocument.createSync(raw, {
+  parserOptions: {
+    fixNestedATags: true,
+  },
+});
+
+console.log(doc.select('a').length); // nested links are normalized before selection
+```
+
 ## Imports
 
 ```typescript

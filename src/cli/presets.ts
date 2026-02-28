@@ -1,5 +1,6 @@
 import * as presets from '../presets/index.js';
 import colors from '../utils/colors.js';
+import { ConfigurationError, ValidationError } from '../core/errors.js';
 
 // Map preset names to required environment variables
 const ENV_MAPPING: Record<string, string[]> = {
@@ -23,6 +24,9 @@ const ENV_MAPPING: Record<string, string[]> = {
   perplexity: ['PERPLEXITY_API_KEY'],
 };
 
+type PresetFactory = (options: Record<string, string>) => unknown;
+const presetFactories = presets as Record<string, PresetFactory | undefined>;
+
 export interface ResolvePresetOptions {
   /** If true, throw errors instead of calling process.exit (for shell mode) */
   throwOnError?: boolean;
@@ -39,12 +43,12 @@ export interface ResolvePresetOptions {
  */
 export async function resolvePreset(name: string, options: ResolvePresetOptions = {}) {
   const { throwOnError = false, silent = false } = options;
-  const presetFn = (presets as any)[name];
+  const presetFn = presetFactories[name];
 
   if (!presetFn) {
     const msg = `Unknown preset '@${name}'`;
     if (throwOnError) {
-      throw new Error(msg);
+      throw new ValidationError(msg, { field: 'name', value: name });
     }
     if (!silent) {
       console.error(colors.red(`Error: ${msg}`));
@@ -80,16 +84,28 @@ export async function resolvePreset(name: string, options: ResolvePresetOptions 
 
   try {
     return presetFn(presetOptions);
-  } catch (error: any) {
-    const msg = `Error initializing preset @${name}: ${error.message}`;
+  } catch (error: unknown) {
+    const msg = `Error initializing preset @${name}: ${getErrorMessage(error)}`;
     if (throwOnError) {
-      throw new Error(msg);
+      throw new ConfigurationError(msg, { configKey: `preset.${name}` });
     }
     if (!silent) {
       console.error(colors.red(msg));
     }
     return null;
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return String(error);
 }
 
 function mapEnvToOption(preset: string, env: string): string {

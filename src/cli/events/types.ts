@@ -90,6 +90,33 @@ export interface SpiderPageEvent extends BaseEvent {
   title?: string;
   links: number;
   duration: number;
+  security?: {
+    blocked?: boolean;
+    reason?: string;
+    confidence?: number;
+    captchaDetected?: boolean;
+    captchaProvider?: string;
+    attempts?: number;
+    retryCount?: number;
+    retryAfterMs?: number;
+    transport?: 'auto' | 'undici' | 'curl';
+    blockedByCaptcha?: boolean;
+    lastStatus?: number;
+    lastTransport?: 'auto' | 'undici' | 'curl';
+  };
+  timings?: {
+    dns?: number;
+    tcp?: number;
+    tls?: number;
+    ttfb?: number;
+    download?: number;
+    total?: number;
+  };
+  resources?: {
+    images: number;
+    scripts: number;
+    stylesheets: number;
+  };
 }
 
 export interface SpiderQueueEvent extends BaseEvent {

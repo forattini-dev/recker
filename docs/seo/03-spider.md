@@ -242,6 +242,398 @@ interface SeoSpiderOptions {
 }
 ```
 
+## SERP Campaign Mode (Post-Crawl Search Checks)
+
+When `--serp` is enabled on `rek seo spider`, the crawler also runs a lightweight keyword campaign using keywords extracted from each page's SEO report.
+
+Use cases:
+- Verify whether top keywords are still showing for their own pages
+- Compare brand/company competitive landscape in `topOrganicCompetitors`
+- Validate if changes in title/heading/content are reflected in SERP
+
+### SERP seed strategy (automatic)
+
+When `--serp` is enabled, seed selection now has three explicit stages:
+
+- **Short-tail seed**:
+  - Uses up to `--serp-top-keywords` (default 5) unique top terms per crawled page
+  - Comes from SEO `topKeywords` extracted per page
+  - Prioritizes signal quality (frequency + position in the page)
+  - Short-tail candidates are unique across all pages after token-normalized dedupe (so permuted duplicates are merged), and per-page caps are applied before global merge.
+- **Long-tail seed**:
+  - Generates multiword phrases from title, meta description, heading hierarchy + content sections, link anchors/URLs, and URL path
+  - Adds schema-backed candidates (FAQ, HowTo, Product, BreadcrumbList)
+  - Adds heading-path composition (parent/child heading merges and heading-body blends)
+  - Filters weak connector-heavy variants (phrases that are only prepositions/conjunctions)
+  - Collapses permutations (`conta aberta` == `aberta conta`) so they do not consume query budget
+  - Keeps only phrases with **2 to 4 words**
+  - Expands coverage for intent terms like `"como abrir conta"` and `"melhor conta digital para empresa"`
+  - Combines top anchor tokens with nearby modifier terms to create natural variations
+- **Deduplication and ranking**:
+  - Short and long-tail candidates are deduped across pages with permutation-insensitive normalization (`conta aberta` == `aberta conta`)
+  - Long-tail variants are capped to 2–4 words, de-noised by connector filtering, and scored by contextual relevance
+  - Final `ordered` list is globally sorted by word count ASC (1-word → 2-word → 3-word → 4-word), weight DESC within each group, then capped by `--serp-query-limit`
+
+Execution order is explicit and stable: `seedPlan.ordered` always goes from shortest keywords to longest — 1-word terms first (by weight), then 2-word, then 3-word, then 4-word. `seedPlan.short` and `seedPlan.longTail` expose each layer individually.
+
+This makes SERP checks much more representative: short-intent tokens first, then intent-rich long-tail discovery.
+
+### Keyword engine (no LLM): concrete execution plan
+
+This is the current production keyword engine used by SERP mode. It is deterministic and tuned for production safety:
+
+#### 1) Structure-first extraction
+
+1. Parse page into sections using DOM hierarchy:
+   - Heading stack (`h1`→`h2`→`h3`…)
+   - Paragraph/list/table/figure containers
+   - Link anchors and URLs
+   - JSON-LD structured data
+2. Build a page content signal set by source:
+   - `title`, `description`, URL path
+   - `heading path` context around each section
+   - section text + anchors/nearby words
+
+#### 2) Candidate families
+
+Generate candidates in parallel, then merge:
+
+- **Short-tail family**
+  - Top single words from `report.keywords.topKeywords`
+  - Optional lexical normalization + minimum-frequency floor
+- **Long-tail family** (2–4 words)
+  - Anchor-window phrases around high-value tokens
+  - Heading-path compositions (parent/child headings + body blends)
+  - Schema-backed phrases (`FAQ`, `HowTo`, `Product`, `BreadcrumbList`)
+  - Link-anchor-anchored expansion
+
+#### 3) Short-tail budget
+
+When building seeds for a SERP run, the `topKeywordsLimit` cap (which reserves query budget for long-tail) is **only applied when long-tail generation is also active**. When extracting short-tail-only seeds (e.g., to build the `short` layer), the full `topKeywordsPerPage` budget is used unchanged. This prevents the cap from accidentally limiting the short-tail layer when no long-tail is being generated.
+
+#### 4) Ranking formula
+
+For each candidate keyword `k`, compute:
+
+`score(k) = (base * 0.45) + (structure * 0.22) + (context * 0.18) + (schema * 0.10) + (diversity * 0.05) - penalty`
+
+- `base` = frequency/weight from source (or YAKE-like local score)
+- `structure` = heading/source boost
+  - `title`/`og:title`/`h1`: 1.3
+  - `h2`/`h3`: 1.1
+  - section/body: 0.8
+- `context` = proximity + window quality
+  - words that appear near main anchors
+  - reduced if high connector ratio
+- `schema` = JSON-LD evidence boost
+  - FAQ/HowTo/Product/BreadcrumbList questions and attributes
+- `diversity` = anti-redundancy component by topic bucket
+- `penalty` = boilerplate/template suppression
+  - repeated DOM paths across pages
+  - very high link-density containers
+  - duplicate permutation signatures (`aberta conta` vs `conta aberta`)
+
+#### 5) Dedup + budget policy
+
+1. Normalize candidate for permutation-insensitive signature (sorted tokens).
+2. Keep highest score per signature.
+3. Merge short-tail and long-tail into one list, then **sort globally by word count ASC, weight DESC**:
+   - 1-word seeds (short-tail) first, ranked by weight
+   - 2-word seeds next, ranked by weight
+   - 3-word seeds, ranked by weight
+   - 4-word seeds last, ranked by weight
+4. Apply `queryLimit` after sort.
+
+Suggested budget split (safe default):
+
+- `shortTailBudget = min(ceil(queryLimit * 0.45), totalShortCandidates)`
+- `longTailBudget = queryLimit - shortTailBudget`
+
+If short candidates are scarce, carry the balance to long-tail automatically.
+
+#### 6) Output contract for each SERP run
+
+- `seedPlan.short`: final short-tail list (deduped, ordered)
+- `seedPlan.longTail`: final long-tail list (deduped, ordered)
+- `seedPlan.ordered`: final query order (`short` first + `longTail`)
+- `pageComparison`: per-source-page visibility metrics (`searched`, `found`, `Ap.%`, `Avg pos`, `Top3`, `Top10`)
+
+#### 7) Regression checks (automatable)
+
+- **Word-count ordering guarantee**: `ordered` is globally non-decreasing by word count — `ordered[i].wordCount >= ordered[i-1].wordCount` for every position.
+- **Short-first guarantee**: first `plan.short.length` entries in `ordered` have exactly 1 token.
+- **Long-tail span guarantee**: long-tail entries are only 2–4 words.
+- **Permutation dedupe guarantee**: no repeated signatures among long-tail candidates.
+- **Stability guarantee**: same input + same options => same ordered plan.
+- **Source coverage guarantee**: at least one seed for pages that contain JSON-LD and headings (when present).
+- **Campaign coverage guarantee**: seeds without source content from anchors/sections are not preferred over section/context-aware seeds when both are valid.
+
+```bash
+# Use more seeds to expand phrase coverage
+rek seo spider example.com \
+  --seo \
+  --serp \
+  --serp-top-keywords 14 \
+  --serp-query-limit 18 \
+  --serp-results-per-query 10 \
+  --output long-tail-serp.json
+```
+
+`--serp-top-keywords` now defaults to **5**. For baseline comparability, keep the query pool tight:
+
+```bash
+rek seo spider example.com \
+  --seo \
+  --serp \
+  --serp-top-keywords 5 \
+  --serp-query-limit 8 \
+  --serp-results-per-query 8 \
+  --serp-transport curl
+```
+
+### CLI Workflow
+
+```bash
+# Run SEO + SERP on default settings
+rek seo spider example.com --seo --serp -o report-with-serp.json
+
+# Use explicit campaign bounds
+rek seo spider example.com \
+  --seo \
+  --serp \
+  --serp-top-keywords 12 \
+  --serp-query-limit 20 \
+  --serp-results-per-query 20 \
+  --jsonl -o serp-crawl.jsonl
+```
+
+### Regional and Transport Controls
+
+```bash
+# Crawl and run SERP for BR + Portuguese interface
+rek seo spider example.com \
+  --seo \
+  --serp \
+  --serp-country br \
+  --serp-gl br \
+  --serp-hl pt-BR \
+  --output serp-br.json
+
+# Use cURL transport + custom timeout on protected domains
+rek seo spider example.com \
+  --seo \
+  --serp \
+  --serp-transport curl \
+  --serp-timeout 25000 \
+  --output serp-curl.json
+```
+
+### Anti-Block Crawler Controls (rek spider / rek seo spider)
+
+Use these options when you see 403/429/challenge responses, or when crawling sensitive sites:
+
+```bash
+# Force impersonated curl for protected domains
+rek spider example.com --transport curl --prefer-curl-first
+
+# Auto mode with stronger anti-block retry/backoff
+rek seo spider example.com \
+  --seo \
+  --transport auto \
+  --prefer-curl-first true \
+  --timeout 12000 \
+  --delay 180 \
+  --max-retry-attempts 5 \
+  --base-retry-delay-ms 800 \
+  --max-retry-delay-ms 14000 \
+  --retry-backoff-multiplier 2 \
+  --retry-jitter-ms 250 \
+  --max-domain-block-strikes 2 \
+  --rotate-user-agent true \
+  --randomize-headers true
+```
+
+### Advanced SERP Query Controls
+
+```bash
+# Filter by country/language and result type
+rek seo spider example.com \
+  --seo \
+  --serp \
+  --serp-cr countryBR \
+  --serp-lr lang_pt \
+  --serp-tbm news \
+  --serp-tbs qdr:d \
+  --serp-safe strict
+
+# Use Google advanced as_* modifiers
+rek seo spider example.com \
+  --seo \
+  --serp \
+  --serp-as-oq "guia rápido" \
+  --serp-as-epq "guia de implantação" \
+  --serp-as-eq "gratis desconto" \
+  --serp-as-filetype pdf \
+  --serp-as-sitesearch example.com \
+  --serp-extra "safe=active,nfpr=1"
+```
+
+### SERP Output Shape (CLI JSON)
+
+The `--serp` flow adds a `serp` block to summary output.
+
+```json
+{
+    "serp": {
+      "seedPlan": {
+        "short": ["maquininha", "conta", "pagamento", "negócio", "soluções"],
+        "longTail": [
+          "criar conta empresa",
+          "como vender maquininha",
+          "maquininha de cartão negócio"
+        ],
+        "ordered": [
+          "maquininha", "conta", "pagamento", "negócio", "soluções",
+          "criar conta empresa", "como vender maquininha",
+          "maquininha de cartão negócio"
+        ]
+      },
+      "summary": {
+        "queriesRequested": 20,
+        "queriesExecuted": 20,
+        "queriesFound": 8,
+        "avgTopPosition": 9,
+        "top3Count": 2,
+        "top10Count": 5,
+        "topOrganicCompetitors": [
+        {
+          "domain": "concorrente.com",
+          "matchedKeywords": 10,
+          "totalOutperformedQueries": 4,
+          "organicQueries": 20,
+          "avgOutperformedGap": 2.0
+        }
+      ],
+      "topPaidCompetitors": [
+        {
+          "domain": "anuncio.com",
+          "matchedKeywords": 3,
+          "totalOutperformedQueries": 1,
+          "paidQueries": 5,
+          "avgOutperformedGap": 3.5
+        }
+      ],
+      "competitorCoverage": {
+        "organicUniqueDomains": 4,
+        "paidUniqueDomains": 1
+      }
+    },
+    "campaign": {
+      "active": true,
+      "confidence": "medium",
+      "evidence": [
+        "tutorial aparece orgânico em posição #2"
+      ]
+    },
+    "results": [
+      {
+        "keyword": "termo principal",
+        "found": true,
+        "position": 2,
+        "targetUrl": "https://example.com/pagina",
+        "searchUrl": "https://www.google.com/search?q=termo+principal"
+      }
+    ],
+    "pageComparison": [
+      {
+        "pageUrl": "https://example.com/blog/post-1",
+        "tracked": 20,
+        "found": 8,
+        "appearanceRate": "40.0%",
+        "avgPosition": "6.2",
+        "top3": 3,
+        "top10": 6
+      }
+    ]
+  }
+}
+```
+
+`seedPlan` documents how query selection happened (`short`, `longTail`, `ordered`) and drives execution order when filling `results`.
+
+- `short` — 1-word seeds only, ranked by weight DESC.
+- `longTail` — 2–4 word phrases, filtered for connectors, deduplicated, sorted by word count ASC then weight DESC.
+- `ordered` — full merged list, globally sorted by word count ASC (1 → 2 → 3 → 4 words), weight DESC within each group. This is the sequence fed to the SERP engine.
+
+`results` keeps rows in the same sequence as `ordered`.
+`Top Keywords` in standard `rek seo` output remains short-term frequency signals; use `--serp` to view long-tail `seedPlan.longTail` candidates and campaign execution.
+
+`pageComparison` shows average visibility by source page (`appearanceRate`, `avgPosition`, `top3`, `top10`), helping you find underperforming page templates quickly.
+
+`topOrganicCompetitors` and `topPaidCompetitors` show where competitors beat you:
+
+- `matchedKeywords`: how many query words they share with your campaign
+- `totalOutperformedQueries`: number of queries where the competitor outranks your domain
+- `organicQueries` / `paidQueries`: where wins happened
+- `avgOutperformedGap`: average position gap when outranking
+
+When `--jsonl` is used, SERP is emitted as an extra record:
+
+```jsonl
+{"type":"serp","summary":{...},"campaign":{...},"results":[...],"pageComparison":[...]}
+```
+
+When no keywords are found in crawl pages, the `serp` block is omitted and the tool will log a warning in CLI output.
+
+### Campaign Intelligence from `serp.pageComparison`
+
+Esse bloco já entrega o que você pediu para análise de campanha:
+
+- **Aparição média** por template (`appearanceRate`)  
+- **Posição média** (`avgPosition`) onde a página aparece  
+- **Top3 / Top10** de aparição nos termos testados  
+
+Exemplo:
+
+```json
+{
+  "pageComparison": [
+    {
+      "pageUrl": "https://example.com/blog/post-1",
+      "tracked": 20,
+      "found": 8,
+      "appearanceRate": "40.0%",
+      "avgPosition": "6.2",
+      "top3": 3,
+      "top10": 6
+    }
+  ]
+}
+```
+
+### Principais concorrentes e páginas vencedoras
+
+`topOrganicCompetitors` também já traz onde seu domínio perde:
+
+- `totalOutperformedQueries` indica em quantas queries o concorrente vence você.
+- `avgOutperformedGap` é o gap médio de posição nesse confronto.
+- `organicQueries` / `paidQueries` ajudam a separar ameaça orgânica x mídia paga.
+
+```bash
+rek seo spider example.com \
+  --seo \
+  --serp \
+  --serp-top-keywords 10 \
+  --serp-query-limit 20 \
+  --serp-results-per-query 10
+```
+
+Use isso para:
+
+1. Ordenar `topOrganicCompetitors` por `totalOutperformedQueries` para priorizar ameaça principal.
+2. Validar se as querys da concorrência estão com intenção próxima da sua página-alvo.
+3. Ajustar o conteúdo da(s) sua(s) páginas com menor `appearanceRate`.
+
 ## Class-Based Usage
 
 ```typescript

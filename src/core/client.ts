@@ -49,6 +49,50 @@ interface BatchRequestOptions<T = ReckerResponse> {
   deadlineMs?: number;
 }
 
+const toError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error));
+
+type RequestWithBodyOptions = Omit<RequestOptions, 'method'>;
+type WarmupTransport = Transport & { warmup?: () => unknown };
+type PostLikeOptionHint =
+  | 'json'
+  | 'form'
+  | 'xml'
+  | 'yaml'
+  | 'csv'
+  | 'body'
+  | 'headers'
+  | 'timeout'
+  | 'retry'
+  | 'hooks'
+  | 'searchParams'
+  | 'params'
+  | 'beforeRedirect'
+  | 'maxRedirects'
+  | 'followRedirects'
+  | 'http2'
+  | 'useCurl';
+
+const BODY_OPTION_HINTS: ReadonlyArray<PostLikeOptionHint> = [
+  'json',
+  'form',
+  'xml',
+  'yaml',
+  'csv',
+  'body',
+  'headers',
+  'timeout',
+  'retry',
+  'hooks',
+  'searchParams',
+  'params',
+  'beforeRedirect',
+  'maxRedirects',
+  'followRedirects',
+  'http2',
+  'useCurl',
+];
+
 // Merge into ClientOptions (augmenting the interface from types)
 export interface ExtendedClientOptions extends ClientOptions {
   retry?: RetryOptions;
@@ -56,8 +100,16 @@ export interface ExtendedClientOptions extends ClientOptions {
   dedup?: DedupOptions;
 }
 
+type NodeGlobal = { process?: { versions?: { node?: string } } };
+
 function isNodeRuntime(): boolean {
-  return typeof globalThis !== 'undefined' && Boolean((globalThis as any).process?.versions?.node);
+  const maybeNodeGlobal = globalThis as NodeGlobal;
+  return typeof globalThis !== 'undefined' && Boolean(maybeNodeGlobal.process?.versions?.node);
+}
+
+function isRequestWithBodyOptions(value: unknown): value is RequestWithBodyOptions {
+  if (!isPlainObject(value)) return false;
+  return BODY_OPTION_HINTS.some((key) => Object.prototype.hasOwnProperty.call(value, key));
 }
 
 class LazyTransport implements Transport {
@@ -202,13 +254,13 @@ class LazyHlsPromise implements Promise<void> {
 
   then<TResult1 = void, TResult2 = never>(
     onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): Promise<TResult1 | TResult2> {
     return this.instancePromise.then(({ instance }) => instance.then(onfulfilled, onrejected));
   }
 
   catch<TResult = never>(
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null
   ): Promise<void | TResult> {
     return this.then(null, onrejected);
   }
@@ -221,22 +273,34 @@ class LazyHlsPromise implements Promise<void> {
     this.instancePromise.then(({ instance }) => instance.cancel()).catch(() => {});
   }
 
-  async download(dest: any): Promise<void> {
+  async download(dest: string | ((segment: unknown) => string)): Promise<void> {
     const { instance } = await this.instancePromise;
     return instance.download(dest);
   }
 
-  async *stream(): AsyncGenerator<any> {
+  async *stream(): AsyncGenerator<unknown> {
     const { instance } = await this.instancePromise;
     yield* instance.stream();
   }
 
-  async pipe(writable: any): Promise<void> {
+  async pipe(
+    writable: {
+      write: (chunk: unknown) => boolean;
+      once: (event: string, handler: () => void) => void;
+      end?: () => void;
+    }
+  ): Promise<void> {
     const { instance } = await this.instancePromise;
     return instance.pipe(writable);
   }
 
-  async info(): Promise<any> {
+  async info(): Promise<{
+    master?: unknown;
+    playlist?: unknown;
+    selectedVariant?: unknown;
+    isLive: boolean;
+    totalDuration?: number;
+  }> {
     const { instance } = await this.instancePromise;
     return instance.info();
   }
@@ -407,7 +471,9 @@ export class Client {
       });
       this.transportKind = 'undici';
     } else {
-      if (this.debugEnabled) console.log('[DEBUG] Using Fetch Transport');
+      if (this.debugEnabled && this.logger) {
+        this.logger.debug('Using Fetch Transport');
+      }
       this.transport = new FetchTransport();
       this.transportKind = 'fetch';
     }
@@ -456,8 +522,9 @@ export class Client {
       });
 
       registerPlugin(
-        (client: any) => {
-          client.middlewares.unshift(this.requestPool!.asMiddleware());
+        (client: Plugin) => {
+          const pluginClient = client as { middlewares?: Middleware[] };
+          pluginClient.middlewares?.unshift(this.requestPool!.asMiddleware());
         },
         {
           name: 'recker:request-pool',
@@ -780,7 +847,7 @@ export class Client {
         this.runtimeEventBus.emit('transport:error', {
           context,
           req,
-          error: error instanceof Error ? error : new Error(String(error))
+          error: toError(error)
         });
       }
       throw error;
@@ -1092,7 +1159,7 @@ export class Client {
             return response;
           },
           (error) => {
-            const requestError = error instanceof Error ? error : new Error(String(error));
+            const requestError = toError(error);
             this.runtimeEventBus.emit('request:failed', {
               context: requestContext,
               req,
@@ -1196,7 +1263,7 @@ export class Client {
           return response;
         },
         (error) => {
-          const requestError = error instanceof Error ? error : new Error(String(error));
+          const requestError = toError(error);
           this.runtimeEventBus.emit('request:failed', {
             context: requestContext,
             req,
@@ -1239,8 +1306,9 @@ export class Client {
    * ```
    */
   async warmup(): Promise<void> {
-    if (this.transport && 'warmup' in this.transport && typeof (this.transport as any).warmup === 'function') {
-      await (this.transport as any).warmup();
+    const transport = this.transport as WarmupTransport | null;
+    if (transport?.warmup) {
+      await transport.warmup();
     }
   }
 
@@ -1341,46 +1409,29 @@ export class Client {
   private requestWithBody<T>(
     method: 'POST' | 'PUT' | 'PATCH' | 'PROPFIND' | 'PROPPATCH' | 'LOCK' | 'LINK' | 'UNLINK',
     path: string,
-    bodyOrOptions?: any,
-    options?: Omit<RequestOptions, 'method' | 'body'>
-  ) {
+    bodyOrOptions?: unknown,
+    options?: RequestWithBodyOptions
+  ): RequestPromise<T> {
     let actualBody = bodyOrOptions;
-    let actualOptions = options;
+    let actualOptions: RequestWithBodyOptions = options || {};
 
-    // Check if options is effectively empty (undefined or no keys)
-    // This is necessary because post/put/patch methods default options to {}
-    const isOptionsEmpty = actualOptions === undefined || 
-      (typeof actualOptions === 'object' && actualOptions !== null && Object.keys(actualOptions).length === 0);
+    const isOptionsEmpty = options === undefined
+      || (isPlainObject(options) && Object.keys(options).length === 0);
 
-    // Overload: post(url, options) handling
-    // If options is undefined, and bodyOrOptions looks like options
-    if (isOptionsEmpty && isPlainObject(bodyOrOptions)) {
-      const potentialOptions = bodyOrOptions as any;
-      // Heuristic to detect if it's options
-      if (
-        potentialOptions.json !== undefined ||
-        potentialOptions.form !== undefined ||
-        potentialOptions.xml !== undefined ||
-        potentialOptions.yaml !== undefined ||
-        potentialOptions.csv !== undefined ||
-        potentialOptions.body !== undefined ||
-        potentialOptions.headers !== undefined ||
-        potentialOptions.timeout !== undefined ||
-        potentialOptions.retry !== undefined ||
-        potentialOptions.hooks !== undefined ||
-        potentialOptions.searchParams !== undefined ||
-        potentialOptions.params !== undefined
-      ) {
-        actualOptions = bodyOrOptions;
-        actualBody = undefined;
-      }
+    if (isOptionsEmpty && isRequestWithBodyOptions(bodyOrOptions)) {
+      actualOptions = bodyOrOptions;
+      actualBody = undefined;
     }
 
-    // Ensure actualOptions is at least an empty object if undefined
-    actualOptions = actualOptions || {};
-
-    // Extract json, form, and xml from options to prevent them from being passed to request()
-    const { json, form, xml, yaml, csv, ...restOptions } = actualOptions as any;
+    const {
+      json,
+      form,
+      xml,
+      yaml,
+      csv,
+      body: explicitBody,
+      ...restOptions
+    } = actualOptions;
 
     let finalBody = actualBody;
     let explicitContentType: string | undefined;
@@ -1412,8 +1463,8 @@ export class Client {
       explicitContentType = 'text/csv';
     }
     // Priority 6: explicit body in options
-    else if (restOptions.body !== undefined) {
-      finalBody = restOptions.body;
+    else if (explicitBody !== undefined) {
+      finalBody = explicitBody;
     }
     // Priority 5: existing body parameter (already in finalBody)
 
@@ -1431,15 +1482,21 @@ export class Client {
     return this.request<T>(path, { ...restOptions, method, body: processedBody, headers });
   }
 
-  post<T = unknown>(path: string, body?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+  post<T = unknown>(path: string, options?: RequestWithBodyOptions): RequestPromise<T>;
+  post<T = unknown>(path: string, body?: unknown, options?: RequestWithBodyOptions): RequestPromise<T>;
+  post<T = unknown>(path: string, body?: unknown, options: RequestWithBodyOptions = {}): RequestPromise<T> {
     return this.requestWithBody<T>('POST', path, body, options);
   }
 
-  put<T = unknown>(path: string, body?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+  put<T = unknown>(path: string, options?: RequestWithBodyOptions): RequestPromise<T>;
+  put<T = unknown>(path: string, body?: unknown, options?: RequestWithBodyOptions): RequestPromise<T>;
+  put<T = unknown>(path: string, body?: unknown, options: RequestWithBodyOptions = {}): RequestPromise<T> {
     return this.requestWithBody<T>('PUT', path, body, options);
   }
 
-  patch<T = unknown>(path: string, body?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+  patch<T = unknown>(path: string, options?: RequestWithBodyOptions): RequestPromise<T>;
+  patch<T = unknown>(path: string, body?: unknown, options?: RequestWithBodyOptions): RequestPromise<T>;
+  patch<T = unknown>(path: string, body?: unknown, options: RequestWithBodyOptions = {}): RequestPromise<T> {
     return this.requestWithBody<T>('PATCH', path, body, options);
   }
 
@@ -1495,14 +1552,14 @@ export class Client {
    * const props = await client.propfind('/folder').json();
    * ```
    */
-  propfind<T = unknown>(path: string, body?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+  propfind<T = unknown>(path: string, body?: unknown, options: RequestWithBodyOptions = {}) {
     return this.requestWithBody<T>('PROPFIND', path, body, options);
   }
 
   /**
    * PROPPATCH request - Modify properties of a resource (WebDAV)
    */
-  proppatch<T = unknown>(path: string, body?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+  proppatch<T = unknown>(path: string, body?: unknown, options: RequestWithBodyOptions = {}) {
     return this.requestWithBody<T>('PROPPATCH', path, body, options);
   }
 
@@ -1550,7 +1607,7 @@ export class Client {
    * LOCK request - Lock a resource (WebDAV)
    * Prevents other clients from modifying the resource
    */
-  lock<T = unknown>(path: string, body?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+  lock<T = unknown>(path: string, body?: unknown, options: RequestWithBodyOptions = {}) {
     return this.requestWithBody<T>('LOCK', path, body, options);
   }
 
@@ -1566,7 +1623,7 @@ export class Client {
    * LINK request - Establish relationships between resources
    * Part of HTTP Link extension
    */
-  link<T = unknown>(path: string, body?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+  link<T = unknown>(path: string, body?: unknown, options: RequestWithBodyOptions = {}) {
     return this.requestWithBody<T>('LINK', path, body, options);
   }
 
@@ -1574,7 +1631,7 @@ export class Client {
    * UNLINK request - Remove relationships between resources
    * Part of HTTP Link extension
    */
-  unlink<T = unknown>(path: string, body?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+  unlink<T = unknown>(path: string, body?: unknown, options: RequestWithBodyOptions = {}) {
     return this.requestWithBody<T>('UNLINK', path, body, options);
   }
 
@@ -1641,7 +1698,7 @@ export class Client {
   /**
    * Iterate over pages (full responses), allowing access to metadata.
    */
-  pages<T = any>(path: string, options: RequestOptions & PaginationOptions = {}): AsyncGenerator<PageResult<T>> {
+  pages<T = unknown>(path: string, options: RequestOptions & PaginationOptions = {}): AsyncGenerator<PageResult<T>> {
       const { getNextUrl, maxPages, pageParam, limitParam, resultsPath, nextCursorPath, ...reqOptions } = options;
       
       const paginationOpts: PaginationOptions = {
@@ -1658,7 +1715,7 @@ export class Client {
   /**
    * Fetch a specific page directly.
    */
-  page<T = any>(path: string, pageNumber: number, options: RequestOptions & { pageParam?: string } = {}): RequestPromise<T> {
+  page<T = unknown>(path: string, pageNumber: number, options: RequestOptions & { pageParam?: string } = {}): RequestPromise<T> {
       const pageParam = options.pageParam || this.paginationConfig?.pageParam || 'page';
       
       const params = { ...options.params, [pageParam]: pageNumber };

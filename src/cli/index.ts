@@ -11,6 +11,7 @@ import { registerDnsCommands } from './commands/dns.js';
 import { registerAiCommand } from './commands/ai.js';
 import { registerSpiderCommand } from './commands/spider.js';
 import { registerScrapeCommand } from './commands/scrape.js';
+import { registerSearchCommand } from './commands/search.js';
 import { registerBenchCommand, registerLoadCommand } from './commands/bench.js';
 import { registerSecurityCommand } from './commands/security.js';
 import { registerServeCommand } from './commands/serve.js';
@@ -350,6 +351,7 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
   registerSecurityCommand(program as any);
   registerSpiderCommand(program as any);
   registerScrapeCommand(program as any);
+  registerSearchCommand(program as any);
   registerSeoCommand(program as any);
   registerNetworkCommands(program as any);
   registerDnsCommands(program as any);

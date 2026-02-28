@@ -23,10 +23,14 @@ import { ValidationError } from '../core/errors.js';
 import { HttpRequest } from '../core/request.js';
 import { ScrapeDocument } from '../scrape/document.js';
 import type { ScrapeElement } from '../scrape/element.js';
-import { detectBlock, type BlockDetectionResult } from '../utils/block-detector.js';
+import {
+  detectBlock,
+  detectCaptcha,
+  type BlockDetectionResult,
+  type CaptchaDetectionResult,
+} from '../utils/block-detector.js';
 import { getRandomUserAgent } from '../utils/user-agent.js';
 
-const GOOGLE_SEARCH_BASE_URL = 'https://www.google.com/search';
 const GOOGLE_SEARCH_ORIGIN = 'https://www.google.com';
 const GOOGLE_RESULT_SNIPPET_SELECTOR_ORDER = [
   '[data-sncf="1"]',
@@ -47,6 +51,18 @@ const GOOGLE_RESULT_LINK_SELECTORS = [
 
 const GOOGLE_RESULT_CONTAINER_SELECTORS =
   '[data-hveid], [data-ved], div[class*="g"], div[class*="MjjY"], div[class*="tF2Cxc"], [class*="xpd"]';
+const GOOGLE_BROWSER_PROFILE_GS_LCRP_VALUES = [
+  'EgZjaHJvbWUyBggAEEUYOdIBCDIwNzlqMGoxqAIAsAIA',
+  'EgZjaHJvbWUyBggAEEUYOdIBCDIwMjlqMGoxqAIAsAIA',
+  'EgZjaHJvbWUyBggAEEUYOdIBCDIwMzNqMGoxqAIAsAIA',
+];
+const GOOGLE_BROWSER_PROFILE_AQS_VALUES = [
+  'EgNQQxIEGAM%3D',
+  'EgZjaHJvbWUyBggAEEUYOdIB',
+  'EgYIARABGBQyGAM%3D',
+];
+const GOOGLE_SEARCH_PARAM_IE_VALUES = ['UTF-8', 'utf-8', 'UTF-8', 'utf-8'];
+const GOOGLE_BROWSER_SEI_LENGTH = 16;
 
 const GOOGLE_AD_CONTAINER_CLASS_HINTS = [
   'ad',
@@ -74,6 +90,48 @@ const GOOGLE_AD_TEXT_HINTS = [
 ];
 
 const COUNTRY_CODE_PATTERN = /^[a-z]{2}$/;
+const GOOGLE_SEARCH_HOST_OVERRIDES: Record<string, string> = {
+  br: 'google.com.br',
+  de: 'google.de',
+  fr: 'google.fr',
+  es: 'google.es',
+  it: 'google.it',
+  in: 'google.co.in',
+  uk: 'google.co.uk',
+  gb: 'google.co.uk',
+  us: 'google.com',
+  au: 'google.com.au',
+  ca: 'google.ca',
+  mx: 'google.com.mx',
+  ar: 'google.com.ar',
+};
+const GOOGLE_DEFAULT_LANGUAGE_BY_COUNTRY: Record<string, string> = {
+  br: 'pt-BR',
+  pt: 'pt-PT',
+  pt_br: 'pt-BR',
+  de: 'de',
+  fr: 'fr',
+  es: 'es',
+  it: 'it',
+  in: 'en-IN',
+  mx: 'es',
+  ar: 'es',
+  au: 'en',
+  ca: 'en',
+  gb: 'en',
+  uk: 'en',
+};
+const SERP_BLOCK_CONFIDENCE = 0.6;
+const URL_DOMAIN_MARKET_MAP: Record<string, string> = {
+  'co.uk': 'uk',
+  'com.br': 'br',
+  'co.br': 'br',
+  'com.au': 'au',
+  'co.in': 'in',
+  'com.ar': 'ar',
+  'com.mx': 'mx',
+};
+
 const COUNTRY_ALIASES: Record<string, string> = {
   us: 'us',
   usa: 'us',
@@ -116,8 +174,10 @@ const COUNTRY_ALIASES_NORMALIZED = Object.entries(COUNTRY_ALIASES).reduce<Record
   },
   {},
 );
+const SERP_SEARCH_SOURCES = ['google'] as const;
 
 type SearchTransport = 'auto' | 'undici' | 'curl';
+export type SerpSearchSource = 'google';
 
 export type { SearchTransport };
 
@@ -174,6 +234,10 @@ export interface GoogleSearchAdvancedOptions {
   country?: string;
   gl?: string;
   hl?: string;
+  /** Browser-like search signature profile used in query parameters (default: off). */
+  humanProfile?: 'chrome' | 'off';
+  /** Search provider/source to execute queries. */
+  source?: SerpSearchSource;
 
   /** Transport mode for request execution */
   transport?: SearchTransport;
@@ -211,22 +275,42 @@ export interface SearchTransportDetails {
   impersonateAvailable: boolean;
 }
 
+export interface GoogleSearchTimings {
+  dns?: number;
+  tcp?: number;
+  tls?: number;
+  ttfb?: number;
+  content?: number;
+  total?: number;
+}
+
+export interface GoogleSearchCaptchaResult {
+  detected: boolean;
+  confidence: number;
+  provider?: CaptchaDetectionResult['provider'];
+  description?: string;
+}
+
 export interface GoogleSearchResponse {
   query: string;
+  source: SerpSearchSource;
   searchUrl: string;
   results: GoogleSearchResult[];
   nextPageUrl?: string;
   nextPageStart?: number;
   resultStats?: number;
   block?: BlockDetectionResult;
+  captcha?: GoogleSearchCaptchaResult;
   transport: SearchTransportDetails;
   status?: number;
+  timings?: GoogleSearchTimings;
   rawHtml?: string;
 }
 
 interface NormalizedSearchOptions extends GoogleSearchAdvancedOptions {
   as_q: string;
   query: string;
+  source: SerpSearchSource;
   asEpq: string;
   asOq: string;
   asEq: string;
@@ -236,8 +320,11 @@ interface NormalizedSearchOptions extends GoogleSearchAdvancedOptions {
   as_nlo: string;
   as_nhi: string;
   gl: string;
+  humanProfile: 'chrome' | 'off';
   transport: SearchTransport;
   includeRawHtml: boolean;
+  searchOrigin: string;
+  searchBaseUrl: string;
 }
 
 interface SearchFetchResult {
@@ -247,6 +334,42 @@ interface SearchFetchResult {
   fallbackUsed: boolean;
   impersonateAvailable: boolean;
   block?: BlockDetectionResult;
+  captcha?: GoogleSearchCaptchaResult;
+  timings?: GoogleSearchTimings;
+}
+
+function normalizeNumberTiming(value: unknown): number | undefined {
+  if (typeof value !== 'number') return undefined;
+  if (!Number.isFinite(value)) return undefined;
+  if (value <= 0) return undefined;
+  return Math.round(value);
+}
+
+function toSearchTimings(timings: unknown): GoogleSearchTimings | undefined {
+  if (!timings || typeof timings !== 'object') return undefined;
+  const parsed = timings as Record<string, number | undefined>;
+  const normalized: GoogleSearchTimings = {
+    dns: normalizeNumberTiming(parsed.dns),
+    tcp: normalizeNumberTiming(parsed.tcp),
+    tls: normalizeNumberTiming(parsed.tls),
+    ttfb: normalizeNumberTiming(parsed.firstByte),
+    content: normalizeNumberTiming(parsed.content),
+    total: normalizeNumberTiming(parsed.total),
+  };
+  return Object.values(normalized).some(value => value !== undefined) ? normalized : undefined;
+}
+
+function detectSearchCaptcha(status: number, headers: Headers, body: string): GoogleSearchCaptchaResult {
+  const result = detectCaptcha(
+    { status, headers },
+    body,
+  );
+  return {
+    detected: result.detected,
+    confidence: result.confidence,
+    provider: result.provider,
+    description: result.description,
+  };
 }
 
 function cleanText(value: string): string {
@@ -262,6 +385,46 @@ function toParamValue(value: string | number | boolean | undefined): string | un
   if (typeof value === 'boolean') return value ? '1' : '0';
   const trimmed = String(value).trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function pickRandomProfileValue(values: string[]): string {
+  if (values.length === 0) return '';
+  const index = Math.floor(Math.random() * values.length);
+  return values[index];
+}
+
+function generateSeiHint(): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const chars: string[] = [];
+  for (let i = 0; i < GOOGLE_BROWSER_SEI_LENGTH; i++) {
+    chars.push(alphabet[Math.floor(Math.random() * alphabet.length)] ?? 'a');
+  }
+  return chars.join('');
+}
+
+function normalizeHumanSearchProfile(value: unknown): 'chrome' | 'off' {
+  if (typeof value !== 'string') {
+    return 'off';
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === 'off' || normalized === 'false' || normalized === '0') {
+    return 'off';
+  }
+
+  if (normalized === 'chrome' || normalized === 'browser' || normalized === 'human') {
+    return 'chrome';
+  }
+
+  return 'off';
+}
+
+function normalizeSearchSource(value: unknown): SerpSearchSource {
+  if (typeof value !== 'string') return 'google';
+  const normalized = value.trim().toLowerCase();
+  return SERP_SEARCH_SOURCES.includes(normalized as SerpSearchSource)
+    ? (normalized as SerpSearchSource)
+    : 'google';
 }
 
 function pick<T>(
@@ -313,6 +476,88 @@ function resolveCountryCode(country: string | undefined, legacyGl: string | unde
   return legacyGl ? legacyGl.trim().toLowerCase() : '';
 }
 
+function parseCountryFromHostname(hostname: string): string | undefined {
+  const normalized = hostname
+    .toLowerCase()
+    .replace(/^www\./, '')
+    .trim();
+  const parts = normalized.split('.');
+  if (parts.length < 2) return undefined;
+
+  const suffix2 = parts.slice(-2).join('.');
+  const mapped2 = URL_DOMAIN_MARKET_MAP[suffix2];
+  if (mapped2) return mapped2;
+
+  const last = parts[parts.length - 1];
+  if (COUNTRY_CODE_PATTERN.test(last)) return last;
+  return undefined;
+}
+
+function resolveGoogleSearchOrigin(gl: string): string {
+  if (!gl) return GOOGLE_SEARCH_ORIGIN;
+  const normalized = gl.toLowerCase();
+  const host = GOOGLE_SEARCH_HOST_OVERRIDES[normalized] ?? `google.${normalized}`;
+  return `https://www.${host}`;
+}
+
+function normalizeSearchOrigin(origin: string): string {
+  try {
+    const parsed = new URL(origin);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    if (origin.startsWith('http://') || origin.startsWith('https://')) return origin;
+    return `https://www.google.com`;
+  }
+}
+
+function pickGoogleSearchOrigins(primary: string, country: string): string[] {
+  const unique: string[] = [];
+  const push = (value: string) => {
+    if (!value) return;
+    if (!unique.includes(value)) unique.push(value);
+  };
+
+  const normalizedPrimary = normalizeSearchOrigin(primary);
+  const canonical = 'https://www.google.com';
+
+  push(normalizedPrimary);
+  push(canonical);
+
+  const countryHost = country ? GOOGLE_SEARCH_HOST_OVERRIDES[country.toLowerCase()] : '';
+  if (countryHost) {
+    push(`https://www.${countryHost}`);
+  }
+
+  if (countryHost && `https://www.${countryHost}` !== canonical) {
+    push('https://www.google.com');
+  }
+
+  // Fallback to plain http in case a specific egress path rejects TLS+HTTP2 combinations.
+  if (normalizedPrimary.startsWith('https://')) {
+    push(normalizedPrimary.replace(/^https:/, 'http:'));
+  }
+
+  return unique;
+}
+
+export function inferSearchLocaleFromUrl(targetUrl: string): { country: string; gl: string; hl?: string } | undefined {
+  try {
+    const parsed = new URL(targetUrl);
+    const country = parseCountryFromHostname(parsed.hostname);
+    if (!country) return undefined;
+    const resolved = normalizeCountryCode(country);
+    if (!resolved) return undefined;
+
+    return {
+      country: resolved,
+      gl: resolved,
+      hl: GOOGLE_DEFAULT_LANGUAGE_BY_COUNTRY[resolved],
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeOptions(query: string, options: GoogleSearchAdvancedOptions = {}): NormalizedSearchOptions {
   const normalizedQuery = cleanText(query);
   if (!normalizedQuery) {
@@ -323,6 +568,9 @@ function normalizeOptions(query: string, options: GoogleSearchAdvancedOptions = 
   }
 
   const resolvedTransport = (options.transport ?? 'auto');
+  const gl = resolveCountryCode(options.country, options.gl);
+  const searchOrigin = resolveGoogleSearchOrigin(gl);
+  const source = normalizeSearchSource(options.source);
 
   return {
     ...options,
@@ -336,9 +584,13 @@ function normalizeOptions(query: string, options: GoogleSearchAdvancedOptions = 
     as_rights: pick(options.as_rights, options.asRights) ?? '',
     as_nlo: toParamValue(pick(options.as_nlo, options.asNlo)) ?? '',
     as_nhi: toParamValue(pick(options.as_nhi, options.asNhi)) ?? '',
-    gl: resolveCountryCode(options.country, options.gl),
+    gl,
+    humanProfile: normalizeHumanSearchProfile(options.humanProfile),
+    source,
     transport: resolvedTransport,
     includeRawHtml: options.includeRawHtml ?? false,
+    searchOrigin,
+    searchBaseUrl: `${searchOrigin}/search`,
   };
 }
 
@@ -346,8 +598,18 @@ function buildSearchUrl(query: string, options: NormalizedSearchOptions): string
   const params = new URLSearchParams();
 
   params.set('q', query);
-  params.set('ie', 'UTF-8');
-  params.set('oe', 'UTF-8');
+  // Chrome sends oq (original query) = q for direct searches, and sourceid=chrome
+  params.set('oq', query);
+  params.set('sourceid', 'chrome');
+  params.set('ie', pickRandomProfileValue(GOOGLE_SEARCH_PARAM_IE_VALUES));
+  params.set('oe', pickRandomProfileValue(GOOGLE_SEARCH_PARAM_IE_VALUES));
+  if (options.humanProfile === 'chrome') {
+    const qs = query.trim().toLowerCase();
+    params.set('aqs', pickRandomProfileValue(GOOGLE_BROWSER_PROFILE_AQS_VALUES));
+    params.set('gs_lcrp', pickRandomProfileValue(GOOGLE_BROWSER_PROFILE_GS_LCRP_VALUES));
+    params.set('sei', generateSeiHint());
+    params.set('client', 'chrome');
+  }
 
   if (options.as_q) params.set('as_q', options.as_q);
   if (options.asEpq) params.set('as_epq', options.asEpq);
@@ -390,21 +652,36 @@ function buildSearchUrl(query: string, options: NormalizedSearchOptions): string
     }
   }
 
-  return `${GOOGLE_SEARCH_BASE_URL}?${params.toString()}`;
+  return `${options.searchBaseUrl}?${params.toString()}`;
 }
 
 function normalizeRequestHeaders(
   inputHeaders: HeadersInit | undefined,
-  userAgent: string
+  userAgent: string,
+  referer: string,
+  locale?: string,
 ): Record<string, string> {
+  const normalizedLocale = (locale || 'en-US').replace('_', '-');
+  const acceptLanguage = `${normalizedLocale},en-US;q=0.8,en;q=0.6`;
+
   const headers = new Headers({
-    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'accept-language': 'en-US,en;q=0.9',
+    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'accept-language': acceptLanguage,
     'cache-control': 'max-age=0',
-    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua': '"Not.A/Brand";v="8", "Chromium";v="132", "Google Chrome";v="132"',
     'sec-ch-ua-platform': '"Windows"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-fetch-dest': 'document',
+    'sec-fetch-mode': 'navigate',
+    'sec-fetch-site': 'same-origin',
+    'sec-fetch-user': '?1',
+    'upgrade-insecure-requests': '1',
     'user-agent': userAgent,
-    referer: GOOGLE_SEARCH_ORIGIN,
+    referer,
+    // SOCS=CAI bypasses the GDPR consent redirect (consent.google.com)
+    // that would otherwise land on a page with reCAPTCHA detection signals.
+    // This cookie tells Google that cookie consent was already given implicitly.
+    cookie: 'SOCS=CAI',
   });
 
   if (inputHeaders) {
@@ -420,6 +697,26 @@ function normalizeRequestHeaders(
   return merged;
 }
 
+function isUsefulSearchResponse(
+  parsed: { results: Array<unknown> },
+  fetchResult: SearchFetchResult,
+): boolean {
+  if (parsed.results.length > 0) return true;
+  if (fetchResult.block?.blocked && fetchResult.block.confidence >= SERP_BLOCK_CONFIDENCE) return false;
+  if (fetchResult.captcha?.detected && fetchResult.captcha.confidence >= SERP_BLOCK_CONFIDENCE) return false;
+  return false;
+}
+
+function isHardSearchBlock(
+  parsed: { results: Array<unknown> },
+  fetchResult: SearchFetchResult,
+): boolean {
+  if (fetchResult.captcha?.detected && fetchResult.captcha.confidence >= SERP_BLOCK_CONFIDENCE) return true;
+  if (fetchResult.block?.blocked && fetchResult.block.confidence >= SERP_BLOCK_CONFIDENCE) return true;
+  if (parsed.results.length === 0 && fetchResult.block?.reason === 'captcha') return true;
+  return false;
+}
+
 async function hasImpersonateBinary(): Promise<boolean> {
   try {
     const { hasImpersonate } = await import('../utils/binary-manager.js');
@@ -433,8 +730,9 @@ async function fetchWithCurl(
   url: string,
   headers: Record<string, string>,
   timeout?: number
-): Promise<{ html: string; status: number }> {
+): Promise<{ html: string; status: number; responseHeaders: Headers; timings?: GoogleSearchTimings }> {
   const { CurlTransport } = await import('../transport/curl.js');
+  const requestStart = performance.now();
   const transport = new CurlTransport();
   const request = new HttpRequest(url, {
     method: 'GET',
@@ -443,29 +741,47 @@ async function fetchWithCurl(
   });
 
   const response = await transport.dispatch(request);
+  const requestEnd = performance.now();
   const html = await response.text();
-  return { html, status: response.status };
+
+  const parsedTimings = toSearchTimings(response.timings);
+  const timings = parsedTimings ?? {
+    total: Math.round(requestEnd - requestStart),
+  };
+
+  return {
+    html,
+    status: response.status,
+    responseHeaders: response.headers,
+    timings,
+  };
 }
+
 
 async function fetchSearchResults(
   url: string,
   options: NormalizedSearchOptions
 ): Promise<SearchFetchResult> {
-  const headers = normalizeRequestHeaders(options.headers, options.userAgent ?? getRandomUserAgent('desktop.chrome'));
+  const headers = normalizeRequestHeaders(
+    options.headers,
+    options.userAgent ?? getRandomUserAgent('desktop.chrome'),
+    options.searchOrigin,
+    options.hl,
+  );
   const requestTimeout = options.timeout;
-  const impersonateAvailable = options.transport !== 'undici' && (await hasImpersonateBinary());
-
-  if (options.transport === 'curl' && !impersonateAvailable) {
-    throw new ValidationError('Transport "curl" requires curl-impersonate; install it with `rek setup`', {
-      field: 'transport',
-      value: options.transport,
-    });
-  }
+  const impersonateAvailable = await hasImpersonateBinary();
 
   if (options.transport === 'curl') {
+    if (!impersonateAvailable) {
+      throw new ValidationError('Transport "curl" requires curl-impersonate; install it with `rek setup`', {
+        field: 'transport',
+        value: options.transport,
+      });
+    }
+
     const directResponse = await fetchWithCurl(url, headers, requestTimeout);
     const directBlock = detectBlock(
-      { status: directResponse.status, headers: new Headers() },
+      { status: directResponse.status, headers: directResponse.responseHeaders },
       directResponse.html
     );
     return {
@@ -475,18 +791,28 @@ async function fetchSearchResults(
       fallbackUsed: false,
       impersonateAvailable,
       block: directBlock,
+      captcha: detectSearchCaptcha(
+        directResponse.status,
+        directResponse.responseHeaders,
+        directResponse.html
+      ),
+      timings: directResponse.timings,
     };
   }
 
   const client = createClient({ timeout: requestTimeout });
 
   const performUndiciRequest = async (): Promise<SearchFetchResult> => {
-    const response = await client.get(url, { headers });
+    const response = await client.get(url, {
+      headers,
+      throwHttpErrors: false,
+    });
     const html = await response.text();
     const block = detectBlock(
       { status: response.status, headers: response.headers },
       html
     );
+    const captcha = detectSearchCaptcha(response.status, response.headers, html);
 
     return {
       html,
@@ -495,25 +821,60 @@ async function fetchSearchResults(
       fallbackUsed: false,
       impersonateAvailable,
       block,
+      captcha,
+      timings: toSearchTimings(response.timings),
     };
   };
-
-  if (options.transport === 'undici') {
-    return performUndiciRequest();
-  }
 
   if (!impersonateAvailable) {
     return performUndiciRequest();
   }
 
+  const shouldFallbackToUndici = (
+    block: BlockDetectionResult,
+    captcha: GoogleSearchCaptchaResult
+  ): boolean => {
+    if (block.blocked && block.confidence >= SERP_BLOCK_CONFIDENCE) return true;
+    if (captcha.detected && captcha.confidence >= SERP_BLOCK_CONFIDENCE) return true;
+    if (block.reason === 'captcha' || block.reason === 'rate-limit') return true;
+    return false;
+  };
+
+  const getSearchResponseRisk = (response: SearchFetchResult): number => (
+    (response.block?.confidence ?? 0) + (response.captcha?.confidence ?? 0)
+  );
+
+  const shouldKeepPrimaryImpersonateResponse = (
+    primary: SearchFetchResult,
+    fallback: SearchFetchResult,
+  ): boolean => (
+    getSearchResponseRisk(primary) <= getSearchResponseRisk(fallback)
+  );
+
   try {
     const primaryImpersonateResponse = await fetchWithCurl(url, headers, requestTimeout);
     const primaryImpersonateBlock = detectBlock(
-      { status: primaryImpersonateResponse.status, headers: new Headers() },
+      { status: primaryImpersonateResponse.status, headers: primaryImpersonateResponse.responseHeaders },
+      primaryImpersonateResponse.html
+    );
+    const primaryImpersonateCaptcha = detectSearchCaptcha(
+      primaryImpersonateResponse.status,
+      primaryImpersonateResponse.responseHeaders,
       primaryImpersonateResponse.html
     );
 
-    if (!primaryImpersonateBlock.blocked || primaryImpersonateBlock.confidence <= 0.7) {
+    const primaryResult: SearchFetchResult = {
+      html: primaryImpersonateResponse.html,
+      status: primaryImpersonateResponse.status,
+      transport: 'curl',
+      fallbackUsed: false,
+      impersonateAvailable,
+      block: primaryImpersonateBlock,
+      captcha: primaryImpersonateCaptcha,
+      timings: primaryImpersonateResponse.timings,
+    };
+
+    if (!shouldFallbackToUndici(primaryImpersonateBlock, primaryImpersonateCaptcha)) {
       return {
         html: primaryImpersonateResponse.html,
         status: primaryImpersonateResponse.status,
@@ -521,8 +882,22 @@ async function fetchSearchResults(
         fallbackUsed: false,
         impersonateAvailable,
         block: primaryImpersonateBlock,
+        captcha: primaryImpersonateCaptcha,
+        timings: primaryImpersonateResponse.timings,
       };
     }
+
+    const fallback = await performUndiciRequest();
+    if (!shouldKeepPrimaryImpersonateResponse(primaryResult, fallback)) {
+      return {
+        ...fallback,
+        transport: fallback.transport,
+        fallbackUsed: true,
+        impersonateAvailable,
+      };
+    }
+
+    return primaryResult;
   } catch {
     // Fall back to undici when impersonation request fails.
   }
@@ -536,18 +911,43 @@ async function fetchSearchResults(
   };
 }
 
-function resolveSearchResultUrl(rawHref: string): string | null {
+function isGoogleOwnHost(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+
+  return (
+    lower === 'www.google.com' ||
+    lower === 'google.com' ||
+    lower.endsWith('.google.com') ||
+    lower.endsWith('.googleapis.com') ||
+    lower.endsWith('.googleusercontent.com') ||
+    lower.endsWith('.googlesyndication.com') ||
+    lower.endsWith('.doubleclick.net') ||
+    lower.endsWith('.gstatic.com') ||
+    lower.startsWith('www.google.') ||
+    /^([a-z0-9-]+\.)*google(\.[a-z]{2,})+$/.test(lower)
+  );
+}
+
+function resolveSearchResultUrl(rawHref: string, searchOrigin: string): string | null {
   try {
     const normalized = rawHref.startsWith('//') ? `https:${rawHref}` : rawHref;
-    const parsed = new URL(normalized, GOOGLE_SEARCH_ORIGIN);
+    const parsed = new URL(normalized, searchOrigin);
+
+    // Google redirect URL (/url?q=... or https://www.google.com/url?...)
     const rawResultUrl = parsed.searchParams.get('q') ?? parsed.searchParams.get('url');
-    if (!rawResultUrl) return null;
+    if (rawResultUrl) {
+      const candidate = new URL(decodeURIComponent(rawResultUrl), searchOrigin);
+      if (!candidate.protocol.startsWith('http')) return null;
+      if (candidate.pathname === '/search' && candidate.hostname.includes('google.')) return null;
+      return candidate.toString();
+    }
 
-    const candidate = new URL(decodeURIComponent(rawResultUrl), GOOGLE_SEARCH_ORIGIN);
-    if (!candidate.protocol.startsWith('http')) return null;
-    if (candidate.hostname === 'www.google.com' && candidate.pathname === '/search') return null;
+    // Direct URL (modern Google skips the redirect wrapper)
+    if (parsed.protocol.startsWith('http') && !isGoogleOwnHost(parsed.hostname)) {
+      return parsed.toString();
+    }
 
-    return candidate.toString();
+    return null;
   } catch {
     return null;
   }
@@ -711,14 +1111,15 @@ function parseResultStats(text: string): number | undefined {
 
 function parseSearchPage(
   html: string,
-  options: NormalizedSearchOptions
+  options: NormalizedSearchOptions,
+  searchOrigin: string
 ): {
   results: GoogleSearchResult[];
   nextPageUrl?: string;
   nextPageStart?: number;
   resultStats?: number;
 } {
-  const doc = ScrapeDocument.createSync(html, { baseUrl: GOOGLE_SEARCH_ORIGIN });
+  const doc = ScrapeDocument.createSync(html, { baseUrl: searchOrigin });
   const results: GoogleSearchResult[] = [];
   const seen = new Set<string>();
   const maxResults = options.maxResults ? Number(options.maxResults) : undefined;
@@ -729,7 +1130,7 @@ function parseSearchPage(
   for (const anchor of anchors) {
     const rawHref = anchor.attr('href');
     if (!rawHref) continue;
-    const resultUrl = resolveSearchResultUrl(rawHref);
+    const resultUrl = resolveSearchResultUrl(rawHref, searchOrigin);
     if (!resultUrl || seen.has(resultUrl)) continue;
 
     const titleText = (() => {
@@ -787,13 +1188,61 @@ function parseSearchPage(
     }
   }
 
+  // Pass 2: Modern Google sometimes serves direct hrefs instead of /url?q= redirects.
+  // Guard: only anchors that contain an h3 heading — the definitive marker of a result
+  // link (navigation, pagination and ads nav never wrap an h3).
+  for (const anchor of doc.selectAll('a[href^="https://"], a[href^="http://"]')) {
+    if (typeof maxResults === 'number' && Number.isFinite(maxResults) && results.length >= maxResults) break;
+
+    const rawHref = anchor.attr('href');
+    if (!rawHref) continue;
+
+    const resultUrl = resolveSearchResultUrl(rawHref, searchOrigin);
+    if (!resultUrl || seen.has(resultUrl)) continue;
+
+    const titleText = cleanText(anchor.find('h3').text());
+    if (!titleText) continue;
+
+    const resultContainer = anchor.parents(GOOGLE_RESULT_CONTAINER_SELECTORS).first();
+    const placement = detectResultPlacement(anchor, resultContainer);
+
+    const snippet = (() => {
+      for (const selector of GOOGLE_RESULT_SNIPPET_SELECTOR_ORDER) {
+        const snippetNode = resultContainer.find(selector).first();
+        const snippetText = cleanText(snippetNode.text());
+        if (looksLikeSnippet(snippetText, titleText)) return snippetText;
+      }
+
+      const fallbackElements = resultContainer.find('span,div').toArray();
+      for (const fallbackEl of fallbackElements) {
+        const fallbackText = cleanText(fallbackEl.text());
+        if (looksLikeSnippet(fallbackText, titleText)) return fallbackText;
+      }
+
+      const rootFallback = cleanText(resultContainer.text());
+      if (looksLikeSnippet(rootFallback, titleText)) return rootFallback.slice(0, 240);
+      return undefined;
+    })();
+
+    results.push({
+      rank: results.length + 1,
+      title: titleText,
+      url: resultUrl,
+      snippet,
+      displayedUrl: extractDisplayedUrl(resultUrl, anchor.text()),
+      placement: placement.placement,
+      placementHint: placement.placementHint,
+    });
+    seen.add(resultUrl);
+  }
+
   const nextPageRaw = (() => {
     const candidate = doc.selectFirst('a#pnnext, a[aria-label="Next"], a[id="pnnext"]').first();
     if (candidate && candidate.length) {
       const href = candidate.attr('href');
       if (!href) return undefined;
       try {
-        return new URL(href, GOOGLE_SEARCH_ORIGIN).toString();
+        return new URL(href, searchOrigin).toString();
       } catch {
         return undefined;
       }
@@ -830,13 +1279,51 @@ export async function searchGoogleAdvanced(
   options: GoogleSearchAdvancedOptions = {}
 ): Promise<GoogleSearchResponse> {
   const normalized = normalizeOptions(query, options);
-  const searchUrl = buildSearchUrl(query, normalized);
-  const fetchResult = await fetchSearchResults(searchUrl, normalized);
-  const parsed = parseSearchPage(fetchResult.html, normalized);
+  const originCandidates = pickGoogleSearchOrigins(normalized.searchOrigin, normalized.gl);
+  let fetchResult: SearchFetchResult | undefined;
+  let parsed: ReturnType<typeof parseSearchPage> | undefined;
+  let selectedSearchUrl = '';
 
-  const response: GoogleSearchResponse = {
+  for (let index = 0; index < originCandidates.length; index += 1) {
+    const origin = originCandidates[index];
+    const isFinalCandidate = index === originCandidates.length - 1;
+    const candidateOptions: NormalizedSearchOptions = {
+      ...normalized,
+      searchOrigin: origin,
+      searchBaseUrl: `${origin}/search`,
+    };
+
+    const candidateUrl = buildSearchUrl(query, candidateOptions);
+    const candidateResult = await fetchSearchResults(candidateUrl, candidateOptions);
+    const candidateParsed = parseSearchPage(candidateResult.html, candidateOptions, candidateOptions.searchOrigin);
+
+    fetchResult = candidateResult;
+    parsed = candidateParsed;
+    selectedSearchUrl = candidateUrl;
+
+    if (isUsefulSearchResponse(candidateParsed, candidateResult) || isFinalCandidate) {
+      break;
+    }
+
+    if (isHardSearchBlock(candidateParsed, candidateResult)) {
+      break;
+    }
+
+    if (candidateParsed.results.length === 0) {
+      // If a candidate returned zero hits (including without explicit block/captcha signals),
+      // try alternate hosts before concluding. This avoids false negatives from host-specific parsing/layout changes.
+      continue;
+    }
+  }
+
+  if (!fetchResult || !parsed) {
+    throw new ValidationError('Failed to execute Google search attempts');
+  }
+
+ const response: GoogleSearchResponse = {
     query: normalized.query,
-    searchUrl,
+    source: normalized.source,
+    searchUrl: selectedSearchUrl,
     results: parsed.results,
     transport: {
       requested: normalized.transport,
@@ -845,15 +1332,17 @@ export async function searchGoogleAdvanced(
       impersonateAvailable: fetchResult.impersonateAvailable,
     },
     status: fetchResult.status,
+    captcha: fetchResult.captcha,
     block: fetchResult.block,
+    timings: fetchResult.timings,
     nextPageUrl: parsed.nextPageUrl,
     nextPageStart: parsed.nextPageStart,
     resultStats: parsed.resultStats,
   };
 
-  if (normalized.includeRawHtml) {
-    response.rawHtml = fetchResult.html;
-  }
+    if (normalized.includeRawHtml) {
+      response.rawHtml = fetchResult.html;
+    }
 
   return response;
 }

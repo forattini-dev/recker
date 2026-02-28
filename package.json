@@ -231,6 +231,7 @@
     "prepublishOnly": "pnpm build && pnpm build:browser:bundle && node scripts/inject-version.js",
     "test": "NODE_OPTIONS='--max-old-space-size=512' vitest run",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=512' vitest run --coverage",
+    "test:curl-impersonate:coverage": "NODE_OPTIONS='--max-old-space-size=512' vitest run --config vitest.config.curl-impersonate.ts --coverage",
     "test:light": "NODE_OPTIONS='--max-old-space-size=256' vitest run --maxWorkers=1 --fileParallelism=false",
     "test:browser": "vitest run --config vitest.config.browser.ts",
     "test:browser:coverage": "vitest run --config vitest.config.browser.ts --coverage",

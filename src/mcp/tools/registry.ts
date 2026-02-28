@@ -1,6 +1,7 @@
 import type { MCPTool, MCPToolResult } from '../types.js';
 import { matchesPattern } from '../profiles.js';
 import { getToolCategory, listCategories, type ToolCategory, type CategoryInfo } from './categories.js';
+import { StateError, ValidationError } from '../../core/errors.js';
 
 export type MCPToolHandler = (args: Record<string, unknown>) => Promise<MCPToolResult>;
 
@@ -48,7 +49,10 @@ export class ToolRegistry {
    */
   registerTool(tool: MCPTool, handler: MCPToolHandler): void {
     if (this.tools.has(tool.name)) {
-      throw new Error(`Tool already registered: ${tool.name}`);
+      throw new ValidationError(`Tool already registered: ${tool.name}`, {
+        field: 'tool.name',
+        value: tool.name,
+      });
     }
     this.tools.set(tool.name, tool);
     this.handlers.set(tool.name, handler);
@@ -61,7 +65,10 @@ export class ToolRegistry {
     for (const tool of module.tools) {
       const handler = module.handlers[tool.name];
       if (!handler) {
-        throw new Error(`Handler missing for tool: ${tool.name}`);
+        throw new ValidationError(`Handler missing for tool: ${tool.name}`, {
+          field: `handlers["${tool.name}"]`,
+          value: undefined,
+        });
       }
       this.registerTool(tool, handler);
     }
@@ -180,7 +187,10 @@ export class ToolRegistry {
   async callTool(name: string, args: Record<string, unknown>): Promise<MCPToolResult> {
     const handler = this.handlers.get(name);
     if (!handler) {
-      throw new Error(`Unknown tool: ${name}`);
+      throw new StateError(`Unknown tool: ${name}`, {
+        expectedState: 'registered tool',
+        actualState: name,
+      });
     }
     return handler(args);
   }

@@ -4,6 +4,8 @@
  * TypeScript interfaces for HTML scraping and data extraction.
  */
 
+import type { Options as ParserOptions } from './parser/index.js';
+
 // === Link Extraction ===
 export interface ExtractedLink {
   /** Link URL (href attribute) */
@@ -207,6 +209,12 @@ export interface ExtractionSchema {
 export interface ScrapeOptions {
   /** Base URL for resolving relative links */
   baseUrl?: string;
+
+  /**
+   * Parser-level options for HTML parsing behavior.
+   * Useful when you need strict parsing rules or specific parser cache behavior.
+   */
+  parserOptions?: Partial<ParserOptions>;
 }
 
 // === Link Extraction Options ===

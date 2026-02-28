@@ -51,18 +51,19 @@ Recker provides three transport modes for HTTP requests:
 
 | Mode | Behavior | Best For |
 |:-----|:---------|:---------|
-| `auto` (default) | Try Undici first, automatically fallback to curl on WAF detection | General crawling |
+| `auto` (default) | Start fast on Undici and escalate to curl-impersonate on CAPTCHA/WAF signals | General crawling |
 | `undici` | Always use Undici (fastest) | APIs, internal services |
 | `curl` | Always use curl-impersonate | Protected sites |
 
 ### Auto Mode: Intelligent Fallback
 
-The `auto` transport mode (default) provides the best of both worlds:
+The `auto` transport mode (default) provides a practical balance:
 
-1. **First request**: Uses fast Undici transport
-2. **Block detection**: Analyzes response for WAF signatures (Cloudflare, Akamai, DataDome, etc.)
-3. **Automatic fallback**: If blocked, retries with curl-impersonate
-4. **Domain caching**: Remembers blocked domains for future requests
+1. **Selective starting point**: Known anti-bot domains start with curl-impersonate immediately.
+2. **Detection loop**: Each response is analyzed by block and CAPTCHA detectors (status + headers + body + scripts + forms + nonce markers).
+3. **Escalation**: If strong challenge signals appear, the crawler increases retry delay and prefers curl on next attempts.
+4. **Cooldown**: Challenge-heavy domains wait before next retry, reducing re-trigger frequency.
+5. **Domain memory**: Repeated block/challenge signals keep forcing curl automatically.
 
 ```typescript
 import { Spider } from 'recker/scrape';
@@ -70,10 +71,33 @@ import { Spider } from 'recker/scrape';
 // Auto mode is the default
 const spider = new Spider({
   transport: 'auto', // optional - this is the default
+  maxDomainBlockStrikes: 1,
+  maxRetryAttempts: 4,
   maxPages: 50,
 });
 
 const results = await spider.crawl('https://protected-site.com');
+```
+
+### Captcha-aware callbacks
+
+```typescript
+import { Spider } from 'recker/scrape';
+
+const spider = new Spider({
+  transport: 'auto',
+  onCaptchaDetected: ({ url, status, confidence, provider, usedCurl }) => {
+    console.log('[captcha]', {
+      url,
+      status,
+      provider,
+      confidence,
+      transport: usedCurl ? 'curl' : 'undici',
+    });
+  },
+});
+
+const result = await spider.crawl('https://protected-site.com');
 ```
 
 ### Block Detection
@@ -86,9 +110,24 @@ Recker detects blocks using multiple signals:
 | **Cloudflare** | `cf-ray` header + challenge page patterns | High |
 | **Akamai** | `x-akamai-*` headers + "Access Denied" patterns | High |
 | **DataDome** | `x-datadome` header + captcha-delivery.com | High |
-| **CAPTCHA** | reCAPTCHA, hCaptcha, FunCaptcha patterns | High |
+| **CAPTCHA** | reCAPTCHA, hCaptcha, FunCaptcha, Turnstile markers + headers + scripts | High |
 | **Rate limiting** | "too many requests", "slow down" patterns | Medium |
 | **Generic WAF** | "blocked", "bot detected" patterns | Medium |
+
+### Provider-aware retry behavior
+
+```typescript
+const spider = new Spider({
+  transport: 'auto',
+  baseRetryDelayMs: 900,
+  maxRetryDelayMs: 18000,
+  retryBackoffMultiplier: 2.2,
+  retryJitterMs: 350,
+  maxDomainBlockStrikes: 1,
+});
+```
+
+This setup makes Cloudflare / DataDome challenges back off progressively before new attempts, instead of immediately retrying and increasing the block risk.
 
 ### Why Curl?
 

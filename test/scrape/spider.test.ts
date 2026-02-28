@@ -405,6 +405,7 @@ describe('Spider - Web Crawler', () => {
       const result = await spider(`${baseUrl}/with-error-link`, {
         maxPages: 5,
         respectRobotsTxt: false,
+        maxRetryAttempts: 0,
       });
 
       expect(result.errors.length).toBeGreaterThanOrEqual(0);

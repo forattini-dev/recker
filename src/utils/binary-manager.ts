@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { promises as fs, constants } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, platform, arch } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -18,12 +18,41 @@ export function getCurlPath(): string {
 }
 
 export async function hasImpersonate(): Promise<boolean> {
+    const binaryPath = process.env.RECKER_CURL_BIN || getCurlPath();
+
     try {
-        await fs.access(getCurlPath());
-        return true;
+        await fs.access(binaryPath, constants.X_OK);
     } catch {
         return false;
     }
+
+    return new Promise<boolean>((resolve) => {
+        let settled = false;
+        const child = spawn(binaryPath, ['--version']);
+
+        const settle = (ok: boolean) => {
+            if (!settled) {
+                settled = true;
+                resolve(ok);
+            }
+        };
+
+        child.on('error', () => settle(false));
+        child.on('close', (code) => {
+            settle(code === 0);
+        });
+
+        const timeout = setTimeout(() => {
+            if (child.exitCode === null) {
+                child.kill();
+            }
+            settle(false);
+        }, 2_000);
+
+        child.on('close', () => {
+            clearTimeout(timeout);
+        });
+    });
 }
 
 function getDownloadUrl(): string {

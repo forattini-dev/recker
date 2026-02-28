@@ -17,6 +17,106 @@ for (const page of result.pages) {
 }
 ```
 
+### Proteção anti-bot no crawl
+
+```typescript
+import { Spider } from 'recker/scrape';
+
+const spider = new Spider({
+  transport: 'auto',
+  maxRetryAttempts: 4,
+  onCaptchaDetected: ({ url, status, confidence, provider, usedCurl }) => {
+    if (confidence >= 0.75) {
+      console.log(`Proteção detectada em ${url}`);
+    }
+    console.log(`${status} - ${provider ?? 'unknown'} via ${usedCurl ? 'curl' : 'undici'}`);
+  },
+  onProgress: (p) => {
+    console.log(`[${p.crawled}/${p.total}] ${p.currentUrl}`);
+  },
+});
+
+const result = await spider.crawl('https://www.example.com');
+
+for (const page of result.pages) {
+  if (page.security?.captchaDetected) {
+    console.log(`Página com desafio: ${page.url} (${page.security.captchaProvider})`);
+  }
+}
+```
+
+### Sinais de anti-bot / captcha detectados
+
+O crawler classifica bloqueios em `page.security` com base em:
+
+- Status HTTP críticos: `403`, `406`, `429`, `503`
+- Headers conhecidos:
+  - `cf-ray`, `cf-cache-status`, `cf-mitigated`
+  - `x-akamai-transformed`, `akamai-grn`
+  - `x-datadome`, `x-dd-b`, `x-dd-type`
+  - `x-captcha`, `x-captcha-result`, `x-captcha-badge`, `x-recaptcha`, `x-hcaptcha`
+- Cookies/IDs de proteção:
+  - `__cf_bm`, `cf_clearance`, `cf_chl_`
+  - `_dd_s`, `_dd_nuid`, `dd_session`
+  - `x-px-id`, `incap_ses_*`, `visid_incap`
+- Padrões HTML/JS:
+  - Formulários/inputs: `g-recaptcha-response`, `hcaptcha-response`, `cf-turnstile-response`
+  - Script source: `recaptcha/api.js`, `hcaptcha.com/1/api.js`, `challenges.cloudflare.com`
+  - Marcadores: `cf_chl`, `recaptcha`, `turnstile`, `funcaptcha`, `arkose`
+
+### Exemplo de leitura (JSONL)
+
+```json
+{
+  "type": "page",
+  "url": "https://example.com/protected",
+  "status": 403,
+  "security": {
+    "blocked": true,
+    "reason": "status",
+    "confidence": 0.93,
+    "captchaDetected": true,
+    "captchaProvider": "cloudflare",
+    "attempts": 3,
+    "retryCount": 2,
+    "transport": "curl"
+  },
+  "timings": {
+    "ttfb": 1200,
+    "total": 2450,
+    "download": 800
+  }
+}
+```
+
+No evento `complete`, o crawl também gera resumo agregado de anti-bot:
+
+```json
+{
+  "type": "complete",
+  "security": {
+    "pages": 120,
+    "blockedPages": 8,
+    "captchaPages": 5,
+    "attempts": 152,
+    "retries": 32,
+    "avgAttempts": 1.27,
+    "avgTtfbMs": 420,
+    "avgTotalMs": 870,
+    "avgDownloadMs": 430,
+    "transportUsage": {
+      "undici": 92,
+      "curl": 28
+    }
+  },
+  "assets": {
+    "images": 1450,
+    "scripts": 212,
+    "stylesheets": 98
+  }
+}
+```
+
 ### CLI Quick Start
 
 ```bash
@@ -215,6 +315,7 @@ The JSONL output contains different record types:
 {"type":"page","url":"https://example.com/about","status":200,"depth":1,...}
 {"type":"page-full","url":"https://example.com/","status":200,"seoScore":85,"extracted":{...}}
 {"type":"complete","url":"...","pagesVisited":50,"duration":12345,"seo":{...}}
+{"type":"serp","summary":{"queriesRequested":8,"queriesFound":5,"top3Count":2,"top10Count":4},"seedPlan":{"short":[...],"longTail":[...],"ordered":[...]},"campaign":{...},"results":[...],"pageComparison":[...]}
 ```
 
 | Record Type | When Emitted | Contains |
@@ -222,7 +323,19 @@ The JSONL output contains different record types:
 | `start` | Beginning | Config, start time, options |
 | `page` | Real-time per page | Basic info (status, depth, links) |
 | `page-full` | After crawl | Complete data (SEO, extraction) |
+| `serp` | Optional (when `--serp` and `--seo`) | SERP campaign result (`summary`, `seedPlan`, `campaign`, `results`, `pageComparison`) |
 | `complete` | End | Summary, site-wide SEO, totals |
+
+`seedPlan` inside each `serp` record documents the exact keyword layers:
+
+- `seedPlan.short` = short-tail seeds from page `topKeywords` (deduped and capped by `--serp-top-keywords`, default 5)
+- `seedPlan.longTail` = generated 2–4 word intent phrases from title/meta/headings/sections/links/url,
+  plus heading-path and schema-backed seeds (FAQ/HowTo/Product/BreadcrumbList)
+- `seedPlan.longTail` is filtered to drop low-signal noise phrases and permutation variants.
+- `seedPlan.ordered` = final execution order used for `results` (`short` first, then long-tail)
+
+Short-tail items are deduped globally (`conta aberta` = `aberta conta`) after per-page extraction and cap (`--serp-top-keywords` by default, per page).
+`seedPlan.ordered` keeps short-tail first for intent alignment, then long-tail.
 
 ### Processing JSONL
 
@@ -238,6 +351,9 @@ cat crawl.jsonl | jq 'select(.type=="page-full") | {url, score: .seoScore}'
 
 # Find pages with specific extraction
 cat data.jsonl | jq 'select(.extracted.price != null)'
+
+# Filter SERP records from crawls run with --serp
+cat crawl.jsonl | jq 'select(.type=="serp") | {summary, seedPlan, campaign, totalResults: (.results|length)}'
 ```
 
 ### JSONL vs JSON Output
@@ -393,6 +509,17 @@ interface SpiderPageResult {
   links: ExtractedLink[];
   duration: number;
   error?: string;
+  /**
+   * Optional: network-level timing signals
+   */
+  timings?: {
+    dns?: number;
+    tcp?: number;
+    tls?: number;
+    ttfb?: number;
+    download?: number;
+    total?: number;
+  };
 
   /** Extracted data (when extract option is used) */
   extracted?: Record<string, unknown>;
@@ -418,6 +545,13 @@ interface SpiderPageResult {
   };
 }
 ```
+
+Non-HTML responses (PDF/JS/image/assets) are also recorded now. For those pages:
+
+* `title` is empty
+* `links` stays `[]`
+* `metrics.htmlSize` uses `Content-Length` when available (or fallback to parsed body size)
+* SEO callbacks (`onPageWithHtml`) are not executed because there is no HTML payload.
 
 ## Crawl Result Structure
 

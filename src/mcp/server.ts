@@ -14,7 +14,7 @@ import type {
   MCPResource,
   MCPResourceContent,
 } from './types.js';
-import { UnsupportedError } from '../core/errors.js';
+import { NotFoundError, UnsupportedError } from '../core/errors.js';
 import { getIpInfo, isValidIP, isGeoIPAvailable, isBogon, isIPv6, type IpInfo } from './ip-intel.js';
 import { networkTools, networkToolHandlers } from './tools/network.js';
 import { seoTools, seoToolHandlers } from './tools/seo.js';
@@ -504,8 +504,9 @@ export class MCPServer {
 
   private inferComplexity(content: string, docComment: string): 'basic' | 'intermediate' | 'advanced' {
     // Check explicit tag
-    if (/@complexity\s+(basic|intermediate|advanced)/i.test(docComment)) {
-      return docComment.match(/@complexity\s+(basic|intermediate|advanced)/i)![1].toLowerCase() as any;
+    const complexityMatch = docComment.match(/@complexity\s+(basic|intermediate|advanced)/i);
+    if (complexityMatch?.[1]) {
+      return complexityMatch[1].toLowerCase() as 'basic' | 'intermediate' | 'advanced';
     }
 
     // Heuristics
@@ -773,7 +774,7 @@ export class MCPServer {
       const path = uri.slice(7);
       const doc = this.docsIndex.find(d => d.path === path);
       if (!doc) {
-        throw new Error(`Documentation not found: ${path}`);
+        throw new NotFoundError(`Documentation not found: ${path}`, { resource: path });
       }
       return [{
         uri,
@@ -787,7 +788,7 @@ export class MCPServer {
       const id = uri.slice(10);
       const example = this.codeExamples.find(e => e.id === id);
       if (!example) {
-        throw new Error(`Example not found: ${id}`);
+        throw new NotFoundError(`Example not found: ${id}`, { resource: id });
       }
       return [{
         uri,
@@ -797,7 +798,9 @@ export class MCPServer {
       }];
     }
 
-    throw new Error(`Unknown resource scheme: ${uri}`);
+    throw new UnsupportedError(`Unknown resource scheme: ${uri}`, {
+      feature: 'recker://, docs://, example://',
+    });
   }
 
   /**

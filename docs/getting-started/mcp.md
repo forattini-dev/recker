@@ -232,6 +232,63 @@ Some tools appear in multiple categories based on use case.
 
 Once configured, your AI assistant can help like this:
 
+### Anti-block crawl via MCP
+
+```json
+{
+  "tool": "rek_seo_spider",
+  "arguments": {
+    "url": "https://protected-site.com",
+    "maxPages": 40,
+    "maxDepth": 3,
+    "transport": "curl",
+    "concurrency": 4
+  }
+}
+
+### SERP-driven SEO audit via MCP
+
+```json
+{
+  "tool": "rek_seo_analyze",
+  "arguments": {
+    "url": "https://example.com/landing",
+    "outputDir": "/tmp/recker/reports"
+  }
+}
+
+{
+  "tool": "rek_seo_spider",
+  "arguments": {
+    "url": "https://example.com",
+    "serp": true,
+    "serpTopKeywords": 5,
+    "serpQueryLimit": 16,
+    "serpResultsPerQuery": 12,
+    "serpTransport": "curl",
+    "serpCountry": "br",
+    "serpHl": "pt-BR"
+  }
+}
+```
+
+`serpTopKeywords` controls how many short-tail seeds are extracted per page.
+Long-tail terms are generated automatically from title/meta/heading context, section context, link anchors/URLs, URL path, and schema signals.
+Long-tail terms are constrained to **2–4 words**, de-noised (no connector-only/low-signal variants), deduplicated with permutation-insensitive matching, and then executed after short-tail terms.
+SERP payloads also return a `seedPlan` (`short`, `longTail`, `ordered`) so agents can explain which layer each query came from.
+
+```json
+{
+  "tool": "rek_scrape",
+  "arguments": {
+    "url": "https://protected-site.com/login",
+    "selector": "title,meta[name=\"description\"]",
+    "extract": ["meta", "links"],
+    "transport": "auto"
+  }
+}
+```
+
 ### Quick Site Audit
 
 ```

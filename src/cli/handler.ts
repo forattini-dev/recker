@@ -1,10 +1,12 @@
 import { createClient } from '../core/client.js';
 import { requireOptional } from '../utils/optional-require.js';
 import colors from '../utils/colors.js';
+import type { CliRequestHeaders, CliRequestOptions } from './types.js';
 import { createSpinner } from './tui/spinner.js';
 
 // Lazy-loaded optional dependency
-let highlight: (code: string, opts?: any) => string;
+type HighlightFn = (code: string, opts?: { theme?: string }) => string;
+let highlight: HighlightFn;
 
 /**
  * Initialize CLI dependencies dynamically
@@ -21,18 +23,7 @@ async function initDependencies() {
   }
 }
 
-interface RequestOptions {
-  method: string;
-  url: string;
-  headers?: Record<string, string>; // Headers might already be part of clientOptions
-  body?: any;
-  verbose?: boolean;
-  quiet?: boolean;
-  output?: string;
-  clientOptions?: any; // Now expects full ClientOptions
-}
-
-export async function handleRequest(options: RequestOptions) {
+export async function handleRequest(options: CliRequestOptions) {
   // Load dependencies on first call
   await initDependencies();
 
@@ -55,11 +46,11 @@ export async function handleRequest(options: RequestOptions) {
   const start = performance.now();
 
   try {
-    let client;
-    const finalClientOptions = options.clientOptions || {}; // Start with provided clientOptions
+    const finalClientOptions: ClientOptions = options.clientOptions || {}; // Start with provided clientOptions
+    const legacyBase = 'base' in finalClientOptions ? (finalClientOptions as { base?: string }).base : undefined;
 
     // If no baseUrl explicitly set in finalClientOptions, try to derive from URL
-    if (!finalClientOptions.baseUrl && !finalClientOptions.base) {
+    if (!finalClientOptions.baseUrl && !legacyBase) {
       try {
         const urlObj = new URL(options.url);
         finalClientOptions.baseUrl = urlObj.origin;
@@ -70,41 +61,46 @@ export async function handleRequest(options: RequestOptions) {
     }
     
     // Ensure headers are merged: options.headers (from parseMixedArgs) take precedence over clientOptions.headers
-    finalClientOptions.headers = { ...finalClientOptions.headers, ...options.headers };
+    const requestHeaders: CliRequestHeaders = {
+      ...(finalClientOptions.headers as CliRequestHeaders | undefined),
+      ...options.headers,
+    };
+    finalClientOptions.headers = requestHeaders;
 
-    client = createClient(finalClientOptions);
+    const client = createClient(finalClientOptions);
 
     // Serialize body if present
-    let requestBody = undefined;
-    options.headers = options.headers || {};
+    let requestBody: string | undefined;
+    const headers = { ...requestHeaders };
     if (options.body) {
       // If body is already a string, use it as-is (e.g., from stdin pipe)
       // Otherwise, serialize as JSON
       if (typeof options.body === 'string') {
         requestBody = options.body;
         // Try to detect if it's JSON content
-        if (!options.headers['Content-Type'] && !options.headers['content-type']) {
+        if (!headers['Content-Type'] && !headers['content-type']) {
           try {
             JSON.parse(options.body);
-            options.headers['Content-Type'] = 'application/json';
+            headers['Content-Type'] = 'application/json';
           } catch {
             // Not JSON, use text/plain
-            options.headers['Content-Type'] = 'text/plain';
+            headers['Content-Type'] = 'text/plain';
           }
         }
       } else {
         requestBody = JSON.stringify(options.body);
         // Ensure Content-Type is set
-        if (!options.headers['Content-Type'] && !options.headers['content-type']) {
-          options.headers['Content-Type'] = 'application/json';
+        if (!headers['Content-Type'] && !headers['content-type']) {
+          headers['Content-Type'] = 'application/json';
         }
       }
     }
 
+    const method = options.method;
     const response = await client.request(options.url, {
-      method: options.method as any,
-      headers: options.headers,
-      body: requestBody
+      method,
+      headers,
+      ...(requestBody === undefined ? {} : { body: requestBody }),
     });
 
     const duration = Math.round(performance.now() - start);
@@ -146,7 +142,7 @@ export async function handleRequest(options: RequestOptions) {
     if (options.verbose) {
         console.log(colors.gray('\n--- Request ---'));
         console.log(`${colors.bold(options.method)} ${options.url}`);
-        Object.entries(options.headers).forEach(([k, v]) => {
+        Object.entries(headers).forEach(([k, v]) => {
             console.log(`${colors.blue(k)}: ${v}`);
         });
         if (options.body) {

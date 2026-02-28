@@ -55,7 +55,7 @@ export class ScrapeDocument {
     html: string,
     options?: ScrapeOptions
   ): Promise<ScrapeDocument> {
-    const root = parse(html);
+    const root = parse(html, options?.parserOptions);
     return new ScrapeDocument(root, options);
   }
 
@@ -63,7 +63,7 @@ export class ScrapeDocument {
    * Create a new ScrapeDocument from HTML string (Sync version)
    */
   static createSync(html: string, options?: ScrapeOptions): ScrapeDocument {
-    const root = parse(html);
+    const root = parse(html, options?.parserOptions);
     return new ScrapeDocument(root, options);
   }
 

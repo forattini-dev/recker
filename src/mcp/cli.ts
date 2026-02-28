@@ -36,6 +36,7 @@ import {
   type CategoryName,
 } from './profiles.js';
 import { LEGACY_TOOL_GROUPS } from './legacy-tool-groups.js';
+import { consoleLogger } from '../types/logger.js';
 
 const program = new Command('recker-mcp');
 
@@ -74,27 +75,27 @@ program
 
     // Handle --list-categories
     if (opts.listCategories) {
-      console.log('╔═══════════════════════════════════════════════════════════════════╗');
-      console.log('║                    Recker MCP Categories                          ║');
-      console.log('╚═══════════════════════════════════════════════════════════════════╝');
-      console.log('');
-      console.log('Available categories:');
-      console.log('');
+      consoleLogger.info('╔═══════════════════════════════════════════════════════════════════╗');
+      consoleLogger.info('║                    Recker MCP Categories                          ║');
+      consoleLogger.info('╚═══════════════════════════════════════════════════════════════════╝');
+      consoleLogger.info('');
+      consoleLogger.info('Available categories:');
+      consoleLogger.info('');
 
       for (const category of listCategories()) {
         const toolCount = category.toolCount === -1 ? 'all' : category.toolCount;
         const icon = category.icon || '📦';
-        console.log(`  ${icon} ${category.name.padEnd(12)} ${category.description}`);
-        console.log(`               Tools: ${toolCount}, ~${category.estimatedTokens} tokens`);
-        console.log('');
+        consoleLogger.info(`  ${icon} ${category.name.padEnd(12)} ${category.description}`);
+        consoleLogger.info(`               Tools: ${toolCount}, ~${category.estimatedTokens} tokens`);
+        consoleLogger.info('');
       }
 
-      console.log('Usage examples:');
-      console.log('  recker-mcp                                # Default: minimal category');
-      console.log('  recker-mcp --category=minimal,seo         # Combine categories');
-      console.log('  recker-mcp -c seo,security                # Short form');
-      console.log('  recker-mcp --category=full                # All tools (high context)');
-      console.log('');
+      consoleLogger.info('Usage examples:');
+      consoleLogger.info('  recker-mcp                                # Default: minimal category');
+      consoleLogger.info('  recker-mcp --category=minimal,seo         # Combine categories');
+      consoleLogger.info('  recker-mcp -c seo,security                # Short form');
+      consoleLogger.info('  recker-mcp --category=full                # All tools (high context)');
+      consoleLogger.info('');
       process.exit(0);
     }
 
@@ -105,8 +106,8 @@ program
       const categoryNames = opts.category.split(',').map((p: string) => p.trim());
       const validation = validateCategories(categoryNames);
       if (!validation.valid) {
-        console.error(`Invalid category(s): ${validation.invalid.join(', ')}`);
-        console.error('Use --list-categories to see available categories');
+        consoleLogger.error(`Invalid category(s): ${validation.invalid.join(', ')}`);
+        consoleLogger.error('Use --list-categories to see available categories');
         process.exit(1);
       }
     }
@@ -160,7 +161,7 @@ program
 
     // Validate transport
     if (!['stdio', 'http', 'sse'].includes(transport)) {
-      console.error(`Invalid transport mode: ${transport}. Use: stdio, http, or sse`);
+      consoleLogger.error(`Invalid transport mode: ${transport}. Use: stdio, http, or sse`);
       process.exit(1);
     }
 
@@ -180,24 +181,24 @@ program
 
     // Log startup info (not in stdio mode to avoid polluting the protocol)
     if (transport !== 'stdio') {
-      console.log('╔═══════════════════════════════════════════════════════════════════╗');
-      console.log('║                    Recker MCP Server                              ║');
-      console.log('╚═══════════════════════════════════════════════════════════════════╝');
-      console.log('');
-      console.log(`  Transport: ${transport}`);
-      console.log(`  Port:      ${port}`);
-      console.log(`  Debug:     ${opts.debug ? 'enabled' : 'disabled'}`);
+      consoleLogger.info('╔═══════════════════════════════════════════════════════════════════╗');
+      consoleLogger.info('║                    Recker MCP Server                              ║');
+      consoleLogger.info('╚═══════════════════════════════════════════════════════════════════╝');
+      consoleLogger.info('');
+      consoleLogger.info(`  Transport: ${transport}`);
+      consoleLogger.info(`  Port:      ${port}`);
+      consoleLogger.info(`  Debug:     ${opts.debug ? 'enabled' : 'disabled'}`);
 
       if (effectiveCategory) {
         const tokens = estimateCategoryTokens(effectiveCategory);
-        console.log(`  Category:  ${effectiveCategory} (~${tokens} tokens)`);
+        consoleLogger.info(`  Category:  ${effectiveCategory} (~${tokens} tokens)`);
       } else if (toolsFilter.length > 0) {
-        console.log(`  Filters:   ${toolsFilter.join(', ')}`);
+        consoleLogger.info(`  Filters:   ${toolsFilter.join(', ')}`);
       } else {
-        console.log(`  Category:  minimal (default)`);
+        consoleLogger.info('  Category:  minimal (default)');
       }
-      console.log('');
-      console.log('  Available tools:');
+      consoleLogger.info('');
+      consoleLogger.info('  Available tools:');
 
       // List which tools are enabled
       const allTools = [
@@ -217,17 +218,17 @@ program
       });
 
       enabledTools.forEach(tool => {
-        console.log(`    ✓ ${tool}`);
+        consoleLogger.info(`    ✓ ${tool}`);
       });
 
       const disabledTools = allTools.filter(t => !enabledTools.includes(t));
       if (disabledTools.length > 0) {
-        disabledTools.forEach(tool => {
-          console.log(`    ✗ ${tool} (disabled)`);
+        disabledTools.forEach((tool) => {
+          consoleLogger.info(`    ✗ ${tool} (disabled)`);
         });
       }
 
-      console.log('');
+      consoleLogger.info('');
     }
 
     // Start server

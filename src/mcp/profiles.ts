@@ -17,6 +17,8 @@
  * ```
  */
 
+import { ValidationError } from '../core/errors.js';
+
 /**
  * Available category names
  */
@@ -362,9 +364,10 @@ export function resolveCategories(categoryNames: string | string[]): string[] {
   for (const name of names) {
     const category = categories[name as CategoryName];
     if (!category) {
-      throw new Error(
-        `Unknown category: ${name}. Available: ${Object.keys(categories).join(', ')}`
-      );
+      throw new ValidationError(`Unknown category: ${name}.`, {
+        field: 'categoryNames',
+        value: name,
+      });
     }
 
     for (const tool of category.tools) {

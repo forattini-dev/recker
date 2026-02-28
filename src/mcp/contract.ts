@@ -133,12 +133,12 @@ export function createMCPContract<T extends MCPContractDefinition>(
   mcp: MCPClient,
   contract: T
 ): MCPContractClient<T> {
-  const proxy = {} as any;
+  const proxy = {} as MCPContractClient<T> & Record<string, MCPToolFunction<MCPToolContract>>;
 
   for (const [toolName, toolDef] of Object.entries(contract)) {
     if (toolDef.stream) {
       // Streaming tool - returns AsyncGenerator
-      proxy[toolName] = async function* (args: any = {}) {
+      proxy[toolName] = async function* (args: Record<string, unknown> = {}) {
         // Validate input
         let validatedArgs = args;
         if (toolDef.inputSchema) {
@@ -161,7 +161,7 @@ export function createMCPContract<T extends MCPContractDefinition>(
       };
     } else {
       // Non-streaming tool - returns Promise
-      proxy[toolName] = async (args: any = {}) => {
+      proxy[toolName] = async (args: Record<string, unknown> = {}) => {
         // Validate input
         let validatedArgs = args;
         if (toolDef.inputSchema) {
@@ -203,7 +203,7 @@ export function createMCPContract<T extends MCPContractDefinition>(
   }
 
   // Add utility methods
-  proxy.raw = async (name: string, args: any = {}) => {
+  proxy.raw = async (name: string, args: Record<string, unknown> = {}) => {
     const toolDef = contract[name];
 
     // Validate input if schema exists
@@ -323,8 +323,8 @@ export function createMCPBatch<T extends MCPContractDefinition>(
     calls: Array<{
       tool: K;
       args?: T[K]['inputSchema'] extends ZodSchema ? z.infer<T[K]['inputSchema']> : Record<string, unknown>;
-    }>
-  ): Promise<Array<{ success: boolean; result?: any; error?: Error }>> => {
+    }>,
+  ): Promise<Array<{ success: boolean; result?: unknown; error?: Error }>> => {
     const results = await Promise.allSettled(
       calls.map(async ({ tool, args }) => {
         const toolDef = contract[tool as string];
@@ -599,7 +599,7 @@ export function createValidatedSSEStream<T extends ZodSchema>(
     }
   }
 
-  const fn = streamText as any;
+  const fn = streamText as unknown as SSEStreamFunction;
 
   fn.text = async (
     args: z.infer<T>,

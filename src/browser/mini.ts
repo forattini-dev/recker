@@ -46,13 +46,13 @@ export class MiniRequestPromise<T = unknown> implements Promise<Response> {
 
   then<TResult1 = Response, TResult2 = never>(
     onfulfilled?: ((value: Response) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): Promise<TResult1 | TResult2> {
     return this.p.then(onfulfilled, onrejected);
   }
 
   catch<TResult = never>(
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null
   ): Promise<Response | TResult> {
     return this.p.catch(onrejected);
   }

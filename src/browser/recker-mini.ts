@@ -50,59 +50,59 @@ function getDefaultClient(): Client {
  * GET request
  * @example await get('https://api.example.com/users').json()
  */
-export function get(url: string, options?: RequestOptions): RequestPromise {
-  return getDefaultClient().get(url, options);
+export function get<T = unknown>(url: string, options?: RequestOptions): RequestPromise<T> {
+  return getDefaultClient().get<T>(url, options);
 }
 
 /**
  * POST request
  * @example await post('https://api.example.com/users', { json: { name: 'John' } })
  */
-export function post(url: string, options?: RequestOptions): RequestPromise {
-  return getDefaultClient().post(url, options);
+export function post<T = unknown>(url: string, options?: RequestOptions): RequestPromise<T> {
+  return getDefaultClient().post<T>(url, options);
 }
 
 /**
  * PUT request
  */
-export function put(url: string, options?: RequestOptions): RequestPromise {
-  return getDefaultClient().put(url, options);
+export function put<T = unknown>(url: string, options?: RequestOptions): RequestPromise<T> {
+  return getDefaultClient().put<T>(url, options);
 }
 
 /**
  * PATCH request
  */
-export function patch(url: string, options?: RequestOptions): RequestPromise {
-  return getDefaultClient().patch(url, options);
+export function patch<T = unknown>(url: string, options?: RequestOptions): RequestPromise<T> {
+  return getDefaultClient().patch<T>(url, options);
 }
 
 /**
  * DELETE request
  */
-export function del(url: string, options?: RequestOptions): RequestPromise {
-  return getDefaultClient().delete(url, options);
+export function del<T = unknown>(url: string, options?: RequestOptions): RequestPromise<T> {
+  return getDefaultClient().delete<T>(url, options);
 }
 
 /**
  * HEAD request
  */
-export function head(url: string, options?: RequestOptions): RequestPromise {
-  return getDefaultClient().head(url, options);
+export function head<T = unknown>(url: string, options?: RequestOptions): RequestPromise<T> {
+  return getDefaultClient().head<T>(url, options);
 }
 
 /**
  * OPTIONS request
  */
-export function options(url: string, options?: RequestOptions): RequestPromise {
-  return getDefaultClient().options(url, options);
+export function options<T = unknown>(url: string, options?: RequestOptions): RequestPromise<T> {
+  return getDefaultClient().options<T>(url, options);
 }
 
 /**
  * PURGE request (CDN cache invalidation)
  * Note: Works in browsers - it's just a custom HTTP method
  */
-export function purge(url: string, options?: RequestOptions): RequestPromise {
-  return getDefaultClient().purge(url, options);
+export function purge<T = unknown>(url: string, options?: RequestOptions): RequestPromise<T> {
+  return getDefaultClient().purge<T>(url, options);
 }
 
 // NOTE: TRACE and CONNECT are blocked by the Fetch specification (forbidden methods)

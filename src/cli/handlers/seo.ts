@@ -1,571 +1,51 @@
 /**
  * SEO Commands (Unified)
  *
- * SEO analysis and crawling tools migrated to the unified command system.
- * These handlers work in both CLI and TUI modes.
+ * Barrel file — re-exports all SEO handlers and types, and defines seoCommands.
+ * Split into focused sub-files for maintainability:
+ *   seo-serp.ts     — SERP types, campaign builder, formatters
+ *   seo-analyze.ts  — single-page SEO analysis handler
+ *   seo-spider.ts   — full-site crawler handler
+ *   seo-robots.ts   — robots.txt handler
+ *   seo-sitemap.ts  — sitemap.xml handler
  */
 
 import type { RekCommandDefinition } from '../handler-types.js'
-import {
-  withHandler,
-  getNumber,
-  getBoolean,
-  colors,
-} from '../output.js'
-
-/**
- * Normalize URL (add https:// if missing)
- */
-function normalizeUrl(url: string): string {
-  return url.startsWith('http') ? url : `https://${url}`
-}
-
-/**
- * Extract domain from URL
- */
-function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url.replace(/^https?:\/\//, '').split('/')[0]
-  }
-}
-
-/**
- * Get score color based on value
- */
-function getScoreColor(score: number) {
-  if (score >= 90) return colors.green
-  if (score >= 70) return colors.blue
-  if (score >= 50) return colors.yellow
-  return colors.red
-}
-
-// =============================================================================
-// SEO Analyze Handler
-// =============================================================================
-
-export const seoAnalyzeHandler = withHandler(
-  { loading: true },
-  async (ctx, out, extCtx) => {
-    let url = ctx.result.positional.url as string
-
-    if (!url) {
-      const base = extCtx?.baseUrl?.()
-      if (base) {
-        url = base
-      } else {
-        out.error('Usage: seo <url> or set base URL first')
-        return
-      }
-    }
-
-    url = normalizeUrl(url)
-    const domain = extractDomain(url)
-
-    // Parse options
-    const jsonOutput = getBoolean(ctx.result.options.json)
-    const outputPath = ctx.result.options.output as string | undefined
-    const outputDir = ctx.result.options.outputDir as string | undefined
-
-    out.log(colors.gray(`Analyzing SEO for ${url}...`))
-
-    const { analyzeSeo, resolveOutputPath, writeReport, formatSeoReportJson } = await import('../../seo/index.js')
-    const { formatReportForJson } = await import('../../seo/output.js')
-
-    // Resolve output path if needed
-    const finalOutputPath = resolveOutputPath({
-      output: outputPath,
-      outputDir,
-      type: 'seo',
-      domain,
-    })
-
-    const startTime = performance.now()
-
-    // Get HTTP client from extended context or create one
-    let html: string
-    let timings: { firstByte?: number; total?: number; dns?: number; tcp?: number; tls?: number; content?: number } = {}
-
-    if (extCtx?.client) {
-      out.log(colors.gray('Fetching page...'))
-      const res = await extCtx.client.get(url)
-      html = await res.text()
-      timings = res.timings || {}
-    } else {
-      const res = await fetch(url)
-      html = await res.text()
-    }
-
-    const duration = Math.round(performance.now() - startTime)
-    out.log(colors.gray(`Analyzing ${Math.round(html.length / 1024)}KB of HTML...`))
-
-    const report = await analyzeSeo(html, { baseUrl: url })
-
-    // Add timing
-    report.timing = {
-      ttfb: timings.firstByte ? Math.round(timings.firstByte) : undefined,
-      total: timings.total ? Math.round(timings.total) : duration,
-      dns: timings.dns ? Math.round(timings.dns) : undefined,
-      tcp: timings.tcp ? Math.round(timings.tcp) : undefined,
-      tls: timings.tls ? Math.round(timings.tls) : undefined,
-      download: timings.content ? Math.round(timings.content) : undefined,
-    }
-
-    // Track domain SEO data in shell
-    extCtx?.track.seo(domain, {
-      score: report.score,
-      issues: report.summary.errors + report.summary.warnings,
-      categories: {
-        technical: 0,
-        content: 0,
-        meta: 0,
-      },
-    })
-
-    // Handle file output
-    if (jsonOutput || finalOutputPath) {
-      const jsonResult = formatReportForJson(
-        formatSeoReportJson(report, url),
-        url,
-        'seo'
-      )
-
-      if (finalOutputPath) {
-        const savedPath = await writeReport(finalOutputPath, jsonResult)
-        out.success(`Report saved to: ${savedPath}`)
-      }
-
-      if (jsonOutput) {
-        out.json(jsonResult)
-        return
-      }
-    }
-
-    // Shell: use structured response
-    if (extCtx) {
-      out.response({
-        url,
-        score: report.score,
-        grade: report.grade,
-        title: report.title,
-        metaDescription: report.metaDescription,
-        timing: report.timing,
-        openGraph: report.openGraph,
-        twitterCard: report.twitterCard,
-        keywords: report.keywords,
-        summary: {
-          passed: report.summary.passed,
-          warnings: report.summary.warnings,
-          errors: report.summary.errors,
-          infos: report.summary.infos,
-          notApplicable: report.summary.notApplicable,
-          suggestions: report.summary.suggestions,
-          vitals: report.summary.vitals,
-          topIssues: report.summary.topIssues,
-          quickWins: report.summary.quickWins,
-          completeness: report.summary.completeness,
-        },
-        technical: report.technical,
-        content: report.content,
-        headings: report.headings,
-        links: report.links,
-        structuredData: report.structuredData,
-        checks: report.checks,
-      }, { responseType: 'seo', time: duration })
-    } else {
-      // CLI: formatted text output
-      out.title('SEO Analysis Results', '🔍')
-      out.keyValue([
-        { key: 'URL', value: url },
-        { key: 'Score', value: `${report.score}/100 (${report.grade})`, color: report.score >= 70 ? 'green' : report.score >= 50 ? 'yellow' : 'red' },
-        { key: 'Title', value: report.title || colors.yellow('Missing') },
-      ])
-      out.blank()
-
-      out.subtitle('Summary')
-      out.checklist([
-        { text: `Passed: ${report.summary.passed}`, checked: true },
-        { text: `Warnings: ${report.summary.warnings}`, checked: report.summary.warnings === 0 },
-        { text: `Errors: ${report.summary.errors}`, checked: report.summary.errors === 0 },
-        {
-          text: `Info: ${report.summary.infos} (N/A: ${report.summary.notApplicable || 0}, Sugestões: ${report.summary.suggestions || 0})`,
-          checked: report.summary.infos === 0,
-        },
-      ])
-      out.blank()
-
-      // Show top issues
-      if (report.summary.topIssues?.length > 0) {
-        out.subtitle('Top Issues')
-        for (const issue of report.summary.topIssues.slice(0, 5)) {
-          out.status(issue.severity === 'error' ? 'error' : 'warning', issue.message)
-        }
-        out.blank()
-      }
-
-      // Show timing
-      if (report.timing.total) {
-        out.log(colors.gray(`Analyzed in ${report.timing.total}ms`))
-      }
-    }
-  }
-)
-
-// =============================================================================
-// Spider Handler
-// =============================================================================
-
-export const spiderHandler = withHandler(
-  { loading: true },
-  async (ctx, out, extCtx) => {
-    let url = ctx.result.positional.url as string
-
-    if (!url) {
-      out.error('URL is required')
-      return
-    }
-
-    url = normalizeUrl(url)
-    const domain = extractDomain(url)
-
-    // Parse options
-    const depth = getNumber(ctx.result.options.depth, 5)
-    const limit = getNumber(ctx.result.options.limit, 100)
-    const concurrency = getNumber(ctx.result.options.concurrency, 5)
-    const seoEnabled = getBoolean(ctx.result.options.seo)
-    const jsonOutput = getBoolean(ctx.result.options.json)
-    const jsonlEnabled = getBoolean(ctx.result.options.jsonl)
-    const outputPath = ctx.result.options.output as string | undefined
-    const outputDir = ctx.result.options.outputDir as string | undefined
-    const focus = ctx.result.options.focus as string | undefined
-    const extract = ctx.result.options.extract as string[] | undefined
-    const include = ctx.result.options.include as string[] | undefined
-    const exclude = ctx.result.options.exclude as string[] | undefined
-
-    out.log(colors.gray(`Starting spider on ${url}... (depth=${depth}, limit=${limit})`))
-
-    const { runSpiderWithEvents } = await import('../commands/spider-runner.js')
-
-    const result = await runSpiderWithEvents(url, {
-      depth,
-      limit,
-      concurrency,
-      seo: seoEnabled,
-      focus: focus as 'links' | 'duplicates' | 'security' | 'ai' | undefined,
-      json: true,
-      extract,
-      include,
-      exclude,
-    })
-
-    // Track domain intelligence in shell
-    extCtx?.track.spider(domain, {
-      pagesFound: result.pagesVisited,
-      internalLinks: result.internalLinks,
-      externalLinks: result.externalLinks,
-      images: result.images,
-      scripts: result.scripts,
-      stylesheets: result.stylesheets,
-      errors: result.errors,
-    })
-
-    // Handle file output
-    const { resolveOutputPath, writeReport, formatReportForJson } = await import('../../seo/output.js')
-
-    const resolvedOutputPath = resolveOutputPath({
-      output: outputPath,
-      outputDir,
-      type: seoEnabled ? 'seo-spider' : 'spider',
-      domain,
-    })
-
-    if (resolvedOutputPath) {
-      if (jsonlEnabled) {
-        const { JsonlWriter } = await import('../commands/spider-runner.js')
-        const writer = new JsonlWriter({ output: resolvedOutputPath })
-        await writer.init()
-
-        writer.write({
-          type: 'start',
-          url,
-          startedAt: new Date().toISOString(),
-          config: { depth, limit, seo: seoEnabled },
-        })
-
-        for (const page of result.pages) {
-          writer.write({
-            type: 'page',
-            url: page.url,
-            status: page.status,
-            title: page.title,
-            depth: page.depth,
-            links: page.links,
-            duration: page.duration,
-            seoScore: page.seoScore,
-            seoGrade: page.seoGrade,
-            seoErrors: page.seoErrors,
-            seoWarnings: page.seoWarnings,
-            extracted: page.extracted,
-          })
-        }
-
-        writer.write({
-          type: 'complete',
-          url: result.url,
-          completedAt: new Date().toISOString(),
-          pagesVisited: result.pagesVisited,
-          duration: result.duration,
-          errors: result.errors,
-          internalLinks: result.internalLinks,
-          externalLinks: result.externalLinks,
-          seo: result.seo,
-          extraction: result.extraction,
-        })
-
-        await writer.close()
-        out.success(`Report saved to: ${writer.getPath() || resolvedOutputPath}`)
-      } else {
-        const jsonResult = formatReportForJson(result, url, seoEnabled ? 'seo-spider' : 'spider')
-        const savedPath = await writeReport(resolvedOutputPath, jsonResult)
-        out.success(`Report saved to: ${savedPath}`)
-      }
-    }
-
-    // Format result summary
-    const summary = {
-      url: result.url,
-      pages: result.pagesVisited,
-      duration: `${(result.duration / 1000).toFixed(1)}s`,
-      errors: result.errors,
-      links: {
-        internal: result.internalLinks,
-        external: result.externalLinks,
-      },
-      assets: {
-        images: result.images,
-        scripts: result.scripts,
-        stylesheets: result.stylesheets,
-      },
-      topPages: result.pages.slice(0, 10).map((p: { url: string; status: number; title?: string; seoScore?: number; seoGrade?: string }) => ({
-        url: p.url.replace(url, ''),
-        status: p.status,
-        title: p.title?.slice(0, 40),
-        seoScore: p.seoScore,
-        seoGrade: p.seoGrade,
-      })),
-      seo: result.seo ? {
-        avgScore: result.seo.avgScore,
-        pagesWithErrors: result.seo.pagesWithErrors,
-        pagesWithWarnings: result.seo.pagesWithWarnings,
-        duplicateTitles: result.seo.duplicateTitles,
-        duplicateDescriptions: result.seo.duplicateDescriptions,
-      } : undefined,
-      extraction: result.extraction ? {
-        schema: result.extraction.schema,
-        totalItems: result.extraction.totalItems,
-        pagesWithData: Object.keys(result.extraction.byPage).length,
-      } : undefined,
-    }
-
-    // Shell: use structured response
-    if (extCtx) {
-      out.response(summary, {
-        responseType: seoEnabled ? 'seo-spider' : 'spider',
-        time: result.duration,
-      })
-    } else {
-      // CLI: formatted output
-      out.title('Spider Results', '🕷️')
-      out.keyValue({
-        URL: result.url,
-        Pages: result.pagesVisited,
-        Duration: `${(result.duration / 1000).toFixed(1)}s`,
-        Errors: result.errors,
-      })
-      out.blank()
-
-      out.keyValue({
-        'Internal Links': result.internalLinks,
-        'External Links': result.externalLinks,
-        Images: result.images,
-        Scripts: result.scripts,
-        Stylesheets: result.stylesheets,
-      })
-      out.blank()
-
-      if (jsonOutput) {
-        out.json(summary)
-      }
-    }
-  }
-)
-
-// =============================================================================
-// Robots Handler
-// =============================================================================
-
-export const robotsHandler = withHandler(
-  { loading: true },
-  async (ctx, out, extCtx) => {
-    let url = ctx.result.positional.url as string
-
-    if (!url) {
-      const base = extCtx?.baseUrl?.()
-      if (base) {
-        url = base
-      } else {
-        out.error('Usage: robots <url> or set base URL first')
-        return
-      }
-    }
-
-    url = normalizeUrl(url)
-
-    const robotsUrl = new URL('/robots.txt', url).toString()
-
-    let response: Response
-    if (extCtx?.client) {
-      response = await extCtx.client.get(robotsUrl)
-    } else {
-      response = await fetch(robotsUrl)
-    }
-
-    const text = await response.text()
-
-    if (response.status === 404) {
-      out.warn(`No robots.txt found at ${robotsUrl}`)
-      return
-    }
-
-    // Parse directives
-    const lines = text.split('\n')
-    const directives: Array<{ agent?: string; type: string; path?: string; url?: string }> = []
-    let currentAgent = '*'
-
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.toLowerCase().startsWith('user-agent:')) {
-        currentAgent = trimmed.slice(11).trim()
-      } else if (trimmed.toLowerCase().startsWith('disallow:')) {
-        directives.push({ agent: currentAgent, type: 'disallow', path: trimmed.slice(9).trim() })
-      } else if (trimmed.toLowerCase().startsWith('allow:')) {
-        directives.push({ agent: currentAgent, type: 'allow', path: trimmed.slice(6).trim() })
-      } else if (trimmed.toLowerCase().startsWith('sitemap:')) {
-        directives.push({ type: 'sitemap', url: trimmed.slice(8).trim() })
-      }
-    }
-
-    const result = {
-      url: robotsUrl,
-      rules: directives.length,
-      sitemaps: directives.filter(d => d.type === 'sitemap').map(d => d.url!),
-      disallowed: directives.filter(d => d.type === 'disallow').slice(0, 10).map(d => d.path!),
-    }
-
-    // Shell: structured response
-    if (extCtx) {
-      out.response(result, { responseType: 'robots' })
-    } else {
-      // CLI: formatted output
-      out.title('robots.txt Analysis', '🤖')
-      out.keyValue({
-        URL: robotsUrl,
-        Rules: directives.length,
-      })
-      out.blank()
-
-      if (result.sitemaps.length > 0) {
-        out.subtitle('Sitemaps')
-        out.list(result.sitemaps)
-        out.blank()
-      }
-
-      if (result.disallowed.length > 0) {
-        out.subtitle('Disallowed Paths')
-        for (const p of result.disallowed) {
-          out.status('error', p)
-        }
-        out.blank()
-      }
-    }
-  }
-)
-
-// =============================================================================
-// Sitemap Handler
-// =============================================================================
-
-export const sitemapHandler = withHandler(
-  { loading: true },
-  async (ctx, out, extCtx) => {
-    let url = ctx.result.positional.url as string
-
-    if (!url) {
-      const base = extCtx?.baseUrl?.()
-      if (base) {
-        url = base
-      } else {
-        out.error('Usage: sitemap <url> or set base URL first')
-        return
-      }
-    }
-
-    url = normalizeUrl(url)
-
-    const sitemapUrl = url.endsWith('.xml') ? url : new URL('/sitemap.xml', url).toString()
-
-    let response: Response
-    if (extCtx?.client) {
-      response = await extCtx.client.get(sitemapUrl)
-    } else {
-      response = await fetch(sitemapUrl)
-    }
-
-    const text = await response.text()
-
-    if (response.status === 404) {
-      out.warn(`No sitemap found at ${sitemapUrl}`)
-      return
-    }
-
-    // Parse URLs from XML
-    const urlMatches = text.match(/<loc>([^<]+)<\/loc>/g) || []
-    const urls = urlMatches.map(m => m.replace(/<\/?loc>/g, ''))
-
-    const result = {
-      url: sitemapUrl,
-      totalUrls: urls.length,
-      sample: urls.slice(0, 10),
-    }
-
-    // Shell: structured response
-    if (extCtx) {
-      out.response(result, { responseType: 'sitemap' })
-    } else {
-      // CLI: formatted output
-      out.title('Sitemap Analysis', '🗺️')
-      out.keyValue({
-        URL: sitemapUrl,
-        'Total URLs': urls.length,
-      })
-      out.blank()
-
-      if (urls.length > 0) {
-        out.subtitle('Sample URLs')
-        out.list(urls.slice(0, 10))
-        if (urls.length > 10) {
-          out.log(colors.gray(`  ... and ${urls.length - 10} more`))
-        }
-        out.blank()
-      }
-    }
-  }
-)
-
-// =============================================================================
-// Command Definitions
-// =============================================================================
+import { parseSpiderSerpConfig } from '../utils/serp-config.js'
+
+// ── Sub-module re-exports ─────────────────────────────────────────────────────
+
+export type {
+  SerpSeedPage,
+  SeoCrawlerSerpConfig,
+  SeoCrawlerSerpPlan,
+  SeoCrawlerSerpRun,
+} from './seo-serp.js'
+export {
+  normalizeUrl,
+  extractDomain,
+  buildSerpCampaignSeeds,
+  runCrawlerSerpCampaign,
+  formatSerpSummaryRows,
+  getSerpComparisonRows,
+  getSerpCompetitorRows,
+  formatKeywordList,
+} from './seo-serp.js'
+
+export { seoAnalyzeHandler } from './seo-analyze.js'
+export { spiderHandler } from './seo-spider.js'
+export { robotsHandler } from './seo-robots.js'
+export { sitemapHandler } from './seo-sitemap.js'
+
+// Backward-compat alias
+export { parseSpiderSerpConfig as parseSeoCrawlerSerpConfig }
+
+// ── Command Definitions ───────────────────────────────────────────────────────
+
+import { seoAnalyzeHandler } from './seo-analyze.js'
+import { spiderHandler } from './seo-spider.js'
+import { robotsHandler } from './seo-robots.js'
+import { sitemapHandler } from './seo-sitemap.js'
 
 export const seoCommands: RekCommandDefinition = {
   description: 'SEO analysis and web crawling tools',
@@ -601,12 +81,89 @@ export const seoCommands: RekCommandDefinition = {
         category: {
           type: 'string',
           description: 'Filter by category (performance, security, content, etc.)'
-        }
+        },
+        serp: {
+          type: 'boolean',
+          description: 'Run SERP checks for extracted top keywords'
+        },
+        'serp-top-keywords': {
+          default: 5,
+          type: 'number',
+          description: 'Top keywords per page used to seed SERP'
+        },
+        'serp-query-limit': {
+          default: 10,
+          type: 'number',
+          description: 'Number of keywords to query on SERP'
+        },
+        'serp-results-per-query': {
+          default: 10,
+          type: 'number',
+          description: 'SERP results fetched per query'
+        },
+        'serp-concurrency': {
+          default: 1,
+          type: 'number',
+          description: 'Number of SERP queries to execute in parallel'
+        },
+        'serp-delay-ms': {
+          default: 1200,
+          type: 'number',
+          description: 'Delay in ms between SERP queries'
+        },
+        'serp-delay-jitter-ms': {
+          default: 450,
+          type: 'number',
+          description: 'Random delay jitter in ms between SERP queries'
+        },
+        'serp-max-consecutive-blocks': {
+          default: 3,
+          type: 'number',
+          description: 'Stop campaign after this many blocked/captcha responses in a row'
+        },
+        'serp-captcha-cooldown-ms': {
+          default: 2400,
+          type: 'number',
+          description: 'Cooldown in ms after captcha before continuing SERP'
+        },
+        'serp-retry-count': {
+          default: 1,
+          type: 'number',
+          description: 'Retry count per SERP query'
+        },
+        'serp-retry-delay-ms': {
+          default: 1200,
+          type: 'number',
+          description: 'Base retry delay in ms for SERP queries'
+        },
+        'serp-gl': {
+          type: 'string',
+          description: 'Google gl parameter'
+        },
+        'serp-hl': {
+          type: 'string',
+          description: 'Google hl parameter'
+        },
+        'serp-transport': {
+          type: 'string',
+          default: 'curl',
+          description: 'Search transport (auto | undici | curl)'
+        },
+        'serp-timeout': {
+          type: 'number',
+          description: 'SERP request timeout in ms'
+        },
+        'serp-country': {
+          type: 'string',
+          description: 'Country code for SERP analysis'
+        },
       },
       examples: [
         { cmd: 'rek seo analyze google.com', desc: 'Analyze Google homepage' },
         { cmd: 'rek seo analyze example.com --all', desc: 'Show all checks' },
-        { cmd: 'rek seo analyze example.com -o report.json', desc: 'Save to file' }
+        { cmd: 'rek seo analyze example.com -o report.json', desc: 'Save to file' },
+        { cmd: 'rek seo analyze google.com --serp', desc: 'Run SERP checks for this page' },
+        { cmd: 'rek seo analyze google.com --serp --serp-top-keywords 12 --serp-query-limit 10', desc: 'Run SERP with custom limits' },
       ],
       handler: seoAnalyzeHandler
     },
@@ -680,13 +237,216 @@ export const seoCommands: RekCommandDefinition = {
         focus: {
           type: 'string',
           description: 'Focus mode: links, duplicates, security, ai'
+        },
+        serp: {
+          type: 'boolean',
+          description: 'Run SERP checks for extracted top keywords'
+        },
+        'serp-country': {
+          type: 'string',
+          description: 'Country code for SERP analysis'
+        },
+        'serp-region': {
+          type: 'string',
+          description: 'Region code for SERP'
+        },
+        'serp-gl': {
+          type: 'string',
+          description: 'Google gl parameter'
+        },
+        'serp-hl': {
+          type: 'string',
+          description: 'Google hl parameter'
+        },
+        'serp-transport': {
+          type: 'string',
+          default: 'curl',
+          description: 'Search transport (auto | undici | curl)'
+        },
+        'serp-timeout': {
+          type: 'number',
+          description: 'SERP request timeout in ms'
+        },
+        'serp-top-keywords': {
+          default: 5,
+          type: 'number',
+          description: 'Top keywords per page used to seed SERP'
+        },
+        'serp-query-limit': {
+          default: 10,
+          type: 'number',
+          description: 'Number of keywords to query on SERP'
+        },
+        'serp-results-per-query': {
+          default: 10,
+          type: 'number',
+          description: 'SERP results fetched per query'
+        },
+        'serp-concurrency': {
+          default: 1,
+          type: 'number',
+          description: 'Number of SERP queries to execute in parallel'
+        },
+        'serp-delay-ms': {
+          default: 1200,
+          type: 'number',
+          description: 'Delay in ms between SERP queries'
+        },
+        'serp-delay-jitter-ms': {
+          default: 450,
+          type: 'number',
+          description: 'Random delay jitter in ms between SERP queries'
+        },
+        'serp-max-consecutive-blocks': {
+          default: 3,
+          type: 'number',
+          description: 'Stop campaign after this many blocked/captcha responses in a row'
+        },
+        'serp-captcha-cooldown-ms': {
+          default: 2400,
+          type: 'number',
+          description: 'Cooldown in ms after captcha before continuing SERP'
+        },
+        'serp-retry-count': {
+          default: 1,
+          type: 'number',
+          description: 'Retry count per SERP query'
+        },
+        'serp-retry-delay-ms': {
+          default: 1200,
+          type: 'number',
+          description: 'Base retry delay in ms for SERP queries'
+        },
+        'serp-safe': {
+          type: 'string',
+          description: 'Safe search level (active | images | strict)'
+        },
+        'serp-lr': {
+          type: 'string',
+          description: 'Google language restrict parameter'
+        },
+        'serp-cr': {
+          type: 'string',
+          description: 'Google country restrict parameter'
+        },
+        'serp-tbs': {
+          type: 'string',
+          description: 'Google result filter params'
+        },
+        'serp-tbm': {
+          type: 'string',
+          description: 'Google search type (shop, news, images, etc.)'
+        },
+        'serp-as-q': {
+          type: 'string',
+          description: 'SERP as_q parameter'
+        },
+        'serp-as-epq': {
+          type: 'string',
+          description: 'SERP as_epq parameter'
+        },
+        'serp-as-oq': {
+          type: 'string',
+          description: 'SERP as_oq parameter'
+        },
+        'serp-as-eq': {
+          type: 'string',
+          description: 'SERP as_eq parameter'
+        },
+        'serp-as-sitesearch': {
+          type: 'string',
+          description: 'SERP as_sitesearch parameter'
+        },
+        'serp-as-filetype': {
+          type: 'string',
+          description: 'SERP as_filetype parameter'
+        },
+        'serp-as-rights': {
+          type: 'string',
+          description: 'SERP as_rights parameter'
+        },
+        'serp-as-nlo': {
+          type: 'string',
+          description: 'SERP as_nlo parameter'
+        },
+        'serp-as-nhi': {
+          type: 'string',
+          description: 'SERP as_nhi parameter'
+        },
+        'serp-extra': {
+          type: 'string',
+          description: 'Extra query params key=value,key2=value2'
+        },
+        transport: {
+          type: 'string',
+          description: 'Crawler transport (auto | undici | curl)',
+          default: 'auto',
+        },
+        'prefer-curl-first': {
+          type: 'boolean',
+          description: 'Prefer curl-impersonate first in auto mode',
+          default: true,
+        },
+        timeout: {
+          type: 'number',
+          description: 'Request timeout in ms',
+          default: 10000,
+        },
+        delay: {
+          type: 'number',
+          description: 'Delay between requests in ms',
+          default: 100,
+        },
+        'max-retry-attempts': {
+          type: 'number',
+          description: 'Max retry attempts per request',
+          default: 3,
+        },
+        'base-retry-delay-ms': {
+          type: 'number',
+          description: 'Base retry delay in ms',
+          default: 1000,
+        },
+        'max-retry-delay-ms': {
+          type: 'number',
+          description: 'Maximum retry delay in ms',
+          default: 12000,
+        },
+        'retry-backoff-multiplier': {
+          type: 'number',
+          description: 'Retry backoff multiplier',
+          default: 2,
+        },
+        'retry-jitter-ms': {
+          type: 'number',
+          description: 'Retry jitter in ms',
+          default: 250,
+        },
+        'max-domain-block-strikes': {
+          type: 'number',
+          description: 'Force curl after this many block signals',
+          default: 2,
+        },
+        'rotate-user-agent': {
+          type: 'boolean',
+          description: 'Rotate user-agent per request',
+          default: true,
+        },
+        'randomize-headers': {
+          type: 'boolean',
+          description: 'Randomize request headers',
+          default: true,
         }
       },
       examples: [
         { cmd: 'rek seo spider example.com', desc: 'Basic crawl' },
         { cmd: 'rek seo spider example.com -d 3 -l 50', desc: 'Limited crawl' },
         { cmd: 'rek seo spider example.com --seo -o report.json', desc: 'SEO crawl with output' },
-        { cmd: 'rek seo spider example.com -E h1 -E h2', desc: 'Extract headings' }
+        { cmd: 'rek seo spider example.com -E h1 -E h2', desc: 'Extract headings' },
+        {
+          cmd: 'rek seo spider example.com --seo --serp --serp-top-keywords 5 --serp-query-limit 10 --serp-results-per-query 10',
+          desc: 'Run SERP on top extracted keywords'
+        },
       ],
       handler: spiderHandler
     },
@@ -714,7 +474,7 @@ export const seoCommands: RekCommandDefinition = {
   }
 }
 
-// Also export as root-level command for backward compatibility
+// Backward-compat aliases (used by shell-commands.ts)
 export const seoAnalyze = seoAnalyzeHandler
 export const spider = spiderHandler
 export const robots = robotsHandler

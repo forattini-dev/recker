@@ -72,6 +72,7 @@ export type {
   SeoTiming,
   HeadingAnalysis,
   HeadingInfo,
+  HeadingNode,
   ContentMetrics,
   LinkAnalysis,
   ImageAnalysis,

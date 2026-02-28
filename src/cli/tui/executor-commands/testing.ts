@@ -18,6 +18,7 @@ import {
   updateJobStatus,
   getJobManager,
 } from '../hooks/useJobs.js';
+import { AbortError } from '../../../core/errors.js'
 
 // =============================================================================
 // Load Command
@@ -140,8 +141,8 @@ async function runLoadTestAsync(
       message: 'Load test completed',
     });
     updateJobStatus(jobId, 'completed');
-  } catch (err: any) {
-    if (signal.aborted || err.message === 'Aborted') {
+  } catch (err: unknown) {
+    if (signal.aborted || err instanceof AbortError) {
       manager.addLog(jobId, {
         timestamp: Date.now(),
         level: 'info',
@@ -149,8 +150,7 @@ async function runLoadTestAsync(
       });
       updateJobStatus(jobId, 'stopped');
     } else {
-      failJob(jobId, err instanceof Error ? err : new Error(err.message));
+      failJob(jobId, err instanceof Error ? err : new Error('Load test failed'));
     }
   }
 }
-

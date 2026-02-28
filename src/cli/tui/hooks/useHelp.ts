@@ -7,6 +7,12 @@
 
 import { createSignal } from 'tuiuiu.js';
 import type { SearchResult } from '../shell-search.js';
+import { StateError } from '../../../core/errors.js';
+
+type ShellSearchHandle = {
+  search: (query: string, options?: { limit?: number }) => Promise<SearchResult[]>;
+  getDocContent: (path: string) => Promise<string | null | undefined> | string | null | undefined;
+};
 
 // =============================================================================
 // Types
@@ -63,7 +69,7 @@ function toggleHelpDetail(): void {
 let lastSearchTime = 0;
 
 // ShellSearch instance (lazy loaded)
-let shellSearch: any = null;
+let shellSearch: ShellSearchHandle | null = null;
 
 // =============================================================================
 // Search Function
@@ -72,7 +78,7 @@ let shellSearch: any = null;
 /**
  * Lazy load ShellSearch to avoid startup cost
  */
-async function getShellSearch(): Promise<any> {
+async function getShellSearch(): Promise<ShellSearchHandle> {
   if (shellSearch) {
     return shellSearch;
   }
@@ -80,10 +86,13 @@ async function getShellSearch(): Promise<any> {
   try {
     // Dynamic import to avoid loading at startup
     const { ShellSearch } = await import('../shell-search.js');
-    shellSearch = new ShellSearch();
+    shellSearch = new ShellSearch() as ShellSearchHandle;
     return shellSearch;
   } catch (error) {
-    throw new Error(`Failed to load search: ${error}`);
+    throw new StateError(`Failed to load search module for help shell.`, {
+      expectedState: 'ShellSearch module available',
+      actualState: getErrorMessage(error),
+    });
   }
 }
 
@@ -147,8 +156,8 @@ async function searchHelp(query: string): Promise<void> {
       setHelpError('Search not available');
       setHelpResults([]);
     }
-  } catch (error: any) {
-    setHelpError(error.message || 'Search failed');
+  } catch (error) {
+    setHelpError(getErrorMessage(error));
     setHelpResults([]);
   } finally {
     setHelpLoading(false);
@@ -241,6 +250,18 @@ async function loadResultPreview(result: HelpResult): Promise<void> {
   } catch {
     setHelpPreviewContent(result.snippet);
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return 'Search failed';
 }
 
 // =============================================================================

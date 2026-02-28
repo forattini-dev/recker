@@ -26,6 +26,44 @@ export interface SpiderTimings {
   total?: number;
 }
 
+export interface SpiderTransportUsage {
+  undici: number;
+  curl: number;
+}
+
+export interface SpiderSecuritySnapshot {
+  pages: number;
+  blockedPages: number;
+  captchaPages: number;
+  captchaProviders?: Record<string, number>;
+  attempts: number;
+  retries: number;
+  transportUsage: SpiderTransportUsage;
+  avgAttempts: number;
+  avgTtfbMs?: number;
+  avgTotalMs?: number;
+  avgDownloadMs?: number;
+}
+
+export interface SpiderSerpSummary {
+  queriesRequested: number;
+  queriesFound: number;
+  avgTopPosition?: number | null;
+  top3Count: number;
+  top10Count: number;
+  topOrganicCompetitors?: Array<{
+    domain: string;
+    matchedKeywords: number;
+    totalOutperformedQueries: number;
+  }>;
+  topPages?: Array<{
+    pageUrl: string;
+    found: number;
+    tracked: number;
+    appearanceRate: number;
+  }>;
+}
+
 export interface PageInfo {
   url: string;
   score: number;
@@ -70,6 +108,24 @@ export interface SpiderTuiState {
   duplicateDescriptions: number;
   orphanPages: number;
   pagesWithErrors: number;
+
+  security: SpiderSecuritySnapshot;
+  serpSummary?: SpiderSerpSummary;
+
+  // Anti-bot running counters
+  antiBotPages: number;
+  antiBotBlockedPages: number;
+  antiBotCaptchaPages: number;
+  antiBotCaptchaProviders: Record<string, number>;
+  antiBotAttempts: number;
+  antiBotRetries: number;
+  antiBotTransport: SpiderTransportUsage;
+  antiBotTtfbSamples: number;
+  antiBotTotalSamples: number;
+  antiBotDownloadSamples: number;
+  antiBotTtfbSum: number;
+  antiBotTotalSum: number;
+  antiBotDownloadSum: number;
 }
 
 const initialState: SpiderTuiState = {
@@ -96,6 +152,34 @@ const initialState: SpiderTuiState = {
   duplicateDescriptions: 0,
   orphanPages: 0,
   pagesWithErrors: 0,
+  security: {
+    pages: 0,
+    blockedPages: 0,
+    captchaPages: 0,
+    attempts: 0,
+    retries: 0,
+    transportUsage: {
+      undici: 0,
+      curl: 0,
+    },
+    avgAttempts: 0,
+  },
+  antiBotPages: 0,
+  antiBotBlockedPages: 0,
+  antiBotCaptchaPages: 0,
+  antiBotCaptchaProviders: {},
+  antiBotAttempts: 0,
+  antiBotRetries: 0,
+  antiBotTransport: {
+    undici: 0,
+    curl: 0,
+  },
+  antiBotTtfbSamples: 0,
+  antiBotTotalSamples: 0,
+  antiBotDownloadSamples: 0,
+  antiBotTtfbSum: 0,
+  antiBotTotalSum: 0,
+  antiBotDownloadSum: 0,
 };
 
 // Keep last N values for sparklines
@@ -169,6 +253,26 @@ function renderTimings(s: SpiderTuiState) {
   }
 
   return timingRows;
+}
+
+function formatSecurityRate(value: number, total: number): string {
+  if (total <= 0) return '0%';
+  return `${Math.round((value / total) * 100)}%`;
+}
+
+function safeNumber(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined;
+}
+
+function normalizeAttemptCount(value?: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(1, Math.floor(value));
+  }
+  return 1;
+}
+
+function hasTimingSample(value?: number): boolean {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 // Render recent pages as a table (no title, with row numbers)
@@ -294,11 +398,27 @@ export function createSpiderTui(startUrl: string, limit: number, concurrency: nu
 
     // Analysis progress: analyzed / (analyzed + queued + pending)
     const totalToAnalyze = s.analyzed + s.queued + s.pending;
-    const analysisPercent = totalToAnalyze > 0 ? Math.min(100, Math.round((s.analyzed / totalToAnalyze) * 100)) : 0;
+  const analysisPercent = totalToAnalyze > 0 ? Math.min(100, Math.round((s.analyzed / totalToAnalyze) * 100)) : 0;
+  const antiBotTotal = s.antiBotPages || s.analyzed || 1;
+  const blockedRate = formatSecurityRate(s.antiBotBlockedPages, antiBotTotal);
+  const captchaRate = formatSecurityRate(s.antiBotCaptchaPages, antiBotTotal);
+  const transportTotal = s.antiBotTransport.undici + s.antiBotTransport.curl;
+  const avgAttempts = antiBotTotal > 0 ? (s.antiBotAttempts / antiBotTotal).toFixed(2) : '0.00';
+  const avgTtfb = s.antiBotTtfbSamples > 0 ? Math.round(s.antiBotTtfbSum / s.antiBotTtfbSamples) : 'n/a';
+  const avgTotal = s.antiBotTotalSamples > 0 ? Math.round(s.antiBotTotalSum / s.antiBotTotalSamples) : 'n/a';
+  const avgDownload = s.antiBotDownloadSamples > 0 ? Math.round(s.antiBotDownloadSum / s.antiBotDownloadSamples) : 'n/a';
+  const formatTiming = (value: number | 'n/a') => value === 'n/a' ? 'n/a' : `${value}ms`;
+  const curlUsage = transportTotal > 0 ? Math.round((s.antiBotTransport.curl / transportTotal) * 100) : 0;
+  const transportLine = transportTotal > 0
+    ? `curl ${curlUsage}% / undici ${100 - curlUsage}%`
+    : 'n/a';
+  const captchaProviderSummary = Object.entries(s.antiBotCaptchaProviders)
+    .map(([provider, count]) => `${provider}: ${count}`)
+    .join(' | ');
 
-    // Score color
-    const scoreColor =
-      s.avgScore >= 80 ? 'success' : s.avgScore >= 60 ? 'warning' : 'destructive';
+  // Score color
+  const scoreColor =
+    s.avgScore >= 80 ? 'success' : s.avgScore >= 60 ? 'warning' : 'destructive';
 
     return Box(
       { flexDirection: 'column', padding: 1 },
@@ -311,6 +431,11 @@ export function createSpiderTui(startUrl: string, limit: number, concurrency: nu
           StatusIndicator({ status: isComplete ? 'success' : 'info' }),
         ),
         Text({ bold: true }, `SEO Spider: ${startUrl}`),
+      ),
+      Box(
+        { flexDirection: 'row', gap: 1, marginBottom: 1 },
+        Text({ dim: true }, 'Transport:'),
+        Text({ color: 'magenta', bold: true }, transportLine),
       ),
 
       // 1. Big numbers row: Avg Score, To Crawl, Depth, Time, Traffic
@@ -345,6 +470,40 @@ export function createSpiderTui(startUrl: string, limit: number, concurrency: nu
           { flexDirection: 'column' },
           Text({ dim: true }, 'Traffic'),
           Text({ color: 'cyan', bold: true }, formatBytes(s.totalBytes)),
+        ),
+      ),
+
+      // 1b. Anti-bot status row
+      Box(
+        { flexDirection: 'row', gap: 3, marginBottom: 1 },
+        Box(
+          { flexDirection: 'column' },
+          Text({ dim: true }, 'Anti-bot'),
+          Text({ color: s.antiBotBlockedPages > 0 ? 'warning' : 'success', bold: true }, `${s.antiBotBlockedPages}/${antiBotTotal} blocked (${blockedRate})`),
+        ),
+        Box(
+          { flexDirection: 'column' },
+          Text({ dim: true }, 'Captcha'),
+          Text({ color: s.antiBotCaptchaPages > 0 ? 'warning' : 'success', bold: true }, `${s.antiBotCaptchaPages} (${captchaRate})`),
+        ),
+        Box(
+          { flexDirection: 'column' },
+          Text({ dim: true }, 'Captcha Providers'),
+          Text({ color: 'blue', bold: true }, captchaProviderSummary || 'n/a'),
+        ),
+        Box(
+          { flexDirection: 'column' },
+          Text({ dim: true }, 'Attempts'),
+          Text({ color: 'blue', bold: true }, `avg ${avgAttempts}`),
+        ),
+      ),
+      Box(
+        { flexDirection: 'row', gap: 3, marginBottom: 1 },
+        Box(
+          { flexDirection: 'column' },
+          Text({ dim: true }, 'Avg timing'),
+          Text({ color: 'cyan', bold: true }, `ttfb ${formatTiming(avgTtfb)} · total ${formatTiming(avgTotal)}`),
+          Text({ color: 'cyan', bold: true }, `download ${formatTiming(avgDownload)}`),
         ),
       ),
 
@@ -401,6 +560,54 @@ export function createSpiderTui(startUrl: string, limit: number, concurrency: nu
       ...renderRecentPages(s.recentPages, isComplete, s.analyzed),
 
       // Summary when complete - build badges array to avoid null children
+      // SERP summary (if available)
+      ...(s.serpSummary ? [
+        Box(
+          { flexDirection: 'column', marginTop: 1 },
+          Divider({}),
+          Box(
+            { flexDirection: 'row', marginTop: 1, height: 1 },
+            Text({ bold: true }, 'SERP campaign'),
+            Box({ width: 2 }, Text({}, '')),
+            Text({ color: 'green' }, `queries ${s.serpSummary.queriesFound}/${s.serpSummary.queriesRequested}`),
+            Box({ width: 2 }, Text({}, '')),
+            Text({ color: 'blue' }, `top3 ${s.serpSummary.top3Count}`),
+            Box({ width: 2 }, Text({}, '')),
+            Text({ color: 'cyan' }, `top10 ${s.serpSummary.top10Count}`),
+            s.serpSummary.avgTopPosition !== undefined && s.serpSummary.avgTopPosition !== null
+                ? Box(
+                  { width: 2 },
+                  Text({ color: 'yellow' }, `avg pos ${Math.round(s.serpSummary.avgTopPosition)}`)
+                )
+              : null,
+          ),
+          s.serpSummary.topOrganicCompetitors && s.serpSummary.topOrganicCompetitors.length > 0
+            ? Box(
+                { marginTop: 1 },
+                Text({ dim: true }, 'Top competitors'),
+              )
+            : null,
+          ...(s.serpSummary.topOrganicCompetitors || []).slice(0, 3).map((item) => Box(
+            { flexDirection: 'row' },
+            Text({ dim: true }, `${item.domain}`),
+            Text({ dim: true }, ` wins ${item.totalOutperformedQueries}`),
+            Text({ dim: true }, ` matched ${item.matchedKeywords}`),
+          )),
+          s.serpSummary.topPages && s.serpSummary.topPages.length > 0
+            ? Box(
+                { marginTop: 1 },
+                Text({ dim: true }, 'Pages outranking baseline'),
+              )
+            : null,
+          ...(s.serpSummary.topPages || []).slice(0, 3).map((item) => Box(
+            { flexDirection: 'row' },
+            Text({ dim: true }, `${item.pageUrl}`),
+            Text({ dim: true }, `${item.found}/${item.tracked}`),
+            Text({ dim: true }, `${Math.round(item.appearanceRate)}%`),
+          )),
+        ),
+      ] : []),
+
       ...(isComplete ? [
         Box(
           { flexDirection: 'column', marginTop: 1 },
@@ -426,6 +633,65 @@ export function createSpiderTui(startUrl: string, limit: number, concurrency: nu
     updateProgress,
     updateSeo,
     updateUrl,
+    updateSecurity: (security?: {
+      blocked?: boolean;
+      captchaDetected?: boolean;
+      captchaProvider?: string;
+      attempts?: number;
+      retryCount?: number;
+      transport?: 'undici' | 'curl';
+      ttfb?: number;
+      total?: number;
+      download?: number;
+    }) => {
+      setState((s) => ({
+        ...s,
+        antiBotPages: s.antiBotPages + 1,
+        antiBotBlockedPages: s.antiBotBlockedPages + (security?.blocked ? 1 : 0),
+        antiBotCaptchaPages: s.antiBotCaptchaPages + (security?.captchaDetected ? 1 : 0),
+        antiBotCaptchaProviders: security?.captchaDetected ? {
+          ...s.antiBotCaptchaProviders,
+          [(security.captchaProvider || 'unknown').trim().toLowerCase()]: (s.antiBotCaptchaProviders[(security.captchaProvider || 'unknown').trim().toLowerCase()] || 0) + 1,
+        } : s.antiBotCaptchaProviders,
+        antiBotAttempts: s.antiBotAttempts + normalizeAttemptCount(security?.attempts),
+        antiBotRetries: s.antiBotRetries + (security?.retryCount ?? 0),
+        antiBotTransport: {
+          undici: s.antiBotTransport.undici + (security?.transport === 'undici' ? 1 : 0),
+          curl: s.antiBotTransport.curl + (security?.transport === 'curl' ? 1 : 0),
+        },
+        antiBotTtfbSamples: s.antiBotTtfbSamples + (hasTimingSample(security?.ttfb) ? 1 : 0),
+        antiBotTotalSamples: s.antiBotTotalSamples + (hasTimingSample(security?.total) ? 1 : 0),
+        antiBotDownloadSamples: s.antiBotDownloadSamples + (hasTimingSample(security?.download) ? 1 : 0),
+        antiBotTtfbSum: s.antiBotTtfbSum + (safeNumber(security?.ttfb) ?? 0),
+        antiBotTotalSum: s.antiBotTotalSum + (safeNumber(security?.total) ?? 0),
+        antiBotDownloadSum: s.antiBotDownloadSum + (safeNumber(security?.download) ?? 0),
+      }));
+    },
+    setSecuritySummary: (summary: SpiderSecuritySnapshot) => {
+      setState((s) => ({
+        ...s,
+        security: summary,
+        antiBotPages: summary.pages,
+        antiBotBlockedPages: summary.blockedPages,
+        antiBotCaptchaPages: summary.captchaPages,
+        antiBotAttempts: summary.attempts,
+        antiBotRetries: summary.retries,
+        antiBotTransport: {
+          undici: summary.transportUsage.undici,
+          curl: summary.transportUsage.curl,
+        },
+        antiBotCaptchaProviders: summary.captchaProviders || {},
+        antiBotTtfbSamples: summary.avgTtfbMs === undefined ? 0 : summary.pages,
+        antiBotTtfbSum: summary.avgTtfbMs === undefined ? 0 : Math.round(summary.avgTtfbMs * summary.pages),
+        antiBotTotalSamples: summary.avgTotalMs === undefined ? 0 : summary.pages,
+        antiBotTotalSum: summary.avgTotalMs === undefined ? 0 : Math.round(summary.avgTotalMs * summary.pages),
+        antiBotDownloadSamples: summary.avgDownloadMs === undefined ? 0 : summary.pages,
+        antiBotDownloadSum: summary.avgDownloadMs === undefined ? 0 : Math.round(summary.avgDownloadMs * summary.pages),
+      }));
+    },
+    setSerpSummary: (serpSummary: SpiderSerpSummary) => {
+      setState((s) => ({ ...s, serpSummary }));
+    },
     setComplete,
     setError,
     stop: () => {

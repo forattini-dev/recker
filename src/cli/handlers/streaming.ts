@@ -13,6 +13,7 @@ import {
   getBoolean,
   colors,
 } from '../output.js'
+import { ValidationError } from '../../core/errors.js'
 
 // =============================================================================
 // HLS Handler
@@ -135,7 +136,10 @@ export const sseHandler: RekHandler = withHandler(
 
     const reader = response.body?.getReader()
     if (!reader) {
-      throw new Error('No response body - SSE requires streaming support')
+      throw new ValidationError('SSE response must include a readable body', {
+        field: 'response.body',
+        value: url,
+      })
     }
 
     const decoder = new TextDecoder()

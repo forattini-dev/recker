@@ -14,6 +14,7 @@ import {
   getBoolean,
   colors,
 } from '../output.js'
+import { ConnectionError, ValidationError } from '../../core/errors.js'
 
 // =============================================================================
 // FTP List Handler
@@ -43,14 +44,24 @@ export const ftpLsHandler: RekHandler = withHandler(
     }
 
     const connectResult = await client.connect()
-    if (!connectResult.success) throw new Error(connectResult.message)
+    if (!connectResult.success) {
+      throw new ConnectionError(connectResult.message, {
+        host,
+        port,
+      })
+    }
 
     if (!extCtx && !jsonOutput) {
       out.success('Connected')
     }
 
     const result = await client.list(remotePath)
-    if (!result.success || !result.data) throw new Error(result.message)
+    if (!result.success || !result.data) {
+      throw new ValidationError(result.message, {
+        field: 'path',
+        value: remotePath,
+      })
+    }
 
     await client.close()
 
@@ -121,7 +132,13 @@ export const ftpGetHandler: RekHandler = withHandler(
       out.log(colors.gray(`Connecting to ${host}...`))
     }
 
-    if (!(await client.connect()).success) throw new Error('Connection failed')
+    const connectResult = await client.connect()
+    if (!connectResult.success) {
+      throw new ConnectionError(connectResult.message, {
+        host,
+        port,
+      })
+    }
 
     if (!extCtx) {
       out.log(colors.gray(`Downloading ${remote} -> ${local}...`))
@@ -140,7 +157,12 @@ export const ftpGetHandler: RekHandler = withHandler(
 
     const result = await client.download(remote, local)
     if (!extCtx) out.log('')
-    if (!result.success) throw new Error(result.message)
+    if (!result.success) {
+      throw new ValidationError(result.message, {
+        field: 'remote',
+        value: remote,
+      })
+    }
 
     await client.close()
 
@@ -186,7 +208,13 @@ export const ftpPutHandler: RekHandler = withHandler(
       out.log(colors.gray(`Connecting to ${host}...`))
     }
 
-    if (!(await client.connect()).success) throw new Error('Connection failed')
+    const connectResult = await client.connect()
+    if (!connectResult.success) {
+      throw new ConnectionError(connectResult.message, {
+        host,
+        port,
+      })
+    }
 
     if (!extCtx) {
       out.log(colors.gray(`Uploading ${local} -> ${remote}...`))
@@ -205,7 +233,12 @@ export const ftpPutHandler: RekHandler = withHandler(
 
     const result = await client.upload(local, remote)
     if (!extCtx) out.log('')
-    if (!result.success) throw new Error(result.message)
+    if (!result.success) {
+      throw new ValidationError(result.message, {
+        field: 'local',
+        value: local,
+      })
+    }
 
     await client.close()
 

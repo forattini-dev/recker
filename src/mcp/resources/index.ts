@@ -1,5 +1,7 @@
-import type { MCPResource, MCPResourceContent } from '../types.js';
-import { listCategories, type CategoryInfo } from '../tools/categories.js';
+import type { MCPResource, MCPResourceContent, ReckerResponse } from '../types.js';
+import { listCategories } from '../tools/categories.js';
+import type { PresetInfo } from '../../presets/registry.js';
+import { ConfigurationError, NotFoundError } from '../../core/errors.js';
 
 export interface ResourceHandler {
   (): Promise<MCPResourceContent[]> | MCPResourceContent[];
@@ -103,7 +105,7 @@ export class ResourceRegistry {
       }
     }
 
-    throw new Error(`Resource not found: ${uri}`);
+    throw new NotFoundError(`Resource not found: ${uri}`, { resource: uri });
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -203,7 +205,15 @@ export class ResourceRegistry {
         mimeType: 'application/json',
       },
       () => {
-        const status: Record<string, any> = {};
+        const status: Record<
+          string,
+          {
+            limit: number;
+            remaining: number;
+            resetAt: string;
+            percentRemaining: number;
+          }
+        > = {};
         this.rateLimitStatus.forEach((v, k) => {
           status[k] = {
             ...v,
@@ -505,9 +515,11 @@ export class ResourceRegistry {
   private async loadPresetsInfo(): Promise<object> {
     // Dynamically import presets registry
     try {
-      const { presetRegistry } = await import('../../presets/registry.js');
+      const { presetRegistry } = await import('../../presets/registry.js') as {
+        presetRegistry: PresetInfo[];
+      };
       // presetRegistry is an array of PresetInfo objects
-      const presets = (presetRegistry as any[]).map((preset) => ({
+      const presets = presetRegistry.map((preset) => ({
         name: preset.name,
         displayName: preset.displayName,
         category: preset.category,
@@ -535,11 +547,13 @@ export class ResourceRegistry {
 
   private async loadPresetDetails(name: string): Promise<object> {
     try {
-      const { presetRegistry } = await import('../../presets/registry.js');
+      const { presetRegistry } = await import('../../presets/registry.js') as {
+        presetRegistry: PresetInfo[];
+      };
       // presetRegistry is an array, find by name
-      const preset = (presetRegistry as any[]).find(p => p.name === name);
+      const preset = presetRegistry.find((p) => p.name === name);
       if (!preset) {
-        throw new Error(`Preset not found: ${name}`);
+        throw new NotFoundError(`Preset not found: ${name}`, { resource: name });
       }
 
       const envVar = `${name.toUpperCase().replace(/-/g, '_')}_API_KEY`;
@@ -564,7 +578,9 @@ const response = await client.get('/endpoint').json();
 `.trim(),
       };
     } catch (e) {
-      throw new Error(`Failed to load preset '${name}': ${(e as Error).message}`);
+      throw new ConfigurationError(`Failed to load preset '${name}': ${getErrorMessage(e)}`, {
+        configKey: `preset.${name}`,
+      });
     }
   }
 
@@ -622,7 +638,11 @@ pnpm bench:json         # JSON output
   }
 
   private async analyzeDomain(domain: string): Promise<object> {
-    const results: Record<string, any> = {
+    const results: {
+      domain: string;
+      timestamp: string;
+      checks: Record<string, Record<string, unknown>>;
+    } = {
       domain,
       timestamp: new Date().toISOString(),
       checks: {},
@@ -649,7 +669,7 @@ pnpm bench:json         # JSON output
         hasDMARC: false, // Would need _dmarc.domain lookup
       };
     } catch (e) {
-      results.checks.dns = { status: 'error', error: (e as Error).message };
+      results.checks.dns = { status: 'error', error: getErrorMessage(e) };
     }
 
     // TLS Certificate (if HTTPS)
@@ -668,7 +688,7 @@ pnpm bench:json         # JSON output
         cipher: tls.cipher,
       };
     } catch (e) {
-      results.checks.tls = { status: 'error', error: (e as Error).message };
+      results.checks.tls = { status: 'error', error: getErrorMessage(e) };
     }
 
     // HTTP Headers check
@@ -690,7 +710,7 @@ pnpm bench:json         # JSON output
         },
       };
     } catch (e) {
-      results.checks.http = { status: 'error', error: (e as Error).message };
+      results.checks.http = { status: 'error', error: getErrorMessage(e) };
     }
 
     return results;
@@ -705,7 +725,7 @@ pnpm bench:json         # JSON output
 
       // Make 3 requests to get average latency
       const times: number[] = [];
-      let lastResponse: any;
+      let lastResponse: ReckerResponse | undefined;
 
       for (let i = 0; i < 3; i++) {
         const reqStart = Date.now();
@@ -720,16 +740,16 @@ pnpm bench:json         # JSON output
       return {
         url,
         status: 'healthy',
-        statusCode: lastResponse.status,
+        statusCode: lastResponse?.status,
         latency: {
           avg: `${avgLatency}ms`,
           min: `${minLatency}ms`,
           max: `${maxLatency}ms`,
         },
         headers: {
-          server: lastResponse.headers.get('server'),
-          contentType: lastResponse.headers.get('content-type'),
-          cacheControl: lastResponse.headers.get('cache-control'),
+          server: lastResponse?.headers.get('server'),
+          contentType: lastResponse?.headers.get('content-type'),
+          cacheControl: lastResponse?.headers.get('cache-control'),
         },
         checkedAt: new Date().toISOString(),
       };
@@ -737,7 +757,7 @@ pnpm bench:json         # JSON output
       return {
         url,
         status: 'unhealthy',
-        error: (e as Error).message,
+        error: getErrorMessage(e),
         latency: `${Date.now() - startTime}ms (failed)`,
         checkedAt: new Date().toISOString(),
       };
@@ -1214,24 +1234,48 @@ Make sure the URL is accessible and try again.
   }
 
   private getAiPricing(): object {
-    const catalog = this.getAiModelsCatalog() as any;
-    const pricing: any[] = [];
+    const catalog = this.getAiModelsCatalog() as {
+      providers: Array<{
+        name: string;
+        displayName: string;
+        models: Array<{
+          id: string;
+          inputPrice?: number;
+          outputPrice?: number;
+          context?: number;
+          vision?: boolean;
+          tools?: boolean;
+          reasoning?: boolean;
+          fast?: boolean;
+          coding?: boolean;
+        }>;
+      }>;
+    };
+    const pricing: Array<{
+      provider: string;
+      model: string;
+      input: string;
+      output: string;
+      context: string;
+      features: string[];
+    }> = [];
 
     for (const provider of catalog.providers) {
       for (const model of provider.models) {
+        const features = [
+          model.vision && 'vision',
+          model.tools && 'tools',
+          model.reasoning && 'reasoning',
+          model.fast && 'fast',
+          model.coding && 'coding',
+        ].filter((value): value is string => Boolean(value));
         pricing.push({
           provider: provider.name,
           model: model.id,
           input: `$${model.inputPrice?.toFixed(2) || 'N/A'}`,
           output: `$${model.outputPrice?.toFixed(2) || 'N/A'}`,
           context: model.context?.toLocaleString() || 'N/A',
-          features: [
-            model.vision && 'vision',
-            model.tools && 'tools',
-            model.reasoning && 'reasoning',
-            model.fast && 'fast',
-            model.coding && 'coding',
-          ].filter(Boolean),
+          features,
         });
       }
     }
@@ -1246,11 +1290,11 @@ Make sure the URL is accessible and try again.
     return {
       note: 'Prices per 1M tokens in USD (as of Dec 2024)',
       cheapest: pricing.slice(0, 5),
-      byProvider: catalog.providers.map((p: any) => ({
+      byProvider: catalog.providers.map((p) => ({
         provider: p.displayName,
         modelCount: p.models.length,
         priceRange: {
-          input: `$${Math.min(...p.models.map((m: any) => m.inputPrice || 999)).toFixed(2)} - $${Math.max(...p.models.map((m: any) => m.inputPrice || 0)).toFixed(2)}`,
+          input: `$${Math.min(...p.models.map((m) => m.inputPrice || 999)).toFixed(2)} - $${Math.max(...p.models.map((m) => m.inputPrice || 0)).toFixed(2)}`,
         },
       })),
       allModels: pricing,
@@ -1258,12 +1302,18 @@ Make sure the URL is accessible and try again.
   }
 
   private getAiProviderDetails(name: string): object {
-    const catalog = this.getAiModelsCatalog() as any;
-    const provider = catalog.providers.find((p: any) => p.name === name);
+    const catalog = this.getAiModelsCatalog() as {
+      providers: Array<{
+        name: string;
+        displayName: string;
+        models: Array<{ tools?: boolean; vision?: boolean }>;
+      }>;
+    };
+    const provider = catalog.providers.find((p) => p.name === name);
 
     if (!provider) {
-      const available = catalog.providers.map((p: any) => p.name).join(', ');
-      throw new Error(`Provider '${name}' not found. Available: ${available}`);
+      const available = catalog.providers.map((p) => p.name).join(', ');
+      throw new NotFoundError(`Provider '${name}' not found. Available: ${available}`, { resource: name });
     }
 
     return {
@@ -1283,10 +1333,26 @@ Make sure the URL is accessible and try again.
       }[name] || null,
       features: {
         streaming: true,
-        functionCalling: provider.models.some((m: any) => m.tools),
-        vision: provider.models.some((m: any) => m.vision),
+        functionCalling: provider.models.some((m) => Boolean(m.tools)),
+        vision: provider.models.some((m) => Boolean(m.vision)),
         embeddings: ['openai', 'google', 'mistral'].includes(name),
       },
     };
+  }
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
   }
 }

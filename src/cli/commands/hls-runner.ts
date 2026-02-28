@@ -20,6 +20,7 @@
 
 import { createClient, type Client } from '../../core/client.js';
 import { CommandEmitter } from '../events/emitter.js';
+import { AbortError } from '../../core/errors.js';
 
 // =============================================================================
 // Types
@@ -88,7 +89,7 @@ export class HLSRunner extends CommandEmitter {
 
     try {
       if (signal?.aborted) {
-        throw new Error('Aborted');
+        throw new AbortError('HLS info aborted');
       }
 
       const { hls } = await import('../../plugins/hls.js');
@@ -125,7 +126,7 @@ export class HLSRunner extends CommandEmitter {
       return result;
 
     } catch (err: any) {
-      if (signal?.aborted || err.message === 'Aborted') {
+      if (signal?.aborted || err instanceof AbortError) {
         this.emitError('HLS info stopped by user', { code: 'ABORT' });
       } else {
         this.emitError(err.message || 'Failed to get HLS info', {
@@ -158,7 +159,7 @@ export class HLSRunner extends CommandEmitter {
 
     try {
       if (signal?.aborted) {
-        throw new Error('Aborted');
+        throw new AbortError('HLS download aborted');
       }
 
       // Emit progress: connecting
@@ -254,7 +255,7 @@ export class HLSRunner extends CommandEmitter {
       return result;
 
     } catch (err: any) {
-      if (signal?.aborted || err.message === 'Aborted') {
+      if (signal?.aborted || err instanceof AbortError) {
         this.emitError('HLS download stopped by user', { code: 'ABORT' });
         // Return partial result on abort
         return {

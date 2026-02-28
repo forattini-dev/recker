@@ -10,6 +10,7 @@ import { createFTP } from '../../protocols/ftp.js';
 import { createSFTP } from '../../protocols/sftp.js';
 import { createTelnet } from '../../protocols/telnet.js';
 import { createWebSocket } from '../../websocket/client.js';
+import { ProtocolError } from '../../core/errors.js';
 
 export interface ToolDefinition {
   name: string;
@@ -178,7 +179,10 @@ export const ftpDownloadTool: ToolDefinition = {
 
       const content = downloadResult.data;
       if (!content) {
-        throw new Error('Failed to download file');
+        throw new ProtocolError('Failed to download file', {
+          protocol: 'ftp',
+          phase: 'download',
+        });
       }
 
       // Try to decode as text, otherwise return base64
@@ -400,7 +404,10 @@ export const sftpDownloadTool: ToolDefinition = {
 
       const content = downloadResult.data;
       if (!content) {
-        throw new Error('Failed to download file');
+        throw new ProtocolError('Failed to download file', {
+          protocol: 'sftp',
+          phase: 'download',
+        });
       }
 
       // Try to decode as text, otherwise return base64

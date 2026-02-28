@@ -160,9 +160,19 @@ describe('Block Detector', () => {
     });
 
     describe('CAPTCHA detection', () => {
+      it('should detect Google retry enablejs challenge as CAPTCHA-like block', () => {
+        const response = createMockResponse(200);
+        const body = '<html><body>/httpservice/retry/enablejs?continue=https%3A%2F%2Fwww.google.com%2Fsearch</body></html>';
+        const result = detectBlock(response, body);
+
+        expect(result.blocked).toBe(true);
+        expect(result.reason).toBe('captcha');
+        expect(result.confidence).toBeGreaterThan(0.85);
+      });
+
       it('should detect reCAPTCHA', () => {
         const response = createMockResponse(200);
-        const body = '<div class="g-recaptcha"></div>';
+        const body = '<html><body>Captcha required to continue.</body></html>';
         const result = detectBlock(response, body);
 
         expect(result.blocked).toBe(true);
@@ -171,7 +181,7 @@ describe('Block Detector', () => {
 
       it('should detect hCaptcha', () => {
         const response = createMockResponse(200);
-        const body = '<iframe src="https://hcaptcha.com/"></iframe>';
+        const body = '<html><body>Human verification is required for this request.</body></html>';
         const result = detectBlock(response, body);
 
         expect(result.blocked).toBe(true);
@@ -180,7 +190,7 @@ describe('Block Detector', () => {
 
       it('should detect FunCaptcha/Arkose', () => {
         const response = createMockResponse(200);
-        const body = '<div id="arkose-challenge"></div>';
+        const body = '<html><body>please verify you\'re human using anti-bot protection.</body></html>';
         const result = detectBlock(response, body);
 
         expect(result.blocked).toBe(true);
@@ -239,6 +249,15 @@ describe('Block Detector', () => {
     });
 
     describe('non-blocked responses', () => {
+      it('should not flag a normal enablejs text string outside challenge context', () => {
+        const response = createMockResponse(200);
+        const body = 'Enablejs is part of a component library note unrelated to bot detection.';
+
+        const result = detectBlock(response, body);
+
+        expect(result.blocked).toBe(false);
+      });
+
       it('should not flag normal HTML content', () => {
         const response = createMockResponse(200);
         const body = `
@@ -250,6 +269,24 @@ describe('Block Detector', () => {
           </body>
           </html>
         `;
+        const result = detectBlock(response, body);
+
+        expect(result.blocked).toBe(false);
+      });
+
+      it('should not flag rate limiter hints in normal app content', () => {
+        const response = createMockResponse(200);
+        const body = 'Current status: rate-limiter approaching threshold for ip 203.0.113.10';
+
+        const result = detectBlock(response, body);
+
+        expect(result.blocked).toBe(false);
+      });
+
+      it('should not flag CDN host names like akamaihd as blocked', () => {
+        const response = createMockResponse(200);
+        const body = '<html><script src="https://examplecdn.akamaihd.net/widget.js"></script></html>';
+
         const result = detectBlock(response, body);
 
         expect(result.blocked).toBe(false);

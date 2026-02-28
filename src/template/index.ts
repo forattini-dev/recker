@@ -198,8 +198,6 @@ export type {
   TextNode,
   ExpressionNode,
   RawExpressionNode,
-  MustacheNode, // @deprecated - use ExpressionNode
-  RawMustacheNode, // @deprecated - use RawExpressionNode
   BlockNode,
   PartialNode,
   CommentNode,

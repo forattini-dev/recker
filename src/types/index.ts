@@ -555,7 +555,20 @@ export type CacheStrategy =
   | 'revalidate'
   | 'rfc-compliant';
 
-export type Plugin = (client: any) => void;
+export interface PluginClient {
+  beforeRequest(
+    fn: (req: ReckerRequest) => ReckerRequest | void | Promise<ReckerRequest | void>
+  ): void;
+  afterResponse(
+    fn: (req: ReckerRequest, res: ReckerResponse) => ReckerResponse | void | Promise<ReckerResponse | void>
+  ): void;
+  onError(
+    fn: (error: Error, req: ReckerRequest) => ReckerResponse | void | Promise<ReckerResponse | void>
+  ): void;
+  use(middleware: Middleware): void;
+}
+
+export type Plugin = (client: PluginClient) => void;
 
 export type HookFunction<T = void> = (req: ReckerRequest, extra?: any) => T | Promise<T>;
 

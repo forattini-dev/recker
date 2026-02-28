@@ -36,11 +36,38 @@ export interface HeadingInfo {
   count: number;
 }
 
+export interface HeadingNode {
+  level: number;
+  text: string;
+  children: HeadingNode[];
+}
+
 export interface HeadingAnalysis {
   structure: HeadingInfo[];
+  /** Hierarchical heading tree */
+  tree?: HeadingNode[];
   h1Count: number;
   hasProperHierarchy: boolean;
   issues: string[];
+}
+
+export interface SeoContentSectionSignal {
+  /** Ordered heading context where this section lives */
+  headingPath: string[];
+  /** Content source classification used by downstream consumers */
+  source: 'heading' | 'paragraph' | 'list-item' | 'table' | 'figure' | 'meta' | 'other';
+  /** Tag name of source node */
+  tagName: string;
+  /** Heading level when source is related to headings */
+  headingLevel: number;
+  /** Raw normalized text from the DOM node */
+  text: string;
+  /** Number of words in this source */
+  wordCount: number;
+  /** Proportion of linked words; higher means more likely boilerplate */
+  linkDensity: number;
+  /** Structural weight multiplier for long-tail ranking */
+  weight: number;
 }
 
 export interface ContentMetrics {
@@ -274,6 +301,12 @@ export interface SeoReport {
   images: ImageAnalysis;
   social: SocialMetaAnalysis;
   technical: TechnicalSeo;
+  /** Anchor text sampled from page links (for campaign / seed generation) */
+  linkAnchorTexts?: string[];
+  /** Link URL samples from page links (for campaign / seed generation) */
+  linkUrlSamples?: string[];
+  /** Extracted section-level textual signals (for keyword extraction/ranking) */
+  contentSections?: SeoContentSectionSignal[];
 }
 
 export interface SeoAnalyzerOptions {

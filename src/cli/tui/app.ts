@@ -881,6 +881,24 @@ function DomainsTabContent({ width, height }: { width: number; height: number })
         { flexDirection: 'column' },
         Text({ color: accentColor, bold: true }, `🕷 Spider Results`),
         Text({ color: mutedFg }, `  Pages: ${intel.spider.pagesFound} │ Links: ${intel.spider.internalLinks + intel.spider.externalLinks} │ Images: ${intel.spider.images}`),
+        intel.spider.security ? Box(
+          { flexDirection: 'column' },
+          Text({ color: mutedFg }, `  Anti-bot: blocked ${intel.spider.security.blockedPages} · captcha ${intel.spider.security.captchaPages}`),
+          Text({ color: mutedFg }, `  Attempts: ${intel.spider.security.attempts} │ retries: ${intel.spider.security.retries}`),
+          Text({ color: mutedFg }, `  Avg attempts: ${intel.spider.security.avgAttempts !== undefined ? intel.spider.security.avgAttempts.toFixed(2) : 'n/a'}`),
+          Text({ color: mutedFg }, `  Transport: curl ${intel.spider.security.transportUsage?.curl || 0} / undici ${intel.spider.security.transportUsage?.undici || 0}`),
+          Text({ color: mutedFg }, `  Timing: TTFB ${intel.spider.security.avgTtfbMs ?? 'n/a'}ms | total ${intel.spider.security.avgTotalMs ?? 'n/a'}ms | download ${intel.spider.security.avgDownloadMs ?? 'n/a'}ms`),
+          intel.spider.security.captchaProviders && Object.keys(intel.spider.security.captchaProviders).length > 0
+            ? Text(
+              { color: mutedFg },
+              `  Captcha providers: ${Object.entries(intel.spider.security.captchaProviders)
+                .sort((a, b) => b[1] - a[1])
+                .map(([provider, count]) => `${provider}: ${count}`)
+                .join(' | ')}`
+            )
+            : null,
+          Box({ height: 1 }),
+        ) : null,
         Box({ height: 1 }),
       ) : null,
 

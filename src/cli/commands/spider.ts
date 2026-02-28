@@ -2,6 +2,33 @@ import { RekCommand as Command } from '../router.js';
 import { promises as fs } from 'node:fs';
 import colors from '../../utils/colors.js';
 import { summarizeErrors, formatErrorSummary } from '../helpers.js';
+import { parseSpiderSerpConfig } from '../utils/serp-config.js';
+import { runSpiderKeywordCampaign, toSerpPayload } from '../utils/serp-campaign.js';
+import {
+  getOptionValue,
+  toBoolean,
+  toNonNegativeInt,
+  toOptionString,
+  toSpiderTransport,
+  type SpiderTransport,
+} from '../utils/option-helpers.js';
+import { getScoreColor } from '../utils/score-color.js';
+
+type SpiderFocusMode = 'all' | 'links' | 'duplicates' | 'security' | 'ai' | 'resources';
+const FOCUS_MODES: SpiderFocusMode[] = ['all', 'links', 'duplicates', 'security', 'ai', 'resources'];
+
+function normalizeSpiderFocus(value: unknown): SpiderFocusMode {
+  const raw = toOptionString(value)?.toLowerCase() as SpiderFocusMode | undefined;
+  return raw && FOCUS_MODES.includes(raw) ? raw : 'all';
+}
+
+function toStringOrStringArray(value: unknown): string | string[] | undefined {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item)).filter(Boolean);
+  }
+
+  return toOptionString(value);
+}
 
 export interface SpiderOptions {
   url: string;
@@ -9,7 +36,7 @@ export interface SpiderOptions {
   limit?: number;
   concurrency?: number;
   output?: string;
-  focus?: string;
+  focus?: SpiderFocusMode;
   seo?: boolean;
   robots?: boolean;
   json?: boolean;
@@ -25,6 +52,215 @@ export interface SpiderOptions {
   noSitemap?: boolean;
   /** Disable rich TUI (when running inside shell context) */
   disableTui?: boolean;
+  /** Transport mode (auto | undici | curl) */
+  transport?: SpiderTransport;
+  /** Prefer curl-impersonate first for auto transport */
+  preferCurlFirst?: boolean;
+  /** Request timeout in ms */
+  timeout?: number;
+  /** Delay between requests in ms */
+  delay?: number;
+  /** Max retry attempts */
+  maxRetryAttempts?: number;
+  /** Base retry delay in ms */
+  baseRetryDelayMs?: number;
+  /** Max retry delay in ms */
+  maxRetryDelayMs?: number;
+  /** Retry backoff multiplier */
+  retryBackoffMultiplier?: number;
+  /** Retry jitter in ms */
+  retryJitterMs?: number;
+  /** Domain strike threshold before forcing curl */
+  maxDomainBlockStrikes?: number;
+  /** Rotate user-agent for each request */
+  rotateUserAgent?: boolean;
+  /** Randomize common request headers */
+  randomizeHeaders?: boolean;
+  /** Parsed SERP campaign config */
+  serpConfig?: ReturnType<typeof parseSpiderSerpConfig>;
+}
+
+type SpiderSecurityTransport = 'auto' | 'undici' | 'curl';
+
+type SpiderSecuritySummaryInput = {
+  security?: {
+    blocked?: boolean;
+    captchaDetected?: boolean;
+    captchaProvider?: string;
+    attempts?: number;
+    retryCount?: number;
+    transport?: SpiderSecurityTransport;
+  };
+  timings?: {
+    ttfb?: number;
+    total?: number;
+    download?: number;
+  };
+};
+
+type SpiderSecuritySummary = {
+  pages: number;
+  blockedPages: number;
+  captchaPages: number;
+  captchaProviders: Record<string, number>;
+  attempts: number;
+  retries: number;
+  transportUsage: {
+    undici: number;
+    curl: number;
+  };
+  avgAttempts: number;
+  avgTtfbMs?: number;
+  avgTotalMs?: number;
+  avgDownloadMs?: number;
+};
+
+function printSerpCampaignSummary(
+  run: Exclude<Awaited<ReturnType<typeof runSpiderKeywordCampaign>>, undefined>,
+  color: typeof colors,
+): void {
+  const campaign = run.campaign;
+  const summary = campaign.summary;
+  const foundRate = summary.queriesRequested > 0
+    ? Math.round((summary.queriesFound / summary.queriesRequested) * 100)
+    : 0;
+
+  console.log(color.bold('\n  SERP campaign:'));
+  console.log(`  ${color.green('Queries')}: ${summary.queriesExecuted}/${summary.queriesRequested} searched | ${color.green(String(summary.queriesFound))} found (${foundRate}%)`);
+  console.log(`  ${color.blue('Top3')}: ${summary.top3Count} | ${color.blue('Top10')}: ${summary.top10Count}`);
+  console.log(`  ${color.yellow('Avg position')}: ${summary.avgTopPosition !== null ? String(Math.round(summary.avgTopPosition)) : 'n/a'}`);
+
+  if (campaign.results.length > 0) {
+    console.log(`  ${color.blue('Keywords')}:`);
+    for (const result of campaign.results.slice(0, 15)) {
+      const icon = result.found ? color.green('✔') : color.red('✗');
+      const pos = result.bestPosition !== null ? color.gray(` #${result.bestPosition}`) : color.gray('  -');
+      const url = result.matchedUrl ? color.gray(` ${result.matchedUrl.replace(/^https?:\/\/[^/]+/, '').slice(0, 40)}`) : '';
+      console.log(`    ${icon} ${result.keyword.padEnd(28)}${pos}${url}`);
+    }
+    if (campaign.results.length > 15) {
+      console.log(color.gray(`    ... and ${campaign.results.length - 15} more keywords`));
+    }
+  }
+
+  if (summary.topOrganicCompetitors.length > 0) {
+    console.log(`  ${color.blue('Top competitors')}:`);
+    for (const competitor of summary.topOrganicCompetitors.slice(0, 3)) {
+      const wins = competitor.totalOutperformedQueries ?? 0;
+      console.log(`    ${color.gray(`${competitor.domain}`)} (${wins} wins / ${competitor.matchedKeywords} matched)`);
+    }
+  }
+
+  if (campaign.pageComparison.length > 0) {
+    console.log(`  ${color.blue('Best pages')}:`);
+    for (const page of campaign.pageComparison
+      .sort((a: { found: number; tracked: number }, b: { found: number; tracked: number }) => b.found - a.found || b.tracked - a.tracked)
+      .slice(0, 3)) {
+      console.log(`    ${color.gray(`${page.pageUrl}`)} ${page.found}/${page.tracked} (${page.appearanceRate.toFixed(1)}%)`);
+    }
+  }
+}
+
+function summarizePageSecurity(pages: SpiderSecuritySummaryInput[]): SpiderSecuritySummary {
+  let blockedPages = 0;
+  let captchaPages = 0;
+  const captchaProviders: Record<string, number> = {};
+  let attempts = 0;
+  let retries = 0;
+  let undici = 0;
+  let curl = 0;
+  let ttfbSum = 0;
+  let totalSum = 0;
+  let downloadSum = 0;
+  let ttfbCount = 0;
+  let totalCount = 0;
+  let downloadCount = 0;
+  const totalPages = pages.length;
+
+  for (const page of pages) {
+    const security = page.security;
+    attempts += Number.isFinite(security?.attempts ?? NaN) ? (security?.attempts || 0) : 1;
+    retries += security?.retryCount ?? 0;
+
+    if (security?.blocked) blockedPages += 1;
+    if (security?.captchaDetected) captchaPages += 1;
+    if (security?.captchaDetected) {
+      const provider = (security.captchaProvider || '').trim().toLowerCase();
+      const key = provider.length > 0 ? provider : 'unknown';
+      captchaProviders[key] = (captchaProviders[key] || 0) + 1;
+    }
+
+    if (security?.transport === 'undici') {
+      undici += 1;
+    } else if (security?.transport === 'curl') {
+      curl += 1;
+    }
+
+    const ttfb = page.timings?.ttfb;
+    const total = page.timings?.total;
+    const download = page.timings?.download;
+
+    if (typeof ttfb === 'number' && Number.isFinite(ttfb)) {
+      ttfbSum += ttfb;
+      ttfbCount += 1;
+    }
+
+    if (typeof total === 'number' && Number.isFinite(total)) {
+      totalSum += total;
+      totalCount += 1;
+    }
+
+    if (typeof download === 'number' && Number.isFinite(download)) {
+      downloadSum += download;
+      downloadCount += 1;
+    }
+  }
+
+  return {
+    pages: totalPages,
+    blockedPages,
+    captchaPages,
+    captchaProviders,
+    attempts: attempts || totalPages || 1,
+    retries,
+    transportUsage: {
+      undici,
+      curl,
+    },
+    avgAttempts: totalPages > 0 ? Number((attempts / totalPages).toFixed(2)) : 0,
+    avgTtfbMs: ttfbCount > 0 ? Math.round(ttfbSum / ttfbCount) : undefined,
+    avgTotalMs: totalCount > 0 ? Math.round(totalSum / totalCount) : undefined,
+    avgDownloadMs: downloadCount > 0 ? Math.round(downloadSum / downloadCount) : undefined,
+  };
+}
+
+function toNumber(value: string): number {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function printSecuritySummary(summary: SpiderSecuritySummary, securityPages: number, colors: typeof import('../../utils/colors.js').default): void {
+  const blockedRate = securityPages > 0 ? Math.round((summary.blockedPages / securityPages) * 100) : 0;
+  const captchaRate = securityPages > 0 ? Math.round((summary.captchaPages / securityPages) * 100) : 0;
+  const transportTotal = summary.transportUsage.undici + summary.transportUsage.curl;
+
+  const transportLine = transportTotal > 0
+    ? `curl ${summary.transportUsage.curl} (${Math.round((summary.transportUsage.curl / transportTotal) * 100)}%) / undici ${summary.transportUsage.undici} (${Math.round((summary.transportUsage.undici / transportTotal) * 100)}%)`
+    : 'transport usage n/a';
+
+  console.log(colors.bold('\n  Anti-bot signal:'));
+  console.log(`  ${colors.red('Blocked')}: ${summary.blockedPages}/${securityPages} (${blockedRate}%)`);
+  console.log(`  ${colors.yellow('Captcha')}: ${summary.captchaPages}/${securityPages} (${captchaRate}%)`);
+  console.log(`  ${colors.blue('Attempts')}: avg ${summary.avgAttempts}, retries ${summary.retries}`);
+  console.log(`  ${colors.cyan('Timings')}: ttfb ${summary.avgTtfbMs ?? 'n/a'}ms · total ${summary.avgTotalMs ?? 'n/a'}ms · download ${summary.avgDownloadMs ?? 'n/a'}ms`);
+  console.log(`  ${colors.magenta('Transport')}: ${transportLine}`);
+  if (Object.keys(summary.captchaProviders).length > 0) {
+    const providers = Object.entries(summary.captchaProviders)
+      .sort((a, b) => b[1] - a[1])
+      .map(([provider, count]) => `${provider}: ${count}`)
+      .join(', ');
+    console.log(`  ${colors.gray('Captcha providers')}: ${providers}`);
+  }
 }
 
 export async function runSpider(opts: SpiderOptions) {
@@ -37,11 +273,32 @@ export async function runSpider(opts: SpiderOptions) {
   const respectRobotsTxt = !!opts.robots;
   // In SEO mode, sitemap crawling is enabled by default unless --no-sitemap is passed
   const useSitemap = seoEnabled && !opts.noSitemap;
+  const serpConfig = opts.serpConfig || parseSpiderSerpConfig(opts as unknown as Record<string, unknown>);
+  const shouldRunSerp = seoEnabled && serpConfig.enabled;
+
+  let startUrl = url;
+  if (!startUrl.startsWith('http')) startUrl = `https://${startUrl}`;
+
+  if (serpConfig.enabled && !seoEnabled) {
+    console.log(colors.yellow('\nSERP campaign requires --seo. Skipping SERP checks.'));
+  }
 
   // Apply defaults
-  const depth = opts.depth || 10;
-  const limit = opts.limit || 1000;
-  const concurrency = opts.concurrency || 5;
+  const depth = toNonNegativeInt(opts.depth, 10);
+  const limit = toNonNegativeInt(opts.limit, 1000);
+  const concurrency = toNonNegativeInt(opts.concurrency, 5);
+  const transport = toSpiderTransport(opts.transport) ?? 'auto';
+  const preferCurlFirst = toBoolean(opts.preferCurlFirst, true);
+  const timeout = toNonNegativeInt(opts.timeout, 10_000);
+  const delay = toNonNegativeInt(opts.delay, 100);
+  const maxRetryAttempts = toNonNegativeInt(opts.maxRetryAttempts, 3);
+  const baseRetryDelayMs = toNonNegativeInt(opts.baseRetryDelayMs, 1_000);
+  const maxRetryDelayMs = toNonNegativeInt(opts.maxRetryDelayMs, 12_000);
+  const retryBackoffMultiplier = toNonNegativeInt(opts.retryBackoffMultiplier, 2);
+  const retryJitterMs = toNonNegativeInt(opts.retryJitterMs, 250);
+  const maxDomainBlockStrikes = toNonNegativeInt(opts.maxDomainBlockStrikes, 2);
+  const rotateUserAgent = toBoolean(opts.rotateUserAgent, true);
+  const randomizeHeaders = toBoolean(opts.randomizeHeaders, true);
 
   // Parse comma-separated options into arrays
   const parseList = (val: string | string[] | undefined): string[] | undefined => {
@@ -57,23 +314,54 @@ export async function runSpider(opts: SpiderOptions) {
   if (formatJsonl) {
     const { runSpiderWithEvents } = await import('./spider-runner.js');
     try {
-      await runSpiderWithEvents(url, {
+      const crawlResult = await runSpiderWithEvents(url, {
         depth,
         limit,
         concurrency,
         robots: respectRobotsTxt,
         seo: seoEnabled,
         useSitemap,
-        focus: focusMode as any,
+        focus: focusMode,
+        transport,
+        preferCurlFirst,
+        timeout,
+        delay,
+        maxRetryAttempts,
+        baseRetryDelayMs,
+        maxRetryDelayMs,
+        retryBackoffMultiplier,
+        retryJitterMs,
+        maxDomainBlockStrikes,
+        rotateUserAgent,
+        randomizeHeaders,
         extract: extractSelectors,
         include: includePatterns,
         exclude: excludePatterns,
         jsonl: true,
         jsonlOutput: outputFile, // If -o is specified, write to file
       });
+      if (shouldRunSerp && crawlResult.pages?.length > 0) {
+        const serpCampaign = await runSpiderKeywordCampaign(startUrl, crawlResult.pages, serpConfig);
+        if (serpCampaign) {
+          const outputRecord = {
+            type: 'serp',
+            ...(toSerpPayload(serpCampaign)),
+          };
+          // Keep JSONL stream focused: emit campaign row for downstream ingestion
+          if (!outputFile) {
+            console.log(JSON.stringify(outputRecord));
+            return;
+          }
+          await fs.appendFile(outputFile, `${JSON.stringify(outputRecord)}\n`);
+        } else if (!outputFile) {
+          console.log(colors.yellow('SERP enabled but no valid keyword seeds were found in crawl pages.'));
+        }
+        return;
+      }
       return;
-    } catch (error: any) {
-      console.error(colors.red(`\nSpider failed: ${error.message}`));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error(colors.red(`\nSpider failed: ${message}`));
       process.exit(1);
     }
   }
@@ -87,9 +375,6 @@ export async function runSpider(opts: SpiderOptions) {
     resources: ['resources', 'performance'],
     all: [],
   };
-
-  let startUrl = url;
-  if (!startUrl.startsWith('http')) startUrl = `https://${startUrl}`;
 
   // Don't print visual output in JSON mode
   if (!formatJson) {
@@ -128,13 +413,24 @@ Spider starting: ${startUrl}`));
         maxPages: limit,
         concurrency: concurrency,
         sameDomain: true,
-        delay: 100,
+        delay,
+        timeout,
+        transport,
+        preferCurlFirst,
+        maxRetryAttempts,
+        baseRetryDelayMs,
+        maxRetryDelayMs,
+        retryBackoffMultiplier,
+        retryJitterMs,
+        maxDomainBlockStrikes,
+        rotateUserAgent,
+        randomizeHeaders,
         seo: true,
         respectRobotsTxt,
         useSitemap,
         output: outputFile || undefined,
         focusCategories: focusCategories[focusMode],
-        focusMode: focusMode as any,
+        focusMode,
         onProgress: (progress) => {
           currentCrawled = progress.crawled;
           if (tui) {
@@ -156,22 +452,63 @@ Spider starting: ${startUrl}`));
               // Use timings from spider page result (network-level data)
               const bytes = seoPage.metrics?.htmlSize;
               const timings = seoPage.timings || { total: seoPage.duration };
+              const securityTransport = seoPage.security?.transport === 'curl' || seoPage.security?.transport === 'undici'
+                ? seoPage.security.transport
+                : undefined;
               tui.updateSeo(seoPage.url, seoPage.seoReport.score, bytes, timings);
+              tui.updateSecurity({
+                blocked: seoPage.security?.blocked,
+                captchaDetected: seoPage.security?.captchaDetected,
+                captchaProvider: seoPage.security?.captchaProvider,
+                attempts: seoPage.security?.attempts,
+                retryCount: seoPage.security?.retryCount,
+                transport: securityTransport,
+                ttfb: timings.ttfb,
+                total: timings.total,
+                download: timings.download,
+              });
             }
           }
         },
       });
 
       const result = await seoSpider.crawl(startUrl);
+      const serpCampaign = shouldRunSerp ? await runSpiderKeywordCampaign(startUrl, result.pages, serpConfig) : undefined;
+      const serpPayload = serpCampaign ? toSerpPayload(serpCampaign) : undefined;
 
       // Update TUI with final results and cleanup
       if (tui) {
+        const securitySummary = summarizePageSecurity(result.pages);
         tui.setComplete({
+          security: securitySummary,
           duplicateTitles: result.summary.duplicateTitles,
           duplicateDescriptions: result.summary.duplicateDescriptions,
           orphanPages: result.summary.orphanPages,
           pagesWithErrors: result.summary.pagesWithErrors,
         });
+        tui.setSecuritySummary(securitySummary);
+        if (serpPayload) {
+          tui.setSerpSummary({
+            queriesRequested: serpPayload.summary.queriesRequested,
+            queriesFound: serpPayload.summary.queriesFound,
+            avgTopPosition: serpPayload.summary.avgTopPosition,
+            top3Count: serpPayload.summary.top3Count,
+            top10Count: serpPayload.summary.top10Count,
+            topOrganicCompetitors: (serpPayload.summary.topOrganicCompetitors || [])
+              .slice(0, 4)
+              .map((item) => ({
+                domain: item.domain,
+                matchedKeywords: item.matchedKeywords,
+                totalOutperformedQueries: item.totalOutperformedQueries || 0,
+              })),
+            topPages: serpPayload.pageComparison.slice(0, 5).map((item) => ({
+              pageUrl: item.pageUrl,
+              found: item.found,
+              tracked: item.tracked,
+              appearanceRate: toNumber(item.appearanceRate),
+            })),
+          });
+        }
         // Give TUI a moment to show final state, then cleanup
         await new Promise(resolve => setTimeout(resolve, 500));
         tui.stop();
@@ -180,6 +517,8 @@ Spider starting: ${startUrl}`));
 
       // JSON output mode - print structured data and exit
       if (formatJson) {
+        const securitySummary = summarizePageSecurity(result.pages);
+
         // Calculate metrics for JSON output
         const responseTimes = result.pages.filter(p => p.duration > 0).map(p => p.duration);
         const avgResponseTime = responseTimes.length > 0
@@ -230,7 +569,9 @@ Spider starting: ${startUrl}`));
             duplicateDescriptions: result.summary.duplicateDescriptions,
             duplicateH1s: result.summary.duplicateH1s,
             orphanPages: result.summary.orphanPages,
+            security: securitySummary,
           },
+          ...(serpPayload ? { serp: serpPayload } : {}),
           discovery: result.discovery ? {
             humans: result.discovery.humans.found,
             llms: result.discovery.llms.found,
@@ -288,12 +629,14 @@ Spider starting: ${startUrl}`));
 
       // Clear progress line
       process.stdout.write('\r' + ' '.repeat(80) + '\r');
+      const securitySummary = summarizePageSecurity(result.pages);
 
       // Print SEO Spider results (visual mode)
       console.log(colors.green(`\n✔ SEO Spider complete`) + colors.gray(` (${(result.duration / 1000).toFixed(1)}s)`));
       console.log(`  ${colors.cyan('Pages crawled')}: ${result.pages.length}`);
       console.log(`  ${colors.cyan('Unique URLs')}: ${result.visited.size}`);
       console.log(`  ${colors.cyan('Avg SEO Score')}: ${result.summary.avgScore}/100`);
+      printSecuritySummary(securitySummary, securitySummary.pages, colors);
 
       // Calculate performance metrics
       const responseTimes = result.pages.filter(p => p.duration > 0).map(p => p.duration);
@@ -465,12 +808,16 @@ Spider starting: ${startUrl}`));
           const score = page.seoReport?.score || 0;
           const grade = page.seoReport?.grade || '?';
           const path = new URL(page.url).pathname;
-          const scoreColor = score >= 80 ? colors.green : score >= 60 ? colors.yellow : colors.red;
+          const scoreColor = getScoreColor(score, colors);
           console.log(`    ${scoreColor(`${score.toString().padStart(3)}`)} ${colors.gray(`[${grade}]`)} ${path.slice(0, 50)}`);
         }
         if (uniquePages.length > 5) {
           console.log(colors.gray(`    ... and ${uniquePages.length - 5} more pages`));
         }
+      }
+
+      if (serpPayload && serpCampaign) {
+        printSerpCampaignSummary(serpCampaign, colors);
       }
 
       // Show output file location
@@ -487,7 +834,18 @@ Spider starting: ${startUrl}`));
         maxPages: limit,
         concurrency: concurrency,
         sameDomain: true,
-        delay: 100,
+        timeout,
+        delay,
+        transport,
+        preferCurlFirst,
+        maxRetryAttempts,
+        baseRetryDelayMs,
+        maxRetryDelayMs,
+        retryBackoffMultiplier,
+        retryJitterMs,
+        maxDomainBlockStrikes,
+        rotateUserAgent,
+        randomizeHeaders,
         respectRobotsTxt,
         extract: extractSelectors,
         include: includePatterns?.map(p => new RegExp(p)),
@@ -501,6 +859,8 @@ Spider starting: ${startUrl}`));
 
       // JSON output mode
       if (formatJson) {
+        const securitySummary = summarizePageSecurity(result.pages);
+
         const jsonOutput = {
           startUrl: result.startUrl,
           startTime: result.startTime,
@@ -516,6 +876,7 @@ Spider starting: ${startUrl}`));
             successCount: result.pages.filter(p => !p.error).length,
             errorCount: result.errors.length,
             uniqueUrls: result.visited.size,
+            security: securitySummary,
           },
           pages: result.pages.map(p => ({
             url: p.url,
@@ -556,12 +917,14 @@ Spider starting: ${startUrl}`));
 
       // Clear progress line
       process.stdout.write('\r' + ' '.repeat(80) + '\r');
+      const securitySummary = summarizePageSecurity(result.pages);
 
       // Print results (visual mode)
       console.log(colors.green(`\n✔ Spider complete`) + colors.gray(` (${(result.duration / 1000).toFixed(1)}s)`));
       console.log(`  ${colors.cyan('Pages crawled')}: ${result.pages.length}`);
       console.log(`  ${colors.cyan('Unique URLs')}: ${result.visited.size}`);
       console.log(`  ${colors.cyan('Errors')}: ${result.errors.length}`);
+      printSecuritySummary(securitySummary, securitySummary.pages, colors);
 
       // Show pages by depth
       const byDepth = new Map<number, number>();
@@ -650,6 +1013,7 @@ Spider starting: ${startUrl}`));
             successCount: result.pages.filter(p => !p.error).length,
             errorCount: result.errors.length,
             uniqueUrls: result.visited.size,
+            security: securitySummary,
           },
           pages: result.pages.map(p => ({
             url: p.url,
@@ -690,8 +1054,9 @@ Spider starting: ${startUrl}`));
     }
 
     console.log('');
-  } catch (error: any) {
-    console.error(colors.red(`\nSpider failed: ${error.message}`));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error(colors.red(`\nSpider failed: ${message}`));
     process.exit(1);
   }
 }
@@ -774,6 +1139,150 @@ export function registerSpiderCommand(program: Command) {
       short: 'N',
       description: 'Disable sitemap.xml crawling (sitemap is used by default in SEO mode)',
     })
+    .option('transport', {
+      type: 'string',
+      default: 'auto',
+      description: 'HTTP transport for crawler (auto | undici | curl)',
+    })
+    .option('prefer-curl-first', {
+      type: 'boolean',
+      default: true,
+      description: 'Prefer curl-impersonate before undici in auto mode',
+    })
+    .option('timeout', {
+      type: 'number',
+      default: 10000,
+      description: 'Request timeout in ms',
+    })
+    .option('delay', {
+      type: 'number',
+      default: 100,
+      description: 'Request delay in ms',
+    })
+    .option('max-retry-attempts', {
+      type: 'number',
+      default: 3,
+      description: 'Max retries for failed or blocked requests',
+    })
+    .option('base-retry-delay-ms', {
+      type: 'number',
+      default: 1000,
+      description: 'Base retry delay in ms',
+    })
+    .option('max-retry-delay-ms', {
+      type: 'number',
+      default: 12000,
+      description: 'Maximum retry delay in ms',
+    })
+    .option('retry-backoff-multiplier', {
+      type: 'number',
+      default: 2,
+      description: 'Retry backoff multiplier',
+    })
+    .option('retry-jitter-ms', {
+      type: 'number',
+      default: 250,
+      description: 'Random retry jitter in ms',
+    })
+    .option('max-domain-block-strikes', {
+      type: 'number',
+      default: 2,
+      description: 'Number of strikes before forcing curl in auto mode',
+    })
+    .option('rotate-user-agent', {
+      type: 'boolean',
+      default: true,
+      description: 'Rotate user-agent per request',
+    })
+    .option('randomize-headers', {
+      type: 'boolean',
+      default: true,
+      description: 'Randomize request headers',
+    })
+    .option('serp', {
+      type: 'boolean',
+      description: 'Enable SERP campaign for top extracted keywords',
+    })
+    .option('serp-top-keywords', {
+      type: 'number',
+      description: 'Top keywords per page to use as campaign seeds',
+      example: '20',
+    })
+    .option('serp-query-limit', {
+      type: 'number',
+      description: 'Number of SERP queries to execute',
+      example: '10',
+    })
+    .option('serp-results-per-query', {
+      type: 'number',
+      description: 'Results fetched per SERP query',
+      example: '10',
+    })
+    .option('serp-concurrency', {
+      type: 'number',
+      description: 'Number of parallel SERP queries',
+      example: '4',
+    })
+    .option('serp-delay-ms', {
+      type: 'number',
+      description: 'Base delay in ms between SERP queries',
+      example: '450',
+    })
+    .option('serp-delay-jitter-ms', {
+      type: 'number',
+      description: 'Random delay jitter in ms between SERP queries',
+      example: '250',
+    })
+    .option('serp-captcha-cooldown-ms', {
+      type: 'number',
+      description: 'Cooldown in ms after captcha before continuing SERP queries',
+      example: '1200',
+    })
+    .option('serp-retry-count', {
+      type: 'number',
+      description: 'Retry count per SERP query',
+      example: '1',
+    })
+    .option('serp-retry-delay-ms', {
+      type: 'number',
+      description: 'Base delay in ms for SERP query retries',
+      example: '900',
+    })
+    .option('serp-transport', {
+      type: 'string',
+      default: 'curl',
+      description: 'Search transport (auto | undici | curl)',
+      example: 'curl',
+    })
+    .option('serp-source', {
+      type: 'string',
+      default: 'google',
+      description: 'Search source/provider. Current options: google',
+      example: 'google',
+    })
+    .option('serp-timeout', {
+      type: 'number',
+      description: 'Search timeout in ms',
+      example: '15000',
+    })
+    .option('serp-country', {
+      type: 'string',
+      description: 'Search country/region',
+      example: 'br',
+    })
+    .option('serp-gl', {
+      type: 'string',
+      description: 'Google GL parameter',
+    })
+    .option('serp-hl', {
+      type: 'string',
+      description: 'Google HL parameter',
+    })
+    .option('serp-human-profile', {
+      type: 'string',
+      default: 'chrome',
+      description: 'Human-like SERP query profile: chrome or off',
+    })
     .example('rek spider example.com', 'Basic crawl')
     .example('rek spider example.com -d 3 -l 50', 'Depth 3, max 50 pages')
     .example('rek spider example.com --seo', 'Enable SEO analysis')
@@ -781,27 +1290,43 @@ export function registerSpiderCommand(program: Command) {
     .example('rek spider example.com --seo -o report.json', 'Save SEO report')
     .example('rek spider example.com -E h1 -E h2', 'Extract all h1 and h2 tags')
     .example('rek spider example.com -E "a:href" --json', 'Extract all links as JSON')
-    .example('rek spider example.com --include "^/blog/"', 'Only crawl /blog/ paths')
-    .example('rek spider example.com --exclude "/admin/"', 'Skip /admin/ paths')
-    .example('rek spider example.com --jsonl -o crawl.jsonl', 'Stream to JSONL file')
-    .example('rek spider example.com -L | jq -c', 'Stream and process with jq')
-    .action(async (url: string, args: string[], cmdObj: any) => {
+      .example('rek spider example.com --include "^/blog/"', 'Only crawl /blog/ paths')
+      .example('rek spider example.com --exclude "/admin/"', 'Skip /admin/ paths')
+      .example('rek spider example.com --seo --serp', 'Run SEO + SERP campaign')
+      .example('rek spider example.com --seo --serp --serp-top-keywords 12 --serp-query-limit 10 --serp-results-per-query 10', 'Tuned SERP campaign')
+      .example('rek spider example.com --jsonl -o crawl.jsonl', 'Stream to JSONL file')
+      .example('rek spider example.com -L | jq -c', 'Stream and process with jq')
+      .action(async (url: string, _args: string[], cmdObj: Command) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
+      const optionBag = options as Record<string, unknown>;
       await runSpider({
         url,
-        depth: options.depth,
-        limit: options.limit,
-        concurrency: options.concurrency,
-        output: options.output,
-        focus: options.focus,
-        seo: options.seo,
-        robots: options.robots,
-        json: options.json,
-        jsonl: options.jsonl,
-        extract: options.extract,
-        include: options.include,
-        exclude: options.exclude,
-        noSitemap: options.noSitemap || options['no-sitemap'],
+        depth: toNonNegativeInt(getOptionValue(optionBag, 'depth'), 10),
+        limit: toNonNegativeInt(getOptionValue(optionBag, 'limit'), 1000),
+        concurrency: toNonNegativeInt(getOptionValue(optionBag, 'concurrency'), 5),
+        output: toOptionString(getOptionValue(optionBag, 'output')),
+        focus: normalizeSpiderFocus(getOptionValue(optionBag, 'focus')),
+        seo: toBoolean(getOptionValue(optionBag, 'seo')),
+        robots: toBoolean(getOptionValue(optionBag, 'robots')),
+        json: toBoolean(getOptionValue(optionBag, 'json')),
+        jsonl: toBoolean(getOptionValue(optionBag, 'jsonl')),
+        extract: toStringOrStringArray(getOptionValue(optionBag, 'extract')),
+        include: toStringOrStringArray(getOptionValue(optionBag, 'include')),
+        exclude: toStringOrStringArray(getOptionValue(optionBag, 'exclude')),
+        noSitemap: toBoolean(getOptionValue(optionBag, 'noSitemap'), false) || toBoolean(getOptionValue(optionBag, 'no-sitemap'), false),
+        transport: toSpiderTransport(getOptionValue(optionBag, 'transport')) || 'auto',
+        preferCurlFirst: toBoolean(getOptionValue(optionBag, 'preferCurlFirst', 'prefer-curl-first'), true),
+        timeout: toNonNegativeInt(getOptionValue(optionBag, 'timeout'), 10_000),
+        delay: toNonNegativeInt(getOptionValue(optionBag, 'delay'), 100),
+        maxRetryAttempts: toNonNegativeInt(getOptionValue(optionBag, 'maxRetryAttempts', 'max-retry-attempts'), 3),
+        baseRetryDelayMs: toNonNegativeInt(getOptionValue(optionBag, 'baseRetryDelayMs', 'base-retry-delay-ms'), 1_000),
+        maxRetryDelayMs: toNonNegativeInt(getOptionValue(optionBag, 'maxRetryDelayMs', 'max-retry-delay-ms'), 12_000),
+        retryBackoffMultiplier: toNonNegativeInt(getOptionValue(optionBag, 'retryBackoffMultiplier', 'retry-backoff-multiplier'), 2),
+        retryJitterMs: toNonNegativeInt(getOptionValue(optionBag, 'retryJitterMs', 'retry-jitter-ms'), 250),
+        maxDomainBlockStrikes: toNonNegativeInt(getOptionValue(optionBag, 'maxDomainBlockStrikes', 'max-domain-block-strikes'), 2),
+        rotateUserAgent: toBoolean(getOptionValue(optionBag, 'rotateUserAgent', 'rotate-user-agent'), true),
+        randomizeHeaders: toBoolean(getOptionValue(optionBag, 'randomizeHeaders', 'randomize-headers'), true),
+        serpConfig: parseSpiderSerpConfig(options),
       });
     });
 }

@@ -20,6 +20,7 @@
 
 import { EventEmitter } from 'node:events';
 import { CommandEmitter } from '../events/emitter.js';
+import { AbortError, ValidationError } from '../../core/errors.js';
 
 // =============================================================================
 // Types
@@ -172,7 +173,7 @@ export class ServerRunner extends CommandEmitter {
     try {
       // Check for abort
       if (signal?.aborted) {
-        throw new Error('Aborted');
+        throw new AbortError('Server start aborted');
       }
 
       // Set up abort handler
@@ -236,7 +237,7 @@ export class ServerRunner extends CommandEmitter {
       return result;
 
     } catch (err: any) {
-      if (signal?.aborted || this.aborted || err.message === 'Aborted') {
+      if (signal?.aborted || this.aborted || err instanceof AbortError) {
         this.emitError('Server stopped by user', { code: 'ABORT' });
 
         return {
@@ -475,7 +476,10 @@ export class ServerRunner extends CommandEmitter {
       }
 
       default:
-        throw new Error(`Unknown server type: ${type}`);
+        throw new ValidationError(`Unknown server type: ${type}`, {
+          field: 'serverType',
+          value: type,
+        });
     }
   }
 

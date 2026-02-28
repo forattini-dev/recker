@@ -14,27 +14,8 @@ export interface KeywordCloud {
   topKeywords: KeywordItem[];
 }
 
-// Common stop words to ignore (English and Portuguese)
-const STOP_WORDS = new Set([
-  // English
-  'a', 'an', 'the', 'and', 'or', 'but', 'if', 'because', 'as', 'what',
-  'when', 'where', 'how', 'who', 'which', 'this', 'that', 'these', 'those',
-  'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
-  'do', 'does', 'did', 'at', 'by', 'for', 'from', 'in', 'into', 'of', 'off',
-  'on', 'onto', 'out', 'over', 'to', 'up', 'with', 'about', 'some', 'any',
-  'it', 'its', 'you', 'your', 'we', 'our', 'they', 'their', 'he', 'his',
-  'she', 'her', 'i', 'my', 'me', 'not', 'no', 'can', 'will', 'just',
-  // Portuguese
-  'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas', 'e', 'ou', 'mas', 'se',
-  'porque', 'como', 'quando', 'onde', 'que', 'quem', 'qual', 'este', 'esta',
-  'esse', 'essa', 'aquele', 'aquela', 'isto', 'isso', 'aquilo', 'é', 'são',
-  'foi', 'foram', 'ser', 'sendo', 'ter', 'tem', 'tinha', 'fazer', 'faz', 'fez',
-  'em', 'no', 'na', 'nos', 'nas', 'de', 'do', 'da', 'dos', 'das', 'por',
-  'para', 'com', 'sem', 'sobre', 'sob', 'ante', 'até', 'ao', 'aos',
-  'eu', 'meu', 'minha', 'você', 'seu', 'sua', 'nós', 'nosso', 'nossa',
-  'eles', 'elas', 'dele', 'dela', 'não', 'sim', 'muito', 'muita', 'mais',
-  'pelo', 'pela', 'pelos', 'pelas', 'num', 'numa', 'está', 'estão'
-]);
+const RE_NON_WORD = /[^\w\s\u00C0-\u00FF]/g;
+const RE_WHITESPACE = /\s+/;
 
 /**
  * Clean and tokenize text
@@ -42,10 +23,9 @@ const STOP_WORDS = new Set([
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^\w\s\u00C0-\u00FF]/g, '') // Remove punctuation but keep accented chars
-    .split(/\s+/)
-    .filter(w => w.length > 2) // Ignore very short words
-    .filter(w => !STOP_WORDS.has(w));
+    .replace(RE_NON_WORD, '') // Remove punctuation but keep accented chars
+    .split(RE_WHITESPACE)
+    .filter(w => w.length > 2); // Ignore very short words
 }
 
 /**

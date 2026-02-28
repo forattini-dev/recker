@@ -789,6 +789,214 @@ interface SeoResponseData {
   checks?: SeoCheck[];
   // Legacy format support
   topIssues?: string[];
+
+  serp?: {
+    summary?: {
+      queriesRequested?: number;
+      queriesExecuted?: number;
+      queriesFound?: number;
+      queriesBlocked?: number;
+      queriesCaptcha?: number;
+      avgTopPosition?: number | null;
+      top3Count?: number;
+      top10Count?: number;
+      topOrganicCompetitors?: Array<{
+        domain: string;
+        matchedKeywords: number;
+        totalOutperformedQueries?: number;
+        organicQueries?: number;
+        paidQueries?: number;
+        avgOutperformedGap?: number | null;
+      }>;
+      topPaidCompetitors?: Array<{
+        domain: string;
+        matchedKeywords: number;
+        totalOutperformedQueries?: number;
+        organicQueries?: number;
+        paidQueries?: number;
+        avgOutperformedGap?: number | null;
+      }>;
+      competitorCoverage?: {
+        organicUniqueDomains?: number;
+        paidUniqueDomains?: number;
+      };
+    };
+    campaign?: {
+      active?: boolean;
+      confidence?: 'high' | 'medium' | 'low';
+      evidence?: string[];
+    };
+    results?: Array<{
+      keyword: string;
+      found: boolean;
+      blocked?: boolean;
+      blockReason?: string;
+      position: number | null;
+      targetUrl?: string;
+      searchUrl: string;
+    }>;
+    pageComparison?: Array<{
+      pageUrl: string;
+      tracked: number;
+      found: number;
+      appearanceRate: string;
+      avgPosition: string | number | null;
+      top3: number;
+      top10: number;
+    }>;
+  };
+}
+
+interface SerpRenderPayload {
+  serp?: NonNullable<SeoResponseData['serp']>;
+}
+
+function toPercent(value: number | string | undefined): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.min(100, Math.round(value)));
+  const parsed = typeof value === 'string' ? parseFloat(value) : NaN;
+  if (Number.isFinite(parsed)) return Math.max(0, Math.min(100, Math.round(parsed)));
+  return 0;
+}
+
+function renderSerpSection(payload: SerpRenderPayload, width: number, isSpider = false): VNode[] {
+  const serp = payload.serp;
+  if (!serp) return [];
+
+  const summary = serp.summary || {};
+  const queriesRequested = Math.max(0, summary.queriesRequested || summary.queriesExecuted || 0);
+  const queriesFound = Math.max(0, summary.queriesFound || 0);
+  const queriesBlocked = Math.max(0, summary.queriesBlocked || 0);
+  const queriesCaptcha = Math.max(0, summary.queriesCaptcha || 0);
+  const foundRate = queriesRequested > 0 ? Math.round((queriesFound / queriesRequested) * 100) : 0;
+  const avgTop = summary.avgTopPosition;
+  const top3 = summary.top3Count || 0;
+  const top10 = summary.top10Count || 0;
+
+  const children: VNode[] = [];
+
+  children.push(
+    Box(
+      { marginTop: 1 },
+      Text({ color: themeColor('foreground'), bold: true }, isSpider ? 'SERP on Spider Campaign' : 'SERP Campaign')
+    )
+  );
+
+  children.push(
+    Box(
+      { flexDirection: 'row' },
+      Text({ color: themeColor('success') }, `🔎 Queries: ${queriesFound}/${queriesRequested} `),
+      Text({ color: themeColor('warning') }, `⚠ blocked ${queriesBlocked} `),
+      Text({ color: themeColor('warning') }, `🧩 captcha ${queriesCaptcha} `),
+      Text({ color: themeColor('accent') }, `✅ hitRate ${foundRate}% `),
+      Text({ color: themeColor('mutedForeground') }, `🏆 Top3 ${top3}  `),
+      Text({ color: themeColor('mutedForeground') }, `🏅 Top10 ${top10}  `),
+      avgTop !== null && avgTop !== undefined ? Text({ color: themeColor('foreground') }, `📈 avgPos ${Math.round(avgTop)}`) : null,
+    )
+  );
+
+  if (serp.campaign) {
+    const campaignConfidence = serp.campaign.confidence || 'low';
+    const campaignActive = serp.campaign.active ? 'active' : 'inactive';
+    const color = campaignConfidence === 'high' ? themeColor('success') : campaignConfidence === 'medium' ? themeColor('warning') : themeColor('mutedForeground');
+
+    children.push(
+      Box(
+        { flexDirection: 'row' },
+        Text({ color: campaignActive === 'active' ? themeColor('success') : themeColor('mutedForeground') }, `Campaign ${campaignActive}`),
+        Text({ color }, `  confidence ${campaignConfidence}`),
+      )
+    );
+
+    if ((serp.campaign.evidence || []).length > 0) {
+      const evidence = serp.campaign.evidence!.slice(0, 2);
+      children.push(
+        Box(
+          { marginTop: 1 },
+          Text({ color: themeColor('mutedForeground') }, `Evidence: ${evidence.join(' • ')}`),
+        )
+      );
+    }
+  }
+
+  if ((summary.competitorCoverage?.organicUniqueDomains !== undefined || summary.competitorCoverage?.paidUniqueDomains !== undefined)) {
+    children.push(
+      Text({ color: themeColor('mutedForeground') },
+        `Competition: ${summary.competitorCoverage?.organicUniqueDomains || 0} organic domains, ${summary.competitorCoverage?.paidUniqueDomains || 0} paid domains`
+      )
+    );
+  }
+
+  const organic = (summary.topOrganicCompetitors || []).slice(0, 6);
+  if (organic.length > 0) {
+    const barData = organic.map((item) => ({
+      label: item.domain.replace(/^www\./, '').slice(0, 20),
+      value: Math.max(0, item.matchedKeywords || item.totalOutperformedQueries || 0),
+      color: themeColor('success'),
+    }));
+
+    children.push(
+      Box({ marginTop: 1 }, Text({ color: themeColor('foreground'), bold: true }, 'Main organic competitors'))
+    );
+    children.push(
+      BarChart({
+        data: barData,
+        orientation: 'horizontal',
+        width: Math.min(45, width - 4),
+        showValues: true,
+      })
+    );
+  }
+
+  const resultFoundSeries = (serp.results || []).slice(0, 12).map((item) => (item.found ? 100 : 0));
+  if (resultFoundSeries.length > 1) {
+    children.push(
+      Box({ marginTop: 1 }, Text({ color: themeColor('foreground'), bold: true }, 'SERP hit history'))
+    );
+    children.push(
+      Box(
+        { flexDirection: 'row' },
+        Sparkline({
+          data: resultFoundSeries,
+          width: Math.min(45, width - 4),
+          color: 'green',
+          max: 100,
+          min: 0,
+        }),
+        Box({ marginLeft: 1 }, Text({ color: themeColor('foreground'), dim: true }, `${resultFoundSeries.filter(v => v === 100).length}/${resultFoundSeries.length}`)),
+      )
+    );
+  }
+
+    const pageRates = (serp.pageComparison || [])
+    .map((page) => ({
+      pageUrl: page.pageUrl,
+      rate: toPercent(page.appearanceRate),
+    }))
+    .slice(0, 10);
+  if (pageRates.length > 1) {
+    children.push(
+      Box({ marginTop: 1 }, Text({ color: themeColor('foreground'), bold: true }, 'Top page hit rate'))
+    );
+    children.push(
+      Sparkline({
+        data: pageRates.map((item) => item.rate),
+        width: Math.min(45, width - 4),
+        color: 'blue',
+        max: 100,
+        min: 0,
+      })
+    );
+    children.push(
+      Box(
+        { flexDirection: 'column' },
+        ...pageRates
+          .slice(0, 4)
+          .map((page) => Text({ color: themeColor('mutedForeground') }, ` ${page.pageUrl.slice(0, 38)} (${page.rate}%)`)),
+      )
+    );
+  }
+
+  return children;
 }
 
 /**
@@ -1236,6 +1444,10 @@ function renderSeoResponse(data: SeoResponseData, width: number): VNode {
       children.push(renderBar('Links', comp.links || 0));
     }
 
+    if (data.serp) {
+      children.push(...renderSerpSection(data, contentWidth, false));
+    }
+
     return Box({ flexDirection: 'column', width }, ...children);
   } catch (err: any) {
     // If rendering fails, show error with raw data as JSON fallback
@@ -1299,11 +1511,29 @@ interface SpiderResponseData {
       manifest?: { found: boolean; url: string; valid?: boolean };
     };
   };
+  serp?: NonNullable<SeoResponseData['serp']>;
+  security?: {
+    pages?: number;
+    blockedPages?: number;
+    captchaPages?: number;
+    captchaProviders?: Record<string, number>;
+    attempts?: number;
+    retries?: number;
+    transportUsage?: {
+      undici?: number;
+      curl?: number;
+    };
+    avgAttempts?: number;
+    avgTtfbMs?: number;
+    avgTotalMs?: number;
+    avgDownloadMs?: number;
+  };
 }
 
 function renderSpiderResponse(data: SpiderResponseData, width: number): VNode {
   const children: VNode[] = [];
   const hasSeo = !!data.seo;
+  const contentWidth = Math.max(40, width - 4);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Header
@@ -1361,6 +1591,68 @@ function renderSpiderResponse(data: SpiderResponseData, width: number): VNode {
         Text({ color: themeColor('mutedForeground') }, `🎨 Stylesheets: ${data.assets.stylesheets || 0}`),
       )
     );
+  }
+
+  // Anti-bot signals
+  if (data.security) {
+    const security = data.security;
+    const totalPages = security.pages || (data.pages || 0);
+    const blockedPages = security.blockedPages || 0;
+    const captchaPages = security.captchaPages || 0;
+    const captchaProviders = security.captchaProviders || {};
+    const transportUsage = security.transportUsage || {};
+    const undiciRequests = transportUsage.undici || 0;
+    const curlRequests = transportUsage.curl || 0;
+    const transportTotal = undiciRequests + curlRequests;
+    const blockedRate = totalPages > 0 ? Math.round((blockedPages / totalPages) * 100) : 0;
+    const blockedColor = blockedRate === 0 ? themeColor('success') : blockedRate <= 15 ? themeColor('warning') : themeColor('error');
+    const providerSummary = Object.entries(captchaProviders)
+      .map(([provider, count]) => `${provider}: ${count}`)
+      .join(', ');
+
+    children.push(
+      Box(
+        { marginTop: 1 },
+        Text({ color: themeColor('foreground'), bold: true }, 'Anti-Bot Signals'),
+      )
+    );
+
+    children.push(
+      Box(
+        { flexDirection: 'row' },
+        Text({ color: blockedColor }, `🚫 blocked ${blockedPages}/${totalPages} (${blockedRate}%)   `),
+        Text({ color: themeColor('warning') }, `🤖 captcha ${captchaPages}`),
+        Text({ color: themeColor('mutedForeground') }, `   🔁 attempts ${security.attempts || 0} │ retries ${security.retries || 0}`),
+      )
+    );
+
+    children.push(
+      Box(
+        { flexDirection: 'row' },
+        Text({ color: themeColor('success') }, `Avg attempts: ${security.avgAttempts !== undefined ? security.avgAttempts.toFixed(2) : 'n/a'}`),
+        Text({ color: themeColor('mutedForeground') }, `   Avg TTFB: ${security.avgTtfbMs ?? 'n/a'}ms`),
+        Text({ color: themeColor('mutedForeground') }, `   Avg total: ${security.avgTotalMs ?? 'n/a'}ms`),
+        Text({ color: themeColor('mutedForeground') }, `   Avg download: ${security.avgDownloadMs ?? 'n/a'}ms`),
+      )
+    );
+
+    children.push(
+      Text(
+        { color: themeColor('mutedForeground') },
+        `Captcha providers: ${providerSummary || 'n/a'}`
+      )
+    );
+
+    if (transportTotal > 0) {
+      children.push(
+        Text(
+          { color: themeColor('mutedForeground') },
+          `Transport split: curl ${curlRequests} (${Math.round((curlRequests / transportTotal) * 100)}%) / undici ${undiciRequests} (${Math.round((undiciRequests / transportTotal) * 100)}%)`
+        )
+      );
+    } else {
+      children.push(Text({ color: themeColor('mutedForeground') }, `Transport split: not enough data`));
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1487,6 +1779,10 @@ function renderSpiderResponse(data: SpiderResponseData, width: number): VNode {
   // ─────────────────────────────────────────────────────────────────────────
   // Top Pages
   // ─────────────────────────────────────────────────────────────────────────
+  if (data.serp) {
+    children.push(...renderSerpSection(data, contentWidth, true));
+  }
+
   if (data.topPages && data.topPages.length > 0) {
     children.push(
       Box(

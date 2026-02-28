@@ -23,6 +23,7 @@
  */
 
 import { EventEmitter } from 'node:events';
+import { StateError } from '../../core/errors.js';
 
 // ============================================
 // Types
@@ -56,7 +57,7 @@ export interface JobLogEntry {
   timestamp: number;
   level: 'info' | 'warn' | 'error' | 'debug';
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 export interface JobProgress {
@@ -107,7 +108,7 @@ export interface Job {
   command?: string;           // Original command that spawned this job
   logs: JobLogEntry[];        // Log buffer (max 1000 entries)
   port?: number;              // For server jobs
-  metadata?: Record<string, any>; // Type-specific metadata
+  metadata?: Record<string, unknown>; // Type-specific metadata
 }
 
 // ============================================
@@ -144,7 +145,7 @@ export interface ServerJobOptions {
   type: 'http' | 'ws' | 'dns' | 'hls' | 'sse' | 'ftp' | 'telnet' | 'whois' | 'udp';
   port: number;
   host?: string;
-  options?: Record<string, any>;
+  options?: Record<string, unknown>;
 }
 
 export interface LoadTestJobOptions {
@@ -266,7 +267,10 @@ export class JobManager extends EventEmitter {
   private createJob(type: JobType, url: string, abortFn: () => void): Job {
     const activeCount = this.getActiveJobCount();
     if (activeCount >= this.maxJobs) {
-      throw new Error(`Maximum concurrent active jobs (${this.maxJobs}) reached`);
+      throw new StateError(`Maximum concurrent active jobs (${this.maxJobs}) reached`, {
+        expectedState: `active jobs < ${this.maxJobs}`,
+        actualState: `active jobs = ${activeCount}`,
+      });
     }
 
     const job: Job = {
@@ -492,7 +496,7 @@ export class JobManager extends EventEmitter {
   /**
    * Set job metadata
    */
-  setMetadata(id: number, metadata: Record<string, any>): void {
+  setMetadata(id: number, metadata: Record<string, unknown>): void {
     const job = this.jobs.get(id);
     if (job) {
       job.metadata = { ...job.metadata, ...metadata };

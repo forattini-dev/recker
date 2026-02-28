@@ -1,13 +1,12 @@
 import { EventEmitter } from 'events';
 import { createClient, Client } from '../core/client.js';
 import { StateError, ProtocolError } from '../core/errors.js';
-import { Logger, consoleLogger } from '../types/logger.js';
+import { consoleLogger } from '../types/logger.js';
 import type {
   JsonRpcRequest,
   JsonRpcResponse,
   MCPServerInfo,
   MCPTool,
-  MCPToolCall,
   MCPToolResult,
   MCPResource,
   MCPResourceContent,
@@ -26,6 +25,16 @@ import type {
   MCPTransportOptions,
 } from './types.js';
 
+function normalizeJsonRpcParams(params: unknown): Record<string, unknown> | unknown[] | undefined {
+  if (params === undefined) return undefined;
+  if (params === null) return { value: null };
+  if (Array.isArray(params)) return params;
+  if (typeof params === 'object') {
+    return params as Record<string, unknown>;
+  }
+  return { value: params };
+}
+
 export interface MCPClientOptions {
   endpoint: string;
   clientName?: string;
@@ -35,7 +44,7 @@ export interface MCPClientOptions {
   timeout?: number;
   retries?: number;
   debug?: boolean;
-  transport?: any;
+  transport?: MCPTransportOptions['transport'];
 }
 
 interface ResolvedMCPClientOptions {
@@ -236,7 +245,7 @@ export class MCPClient extends EventEmitter {
       jsonrpc: '2.0',
       id: ++this.requestId,
       method,
-      params: params as Record<string, unknown>,
+      params: normalizeJsonRpcParams(params),
     };
 
     this.emit('request', request);
@@ -256,12 +265,16 @@ export class MCPClient extends EventEmitter {
           retriable: false,
         }
       );
-      (error as any).code = response.error.code;
-      (error as any).data = response.error.data;
+      (error as Error & { code?: number; data?: unknown }).code = response.error.code;
+      (error as Error & { data?: unknown }).data = response.error.data;
       throw error;
     }
 
-    return response.result as T;
+    if (response.result === undefined) {
+      return {} as T;
+    }
+
+    return response.result;
   }
 
   private async connectSSE(): Promise<void> {
@@ -282,9 +295,12 @@ export class MCPClient extends EventEmitter {
     }
   }
 
-  private handleSSEEvent(event: any): void {
+  private handleSSEEvent(event: { data?: string } | string): void {
+    const payload = typeof event === 'string' ? event : event.data;
+    if (!payload) return;
+
     try {
-      const data = JSON.parse(event.data);
+      const data = JSON.parse(payload);
 
       switch (data.method) {
         case 'notifications/progress':

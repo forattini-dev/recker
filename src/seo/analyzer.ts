@@ -20,6 +20,8 @@ import type {
   SeoAnalyzerOptions,
   SeoStatus,
   SeoInfoType,
+  HeadingNode,
+  SeoContentSectionSignal,
 } from './types.js';
 import {
   extractMeta,
@@ -105,7 +107,7 @@ export class SeoAnalyzer {
     const socialDomains = ['facebook.com', 'twitter.com', 'x.com', 'instagram.com', 'linkedin.com', 'youtube.com', 'pinterest.com', 'tiktok.com', 'github.com', 'reddit.com', 'snapchat.com', 'whatsapp.com', 'telegram.org', 'discord.com', 'threads.net'];
     const socialLinksFound = links
         .map(l => l.href)
-        .filter(href => socialDomains.some(d => href.toLowerCase().includes(d)));
+      .filter(href => socialDomains.some(d => href.toLowerCase().includes(d)));
 
     // Enhanced social link analysis
     const socialLinkDetails = this.analyzeSocialLinks(links, socialDomains);
@@ -113,6 +115,7 @@ export class SeoAnalyzer {
     // Analyze structured data
     const headings = this.analyzeHeadings();
     const content = this.analyzeContent(headings);
+    const contentSections = this.extractContentSectionSignals(headings);
     const linkAnalysis = this.buildLinkAnalysis(links);
     const imageAnalysis = this.buildImageAnalysis(images);
     const social = this.buildSocialAnalysis(og, twitter);
@@ -128,6 +131,17 @@ export class SeoAnalyzer {
     // Conversion elements (CTAs, forms, contact)
     const conversion = this.analyzeConversionElements(links, visibleText);
     const pageType = this.detectPageType(jsonLd);
+    const linkAnchorTexts = links
+      .map((link) => link.text?.trim())
+      .filter((text): text is string => Boolean(text))
+      .filter((text) => text.length <= 140)
+      .filter((text) => !text.match(/^\s*$/))
+      .slice(0, 80);
+
+    const linkUrlSamples = links
+      .map((link) => extractReadablePathFromUrl(link.href))
+      .filter((sample): sample is string => sample.length > 0)
+      .slice(0, 80);
 
     // Build rule context from all extracted data
     const context = this.buildRuleContext({
@@ -217,12 +231,15 @@ export class SeoAnalyzer {
         items: jsonLd,
       },
       headings: headings,
+      contentSections,
       content,
       keywords,
       links: linkAnalysis,
       images: imageAnalysis,
       social,
       technical,
+      linkAnchorTexts,
+      linkUrlSamples,
     };
   }
 
@@ -297,6 +314,113 @@ export class SeoAnalyzer {
     } catch {
       return 'other';
     }
+  }
+
+  private extractContentSectionSignals(
+    headings: HeadingAnalysis
+  ): SeoContentSectionSignal[] {
+    const body = this.getMainBody();
+    if (!body) return [];
+
+    const candidateTags = 'h1,h2,h3,h4,h5,h6,p,li,ol,ul,article,section,main,figure,figcaption,blockquote,table,th,td';
+    const nodes = body.querySelectorAll(candidateTags);
+
+    const normalizeSignalText = (value: string): string =>
+      value
+        .replace(/\s+/g, ' ')
+        .replace(/[,\.;:!?()[\]{}"“”']/g, '')
+        .trim()
+        .toLowerCase();
+
+    const headingStack: Array<{ level: number; text: string }> = [];
+    const seen = new Set<string>();
+    const results: SeoContentSectionSignal[] = [];
+
+    const pushSectionSignal = (entry: SeoContentSectionSignal) => {
+      const fingerprint = `${entry.tagName}|${entry.headingPath.join(' > ')}|${entry.text.slice(0, 120)}`;
+      if (seen.has(fingerprint)) return;
+      seen.add(fingerprint);
+      results.push(entry);
+    };
+
+    for (const node of nodes) {
+      const tagName = node.tagName.toLowerCase();
+
+      if (/^h[1-6]$/.test(tagName)) {
+        const level = Number.parseInt(tagName.slice(1), 10);
+        const text = normalizeSignalText(node.text);
+        if (!text || text.length < 4) {
+          continue;
+        }
+
+        while (headingStack.length > 0 && headingStack[headingStack.length - 1].level >= level) {
+          headingStack.pop();
+        }
+        headingStack.push({ level, text });
+
+        const headingPath = headingStack.map((entry) => entry.text);
+        const source: SeoContentSectionSignal = {
+          headingPath,
+          source: 'heading',
+          tagName,
+          headingLevel: level,
+          text,
+          wordCount: text.split(/\s+/).length,
+          linkDensity: 0,
+          weight: 1.45,
+        };
+        pushSectionSignal(source);
+        continue;
+      }
+
+      if (tagName === 'ul' || tagName === 'ol') {
+        // Containers, keep only list items themselves.
+        continue;
+      }
+
+      const text = normalizeSignalText(node.text);
+      if (!text || text.split(/\s+/).length < 4) {
+        continue;
+      }
+
+      const words = text.split(/\s+/);
+      const wordCount = words.length;
+      if (wordCount < 4) continue;
+
+      const anchorCount = node.querySelectorAll('a').length;
+      const linkDensity = wordCount > 0
+        ? Math.min(1, anchorCount / Math.max(1, wordCount))
+        : 0;
+      if (linkDensity > 0.85) continue;
+
+      const headingPath = headingStack.length > 0
+        ? headingStack.map((entry) => entry.text)
+        : headings.h1Count > 0
+          ? ['conteúdo']
+          : ['home'];
+      const sourceLabel = tagName === 'li' ? 'list-item'
+        : tagName === 'figure' || tagName === 'figcaption' ? 'figure'
+          : (tagName === 'table' || tagName === 'th' || tagName === 'td') ? 'table'
+            : 'paragraph';
+      const headingLevel = headingStack.length > 0 ? headingStack[headingStack.length - 1].level : 1;
+      const baseWeight = sourceLabel === 'paragraph' ? 1.25 : 1.05;
+      const adjustedWeight = baseWeight * (1 - (linkDensity * 0.4));
+
+      pushSectionSignal({
+        headingPath,
+        source: sourceLabel,
+        tagName,
+        headingLevel,
+        text,
+        wordCount,
+        linkDensity,
+        weight: Math.max(0.5, adjustedWeight),
+      });
+    }
+
+    return results
+      .filter((entry) => entry.text.length >= 20)
+      .slice(0, 160);
   }
 
   /**
@@ -2016,7 +2140,7 @@ export class SeoAnalyzer {
         const text = el.text.trim();
 
         counts[level] = (counts[level] || 0) + 1;
-        structure.push({ level, text: text.slice(0, 80), count: 1 });
+        structure.push({ level, text: text.slice(0, 120), count: 1 });
 
         // Section word count logic (for H2s)
         if (level === 2) {
@@ -2072,8 +2196,29 @@ export class SeoAnalyzer {
       issues.push('Multiple H1 tags');
     }
 
+    // Build heading tree using a stack
+    const tree: HeadingNode[] = [];
+    const stack: Array<{ node: HeadingNode; level: number }> = [];
+
+    for (const heading of structure) {
+      const node: HeadingNode = { level: heading.level, text: heading.text, children: [] };
+
+      while (stack.length > 0 && stack[stack.length - 1].level >= heading.level) {
+        stack.pop();
+      }
+
+      if (stack.length === 0) {
+        tree.push(node);
+      } else {
+        stack[stack.length - 1].node.children.push(node);
+      }
+
+      stack.push({ node, level: heading.level });
+    }
+
     return {
       structure,
+      tree,
       h1Count: counts[1],
       hasProperHierarchy,
       issues,
@@ -2388,6 +2533,31 @@ export class SeoAnalyzer {
    */
   getCategories() {
     return this.rulesEngine.getCategories();
+  }
+}
+
+function extractReadablePathFromUrl(value: string): string {
+  try {
+    const parsed = new URL(value);
+    const fragments = parsed.pathname
+      .split('/')
+      .filter((segment) => segment.length > 0)
+      .slice(0, 3)
+      .map((segment) => segment.replace(/[-_]/g, ' '))
+      .join(' ')
+      .replace(/\d+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const host = parsed.hostname.replace(/^www\./, '').replace(/\./g, ' ');
+
+    if (fragments.length > 0) {
+      return `${host} ${fragments}`.trim();
+    }
+
+    return host;
+  } catch {
+    return '';
   }
 }
 

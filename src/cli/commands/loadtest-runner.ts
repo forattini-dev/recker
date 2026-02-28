@@ -21,6 +21,7 @@
 import { CommandEmitter } from '../events/emitter.js';
 import { LoadGenerator, LoadConfig, LoadMode } from '../../bench/generator.js';
 import { LoadStats, ErrorEntry } from '../../bench/stats.js';
+import { AbortError } from '../../core/errors.js';
 
 // =============================================================================
 // Types
@@ -140,7 +141,7 @@ export class LoadTestRunner extends CommandEmitter {
     try {
       // Check for abort
       if (signal?.aborted) {
-        throw new Error('Aborted');
+        throw new AbortError('Load test aborted');
       }
 
       // Set up abort handler
@@ -215,7 +216,7 @@ export class LoadTestRunner extends CommandEmitter {
     } catch (err: any) {
       this.stopStatsPolling();
 
-      if (signal?.aborted || this.aborted || err.message === 'Aborted') {
+      if (signal?.aborted || this.aborted || err instanceof AbortError) {
         this.emitError('Load test stopped by user', { code: 'ABORT' });
 
         // Return partial result on abort

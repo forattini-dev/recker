@@ -14,9 +14,16 @@ import { createHash } from 'node:crypto';
 import { createClient } from '../../core/client.js';
 import { analyzeSeo } from '../../seo/analyzer.js';
 import { seoSpider } from '../../seo/seo-spider.js';
+import { analyzeKeywordCampaign, extractKeywordCampaignSeedsFromReport } from '../../seo/index.js';
 import type { SeoReport, SeoCheckResult } from '../../seo/types.js';
-import type { SeoSpiderResult, SiteWideIssue } from '../../seo/seo-spider.js';
+import type { SeoSpiderResult, SiteWideIssue, SeoPageResult } from '../../seo/seo-spider.js';
 import type { MCPTool, MCPToolResult } from '../types.js';
+import {
+  parseSpiderSerpConfig,
+  type SpiderSerpOptionConfig,
+  DEFAULT_SERP_KEYWORD_LIMIT,
+  DEFAULT_SERP_MAX_RESULTS,
+} from '../../cli/utils/serp-config.js';
 
 // ============================================================================
 // Helper Functions
@@ -41,6 +48,35 @@ type ReportPersistence = {
   cacheTtlSec: number;
   forceRefresh: boolean;
 };
+
+type McpSerpSeedPage = {
+  url: string
+  seoReport?: SeoReport
+}
+
+type McpSpiderSecuritySummary = {
+  pages: number;
+  blockedPages: number;
+  captchaPages: number;
+  attempts: number;
+  retries: number;
+  transportUsage: {
+    undici: number;
+    curl: number;
+  };
+  avgAttempts: number;
+  avgTtfbMs?: number;
+  avgTotalMs?: number;
+  avgDownloadMs?: number;
+};
+
+type McpSpiderResources = {
+  images: number;
+  scripts: number;
+  stylesheets: number;
+};
+
+type McpSeoCrawlerSerpConfig = SpiderSerpOptionConfig;
 
 function normalizeStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
@@ -110,6 +146,229 @@ function resolveReportPersistence(args: Record<string, unknown>, options: {
     cacheTtlSec,
     forceRefresh,
   };
+}
+
+function toSpiderTransport(value: unknown): 'auto' | 'undici' | 'curl' {
+  const raw = typeof value === 'string' ? value.toLowerCase().trim() : ''
+  if (raw === 'auto' || raw === 'undici' || raw === 'curl') {
+    return raw
+  }
+
+  return 'auto'
+}
+
+function toNonNegativeInt(value: unknown, fallback = 0): number {
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string'
+      ? Number(value.trim())
+      : fallback
+
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback
+}
+
+function summarizeCrawlerSecurity(pages: SeoPageResult[]): McpSpiderSecuritySummary {
+  let blockedPages = 0;
+  let captchaPages = 0;
+  let attempts = 0;
+  let attemptsSamples = 0;
+  let retries = 0;
+  let ttfbSum = 0;
+  let ttfbSamples = 0;
+  let totalSum = 0;
+  let totalSamples = 0;
+  let downloadSum = 0;
+  let downloadSamples = 0;
+  const transportUsage = {
+    undici: 0,
+    curl: 0,
+  };
+
+  for (const page of pages) {
+    const security = page.security;
+    if (!security) {
+      continue;
+    }
+
+    const pageAttempts = typeof security.attempts === 'number' && security.attempts >= 1
+      ? security.attempts
+      : 1;
+    attempts += pageAttempts;
+    attemptsSamples += 1;
+    retries += Math.max(0, pageAttempts - 1);
+
+    if (security.blocked) {
+      blockedPages += 1;
+    }
+
+    if (security.captchaDetected) {
+      captchaPages += 1;
+    }
+
+    if (security.transport === 'undici' || security.transport === 'curl') {
+      transportUsage[security.transport] += 1;
+    }
+
+    const ttfb = page.timings?.ttfb;
+    if (typeof ttfb === 'number' && Number.isFinite(ttfb)) {
+      ttfbSum += ttfb;
+      ttfbSamples += 1;
+    }
+
+    const total = page.timings?.total;
+    if (typeof total === 'number' && Number.isFinite(total)) {
+      totalSum += total;
+      totalSamples += 1;
+    }
+
+    const download = page.timings?.download;
+    if (typeof download === 'number' && Number.isFinite(download)) {
+      downloadSum += download;
+      downloadSamples += 1;
+    }
+  }
+
+  return {
+    pages: pages.length,
+    blockedPages,
+    captchaPages,
+    attempts,
+    retries,
+    transportUsage,
+    avgAttempts: attemptsSamples > 0 ? Number((attempts / attemptsSamples).toFixed(2)) : 0,
+    avgTtfbMs: ttfbSamples > 0 ? Math.round(ttfbSum / ttfbSamples) : undefined,
+    avgTotalMs: totalSamples > 0 ? Math.round(totalSum / totalSamples) : undefined,
+    avgDownloadMs: downloadSamples > 0 ? Math.round(downloadSum / downloadSamples) : undefined,
+  };
+}
+
+function summarizeCrawlerResources(pages: SeoPageResult[]): McpSpiderResources {
+  const totals = {
+    images: 0,
+    scripts: 0,
+    stylesheets: 0,
+  };
+
+  for (const page of pages) {
+    if (!page.resources) {
+      continue;
+    }
+
+    totals.images += page.resources.images || 0;
+    totals.scripts += page.resources.scripts || 0;
+    totals.stylesheets += page.resources.stylesheets || 0;
+  }
+
+  return totals;
+}
+
+function buildSerpCampaignSeeds(
+  pages: McpSerpSeedPage[],
+  topKeywordsPerPage: number,
+  maxSeeds: number,
+): Array<{ keyword: string; sourcePage?: string; sourceWeight: number }> {
+  const aggregate = new Map<string, { keyword: string; sourcePage?: string; sourceWeight: number; count: number }>()
+
+  for (const page of pages) {
+    if (!page.seoReport) continue
+
+    const seeds = extractKeywordCampaignSeedsFromReport(page.seoReport, {
+      maxKeywords: topKeywordsPerPage,
+      minKeywordLength: 5,
+      includeLongTail: false,
+      sourcePage: page.url,
+    })
+
+    for (const seed of seeds) {
+      const current = aggregate.get(seed.normalizedKeyword)
+      if (current) {
+        current.count += seed.weight
+        if (!current.sourcePage) current.sourcePage = seed.sourcePage
+        if (seed.weight > current.sourceWeight) {
+          current.sourceWeight = Math.max(1, Math.round(seed.weight))
+        }
+        continue
+      }
+
+      aggregate.set(seed.normalizedKeyword, {
+        keyword: seed.keyword,
+        sourcePage: seed.sourcePage,
+        sourceWeight: Math.max(1, Math.round(seed.weight)),
+        count: seed.weight,
+      })
+    }
+  }
+
+  return [...aggregate.values()]
+    .sort((a, b) => b.count - a.count || a.keyword.localeCompare(b.keyword))
+    .slice(0, maxSeeds)
+    .map(({ keyword, sourcePage, sourceWeight }) => ({
+      keyword,
+      sourcePage,
+      sourceWeight,
+    }))
+}
+
+async function runCrawlerSerpCampaign(
+  targetUrl: string,
+  pages: McpSerpSeedPage[],
+  config: McpSeoCrawlerSerpConfig
+): Promise<Awaited<ReturnType<typeof analyzeKeywordCampaign>> | undefined> {
+  const seeds = buildSerpCampaignSeeds(pages, config.topKeywordsLimit, config.queriesLimit)
+
+  if (seeds.length === 0) return undefined
+
+  const discoveredKeywords = seeds.map(seed => ({
+    keyword: seed.keyword,
+    source: 'discovered' as const,
+    sourcePage: seed.sourcePage,
+    weight: seed.sourceWeight,
+  }))
+
+  return analyzeKeywordCampaign({
+    targetUrl,
+    discoveredKeywords,
+    maxQueries: config.queriesLimit,
+    maxResultsPerQuery: config.resultsPerQuery,
+    minKeywordLength: 2,
+    searchParams: config.searchOptions,
+  })
+}
+
+function formatSerpSummaryRows(campaign: Awaited<ReturnType<typeof analyzeKeywordCampaign>>): Array<{
+  keyword: string
+  found: boolean
+  position: number | null
+  targetUrl?: string
+  searchUrl: string
+}> {
+  return campaign.results.slice(0, 12).map((item) => ({
+    keyword: item.keyword,
+    found: item.found,
+    position: item.bestPosition,
+    targetUrl: item.matchedUrl,
+    searchUrl: item.searchUrl,
+  }))
+}
+
+function getSerpComparisonRows(campaign: Awaited<ReturnType<typeof analyzeKeywordCampaign>>): Array<{
+  pageUrl: string
+  tracked: number
+  found: number
+  appearanceRate: string
+  avgPosition: string
+  top3: number
+  top10: number
+}> {
+  return campaign.pageComparison.map((item) => ({
+    pageUrl: item.pageUrl,
+    tracked: item.tracked,
+    found: item.found,
+    appearanceRate: `${item.appearanceRate.toFixed(1)}%`,
+    avgPosition: item.avgPosition === null ? 'n/a' : String(item.avgPosition),
+    top3: item.top3,
+    top10: item.top10,
+  }))
 }
 
 async function readCachedReport(path: string, ttlSec: number): Promise<{
@@ -469,7 +728,19 @@ async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolRes
   const maxPages = Number(args.maxPages) || 100;
   const maxDepth = Number(args.maxDepth) || 5;
   const concurrency = Number(args.concurrency) || 3;
-  const transport = (args.transport as 'auto' | 'undici' | 'curl') || 'auto';
+  const transport = toSpiderTransport(args.transport);
+  const preferCurlFirst = args.preferCurlFirst !== false;
+  const timeout = toNonNegativeInt(args.timeout, 30000);
+  const delay = toNonNegativeInt(args.delay, 200);
+  const maxRetryAttempts = toNonNegativeInt(args.maxRetryAttempts, 3);
+  const baseRetryDelayMs = toNonNegativeInt(args.baseRetryDelayMs, 1000);
+  const maxRetryDelayMs = toNonNegativeInt(args.maxRetryDelayMs, 12000);
+  const retryBackoffMultiplier = toNonNegativeInt(args.retryBackoffMultiplier, 2);
+  const retryJitterMs = toNonNegativeInt(args.retryJitterMs, 250);
+  const maxDomainBlockStrikes = toNonNegativeInt(args.maxDomainBlockStrikes, 2);
+  const rotateUserAgent = args.rotateUserAgent !== false;
+  const randomizeHeaders = args.randomizeHeaders !== false;
+  const serpConfig = parseSpiderSerpConfig(args);
 
   if (!url) {
     return {
@@ -488,6 +759,42 @@ async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolRes
         maxDepth,
         concurrency,
         transport,
+        preferCurlFirst,
+        timeout,
+        delay,
+        maxRetryAttempts,
+        baseRetryDelayMs,
+        maxRetryDelayMs,
+        retryBackoffMultiplier,
+        retryJitterMs,
+        maxDomainBlockStrikes,
+        rotateUserAgent,
+        randomizeHeaders,
+        serp: serpConfig.enabled,
+        serpTopKeywords: serpConfig.topKeywordsLimit,
+        serpQueryLimit: serpConfig.queriesLimit,
+        serpResultsPerQuery: serpConfig.resultsPerQuery,
+        serpTransport: serpConfig.searchOptions.transport,
+        serpTimeout: serpConfig.searchOptions.timeout,
+        serpCountry: serpConfig.searchOptions.country,
+        serpRegion: serpConfig.searchOptions.country,
+        serpGl: serpConfig.searchOptions.gl,
+        serpHl: serpConfig.searchOptions.hl,
+        serpSafe: serpConfig.searchOptions.safe,
+        serpLr: serpConfig.searchOptions.lr,
+        serpCr: serpConfig.searchOptions.cr,
+        serpTbs: serpConfig.searchOptions.tbs,
+        serpTbm: serpConfig.searchOptions.tbm,
+        serpAsQ: serpConfig.searchOptions.as_q,
+        serpAsEpq: serpConfig.searchOptions.as_epq,
+        serpAsOq: serpConfig.searchOptions.as_oq,
+        serpAsEq: serpConfig.searchOptions.as_eq,
+        serpAsSitesearch: serpConfig.searchOptions.as_sitesearch,
+        serpAsFiletype: serpConfig.searchOptions.as_filetype,
+        serpAsRights: serpConfig.searchOptions.as_rights,
+        serpAsNlo: serpConfig.searchOptions.as_nlo,
+        serpAsNhi: serpConfig.searchOptions.as_nhi,
+        serpExtra: serpConfig.searchOptions.extraParams,
       },
     });
 
@@ -521,15 +828,42 @@ async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolRes
       maxPages,
       maxDepth,
       concurrency,
-      delay: 200, // Be respectful to servers
+      delay,
       transport,
+      preferCurlFirst,
+      timeout,
+      maxRetryAttempts,
+      baseRetryDelayMs,
+      maxRetryDelayMs,
+      retryBackoffMultiplier,
+      retryJitterMs,
+      maxDomainBlockStrikes,
+      rotateUserAgent,
+      randomizeHeaders,
     });
+
+    let serpCampaign: Awaited<ReturnType<typeof analyzeKeywordCampaign>> | undefined;
+    if (serpConfig.enabled) {
+      const pagesForCampaign: McpSerpSeedPage[] = result.pages
+        .filter((p) => Boolean(p.seoReport))
+        .map((p) => ({
+          url: p.url,
+          seoReport: p.seoReport,
+        }));
+
+      serpCampaign = await runCrawlerSerpCampaign(url, pagesForCampaign, serpConfig);
+    }
+
+    const crawlSecuritySummary = summarizeCrawlerSecurity(result.pages);
+    const crawlResources = summarizeCrawlerResources(result.pages);
 
     // Build output
     const output: Record<string, unknown> = {
       url,
       crawlDuration: result.duration,
       summary: result.summary,
+      security: crawlSecuritySummary,
+      resources: crawlResources,
     };
 
     // Site-wide issues (duplicates, orphans)
@@ -591,6 +925,18 @@ async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolRes
       output.recommendations = recommendations;
     }
 
+    let serpWarning: string | undefined;
+    if (serpCampaign) {
+      output.serp = {
+        summary: serpCampaign.summary,
+        campaign: serpCampaign.campaign,
+        results: formatSerpSummaryRows(serpCampaign),
+        pageComparison: getSerpComparisonRows(serpCampaign),
+      };
+    } else if (serpConfig.enabled) {
+      serpWarning = 'SERP was enabled but no valid keyword seeds were found in crawl pages.';
+    }
+
     const reportPayload = JSON.stringify(output, null, 2);
 
     let reportMeta = buildReportMeta({
@@ -636,6 +982,9 @@ async function seoSpiderCrawl(args: Record<string, unknown>): Promise<MCPToolRes
         savedAt: new Date().toISOString(),
         source: 'fresh',
       });
+    }
+    if (serpWarning) {
+      note = `${note} ${serpWarning}`;
     }
 
     return {
@@ -840,6 +1189,168 @@ Returns per-page scores and prioritized recommendations for improving overall si
           enum: ['auto', 'undici', 'curl'],
           description: 'HTTP transport: auto (try undici, fallback to curl on WAF block), undici (fast), curl (curl-impersonate for protected sites)',
           default: 'auto',
+        },
+        preferCurlFirst: {
+          type: 'boolean',
+          description: 'Prefer curl-impersonate before undici in auto mode',
+          default: true,
+        },
+        timeout: {
+          type: 'number',
+          description: 'Request timeout in ms',
+          default: 30000,
+        },
+        delay: {
+          type: 'number',
+          description: 'Delay between requests in ms',
+          default: 200,
+        },
+        maxRetryAttempts: {
+          type: 'number',
+          description: 'Max retries for failed/blocked requests',
+          default: 3,
+        },
+        baseRetryDelayMs: {
+          type: 'number',
+          description: 'Base retry delay in ms',
+          default: 1000,
+        },
+        maxRetryDelayMs: {
+          type: 'number',
+          description: 'Maximum retry delay in ms',
+          default: 12000,
+        },
+        retryBackoffMultiplier: {
+          type: 'number',
+          description: 'Retry backoff multiplier',
+          default: 2,
+        },
+        retryJitterMs: {
+          type: 'number',
+          description: 'Retry jitter in ms',
+          default: 250,
+        },
+        maxDomainBlockStrikes: {
+          type: 'number',
+          description: 'Number of strikes before forcing curl in auto mode',
+          default: 2,
+        },
+        rotateUserAgent: {
+          type: 'boolean',
+          description: 'Rotate user-agent per request',
+          default: true,
+        },
+        randomizeHeaders: {
+          type: 'boolean',
+          description: 'Randomize request headers per request',
+          default: true,
+        },
+        serp: {
+          type: 'boolean',
+          description: 'Run SERP keyword checks for extracted top keywords',
+          default: false,
+        },
+        serpTopKeywords: {
+          type: 'number',
+          description: 'Max keywords extracted per page to seed SERP',
+          default: DEFAULT_SERP_KEYWORD_LIMIT,
+        },
+        serpQueryLimit: {
+          type: 'number',
+          description: 'Max number of keyword queries to run',
+          default: DEFAULT_SERP_MAX_RESULTS,
+        },
+        serpResultsPerQuery: {
+          type: 'number',
+          description: 'Number of Google results per query',
+          default: DEFAULT_SERP_MAX_RESULTS,
+        },
+        serpTransport: {
+          type: 'string',
+          enum: ['auto', 'undici', 'curl'],
+          description: 'SERP transport: auto | undici | curl',
+          default: 'auto',
+        },
+        serpTimeout: {
+          type: 'number',
+          description: 'SERP request timeout in ms',
+          default: 0,
+        },
+        serpCountry: {
+          type: 'string',
+          description: 'Country code or country name for SERP geolocation',
+        },
+        serpRegion: {
+          type: 'string',
+          description: 'Alias for country to pass into SERP country',
+        },
+        serpGl: {
+          type: 'string',
+          description: 'Google host country code',
+        },
+        serpHl: {
+          type: 'string',
+          description: 'Search language/locale (e.g., pt-BR)',
+        },
+        serpSafe: {
+          type: 'string',
+          description: 'SafeSearch setting',
+        },
+        serpLr: {
+          type: 'string',
+          description: 'Language restrict parameter',
+        },
+        serpCr: {
+          type: 'string',
+          description: 'Country restrict parameter',
+        },
+        serpTbs: {
+          type: 'string',
+          description: 'Time/custom restrictions',
+        },
+        serpTbm: {
+          type: 'string',
+          description: 'Search type filter',
+        },
+        serpAsQ: {
+          type: 'string',
+          description: 'All words query for Google advanced search',
+        },
+        serpAsEpq: {
+          type: 'string',
+          description: 'Exact phrase query',
+        },
+        serpAsOq: {
+          type: 'string',
+          description: 'Any words query',
+        },
+        serpAsEq: {
+          type: 'string',
+          description: 'Excluding words query',
+        },
+        serpAsSitesearch: {
+          type: 'string',
+          description: 'Restrict results to a site/domain',
+        },
+        serpAsFiletype: {
+          type: 'string',
+          description: 'Restrict by file type',
+        },
+        serpAsRights: {
+          type: 'string',
+          description: 'Rights/license filter',
+        },
+        serpAsNlo: {
+          type: 'string',
+          description: 'Numeric lower bound for search results',
+        },
+        serpAsNhi: {
+          type: 'string',
+          description: 'Numeric upper bound for search results',
+        },
+        serpExtra: {
+          type: 'string',
+          description: 'Additional SERP params as comma-separated key=value list',
         },
         output: {
           type: 'string',

@@ -251,6 +251,7 @@ export class TUIHandler {
       case 'complete': {
         const completeEvent = event as CompleteEvent;
         const summary = completeEvent.summary;
+        const securitySummary = summary.security as Record<string, unknown> | undefined;
 
         // Track spider completion as domain intelligence
         if (event.command === 'spider' && summary.url) {
@@ -264,6 +265,31 @@ export class TUIHandler {
               scripts: (summary.scripts as number) || 0,
               stylesheets: (summary.stylesheets as number) || 0,
               errors: (summary.errors as number) || 0,
+                security: securitySummary
+                ? {
+                    pages: Number(securitySummary.pages ?? 0),
+                    blockedPages: Number(securitySummary.blockedPages ?? 0),
+                    captchaPages: Number(securitySummary.captchaPages ?? 0),
+                    captchaProviders: typeof securitySummary.captchaProviders === 'object'
+                      ? securitySummary.captchaProviders as Record<string, number>
+                      : undefined,
+                    attempts: Number(securitySummary.attempts ?? 0),
+                    retries: Number(securitySummary.retries ?? 0),
+                    transportUsage: securitySummary.transportUsage as Record<string, number> | undefined,
+                    avgAttempts: typeof securitySummary.avgAttempts === 'number'
+                      ? securitySummary.avgAttempts
+                      : undefined,
+                    avgTtfbMs: typeof securitySummary.avgTtfbMs === 'number'
+                      ? securitySummary.avgTtfbMs
+                      : undefined,
+                    avgTotalMs: typeof securitySummary.avgTotalMs === 'number'
+                      ? securitySummary.avgTotalMs
+                      : undefined,
+                    avgDownloadMs: typeof securitySummary.avgDownloadMs === 'number'
+                      ? securitySummary.avgDownloadMs
+                      : undefined,
+                  }
+                : undefined,
             });
           }
         }

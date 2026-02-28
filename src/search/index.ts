@@ -11,6 +11,7 @@ export type {
   GoogleSearchResult,
   GoogleSearchResultPlacement,
   GoogleSearchResponse,
+  SerpSearchSource,
   SearchTransportDetails,
 } from './google.js';
 

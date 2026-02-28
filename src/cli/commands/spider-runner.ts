@@ -20,6 +20,10 @@
 
 import { CommandEmitter } from '../events/emitter.js';
 import type { SpiderPageEvent, SpiderQueueEvent } from '../events/types.js';
+import type { SeoReport } from '../../seo/types.js';
+import type { SpiderPageResult, SpiderTransport } from '../../scrape/spider.js';
+import type { SpiderFocusMode } from '../utils/option-helpers.js';
+import { AbortError } from '../../core/errors.js';
 
 // =============================================================================
 // Types
@@ -38,8 +42,32 @@ export interface SpiderRunnerOptions {
   seo?: boolean;
   /** Use sitemap.xml to discover URLs (default: true in SEO mode) */
   useSitemap?: boolean;
+  /** HTTP transport to use */
+  transport?: SpiderTransport;
+  /** Prefer curl-impersonate first when transport is auto */
+  preferCurlFirst?: boolean;
+  /** Request timeout in ms */
+  timeout?: number;
+  /** Delay between requests in ms */
+  delay?: number;
+  /** Max retries for failed/blocked requests */
+  maxRetryAttempts?: number;
+  /** Base delay for retries in ms */
+  baseRetryDelayMs?: number;
+  /** Maximum retry delay in ms */
+  maxRetryDelayMs?: number;
+  /** Exponential backoff multiplier */
+  retryBackoffMultiplier?: number;
+  /** Random jitter (ms) for retries */
+  retryJitterMs?: number;
+  /** Strikes before forcing curl in auto mode */
+  maxDomainBlockStrikes?: number;
+  /** Rotate user-agent each request */
+  rotateUserAgent?: boolean;
+  /** Randomize request headers */
+  randomizeHeaders?: boolean;
   /** Focus mode for SEO analysis */
-  focus?: 'all' | 'links' | 'duplicates' | 'security' | 'ai' | 'resources';
+  focus?: SpiderFocusMode;
   /** Abort signal for cancellation */
   signal?: AbortSignal;
   /** CSS selectors to extract from each page (e.g., ['h1', 'a:href', '.price']) */
@@ -55,6 +83,19 @@ export interface SpiderRunnerResult {
   pagesVisited: number;
   duration: number;
   errors: number;
+  security?: {
+    pages: number;
+    blockedPages: number;
+    captchaPages: number;
+    captchaProviders: Record<string, number>;
+    attempts: number;
+    retries: number;
+    transportUsage: Record<Exclude<SpiderTransport, 'auto'>, number>;
+    avgAttempts: number;
+    avgTtfbMs?: number;
+    avgTotalMs?: number;
+    avgDownloadMs?: number;
+  };
   internalLinks: number;
   externalLinks: number;
   images: number;
@@ -67,6 +108,13 @@ export interface SpiderRunnerResult {
     depth: number;
     links: number;
     duration: number;
+    security?: SpiderPageResult['security'];
+    timings?: SpiderPageResult['timings'];
+    resources?: {
+      images: number;
+      scripts: number;
+      stylesheets: number;
+    };
     /** SEO score for this page (only when seo mode enabled) */
     seoScore?: number;
     /** SEO grade for this page (only when seo mode enabled) */
@@ -75,6 +123,8 @@ export interface SpiderRunnerResult {
     seoErrors?: number;
     /** SEO warnings count (only when seo mode enabled) */
     seoWarnings?: number;
+    /** Full SEO report (only when seo mode enabled) */
+    seoReport?: SeoReport;
     /** Custom extracted data (when --extract is used) */
     extracted?: Record<string, unknown>;
   }>;
@@ -136,6 +186,18 @@ export class SpiderRunner extends CommandEmitter {
       extract,
       include,
       exclude,
+      transport,
+      preferCurlFirst,
+      timeout,
+      delay,
+      maxRetryAttempts,
+      baseRetryDelayMs,
+      maxRetryDelayMs,
+      retryBackoffMultiplier,
+      retryJitterMs,
+      maxDomainBlockStrikes,
+      rotateUserAgent,
+      randomizeHeaders,
     } = options;
 
     // Normalize URL
@@ -155,11 +217,70 @@ export class SpiderRunner extends CommandEmitter {
     let scripts = 0;
     let stylesheets = 0;
     let errorCount = 0;
+    let blockedPages = 0;
+    let captchaPages = 0;
+    let captchaProviders: Record<string, number> = {};
+    let attemptsTotal = 0;
+    let retriesTotal = 0;
+    let transportUsage: Record<Exclude<SpiderTransport, 'auto'>, number> = { undici: 0, curl: 0 };
+    let timingSum: { ttfb: number; total: number; download: number } = { ttfb: 0, total: 0, download: 0 };
+    let timingCount = 0;
+
+    const collectPageMetrics = (page: SpiderPageResult): void => {
+      const resources = page.resources;
+      if (resources) {
+        images += resources.images || 0;
+        scripts += resources.scripts || 0;
+        stylesheets += resources.stylesheets || 0;
+      }
+
+      if (page.security) {
+        if (page.security.blocked) blockedPages += 1;
+        if (page.security.captchaDetected) captchaPages += 1;
+        if (page.security.captchaDetected) {
+          const provider = (page.security.captchaProvider || '').trim().toLowerCase();
+          const key = provider.length > 0 ? provider : 'unknown';
+          captchaProviders[key] = (captchaProviders[key] || 0) + 1;
+        }
+        attemptsTotal += Number(page.security.attempts ?? 1);
+        retriesTotal += Number(page.security.retryCount ?? 0);
+        const transport = page.security.transport;
+        if (transport && transport !== 'auto') {
+          transportUsage[transport] += 1;
+        }
+      } else {
+        attemptsTotal += 1;
+      }
+
+      const ttfb = page.timings?.ttfb;
+      const total = page.timings?.total;
+      const download = page.timings?.download;
+      if (typeof ttfb === 'number' || typeof total === 'number' || typeof download === 'number') {
+        timingSum.ttfb += typeof ttfb === 'number' ? ttfb : 0;
+        timingSum.total += typeof total === 'number' ? total : 0;
+        timingSum.download += typeof download === 'number' ? download : 0;
+        timingCount += 1;
+      }
+    };
+
+    const getSecuritySummary = () => ({
+      pages: pages.length,
+      blockedPages,
+      captchaPages,
+      captchaProviders,
+      attempts: attemptsTotal,
+      retries: retriesTotal,
+      transportUsage,
+      avgAttempts: pages.length > 0 ? Number((attemptsTotal / pages.length).toFixed(2)) : 0,
+      avgTtfbMs: timingCount > 0 ? Math.round(timingSum.ttfb / timingCount) : undefined,
+      avgTotalMs: timingCount > 0 ? Math.round(timingSum.total / timingCount) : undefined,
+      avgDownloadMs: timingCount > 0 ? Math.round(timingSum.download / timingCount) : undefined,
+    });
 
     try {
       // Choose spider implementation
       if (seo) {
-        return await this.runSeoSpider(startUrl, options, pages);
+        return await this.runSeoSpider(startUrl, options, pages, collectPageMetrics, getSecuritySummary);
       }
 
       // Regular spider
@@ -173,10 +294,24 @@ export class SpiderRunner extends CommandEmitter {
         maxPages: limit,
         concurrency,
         respectRobotsTxt: robots,
+        transport,
+        preferCurlFirst,
+        timeout,
+        delay,
+        maxRetryAttempts,
+        baseRetryDelayMs,
+        maxRetryDelayMs,
+        retryBackoffMultiplier,
+        retryJitterMs,
+        maxDomainBlockStrikes,
+        rotateUserAgent,
+        randomizeHeaders,
         extract,
         include: include?.map(p => new RegExp(p)),
         exclude: exclude?.map(p => new RegExp(p)),
         onPage: (page) => {
+          collectPageMetrics(page);
+
           // Track page with extraction data
           pages.push({
             url: page.url,
@@ -185,6 +320,9 @@ export class SpiderRunner extends CommandEmitter {
             depth: page.depth,
             links: page.links?.length || 0,
             duration: page.duration,
+            security: page.security,
+            timings: page.timings,
+            resources: page.resources,
             extracted: page.extracted,
           });
 
@@ -220,11 +358,14 @@ export class SpiderRunner extends CommandEmitter {
             title: page.title,
             links: page.links?.length || 0,
             duration: page.duration,
+            security: page.security,
+            timings: page.timings,
+            resources: page.resources,
           });
 
           // Check for abort
           if (signal?.aborted) {
-            throw new Error('Aborted');
+            throw new AbortError('Spider crawl aborted');
           }
         },
         onProgress: (progress) => {
@@ -284,6 +425,7 @@ export class SpiderRunner extends CommandEmitter {
         images,
         scripts,
         stylesheets,
+        security: getSecuritySummary(),
         pages,
         extraction,
       };
@@ -298,16 +440,17 @@ export class SpiderRunner extends CommandEmitter {
         images,
         scripts,
         stylesheets,
+        security: getSecuritySummary(),
       });
 
       return summary;
 
-    } catch (err: any) {
-      if (signal?.aborted || err.message === 'Aborted') {
+    } catch (err: unknown) {
+      if (signal?.aborted || err instanceof AbortError) {
         this.emitError('Spider stopped by user', { code: 'ABORT' });
       } else {
-        this.emitError(err.message || 'Spider failed', {
-          stack: err.stack,
+        this.emitError(err instanceof Error ? err.message : 'Spider failed', {
+          stack: err instanceof Error ? err.stack : undefined,
           context: startUrl,
         });
       }
@@ -321,9 +464,31 @@ export class SpiderRunner extends CommandEmitter {
   private async runSeoSpider(
     url: string,
     options: SpiderRunnerOptions,
-    pages: SpiderRunnerResult['pages']
+    pages: SpiderRunnerResult['pages'],
+    collectPageMetrics: (page: SpiderPageResult) => void,
+    getSecuritySummary: () => NonNullable<SpiderRunnerResult['security']>
   ): Promise<SpiderRunnerResult> {
-    const { depth = 5, limit = 100, concurrency = 5, robots = true, focus = 'all', signal, useSitemap = true } = options;
+    const {
+      depth = 5,
+      limit = 100,
+      concurrency = 5,
+      robots = true,
+      focus = 'all',
+      signal,
+      useSitemap = true,
+      transport,
+      preferCurlFirst,
+      timeout,
+      delay,
+      maxRetryAttempts,
+      baseRetryDelayMs,
+      maxRetryDelayMs,
+      retryBackoffMultiplier,
+      retryJitterMs,
+      maxDomainBlockStrikes,
+      rotateUserAgent,
+      randomizeHeaders,
+    } = options;
 
     const focusCategories: Record<string, string[]> = {
       links: ['links'],
@@ -347,12 +512,23 @@ export class SpiderRunner extends CommandEmitter {
       maxPages: limit,
       concurrency,
       sameDomain: true,
-      delay: 100,
+      delay,
+      timeout,
+      transport,
+      preferCurlFirst,
+      maxRetryAttempts,
+      baseRetryDelayMs,
+      maxRetryDelayMs,
+      retryBackoffMultiplier,
+      retryJitterMs,
+      maxDomainBlockStrikes,
+      rotateUserAgent,
+      randomizeHeaders,
       seo: true,
       respectRobotsTxt: robots,
       useSitemap,
       focusCategories: focusCategories[focus],
-      focusMode: focus as any,
+      focusMode: focus,
       onProgress: (progress) => {
         this.emitTyped<SpiderQueueEvent>({
           type: 'spider:queue',
@@ -363,7 +539,7 @@ export class SpiderRunner extends CommandEmitter {
         });
 
         if (signal?.aborted) {
-          throw new Error('Aborted');
+          throw new AbortError('Spider crawl aborted');
         }
       },
     });
@@ -372,7 +548,7 @@ export class SpiderRunner extends CommandEmitter {
 
     // Process pages with SEO data
     for (const page of result.pages) {
-      const seoReport = (page as any).seoReport;
+      const seoReport = page.seoReport;
       pages.push({
         url: page.url,
         status: page.status || 0,
@@ -380,12 +556,18 @@ export class SpiderRunner extends CommandEmitter {
         depth: page.depth,
         links: page.links?.length || 0,
         duration: page.duration,
+        security: page.security,
+        timings: page.timings,
+        resources: page.resources,
         // Include SEO metrics per page
         seoScore: seoReport?.score,
         seoGrade: seoReport?.grade,
         seoErrors: seoReport?.summary?.errors,
         seoWarnings: seoReport?.summary?.warnings,
+        seoReport,
       });
+
+      collectPageMetrics(page);
 
       // Count resources
       if (page.links) {
@@ -414,6 +596,9 @@ export class SpiderRunner extends CommandEmitter {
         title: page.title,
         links: page.links?.length || 0,
         duration: page.duration,
+        security: page.security,
+        timings: page.timings,
+        resources: page.resources,
       });
     }
 
@@ -428,6 +613,7 @@ export class SpiderRunner extends CommandEmitter {
       images,
       scripts,
       stylesheets,
+      security: getSecuritySummary(),
       pages,
       // Include SEO summary when seo mode is enabled
       seo: result.summary ? {
@@ -460,6 +646,10 @@ export class SpiderRunner extends CommandEmitter {
       errors: result.errors?.length || 0,
       internalLinks,
       externalLinks,
+      images,
+      scripts,
+      stylesheets,
+      security: getSecuritySummary(),
     });
 
     return summary;
@@ -561,6 +751,10 @@ export async function runSpiderWithEvents(
         concurrency: spiderOptions.concurrency ?? 5,
         seo: spiderOptions.seo ?? false,
         extract: spiderOptions.extract,
+        transport: spiderOptions.transport,
+        preferCurlFirst: spiderOptions.preferCurlFirst,
+        timeout: spiderOptions.timeout,
+        delay: spiderOptions.delay,
       },
     });
 
@@ -574,6 +768,12 @@ export async function runSpiderWithEvents(
         title: event.title,
         links: event.links,
         duration: event.duration,
+        blocked: event.security?.blocked,
+        blockedByCaptcha: event.security?.blockedByCaptcha,
+        captchaDetected: event.security?.captchaDetected,
+        transport: event.security?.transport,
+        timing: event.timings,
+        resources: event.resources,
       });
     });
   } else if (!json) {
@@ -596,10 +796,16 @@ export async function runSpiderWithEvents(
         depth: page.depth,
         links: page.links,
         duration: page.duration,
+        security: page.security,
+        timings: page.timings,
+        resources: page.resources,
         seoScore: page.seoScore,
         seoGrade: page.seoGrade,
         seoErrors: page.seoErrors,
         seoWarnings: page.seoWarnings,
+        attempts: page.security?.attempts,
+        retryCount: page.security?.retryCount,
+        retryAfterMs: page.security?.retryAfterMs,
         extracted: page.extracted,
       });
     }
@@ -615,6 +821,10 @@ export async function runSpiderWithEvents(
       internalLinks: result.internalLinks,
       externalLinks: result.externalLinks,
       seo: result.seo,
+      security: result.security,
+      images: result.images,
+      scripts: result.scripts,
+      stylesheets: result.stylesheets,
       extraction: result.extraction,
     });
     await jsonlWriter.close();

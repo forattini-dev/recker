@@ -20,6 +20,7 @@
 
 import { createClient, type Client } from '../../core/client.js';
 import { CommandEmitter } from '../events/emitter.js';
+import { AbortError } from '../../core/errors.js';
 
 // =============================================================================
 // Types
@@ -89,7 +90,7 @@ export class LiveRunner extends CommandEmitter {
     try {
       // Check for abort
       if (signal?.aborted) {
-        throw new Error('Aborted');
+        throw new AbortError('Live info aborted');
       }
 
       const { createVideoBuilder } = await import('../../video/builder.js');
@@ -118,7 +119,7 @@ export class LiveRunner extends CommandEmitter {
       return result;
 
     } catch (err: any) {
-      if (signal?.aborted || err.message === 'Aborted') {
+      if (signal?.aborted || err instanceof AbortError) {
         this.emitError('Live info stopped by user', { code: 'ABORT' });
       } else {
         this.emitError(err.message || 'Failed to get live info', {
@@ -155,7 +156,7 @@ export class LiveRunner extends CommandEmitter {
     try {
       // Check for abort
       if (signal?.aborted) {
-        throw new Error('Aborted');
+        throw new AbortError('Live download aborted');
       }
 
       // Emit progress: connecting
@@ -279,7 +280,7 @@ export class LiveRunner extends CommandEmitter {
       return result;
 
     } catch (err: any) {
-      if (signal?.aborted || err.message === 'Aborted') {
+      if (signal?.aborted || err instanceof AbortError) {
         this.emitError('Live recording stopped by user', { code: 'ABORT' });
         // Return partial result on abort
         return {

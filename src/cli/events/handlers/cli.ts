@@ -162,6 +162,31 @@ export class CLIHandler {
     if (this.context.verbose && Object.keys(event.summary).length > 0) {
       console.log(c.dim(`  Summary: ${JSON.stringify(event.summary)}`));
     }
+
+    if (this.context.verbose) {
+      const summary = event.summary as Record<string, unknown>;
+      const security = summary.security as Record<string, unknown> | undefined;
+      if (security) {
+        console.log(c.bold('  Anti-bot summary:'));
+        const blockedPages = security.blockedPages ?? 0;
+        const captchaPages = security.captchaPages ?? 0;
+        const attempts = security.avgAttempts;
+        const avgTtfb = security.avgTtfbMs;
+        const transportUsage = security.transportUsage;
+        const captchaProviders = security.captchaProviders as Record<string, unknown> | undefined;
+        console.log(c.dim(`    blocked=${blockedPages} captcha=${captchaPages} avgAttempts=${attempts ?? 'n/a'} avgTTFB=${avgTtfb ?? 'n/a'}ms`));
+        if (transportUsage) {
+          const usage = transportUsage as Record<string, number>;
+          console.log(c.dim(`    transport usage: curl=${usage.curl || 0} undici=${usage.undici || 0}`));
+        }
+        if (captchaProviders && Object.keys(captchaProviders).length > 0) {
+          const providerList = Object.entries(captchaProviders)
+            .map(([provider, count]) => `${provider}: ${count}`)
+            .join(', ');
+          console.log(c.dim(`    captcha providers: ${providerList}`));
+        }
+      }
+    }
   }
 
   private handleError(event: ErrorEvent): void {
@@ -178,7 +203,12 @@ export class CLIHandler {
   private handleSpiderPage(event: SpiderPageEvent): void {
     if (this.context.verbose) {
       const status = event.status < 400 ? c.success(String(event.status)) : c.error(String(event.status));
-      console.log(`  ${status} ${c.dim(`[${event.depth}]`)} ${event.url}`);
+      const depthInfo = c.dim(`[${event.depth}]`);
+      const security = event.security
+        ? ` ${c.dim(event.security.blocked ? '[blocked]' : event.security.captchaDetected ? '[captcha]' : '')}`
+        : '';
+      const timing = event.timings?.ttfb ? ` ${c.dim(`ttfb=${event.timings.ttfb}ms`)}` : '';
+      console.log(`  ${status} ${depthInfo} ${event.url}${security}${timing}`);
     }
   }
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { searchGoogleAdvanced } from '../../src/search/google.js';
+import { inferSearchLocaleFromUrl, searchGoogleAdvanced } from '../../src/search/google.js';
 import { ScrapeDocument } from '../../src/scrape/document.js';
 
 const mockGet = vi.fn();
@@ -153,6 +153,106 @@ describe('searchGoogleAdvanced', () => {
     expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
+  it('adds chrome-like browser params when human profile is enabled', async () => {
+    mockGet.mockResolvedValueOnce(
+      makeResponse(`<html><body><div class="g"><a href="/url?q=https://example.com"><h3>Only result</h3><div class="aCOpRe">This is a robust snippet with enough characters for extraction.</div></a></div></body></html>`)
+    );
+
+    const response = await searchGoogleAdvanced('search profile', {
+      transport: 'undici',
+      humanProfile: 'chrome',
+    });
+
+    const url = new URL(response.searchUrl);
+    expect(url.searchParams.get('aqs')).toBeTruthy();
+    expect(url.searchParams.get('gs_lcrp')).toBeTruthy();
+    expect(url.searchParams.get('sei')).toBeTruthy();
+    expect(url.searchParams.get('sourceid')).toBe('chrome');
+    expect(url.searchParams.get('client')).toBe('chrome');
+    expect(url.searchParams.get('ie')).toMatch(/UTF-8|utf-8/i);
+    expect(url.searchParams.get('oe')).toMatch(/UTF-8|utf-8/i);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('varies chrome browser signature params across calls using randomized selection', async () => {
+    const randomValues = [
+      0.2, 0.8,
+      0.9, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.1, 0.15, 0.25, 0.35, 0.45,
+      0.55, 0.12,
+      0.4, 0.15,
+      0.16, 0.26, 0.36, 0.46, 0.56, 0.66, 0.76, 0.86, 0.96, 0.06, 0.17, 0.27, 0.37, 0.47, 0.57, 0.67, 0.03,
+    ];
+    let randomCursor = 0;
+    const randomSpy = vi.spyOn(Math, 'random').mockImplementation(() => {
+      const value = randomValues[randomCursor % randomValues.length];
+      randomCursor += 1;
+      return value;
+    });
+
+    mockGet.mockResolvedValueOnce(makeResponse(`<html><body><div class="g"><a href="/url?q=https://example.com"><h3>Only result</h3><div class="aCOpRe">This is a robust snippet with enough characters for extraction.</div></a></div></body></html>`));
+    mockGet.mockResolvedValueOnce(makeResponse(`<html><body><div class="g"><a href="/url?q=https://example.com"><h3>Only result</h3><div class="aCOpRe">This is a robust snippet with enough characters for extraction.</div></a></div></body></html>`));
+
+    const first = await searchGoogleAdvanced('signature behavior', {
+      transport: 'undici',
+      humanProfile: 'chrome',
+    });
+    const second = await searchGoogleAdvanced('signature behavior', {
+      transport: 'undici',
+      humanProfile: 'chrome',
+    });
+
+    const firstUrl = new URL(first.searchUrl);
+    const secondUrl = new URL(second.searchUrl);
+
+    expect(firstUrl.searchParams.get('aqs')).not.toBe(secondUrl.searchParams.get('aqs'));
+    expect(firstUrl.searchParams.get('gs_lcrp')).not.toBe(secondUrl.searchParams.get('gs_lcrp'));
+    expect(firstUrl.searchParams.get('sei')).not.toBe(secondUrl.searchParams.get('sei'));
+    expect(first.results[0]).toMatchObject({ title: 'Only result' });
+    expect(randomSpy).toHaveBeenCalled();
+    randomSpy.mockRestore();
+  });
+
+  it('keeps browser signature params off when human profile is disabled', async () => {
+    mockGet.mockResolvedValueOnce(
+      makeResponse(`<html><body><div class="g"><a href="/url?q=https://example.com"><h3>Only result</h3><div class="aCOpRe">This is a robust snippet with enough characters for extraction.</div></a></div></body></html>`)
+    );
+
+    const response = await searchGoogleAdvanced('search profile', {
+      transport: 'undici',
+      humanProfile: 'off',
+    });
+
+    const url = new URL(response.searchUrl);
+    expect(url.searchParams.has('aqs')).toBe(false);
+    expect(url.searchParams.has('gs_lcrp')).toBe(false);
+    expect(url.searchParams.get('sourceid')).toBe('chrome');
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses localized Google host when country is inferred by gl parameter', async () => {
+    mockHasImpersonate.mockReturnValue(false);
+    mockGet.mockResolvedValueOnce(
+      makeResponse(`<html><body><div class=\"g\"><a href="/url?q=https://example.com"><h3>Only result</h3><div class="aCOpRe">This is a robust snippet with enough characters for extraction.</div></a></div></body></html>`)
+    );
+
+    const response = await searchGoogleAdvanced('localized', {
+      country: 'br',
+      transport: 'undici',
+    });
+
+    const parsed = new URL(response.searchUrl);
+    expect(parsed.hostname).toBe('www.google.com.br');
+    expect(response.searchUrl).toContain('gl=br');
+  });
+
+  it('extracts search locale from target URL', () => {
+    expect(inferSearchLocaleFromUrl('https://www.stone.com.br/shop')).toEqual({
+      country: 'br',
+      gl: 'br',
+      hl: 'pt-BR',
+    });
+  });
+
   it('parses duplicates, snippet fallbacks, pagination and result stats', async () => {
     mockGet.mockResolvedValueOnce(makeResponse(BASE_RESULT_HTML));
 
@@ -228,6 +328,24 @@ describe('searchGoogleAdvanced', () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
+  it('uses impersonate-first flow in undici mode when available', async () => {
+    mockHasImpersonate.mockReturnValue(true);
+    mockCurlDispatch.mockResolvedValueOnce(
+      makeResponse(`<html><body><div class="g"><a href="/url?q=https://example.com/undici-impersonate"><h3>Undici mode result</h3><div class="aCOpRe">Impersonated request wins over undici preference.</div></a></div></body></html>`)
+    );
+
+    const response = await searchGoogleAdvanced('undici', {
+      transport: 'undici',
+    });
+
+    expect(response.transport.requested).toBe('undici');
+    expect(response.transport.used).toBe('curl');
+    expect(response.transport.fallbackUsed).toBe(false);
+    expect(response.transport.impersonateAvailable).toBe(true);
+    expect(mockCurlDispatch).toHaveBeenCalledTimes(1);
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
   it('falls back to undici when impersonate reports block', async () => {
     mockHasImpersonate.mockReturnValue(true);
     mockCurlDispatch.mockResolvedValueOnce(
@@ -247,6 +365,31 @@ describe('searchGoogleAdvanced', () => {
     expect(mockGet).toHaveBeenCalledTimes(1);
     expect(response.results).toHaveLength(1);
     expect(response.results[0].title).toBe('Fallback result');
+  });
+
+  it('falls back to alternate Google origins when first SERP host is blocked', async () => {
+    mockHasImpersonate.mockReturnValue(false);
+    mockGet
+      .mockResolvedValueOnce(
+        makeResponse('This page appears to require JavaScript and cookies to continue.'),
+      )
+      .mockResolvedValueOnce(
+        makeResponse(`<html><body><div class="g" data-hveid="1"><a href="/url?q=https://example.com/alternate"><h3>Alternate origin result</h3><div class="aCOpRe">Alternate Google origin result with enough length for parser validation.</div></a></div></body></html>`)
+      );
+
+    const response = await searchGoogleAdvanced('origin fallback', {
+      transport: 'undici',
+      country: 'br',
+    });
+
+    const calls = mockGet.mock.calls.map(([callUrl]) => String(callUrl));
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain('www.google.com.br/search');
+    expect(calls[1]).toContain('www.google.com/search');
+    expect(response.results).toHaveLength(1);
+    expect(response.results[0].url).toBe('https://example.com/alternate');
+    expect(response.transport.used).toBe('undici');
+    expect(response.searchUrl).toContain('www.google.com/search');
   });
 
   it('falls back to undici when impersonate transport throws', async () => {
