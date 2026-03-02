@@ -226,47 +226,23 @@ When a proxy is running, the Proxy tab shows real-time traffic:
 
 ## Stats & Monitoring
 
-The proxy tracks comprehensive statistics in real-time:
+The proxy tracks basic statistics via `proxy.statistics`:
 
 | Stat | Description |
 |------|-------------|
-| `totalRequests` | Total requests processed |
-| `successCount` | Successful requests (2xx, 3xx) |
-| `errorCount` | Failed requests |
-| `bytesIn` | Total bytes received from clients |
-| `bytesOut` | Total bytes sent to clients |
-| `avgLatency` | Average request latency (ms) |
-| `requestsPerSecond` | Current RPS (rolling) |
-| `activeConnections` | Current open connections |
-| `byStatusCode` | Request count by HTTP status |
-| `byMethod` | Request count by HTTP method |
-| `topHosts` | Top 10 requested hosts |
+| `totalRequests` | Total requests proxied |
+| `totalBytesTransferred` | Total bytes transferred (request + response bodies) |
 
-### Accessing Stats (Programmatic)
+### Accessing Statistics (Programmatic)
 
 ```typescript
-const proxy = await MockProxyServer.create({ port: 8888 });
+const proxy = await createMockProxyServer({ port: 8888 });
 
-// Get current stats
-console.log(proxy.stats);
-// {
-//   totalRequests: 1234,
-//   successCount: 1200,
-//   errorCount: 34,
-//   bytesIn: 1048576,
-//   bytesOut: 5242880,
-//   avgLatency: 145,
-//   requestsPerSecond: 25,
-//   activeConnections: 12,
-//   byStatusCode: { 200: 1000, 404: 150, 500: 50 },
-//   byMethod: { GET: 900, POST: 300, CONNECT: 34 },
-//   topHosts: [
-//     { host: 'api.github.com', count: 500 },
-//     { host: 'api.example.com', count: 300 },
-//   ]
-// }
+// Get current statistics
+console.log(proxy.statistics);
+// { totalRequests: 42, totalBytesTransferred: 102400 }
 
-// Reset stats
+// Reset statistics
 proxy.reset();
 ```
 
@@ -363,49 +339,41 @@ export HTTPS_PROXY=http://dev-server:8888
 ### Basic Forward Proxy
 
 ```typescript
-import { MockProxyServer } from 'recker/testing';
+import { createForwardProxy, createMockProxyServer } from 'recker/testing';
 
-// Create forward proxy
-const proxy = await MockProxyServer.create({
-  port: 8888,
-  mode: 'forward',
-});
+// Quick forward proxy
+const proxy = await createForwardProxy(8888);
+// or with full options:
+// const proxy = await createMockProxyServer({ port: 8888, mode: 'forward' });
 
 console.log(`Proxy running at ${proxy.url}`);
 
-// Listen for requests
-proxy.on('request', (req) => {
-  console.log(`${req.method} ${req.url}`);
-});
-
-proxy.on('response', (res) => {
-  console.log(`Response: ${res.statusCode} (${res.latency}ms)`);
+// Listen for requests (event emits { request, response })
+proxy.on('request', ({ request }) => {
+  console.log(`${request.method} ${request.url}`);
 });
 
 // Stop when done
 await proxy.stop();
 ```
 
-### Intercept Mode with Custom CA
+### Intercept Mode
 
 ```typescript
-import { MockProxyServer } from 'recker/testing';
-import fs from 'fs';
+import { createInterceptProxy, getDefaultCA } from 'recker/testing';
 
-const proxy = await MockProxyServer.create({
-  port: 8080,
-  mode: 'intercept',
-  mtls: {
-    caCert: fs.readFileSync('ca.pem', 'utf-8'),
-    caKey: fs.readFileSync('ca-key.pem', 'utf-8'),
-  },
-});
+// Quick intercept proxy (uses auto-generated built-in CA)
+const proxy = await createInterceptProxy(8080);
+
+// Export the CA cert — clients must trust it to avoid TLS errors
+const ca = getDefaultCA();
+console.log(ca.cert); // PEM string — install in OS/browser trust store
 ```
 
 ### Request/Response Modification
 
 ```typescript
-const proxy = await MockProxyServer.create({
+const proxy = await createMockProxyServer({
   port: 8888,
   mode: 'intercept',
   intercept: {
@@ -421,7 +389,7 @@ const proxy = await MockProxyServer.create({
 
     // Modify responses before returning to client
     modifyResponse: (res) => {
-      res.headers['X-Proxy-Latency'] = `${res.latency}ms`;
+      res.headers['X-Proxied'] = 'true';
       return res;
     },
   },
@@ -444,54 +412,28 @@ const intercept = await createInterceptProxy(8080);
 
 | Event | Description | Payload |
 |-------|-------------|---------|
-| `listening` | Server started | `port: number` |
-| `request` | Request received | `ProxyRequest` |
-| `response` | Response sent | `ProxyResponse` |
-| `error` | Error occurred | `ProxyError` |
-| `close` | Server stopped | - |
-| `reset` | Stats reset | - |
+| `request` | Request proxied | `{ request: ProxyRequest, response: ProxyResponse }` |
+| `error` | Error occurred | `Error` |
 
 ### Event Payloads
 
 **ProxyRequest:**
 ```typescript
 interface ProxyRequest {
-  id: string;           // Unique request ID
-  timestamp: number;    // Unix timestamp
-  method: string;       // HTTP method
-  url: string;          // Full URL
+  method: string;
+  url: string;
   headers: Record<string, string>;
-  body?: Buffer;        // If logPayloads enabled
-  clientIp: string;     // Client IP address
-  targetHost: string;   // Target hostname
-  targetPort: number;   // Target port
-  isHttps: boolean;     // Is HTTPS request
+  body: Buffer;
 }
 ```
 
 **ProxyResponse:**
 ```typescript
 interface ProxyResponse {
-  id: string;           // Matches request ID
-  timestamp: number;    // Unix timestamp
-  statusCode: number;   // HTTP status
-  statusText: string;   // HTTP status text
+  statusCode: number;
+  statusMessage: string;
   headers: Record<string, string>;
-  body?: Buffer;        // If logPayloads enabled
-  latency: number;      // Response time (ms)
-  size: number;         // Response size (bytes)
-}
-```
-
-**ProxyError:**
-```typescript
-interface ProxyError {
-  requestId?: string;   // Request ID if available
-  type: 'connection' | 'timeout' | 'tls' | 'upstream' | 'parse';
-  message: string;
-  error?: Error;        // Original error
-  targetHost?: string;
-  targetPort?: number;
+  body: Buffer;
 }
 ```
 
@@ -503,41 +445,32 @@ interface ProxyError {
 class MockProxyServer extends EventEmitter {
   // Properties
   readonly port: number;
-  readonly address: string;
   readonly url: string;
   readonly isRunning: boolean;
-  readonly mode: 'forward' | 'intercept';
-  readonly stats: ProxyStats;
+  readonly ca: { cert: string } | null;  // intercept mode: CA cert for client trust
+  readonly statistics: { totalRequests: number; totalBytesTransferred: number };
 
   // Lifecycle
-  constructor(options?: ProxyServerOptions);
+  constructor(options?: MockProxyServerOptions);
   start(): Promise<void>;
   stop(): Promise<void>;
   reset(): void;
-
-  // Static factory
-  static create(options?: ProxyServerOptions): Promise<MockProxyServer>;
 }
+
+// Factory functions
+async function createMockProxyServer(options?: MockProxyServerOptions): Promise<MockProxyServer>;
+async function createForwardProxy(port?: number): Promise<MockProxyServer>;
+async function createInterceptProxy(port?: number): Promise<MockProxyServer>;
 ```
 
-### ProxyServerOptions
+### MockProxyServerOptions
 
 ```typescript
-interface ProxyServerOptions {
+interface MockProxyServerOptions {
   port?: number;              // Default: 0 (random)
   host?: string;              // Default: '127.0.0.1'
   mode?: 'forward' | 'intercept';  // Default: 'forward'
   timeout?: number;           // Default: 30000ms
-  verbose?: boolean;          // Default: false
-
-  mtls?: {
-    enabled: boolean;
-    caCert?: string;          // PEM string
-    caKey?: string;           // PEM string
-    clientCert?: string;      // For upstream mTLS
-    clientKey?: string;
-    requireClientCert?: boolean;
-  };
 
   intercept?: {
     logPayloads?: boolean;    // Default: false
@@ -545,24 +478,6 @@ interface ProxyServerOptions {
     modifyRequest?: (req: ProxyRequest) => ProxyRequest | Promise<ProxyRequest>;
     modifyResponse?: (res: ProxyResponse) => ProxyResponse | Promise<ProxyResponse>;
   };
-}
-```
-
-### ProxyStats
-
-```typescript
-interface ProxyStats {
-  totalRequests: number;
-  successCount: number;
-  errorCount: number;
-  bytesIn: number;
-  bytesOut: number;
-  avgLatency: number;
-  requestsPerSecond: number;
-  activeConnections: number;
-  byStatusCode: Record<number, number>;
-  byMethod: Record<string, number>;
-  topHosts: Array<{ host: string; count: number }>;
 }
 ```
 

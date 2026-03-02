@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Spider, spider } from '../../src/scrape/spider.js';
-import { MockHttpServer } from '../../src/testing/mock-http-server.js';
+import { MockHttpServer } from 'raffel/testing';
 
 type MockPage = {
   status?: number;
@@ -23,7 +23,7 @@ function setMockPage(path: string, response: MockPage): void {
   }
 
   activeServer.removeRoute('GET', path);
-  activeServer.get(path, response);
+  activeServer.get(path, () => response);
 }
 
 function setupDefaultPages(): void {
@@ -218,7 +218,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   useMockServer(sharedServer);
-  sharedServer.reset();
+  sharedServer.clearRoutes();
   setupDefaultPages();
 });
 

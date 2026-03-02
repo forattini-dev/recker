@@ -714,7 +714,7 @@ async function runProxyAsync(
   signal: AbortSignal
 ): Promise<void> {
   try {
-    const { MockProxyServer } = await import('../../../testing/mock-proxy-server.js');
+    const { createMockProxyServer } = await import('../../../testing/index.js');
     const {
       setProxyRunning,
       setProxyStopped,
@@ -724,7 +724,7 @@ async function runProxyAsync(
 
     const manager = getJobManager();
 
-    const proxy = await MockProxyServer.create({
+    const proxy = await createMockProxyServer({
       port: options.port,
       host: options.host,
       mode: options.intercept ? 'intercept' : 'forward',
@@ -744,50 +744,46 @@ async function runProxyAsync(
     let bytesOut = 0;
     let totalLatency = 0;
 
-    proxy.on('request', (req) => {
+    // raffel emits 'request' with { request: ProxyRequest, response: ProxyResponse }
+    proxy.on('request', ({ request, response }: any) => {
       requestCount++;
+      successCount++;
       const requestId = `${Date.now()}-${requestCount}`;
+      const url = request.url ?? '';
+      const isHttps = url.startsWith('https');
+
+      if (response?.body) bytesIn += (response.body as Buffer).length || 0;
 
       addProxyRequest({
         id: requestId,
         timestamp: Date.now(),
-        method: req.method,
-        url: req.url,
-        targetHost: req.targetHost,
-        targetPort: req.targetPort,
-        isHttps: req.isHttps,
-        clientIp: req.clientIp,
-        headers: req.headers,
+        method: request.method ?? 'GET',
+        url,
+        targetHost: (() => { try { return new URL(url).hostname; } catch { return url; } })(),
+        targetPort: (() => { try { return parseInt(new URL(url).port || (isHttps ? '443' : '80')); } catch { return 80; } })(),
+        isHttps,
+        clientIp: '',
+        headers: request.headers ?? {},
       });
 
       if (options.verbose) {
         manager.addLog(jobId, {
           timestamp: Date.now(),
           level: 'info',
-          message: `${req.method} ${req.url}`,
+          message: `${request.method ?? 'GET'} ${url}`,
         });
       }
 
-      manager.updateProgress(jobId, {
-        proxyRequests: requestCount,
-        proxySuccess: successCount,
-        proxyErrors: errorCount,
-      });
-    });
-
-    proxy.on('response', (res) => {
-      successCount++;
-      if (res.size) bytesIn += res.size;
-
+      const stats = proxy.statistics;
       updateProxyStats({
-        totalRequests: requestCount,
+        totalRequests: stats.totalRequests,
         successCount,
         errorCount,
         bytesIn,
         bytesOut,
-        avgLatency: successCount > 0 ? Math.round(totalLatency / successCount) : 0,
+        avgLatency: 0,
         requestsPerSecond: 0,
-        activeConnections: proxy.stats.activeConnections,
+        activeConnections: 0,
         byStatusCode: {},
         byMethod: {},
         topHosts: [],

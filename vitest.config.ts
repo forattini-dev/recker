@@ -1,4 +1,5 @@
 import { availableParallelism, cpus } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 const cpuCount = typeof availableParallelism === 'function' ? availableParallelism() : cpus().length;
@@ -12,6 +13,11 @@ const resolvedMaxWorkers = typeof maxWorkers === 'number'
   : maxWorkers;
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      'raffel/testing': fileURLToPath(new URL('../raffel/src/testing/index.ts', import.meta.url)),
+    },
+  },
   test: {
     // Resource limits - keep tests parallel but bounded
     pool: 'forks',

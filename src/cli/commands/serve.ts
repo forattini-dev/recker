@@ -46,14 +46,14 @@ export function registerServeCommand(program: Command) {
     .example('rek serve http --echo', 'Echo mode')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockHttpServer } = await import('../../testing/mock-http-server.js');
+      const { createMockHttpServer } = await import('../../testing/index.js');
 
       const port = options.port || 3000;
       const host = options.host || '127.0.0.1';
       const delay = options.delay || 0;
       const useCors = !options['no-cors'];
 
-      const server = await MockHttpServer.create({
+      const server = await createMockHttpServer({
         port,
         host,
         delay,
@@ -61,10 +61,15 @@ export function registerServeCommand(program: Command) {
       });
 
       if (options.echo) {
-        server.any('/*', (req: any) => ({
+        const echoHandler = (req: any) => ({
           status: 200,
           body: { method: req.method, path: req.path, query: req.query, headers: req.headers, body: req.body },
-        }));
+        });
+        server.get('/*', echoHandler);
+        server.post('/*', echoHandler);
+        server.put('/*', echoHandler);
+        server.patch('/*', echoHandler);
+        server.delete('/*', echoHandler);
       }
 
       console.log(colors.green(`
@@ -78,8 +83,9 @@ export function registerServeCommand(program: Command) {
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
 
-      server.on('request', (req: any) => {
+      server.addInterceptor((req: any, res: any) => {
         console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(req.method.padEnd(7)) + req.path);
+        return res;
       });
 
       process.on('SIGINT', async () => {
@@ -117,7 +123,7 @@ export function registerServeCommand(program: Command) {
     .example('rek serve webhook --status=200', 'Return 200 OK')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { createWebhookServer } = await import('../../testing/mock-http-server.js');
+      const { createMockHttpServer } = await import('../../testing/index.js');
 
       const port = options.port || 3000;
       const host = options.host || '127.0.0.1';
@@ -128,12 +134,13 @@ export function registerServeCommand(program: Command) {
         process.exit(1);
       }
 
-      const server = await createWebhookServer({
-        port,
-        host,
-        status: status as 200 | 204,
-        log: !options.quiet,
-      });
+      const webhookHandler = () => ({ status });
+      const server = await createMockHttpServer({ port, host });
+      server.get('/*', webhookHandler);
+      server.post('/*', webhookHandler);
+      server.put('/*', webhookHandler);
+      server.patch('/*', webhookHandler);
+      server.delete('/*', webhookHandler);
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
@@ -150,7 +157,7 @@ export function registerServeCommand(program: Command) {
 
       process.on('SIGINT', async () => {
         console.log(colors.yellow('\nShutting down...'));
-        console.log(colors.gray(`Total webhooks received: ${server.webhooks.length}`));
+        console.log(colors.gray(`Total webhooks received: ${server.statistics.totalRequests}`));
         await server.stop();
         process.exit(0);
       });
@@ -186,19 +193,16 @@ export function registerServeCommand(program: Command) {
     .example('rek serve ws --no-echo', 'Disable echo mode')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockWebSocketServer } = await import('../../testing/mock-websocket-server.js');
+      const { createMockWebSocketServer } = await import('../../testing/index.js');
 
       const port = options.port || 8080;
       const host = options.host || '127.0.0.1';
-      const delay = options.delay || 0;
       const echo = !options['no-echo'];
 
-      const server = await MockWebSocketServer.create({
-        port,
-        host,
-        echo,
-        delay,
-      });
+      const server = await createMockWebSocketServer({ port, host });
+      if (!echo) {
+        server.setMessageHandler(() => undefined);
+      }
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
@@ -206,17 +210,11 @@ export function registerServeCommand(program: Command) {
 ├─────────────────────────────────────────────┤
 │  URL: ${colors.cyan(server.url.padEnd(37))}│
 │  Echo: ${colors.yellow((echo ? 'Enabled' : 'Disabled').padEnd(36))}│
-│  Delay: ${colors.gray((delay + 'ms').padEnd(35))}
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
 
-      server.on('connection', (client: any) => console.log(colors.green(`+ Connected: ${client.id}`)));
-      server.on('message', (msg: any, client: any) => {
-        const d = msg.data.toString();
-        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(client.id) + ` ${d.slice(0, 50)}${d.length > 50 ? '...' : ''}`);
-      });
-      server.on('disconnect', (client: any) => console.log(colors.red(`- Disconnected: ${client.id}`)));
+      server.on('connection', (socket: any) => console.log(colors.green(`+ Connected: ${socket._socket?.remoteAddress ?? 'client'}`)));
 
       process.on('SIGINT', async () => {
         console.log(colors.yellow('\nShutting down...'));
@@ -257,7 +255,7 @@ export function registerServeCommand(program: Command) {
     .example('rek serve sse --heartbeat=5000', 'Heartbeat every 5s')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockSSEServer } = await import('../../testing/mock-sse-server.js');
+      const { createMockSSEServer } = await import('../../testing/index.js');
       const readline = await import('node:readline');
 
       const port = options.port || 8081;
@@ -265,13 +263,9 @@ export function registerServeCommand(program: Command) {
       const path = options.path || '/events';
       const heartbeat = options.heartbeat || 0;
 
-      const server = await MockSSEServer.create({
-        port,
-        host,
-        path,
-      });
+      const server = await createMockSSEServer({ port, host, path });
 
-      if (heartbeat > 0) server.startPeriodicEvents('heartbeat', heartbeat);
+      if (heartbeat > 0) server.startPeriodicEvents('heartbeat', heartbeat, () => ({ data: 'heartbeat', event: 'heartbeat' }));
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
@@ -290,8 +284,8 @@ export function registerServeCommand(program: Command) {
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       rl.on('line', (line) => {
         if (line.trim()) {
-          const sent = server.sendData(line.trim());
-          console.log(colors.gray(`Broadcast to ${sent} client(s): ${line.trim()}`));
+          server.sendEvent({ data: line.trim() });
+          console.log(colors.gray(`Broadcast to ${server.connectionCount} client(s): ${line.trim()}`));
         }
       });
 
@@ -349,8 +343,7 @@ export function registerServeCommand(program: Command) {
     .example('rek serve hls -Q 1080p,720p', 'Custom qualities')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockHlsServer } = await import('../../testing/mock-hls-server.js');
-      const http = await import('node:http');
+      const { createMockHlsServer } = await import('../../testing/index.js');
 
       const port = options.port || 8082;
       const host = options.host || '127.0.0.1';
@@ -366,46 +359,28 @@ export function registerServeCommand(program: Command) {
         resolution: ['1920x1080', '1280x720', '854x480'][i] || '640x360',
       }));
 
-      const baseUrl = `http://${host}:${port}`;
-      const hlsServer = await MockHlsServer.create({
-        baseUrl,
+      const hlsServer = await createMockHlsServer({
+        port,
+        host,
         mode: mode as any,
         segmentCount: segments,
         segmentDuration: duration,
-        multiQuality: variants.length > 1,
-        variants: variants.length > 1 ? variants : undefined,
+        variants,
       });
 
-      const httpServer = http.createServer(async (req, res) => {
-        const url = `${baseUrl}${req.url}`;
-        try {
-          const response = await hlsServer.transport.dispatch({ url, method: req.method || 'GET' } as any) as any;
-          res.statusCode = response.status;
-          response.headers.forEach((value: string, key: string) => res.setHeader(key, value));
-          const body = await response.arrayBuffer();
-          res.end(Buffer.from(body));
-        } catch {
-          res.statusCode = 404;
-          res.end('Not Found');
-        }
-      });
-
-      httpServer.listen(port, host, () => {
-        console.log(colors.green(`
+      console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
 │  ${colors.bold('Recker Mock HLS Server')}                    │
 ├─────────────────────────────────────────────┤
-│  Master: ${colors.cyan((hlsServer.manifestUrl).padEnd(34))}│
+│  Master: ${colors.cyan(hlsServer.masterUrl.padEnd(34))}│
 │  Mode: ${colors.yellow(mode.padEnd(36))}│
 │  Qualities: ${colors.cyan(qualities.join(', ').padEnd(31))}
 ├─────────────────────────────────────────────┤
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
-      });
 
       process.on('SIGINT', async () => {
         console.log(colors.yellow('\nShutting down...'));
-        httpServer.close();
         await hlsServer.stop();
         process.exit(0);
       });
@@ -433,19 +408,14 @@ export function registerServeCommand(program: Command) {
     .example('rek serve udp', 'Start on port 9000')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockUDPServer } = await import('../../testing/mock-udp-server.js');
+      const { createMockUdpServer } = await import('../../testing/index.js');
 
       const port = options.port || 9000;
       const host = options.host || '127.0.0.1';
       const echo = !options['no-echo'];
 
-      const server = new MockUDPServer({
-        port,
-        host,
-        echo,
-      });
-
-      await server.start();
+      const server = await createMockUdpServer({ port, host });
+      if (!echo) server.setMessageHandler(() => undefined);
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
@@ -457,9 +427,9 @@ export function registerServeCommand(program: Command) {
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
 
-      server.on('message', (msg: any) => {
-        const d = msg.data.toString();
-        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(`${msg.rinfo.address}:${msg.rinfo.port}`) + ` ${d.slice(0, 50)}${d.length > 50 ? '...' : ''}`);
+      server.on('message', (message: any, rinfo: any) => {
+        const d = Buffer.isBuffer(message) ? message.toString() : String(message);
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(`${rinfo.address}:${rinfo.port}`) + ` ${d.slice(0, 50)}${d.length > 50 ? '...' : ''}`);
       });
 
       process.on('SIGINT', async () => {
@@ -494,17 +464,13 @@ export function registerServeCommand(program: Command) {
     .example('rek serve dns', 'Start on port 5353')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockDnsServer } = await import('../../testing/mock-dns-server.js');
+      const { createMockDnsServer } = await import('../../testing/index.js');
 
       const port = options.port || 5353;
       const host = options.host || '127.0.0.1';
       const delay = options.delay || 0;
 
-      const server = await MockDnsServer.create({
-        port,
-        host,
-        delay,
-      });
+      const server = await createMockDnsServer({ port, host, delay });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
@@ -517,8 +483,8 @@ export function registerServeCommand(program: Command) {
 │  Press ${colors.bold('Ctrl+C')} to stop                       │
 └─────────────────────────────────────────────┘`));
 
-      server.on('query', (query: { domain: string; type: string }) => {
-        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(query.type.padEnd(6)) + ` ${query.domain}`);
+      server.on('query', (query: { name: string; type: string }) => {
+        console.log(colors.gray(`${new Date().toISOString()} `) + colors.cyan(query.type.padEnd(6)) + ` ${query.name}`);
       });
 
       process.on('SIGINT', async () => {
@@ -553,17 +519,13 @@ export function registerServeCommand(program: Command) {
     .example('rek serve whois', 'Start on port 4343')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockWhoisServer } = await import('../../testing/mock-whois-server.js');
+      const { createMockWhoisServer } = await import('../../testing/index.js');
 
       const port = options.port || 4343;
       const host = options.host || '127.0.0.1';
       const delay = options.delay || 0;
 
-      const server = await MockWhoisServer.create({
-        port,
-        host,
-        delay,
-      });
+      const server = await createMockWhoisServer({ port, host, responseDelay: delay });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
@@ -613,19 +575,14 @@ export function registerServeCommand(program: Command) {
     .example('rek serve telnet', 'Start on port 2323')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockTelnetServer } = await import('../../testing/mock-telnet-server.js');
+      const { createMockTelnetServer } = await import('../../testing/index.js');
 
       const port = options.port || 2323;
       const host = options.host || '127.0.0.1';
       const delay = options.delay || 0;
       const echo = !options['no-echo'];
 
-      const server = await MockTelnetServer.create({
-        port,
-        host,
-        echo,
-        delay,
-      });
+      const server = await createMockTelnetServer({ port, host, responseDelay: delay });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
@@ -690,7 +647,7 @@ export function registerServeCommand(program: Command) {
     .example('rek serve ftp -u admin -P secret', 'Custom credentials')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockFtpServer } = await import('../../testing/mock-ftp-server.js');
+      const { createMockFtpServer } = await import('../../testing/index.js');
 
       const port = options.port || 2121;
       const host = options.host || '127.0.0.1';
@@ -699,14 +656,7 @@ export function registerServeCommand(program: Command) {
       const delay = options.delay || 0;
       const anonymous = !options['no-anonymous'];
 
-      const server = await MockFtpServer.create({
-        port,
-        host,
-        username,
-        password,
-        anonymous,
-        delay,
-      });
+      const server = await createMockFtpServer({ port, host });
 
       console.log(colors.green(`
 ┌─────────────────────────────────────────────┐
@@ -765,7 +715,7 @@ export function registerServeCommand(program: Command) {
     .example('curl -x http://localhost:8888 https://api.github.com/users', 'Test with curl')
     .action(async (args: string[], cmdObj: any) => {
       const options = cmdObj.opts ? cmdObj.opts() : {};
-      const { MockProxyServer } = await import('../../testing/mock-proxy-server.js');
+      const { createMockProxyServer } = await import('../../testing/index.js');
 
       const port = options.port || 8888;
       const host = options.host || '127.0.0.1';
@@ -773,11 +723,10 @@ export function registerServeCommand(program: Command) {
       const logPayloads = options['log-payloads'] || false;
       const verbose = options.verbose || false;
 
-      const server = await MockProxyServer.create({
+      const server = await createMockProxyServer({
         port,
         host,
         mode: mode as any,
-        verbose,
         intercept: mode === 'intercept' ? { logPayloads } : undefined,
       });
 
@@ -800,31 +749,19 @@ export function registerServeCommand(program: Command) {
         console.log(colors.yellow('\n⚠️  MITM mode active - clients must trust the proxy CA certificate'));
       }
 
-      // Request event
-      server.on('request', (req: any) => {
-        const method = req.method.padEnd(7);
-        const status = req.isHttps ? colors.cyan('HTTPS') : colors.gray('HTTP ');
-        const target = `${req.targetHost}:${req.targetPort}`;
+      // Request event: raffel emits { request, response } with ProxyRequest/ProxyResponse shapes
+      server.on('request', ({ request, response }: any) => {
+        const method = (request.method ?? 'GET').padEnd(7);
+        const url = request.url ?? '';
+        const isHttps = url.startsWith('https');
+        const proto = isHttps ? colors.cyan('HTTPS') : colors.gray('HTTP ');
+        const pathname = url ? (() => { try { return new URL(url).pathname; } catch { return url; } })() : '';
         console.log(
           colors.gray(`${new Date().toISOString()} `) +
           colors.green(method) +
-          status + ' ' +
-          colors.cyan(target) +
-          (req.method !== 'CONNECT' ? ` ${colors.gray(new URL(req.url).pathname)}` : '')
-        );
-      });
-
-      // Response event
-      server.on('response', (res: any) => {
-        const statusColor = res.statusCode >= 500 ? colors.red :
-                           res.statusCode >= 400 ? colors.yellow :
-                           res.statusCode >= 300 ? colors.cyan :
-                           colors.green;
-        console.log(
-          colors.gray(`${new Date().toISOString()} `) +
-          statusColor(`← ${res.statusCode}`) +
-          colors.gray(` ${res.latency}ms`) +
-          (res.size > 0 ? colors.gray(` ${formatBytes(res.size)}`) : '')
+          proto + ' ' +
+          colors.cyan(url.replace(/^https?:\/\/[^/]+/, '').slice(0, 40) || '/') +
+          (response?.statusCode ? ` ${colors.gray(`← ${response.statusCode}`)}` : '')
         );
       });
 
@@ -832,8 +769,7 @@ export function registerServeCommand(program: Command) {
       server.on('error', (err: any) => {
         console.log(
           colors.gray(`${new Date().toISOString()} `) +
-          colors.red(`✗ ${err.type}: ${err.message}`) +
-          (err.targetHost ? colors.gray(` → ${err.targetHost}:${err.targetPort}`) : '')
+          colors.red(`✗ ${err.message ?? err}`)
         );
       });
 
@@ -841,12 +777,10 @@ export function registerServeCommand(program: Command) {
       let statsInterval: NodeJS.Timeout | undefined;
       if (verbose) {
         statsInterval = setInterval(() => {
-          const stats = server.stats;
+          const stats = server.statistics;
           console.log(colors.gray(
             `\n[stats] ${stats.totalRequests} req | ` +
-            `${stats.successCount} ok | ${stats.errorCount} err | ` +
-            `${formatBytes(stats.bytesIn)} in | ${formatBytes(stats.bytesOut)} out | ` +
-            `${stats.avgLatency}ms avg | ${stats.requestsPerSecond} rps\n`
+            `${formatBytes(stats.totalBytesTransferred)} transferred\n`
           ));
         }, 30000);
       }
@@ -854,11 +788,10 @@ export function registerServeCommand(program: Command) {
       process.on('SIGINT', async () => {
         console.log(colors.yellow('\nShutting down...'));
         if (statsInterval) clearInterval(statsInterval);
-        const stats = server.stats;
+        const stats = server.statistics;
         console.log(colors.gray(
           `Final stats: ${stats.totalRequests} requests | ` +
-          `${stats.successCount} success | ${stats.errorCount} errors | ` +
-          `${formatBytes(stats.bytesIn + stats.bytesOut)} transferred`
+          `${formatBytes(stats.totalBytesTransferred)} transferred`
         ));
         await server.stop();
         process.exit(0);

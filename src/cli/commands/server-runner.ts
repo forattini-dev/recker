@@ -290,8 +290,8 @@ export class ServerRunner extends CommandEmitter {
   private async createServer(type: ServerType, options: any): Promise<AnyServer> {
     switch (type) {
       case 'http': {
-        const { MockHttpServer } = await import('../../testing/mock-http-server.js');
-        const server = await MockHttpServer.create({
+        const { createMockHttpServer } = await import('../../testing/index.js');
+        const server = await createMockHttpServer({
           port: options.port,
           host: options.host,
           delay: options.delay,
@@ -299,10 +299,15 @@ export class ServerRunner extends CommandEmitter {
         });
 
         if (options.echo) {
-          server.any('/*', (req: any) => ({
+          const echoHandler = (req: any) => ({
             status: 200,
             body: { method: req.method, path: req.path, query: req.query, headers: req.headers, body: req.body },
-          }));
+          });
+          server.get('/*', echoHandler);
+          server.post('/*', echoHandler);
+          server.put('/*', echoHandler);
+          server.patch('/*', echoHandler);
+          server.delete('/*', echoHandler);
         }
 
         this.attachHttpEvents(server);
@@ -310,41 +315,44 @@ export class ServerRunner extends CommandEmitter {
       }
 
       case 'webhook': {
-        const { createWebhookServer } = await import('../../testing/mock-http-server.js');
-        const server = await createWebhookServer({
-          port: options.port,
-          host: options.host,
-          status: options.status || 204,
-          log: false, // We handle logging via events
-        });
+        const { createMockHttpServer } = await import('../../testing/index.js');
+        const webhookStatus = options.status || 204;
+        const webhookHandler = () => ({ status: webhookStatus });
+        const server = await createMockHttpServer({ port: options.port, host: options.host });
+        server.get('/*', webhookHandler);
+        server.post('/*', webhookHandler);
+        server.put('/*', webhookHandler);
+        server.patch('/*', webhookHandler);
+        server.delete('/*', webhookHandler);
 
         this.attachHttpEvents(server);
         return server;
       }
 
       case 'websocket': {
-        const { MockWebSocketServer } = await import('../../testing/mock-websocket-server.js');
-        const server = await MockWebSocketServer.create({
+        const { createMockWebSocketServer } = await import('../../testing/index.js');
+        const server = await createMockWebSocketServer({
           port: options.port,
           host: options.host,
-          echo: options.echo !== false,
-          delay: options.delay,
         });
+        if (options.echo === false) {
+          server.setMessageHandler(() => undefined);
+        }
 
         this.attachWebSocketEvents(server);
         return server;
       }
 
       case 'sse': {
-        const { MockSSEServer } = await import('../../testing/mock-sse-server.js');
-        const server = await MockSSEServer.create({
+        const { createMockSSEServer } = await import('../../testing/index.js');
+        const server = await createMockSSEServer({
           port: options.port,
           host: options.host,
           path: options.path || '/events',
         });
 
         if (options.heartbeat) {
-          server.startPeriodicEvents('heartbeat', options.heartbeat);
+          server.startPeriodicEvents('heartbeat', options.heartbeat, () => ({ data: 'heartbeat', event: 'heartbeat' }));
         }
 
         this.attachSSEEvents(server);
@@ -352,80 +360,42 @@ export class ServerRunner extends CommandEmitter {
       }
 
       case 'hls': {
-        const { MockHlsServer } = await import('../../testing/mock-hls-server.js');
-        const http = await import('node:http');
-
-        const baseUrl = `http://${options.host}:${options.port}`;
-        const hlsServer = await MockHlsServer.create({
-          baseUrl,
+        const { createMockHlsServer } = await import('../../testing/index.js');
+        const hlsServer = await createMockHlsServer({
+          port: options.port,
+          host: options.host,
           mode: options.mode || 'vod',
           segmentCount: options.segments || 10,
           segmentDuration: options.duration || 6,
-          multiQuality: true,
         });
 
-        // Wrap HLS server in HTTP server
-        const httpServer = http.createServer(async (req, res) => {
-          const url = `${baseUrl}${req.url}`;
-          this.stats.totalRequests++;
-
-          this.emit('data', {
-            type: 'data',
-            category: 'server:request',
-            timestamp: Date.now(),
-            command: 'server',
-            level: 'debug',
-            payload: { method: req.method, path: req.url },
-          });
-
-          try {
-            const response = await hlsServer.transport.dispatch({ url, method: req.method || 'GET' } as any) as any;
-            res.statusCode = response.status;
-            response.headers.forEach((value: string, key: string) => res.setHeader(key, value));
-            const body = await response.arrayBuffer();
-            res.end(Buffer.from(body));
-          } catch {
-            res.statusCode = 404;
-            res.end('Not Found');
-          }
-        });
-
-        await new Promise<void>((resolve) => {
-          httpServer.listen(options.port, options.host, () => resolve());
-        });
-
-        // Return a combined server object
         return {
-          port: options.port,
+          port: hlsServer.port,
           address: options.host,
-          url: hlsServer.manifestUrl,
-          isRunning: true,
-          stop: async () => {
-            httpServer.close();
-            await hlsServer.stop();
-          },
-          on: () => this,
-          emit: () => false,
-          // EventEmitter methods
+          url: hlsServer.masterUrl,
+          isRunning: hlsServer.isRunning,
+          stop: () => hlsServer.stop(),
+          on: hlsServer.on.bind(hlsServer),
+          emit: hlsServer.emit.bind(hlsServer),
         } as unknown as AnyServer;
       }
 
       case 'udp': {
-        const { MockUDPServer } = await import('../../testing/mock-udp-server.js');
-        const server = new MockUDPServer({
+        const { createMockUdpServer } = await import('../../testing/index.js');
+        const server = await createMockUdpServer({
           port: options.port,
           host: options.host,
-          echo: options.echo !== false,
         });
-
-        await server.start();
+        if (options.echo === false) {
+          server.setMessageHandler(() => undefined);
+        }
         this.attachUDPEvents(server);
         return server;
       }
 
       case 'dns': {
-        const { MockDnsServer } = await import('../../testing/mock-dns-server.js');
-        const server = await MockDnsServer.create({
+        const { createMockDnsServer } = await import('../../testing/index.js');
+        const server = await createMockDnsServer({
           port: options.port,
           host: options.host,
           delay: options.delay,
@@ -436,11 +406,11 @@ export class ServerRunner extends CommandEmitter {
       }
 
       case 'whois': {
-        const { MockWhoisServer } = await import('../../testing/mock-whois-server.js');
-        const server = await MockWhoisServer.create({
+        const { createMockWhoisServer } = await import('../../testing/index.js');
+        const server = await createMockWhoisServer({
           port: options.port,
           host: options.host,
-          delay: options.delay,
+          responseDelay: options.delay,
         });
 
         this.attachWhoisEvents(server);
@@ -448,12 +418,11 @@ export class ServerRunner extends CommandEmitter {
       }
 
       case 'telnet': {
-        const { MockTelnetServer } = await import('../../testing/mock-telnet-server.js');
-        const server = await MockTelnetServer.create({
+        const { createMockTelnetServer } = await import('../../testing/index.js');
+        const server = await createMockTelnetServer({
           port: options.port,
           host: options.host,
-          echo: options.echo !== false,
-          delay: options.delay,
+          responseDelay: options.delay,
         });
 
         this.attachTelnetEvents(server);
@@ -461,14 +430,10 @@ export class ServerRunner extends CommandEmitter {
       }
 
       case 'ftp': {
-        const { MockFtpServer } = await import('../../testing/mock-ftp-server.js');
-        const server = await MockFtpServer.create({
+        const { createMockFtpServer } = await import('../../testing/index.js');
+        const server = await createMockFtpServer({
           port: options.port,
           host: options.host,
-          username: options.username || 'user',
-          password: options.password || 'pass',
-          anonymous: options.anonymous !== false,
-          delay: options.delay,
         });
 
         this.attachFTPEvents(server);
@@ -633,7 +598,7 @@ export class ServerRunner extends CommandEmitter {
   }
 
   private attachDNSEvents(server: AnyServer): void {
-    server.on('query', (query: { domain: string; type: string }) => {
+    server.on('query', (query: { name: string; type: string }) => {
       this.stats.totalRequests++;
 
       this.emit('data', {
@@ -643,7 +608,7 @@ export class ServerRunner extends CommandEmitter {
         command: 'server',
         level: 'debug',
         payload: {
-          domain: query.domain,
+          domain: query.name,
           recordType: query.type,
         },
       });

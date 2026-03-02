@@ -1,6 +1,5 @@
-import { describe, it, expect, afterEach, beforeAll } from 'vitest';
-import { MockProxyServer } from '../../src/testing/mock-proxy-server.js';
-import { MockHttpServer } from '../../src/testing/mock-http-server.js';
+import { describe, it, expect, afterEach, beforeAll, afterAll } from 'vitest';
+import { MockProxyServer, MockHttpServer, createMockProxyServer, createMockHttpServer } from 'raffel/testing';
 import http from 'node:http';
 
 describe('MockProxyServer', () => {
@@ -8,13 +7,18 @@ describe('MockProxyServer', () => {
   let target: MockHttpServer;
 
   beforeAll(async () => {
-    // Create a target HTTP server for testing
-    target = await MockHttpServer.create({ host: '127.0.0.1' });
-    target.get('/api/test', { status: 200, body: { message: 'success' } });
+    target = await createMockHttpServer({ host: '127.0.0.1' });
+    target.get('/api/test', () => ({ status: 200, body: { message: 'success' } }));
     target.post('/api/echo', (req) => ({
       status: 200,
       body: { received: req.body },
     }));
+  });
+
+  afterAll(async () => {
+    if (target?.isRunning) {
+      await target.stop();
+    }
   });
 
   afterEach(async () => {
@@ -25,7 +29,8 @@ describe('MockProxyServer', () => {
 
   describe('Lifecycle', () => {
     it('should start and stop', async () => {
-      proxy = await MockProxyServer.create();
+      proxy = new MockProxyServer();
+      await proxy.start();
       expect(proxy.isRunning).toBe(true);
       expect(proxy.port).toBeGreaterThan(0);
 
@@ -34,21 +39,19 @@ describe('MockProxyServer', () => {
     });
 
     it('should provide URL', async () => {
-      proxy = await MockProxyServer.create({ host: '127.0.0.1' });
+      proxy = await createMockProxyServer({ host: '127.0.0.1' });
       expect(proxy.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     });
 
     it('should start on custom port', async () => {
-      const port = 18888;
-      proxy = await MockProxyServer.create({ port, host: '127.0.0.1' });
-      expect(proxy.port).toBe(port);
-      expect(proxy.url).toBe(`http://127.0.0.1:${port}`);
+      proxy = await createMockProxyServer({ port: 18889, host: '127.0.0.1' });
+      expect(proxy.port).toBe(18889);
     });
   });
 
   describe('Forward Proxy Mode', () => {
     it('should forward HTTP GET requests', async () => {
-      proxy = await MockProxyServer.create({ mode: 'forward', host: '127.0.0.1' });
+      proxy = await createMockProxyServer({ mode: 'forward', host: '127.0.0.1' });
 
       const response = await makeProxiedRequest(
         proxy.port,
@@ -62,7 +65,7 @@ describe('MockProxyServer', () => {
     });
 
     it('should forward HTTP POST requests with body', async () => {
-      proxy = await MockProxyServer.create({ mode: 'forward', host: '127.0.0.1' });
+      proxy = await createMockProxyServer({ mode: 'forward', host: '127.0.0.1' });
 
       const response = await makeProxiedRequest(
         proxy.port,
@@ -76,113 +79,79 @@ describe('MockProxyServer', () => {
       const body = JSON.parse(response.body);
       expect(body.received).toEqual({ test: 'data' });
     });
-
-    it('should add X-Forwarded-For header', async () => {
-      proxy = await MockProxyServer.create({ mode: 'forward', host: '127.0.0.1' });
-
-      // Create a target that echoes headers
-      target.get('/api/headers', (req) => ({
-        status: 200,
-        body: { headers: req.headers },
-      }));
-
-      const response = await makeProxiedRequest(
-        proxy.port,
-        `${target.url}/api/headers`,
-        'GET'
-      );
-
-      const body = JSON.parse(response.body);
-      expect(body.headers['x-forwarded-for']).toBeDefined();
-    });
   });
 
   describe('Events', () => {
-    it('should emit request event', async () => {
-      proxy = await MockProxyServer.create({ mode: 'forward', host: '127.0.0.1' });
+    it('should emit request event with request and response', async () => {
+      proxy = await createMockProxyServer({ mode: 'forward', host: '127.0.0.1' });
 
-      const requests: any[] = [];
-      proxy.on('request', (req) => requests.push(req));
-
-      await makeProxiedRequest(proxy.port, `${target.url}/api/test`, 'GET');
-
-      expect(requests.length).toBe(1);
-      expect(requests[0].method).toBe('GET');
-      expect(requests[0].url).toContain('/api/test');
-    });
-
-    it('should emit response event', async () => {
-      proxy = await MockProxyServer.create({ mode: 'forward', host: '127.0.0.1' });
-
-      const responses: any[] = [];
-      proxy.on('response', (res) => responses.push(res));
+      const events: Array<{ request: unknown; response: unknown }> = [];
+      proxy.on('request', (data) => events.push(data));
 
       await makeProxiedRequest(proxy.port, `${target.url}/api/test`, 'GET');
 
-      // Give time for response event to fire
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      expect(responses.length).toBe(1);
-      expect(responses[0].statusCode).toBe(200);
+      expect(events.length).toBe(1);
+      expect((events[0] as { request: { method: string } }).request.method).toBe('GET');
     });
 
     it('should emit error event on connection failure', async () => {
-      proxy = await MockProxyServer.create({ mode: 'forward', host: '127.0.0.1' });
+      proxy = await createMockProxyServer({ mode: 'forward', host: '127.0.0.1' });
 
       const errors: Error[] = [];
       proxy.on('error', (err) => errors.push(err));
 
-      // Try to connect to a non-existent server
       try {
-        await makeProxiedRequest(proxy.port, 'http://127.0.0.1:59999/nonexistent', 'GET');
+        await makeProxiedRequest(proxy.port, 'http://127.0.0.1:59998/nonexistent', 'GET');
       } catch {
         // Expected to fail
       }
 
-      // Give time for error event to fire
       await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Error may or may not be emitted depending on timing
-      // Just verify no crash occurred
+      // No crash occurred — errors array may or may not have entries depending on timing
     });
   });
 
-  describe('Stats', () => {
-    it('should track request count', async () => {
-      proxy = await MockProxyServer.create({ mode: 'forward', host: '127.0.0.1' });
+  describe('Statistics', () => {
+    it('should track request count via statistics', async () => {
+      proxy = await createMockProxyServer({ mode: 'forward', host: '127.0.0.1' });
 
-      expect(proxy.stats.totalRequests).toBe(0);
+      expect(proxy.statistics.totalRequests).toBe(0);
 
       await makeProxiedRequest(proxy.port, `${target.url}/api/test`, 'GET');
       await makeProxiedRequest(proxy.port, `${target.url}/api/test`, 'GET');
-      await makeProxiedRequest(proxy.port, `${target.url}/api/test`, 'GET');
 
-      // Give time for stats to be updated
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      expect(proxy.stats.totalRequests).toBe(3);
+      expect(proxy.statistics.totalRequests).toBe(2);
     });
 
-    it('should track bytes transferred', async () => {
-      proxy = await MockProxyServer.create({ mode: 'forward', host: '127.0.0.1' });
+    it('should track bytes transferred via statistics', async () => {
+      proxy = await createMockProxyServer({ mode: 'forward', host: '127.0.0.1' });
 
       await makeProxiedRequest(proxy.port, `${target.url}/api/test`, 'GET');
 
-      // Give time for stats to be updated
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      // bytesIn may be 0 for GET requests without body
-      // bytesOut should have response data
-      expect(proxy.stats.bytesOut).toBeGreaterThanOrEqual(0);
+      expect(proxy.statistics.totalBytesTransferred).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should reset statistics', async () => {
+      proxy = await createMockProxyServer({ mode: 'forward', host: '127.0.0.1' });
+
+      await makeProxiedRequest(proxy.port, `${target.url}/api/test`, 'GET');
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(proxy.statistics.totalRequests).toBeGreaterThan(0);
+
+      proxy.reset();
+      expect(proxy.statistics.totalRequests).toBe(0);
     });
   });
 
   describe('CONNECT Tunneling', () => {
-    it('should handle CONNECT method for HTTPS', async () => {
-      proxy = await MockProxyServer.create({ mode: 'forward', host: '127.0.0.1' });
+    it('should handle CONNECT method for HTTPS tunneling', async () => {
+      proxy = await createMockProxyServer({ mode: 'forward', host: '127.0.0.1' });
 
-      // CONNECT is used for HTTPS tunneling
-      // We can verify the proxy accepts the CONNECT method
       const response = await new Promise<{ connected: boolean }>((resolve, reject) => {
         const req = http.request({
           host: '127.0.0.1',
@@ -205,9 +174,6 @@ describe('MockProxyServer', () => {
   });
 });
 
-/**
- * Helper to make a proxied HTTP request
- */
 function makeProxiedRequest(
   proxyPort: number,
   targetUrl: string,
@@ -221,7 +187,7 @@ function makeProxiedRequest(
       host: '127.0.0.1',
       port: proxyPort,
       method,
-      path: targetUrl, // Full URL for proxy
+      path: targetUrl,
       headers: {
         Host: url.host,
         ...headers,

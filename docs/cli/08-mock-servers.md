@@ -424,53 +424,19 @@ rek serve http delay=5000  # Very slow
 
 ## Programmatic Usage
 
-All mock servers are also available as a library:
+> Mock servers are implemented in **[raffel](https://github.com/forattini-dev/raffel)**. Recker re-exports them from `raffel/testing` — import from either package.
 
 ```typescript
-import {
-  MockHttpServer,
-  MockProxyServer,
-  createForwardProxy,
-  MockWebSocketServer,
-  MockSSEServer,
-  MockHlsServer,
-  MockUDPServer,
-  MockDnsServer,
-  MockWhoisServer,
-  MockTelnetServer,
-  MockFtpServer
-} from 'recker/testing';
+import { createMockHttpServer } from 'raffel/testing';
+// or: import { createMockHttpServer } from 'recker/testing';
 
-// Create and start servers
-const http = await MockHttpServer.create({ port: 3000 });
-const proxy = await createForwardProxy(8888);
-const ws = await MockWebSocketServer.create({ port: 8080 });
-const hls = await MockHlsServer.create({ mode: 'live' });
-const dns = await MockDnsServer.create({ port: 5353 });
-const ftp = await MockFtpServer.create({ port: 2121 });
-
-// Add custom data
-dns.addRecord('myapp.local', 'A', '192.168.1.50');
-ftp.addFile('/custom.txt', 'Custom content');
-
-// Listen to proxy events
-proxy.on('request', (req) => console.log(req.method, req.url));
-proxy.on('response', (res) => console.log(res.statusCode, res.latency));
-
-// Use in tests
-const response = await fetch('http://localhost:3000/test');
-await ws.broadcast('Hello from test!');
-
-// Clean up
-await http.stop();
-await proxy.stop();
-await ws.stop();
-await hls.stop();
-await dns.stop();
-await ftp.stop();
+const server = await createMockHttpServer();
+server.get('/test', () => ({ status: 200, body: { ok: true } }));
+// ...
+await server.stop();
 ```
 
-See [Testing Reference](/reference/03-testing.md) for more details on programmatic usage.
+For the complete API reference, see [raffel's testing docs](https://github.com/forattini-dev/raffel) or [Testing Reference](/reference/03-testing.md).
 
 ## Proxy Server
 

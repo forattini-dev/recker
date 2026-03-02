@@ -1,7 +1,8 @@
 /**
  * Recker Testing Utilities
  *
- * Provides mocking and testing helpers for Recker HTTP client
+ * Provides mocking and testing helpers for Recker HTTP client.
+ * Mock servers are delegated to raffel/testing.
  *
  * @example
  * ```typescript
@@ -35,6 +36,7 @@
  * ```
  */
 
+// client-side mocking (no raffel equivalent)
 export {
   MockClient,
   MockTransport,
@@ -49,149 +51,5 @@ export type {
   MockInterceptOptions,
 } from './mock.js';
 
-// UDP Testing
-export {
-  MockUDPServer,
-  createMockUDPServer,
-} from './mock-udp-server.js';
-
-export type {
-  MockUDPServerOptions,
-  ReceivedMessage,
-} from './mock-udp-server.js';
-
-// HLS Testing
-export {
-  MockHlsServer,
-  createMockHlsVod,
-  createMockHlsLive,
-  createMockHlsMultiQuality,
-} from './mock-hls-server.js';
-
-export type {
-  MockHlsServerOptions,
-  MockHlsVariant,
-  MockHlsSegment,
-  MockHlsStats,
-} from './mock-hls-server.js';
-
-// WebSocket Testing
-export {
-  MockWebSocketServer,
-  createMockWebSocketServer,
-} from './mock-websocket-server.js';
-
-export type {
-  MockWebSocketServerOptions,
-  MockWebSocketClient,
-  MockWebSocketMessage,
-  MockWebSocketStats,
-} from './mock-websocket-server.js';
-
-// SSE Testing
-export {
-  MockSSEServer,
-  createMockSSEServer,
-} from './mock-sse-server.js';
-
-export type {
-  MockSSEServerOptions,
-  SSEEvent,
-  MockSSEClient,
-  MockSSEStats,
-} from './mock-sse-server.js';
-
-// HTTP Testing
-export {
-  MockHttpServer,
-  createMockHttpServer,
-  createWebhookServer,
-} from './mock-http-server.js';
-
-export type {
-  MockHttpServerOptions,
-  MockHttpResponse,
-  MockHttpRequest,
-  MockHttpHandler,
-  MockHttpStats,
-  WebhookServerOptions,
-  WebhookPayload,
-} from './mock-http-server.js';
-
-// DNS Testing
-export {
-  MockDnsServer,
-} from './mock-dns-server.js';
-
-export type {
-  MockDnsServerOptions,
-  DnsRecordType,
-  DnsRecord,
-  DnsMxRecord,
-  DnsSoaRecord,
-  DnsSrvRecord,
-  MockDnsStats,
-} from './mock-dns-server.js';
-
-// WHOIS Testing
-export {
-  MockWhoisServer,
-} from './mock-whois-server.js';
-
-export type {
-  MockWhoisServerOptions,
-  WhoisDomainData,
-  MockWhoisStats,
-} from './mock-whois-server.js';
-
-// Telnet Testing
-export {
-  MockTelnetServer,
-} from './mock-telnet-server.js';
-
-export type {
-  MockTelnetServerOptions,
-  CommandHandler,
-  TelnetSession,
-  MockTelnetStats,
-} from './mock-telnet-server.js';
-
-// FTP Testing
-export {
-  MockFtpServer,
-} from './mock-ftp-server.js';
-
-export type {
-  MockFtpServerOptions,
-  VirtualFile,
-  FtpSession,
-  MockFtpStats,
-} from './mock-ftp-server.js';
-
-// Proxy Testing
-export {
-  MockProxyServer,
-  createForwardProxy,
-  createInterceptProxy,
-} from './mock-proxy-server.js';
-
-export type {
-  ProxyServerOptions,
-  ProxyMode,
-  ProxyRequest,
-  ProxyResponse,
-  ProxyError,
-  ProxyStats,
-} from './mock-proxy-server.js';
-
-// Proxy Certificate Utils
-export {
-  generateCertificate,
-  generateCA,
-  getDefaultCA,
-} from './proxy-certs.js';
-
-export type {
-  CertificateInfo,
-  CertificateOptions,
-} from './proxy-certs.js';
+// server-side mock servers (delegated to raffel)
+export * from 'raffel/testing';

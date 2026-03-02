@@ -715,171 +715,19 @@ describe('E2E: UserService', () => {
 
 ## Mock Servers
 
-Recker provides 10 built-in mock servers for testing various protocols:
-
-### Available Mock Servers
-
-| Server | Port | Protocol | Use Case |
-|--------|------|----------|----------|
-| `MockHttpServer` | Any | HTTP | API testing, webhooks |
-| `MockProxyServer` | 8888 | HTTP/HTTPS | Proxy testing, MITM |
-| `MockWebSocketServer` | Any | WebSocket | Real-time apps |
-| `MockDnsServer` | 5353 | DNS | DNS resolution testing |
-| `MockWhoisServer` | 43 | WHOIS | Domain lookup testing |
-| `MockHlsServer` | Any | HLS | Video streaming |
-| `MockSSEServer` | Any | SSE | Server-sent events |
-| `MockFtpServer` | 21 | FTP | File transfer |
-| `MockTelnetServer` | 23 | Telnet | Remote terminal |
-| `MockUDPServer` | Any | UDP | UDP protocol |
-
-### MockHttpServer
+> Mock servers are implemented in **[raffel](https://github.com/forattini-dev/raffel)** — recker re-exports them from `raffel/testing` for convenience. For the full API documentation, see raffel's docs.
 
 ```typescript
-import { MockHttpServer } from 'recker/testing';
-
-const server = await MockHttpServer.create({ port: 3000 });
-
-// Define routes
-server.get('/users', { status: 200, body: [{ id: 1, name: 'John' }] });
-server.post('/users', (req) => ({
-  status: 201,
-  body: { id: 2, ...req.body }
-}));
-
-// Use in tests
-const client = createClient({ baseUrl: server.url });
-const users = await client.get('/users').json();
-
-await server.stop();
+// Both imports are equivalent:
+import { createMockHttpServer, createMockWebSocketServer } from 'raffel/testing';
+import { createMockHttpServer, createMockWebSocketServer } from 'recker/testing';
 ```
 
-### MockProxyServer
+Available servers: `MockHttpServer`, `MockWebSocketServer`, `MockDnsServer`, `MockHlsServer`,
+`MockSSEServer`, `MockProxyServer`, `MockFtpServer`, `MockTelnetServer`, `MockWhoisServer`,
+`MockUdpServer`, `MockTcpServer`.
 
-```typescript
-import { MockProxyServer, createForwardProxy } from 'recker/testing';
-
-// Forward proxy (tunneling)
-const proxy = await createForwardProxy(8888);
-console.log(`Proxy at ${proxy.url}`);
-
-// Listen for traffic
-proxy.on('request', (req) => console.log(req.method, req.url));
-proxy.on('response', (res) => console.log(res.statusCode, res.latency));
-
-// Get stats
-console.log(proxy.stats.totalRequests);
-console.log(proxy.stats.topHosts);
-
-await proxy.stop();
-```
-
-See [Proxy Server documentation](/cli/10-proxy.md) for full details.
-
-### MockWebSocketServer
-
-```typescript
-import { MockWebSocketServer } from 'recker/testing';
-
-const ws = await MockWebSocketServer.create({ port: 8080 });
-
-// Handle messages
-ws.onMessage((client, message) => {
-  client.send(`Echo: ${message}`);
-});
-
-// Broadcast
-ws.broadcast('Hello everyone!');
-
-await ws.stop();
-```
-
-### MockDnsServer
-
-```typescript
-import { MockDnsServer } from 'recker/testing';
-
-const dns = new MockDnsServer({ port: 5353 });
-
-// Add records
-dns.addRecord('example.com', 'A', '93.184.216.34');
-dns.addRecord('example.com', 'MX', { priority: 10, exchange: 'mail.example.com' });
-
-await dns.start();
-// Test DNS resolution pointing to localhost:5353
-await dns.stop();
-```
-
-### MockHlsServer
-
-```typescript
-import { createMockHlsVod, createMockHlsLive } from 'recker/testing';
-
-// VOD stream (finite)
-const vod = await createMockHlsVod({
-  port: 8082,
-  duration: 60,  // 60 seconds
-  segmentDuration: 2
-});
-
-// Live stream (continuous)
-const live = await createMockHlsLive({
-  port: 8083,
-  segmentDuration: 2
-});
-
-console.log(vod.manifestUrl);  // http://localhost:8082/stream.m3u8
-```
-
-### Importing
-
-All mock servers are available from `recker/testing`:
-
-```typescript
-import {
-  // HTTP
-  MockHttpServer,
-  createMockHttpServer,
-  createWebhookServer,
-
-  // Proxy
-  MockProxyServer,
-  createForwardProxy,
-  createInterceptProxy,
-  generateCertificate,
-  generateCA,
-  getDefaultCA,
-
-  // WebSocket
-  MockWebSocketServer,
-  createMockWebSocketServer,
-
-  // DNS
-  MockDnsServer,
-
-  // WHOIS
-  MockWhoisServer,
-
-  // HLS
-  MockHlsServer,
-  createMockHlsVod,
-  createMockHlsLive,
-  createMockHlsMultiQuality,
-
-  // SSE
-  MockSSEServer,
-  createMockSSEServer,
-
-  // FTP
-  MockFtpServer,
-
-  // Telnet
-  MockTelnetServer,
-
-  // UDP
-  MockUDPServer,
-  createMockUDPServer,
-} from 'recker/testing';
-```
+The CLI commands (`rek serve http`, `rek serve ws`, etc.) are still part of recker — see [Mock Servers CLI](/cli/08-mock-servers.md).
 
 ## Next Steps
 
