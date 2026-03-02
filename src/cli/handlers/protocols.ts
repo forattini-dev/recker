@@ -45,7 +45,7 @@ export const ftpLsHandler: RekHandler = withHandler(
 
     const connectResult = await client.connect()
     if (!connectResult.success) {
-      throw new ConnectionError(connectResult.message, {
+      throw new ConnectionError(connectResult.message ?? 'Connection failed', {
         host,
         port,
       })
@@ -57,7 +57,7 @@ export const ftpLsHandler: RekHandler = withHandler(
 
     const result = await client.list(remotePath)
     if (!result.success || !result.data) {
-      throw new ValidationError(result.message, {
+      throw new ValidationError(result.message ?? 'Operation failed', {
         field: 'path',
         value: remotePath,
       })
@@ -134,7 +134,7 @@ export const ftpGetHandler: RekHandler = withHandler(
 
     const connectResult = await client.connect()
     if (!connectResult.success) {
-      throw new ConnectionError(connectResult.message, {
+      throw new ConnectionError(connectResult.message ?? 'Connection failed', {
         host,
         port,
       })
@@ -158,7 +158,7 @@ export const ftpGetHandler: RekHandler = withHandler(
     const result = await client.download(remote, local)
     if (!extCtx) out.log('')
     if (!result.success) {
-      throw new ValidationError(result.message, {
+      throw new ValidationError(result.message ?? 'Operation failed', {
         field: 'remote',
         value: remote,
       })
@@ -210,7 +210,7 @@ export const ftpPutHandler: RekHandler = withHandler(
 
     const connectResult = await client.connect()
     if (!connectResult.success) {
-      throw new ConnectionError(connectResult.message, {
+      throw new ConnectionError(connectResult.message ?? 'Connection failed', {
         host,
         port,
       })
@@ -234,7 +234,7 @@ export const ftpPutHandler: RekHandler = withHandler(
     const result = await client.upload(local, remote)
     if (!extCtx) out.log('')
     if (!result.success) {
-      throw new ValidationError(result.message, {
+      throw new ValidationError(result.message ?? 'Operation failed', {
         field: 'local',
         value: local,
       })

@@ -276,6 +276,7 @@
   "peerDependencies": {
     "cardinal": "^2.1.0",
     "ioredis": "^5.0.0",
+    "socks": "^2.8.0",
     "ssh2-sftp-client": "^11.0.0",
     "ws": "^8.0.0"
   },
@@ -284,6 +285,9 @@
       "optional": true
     },
     "ioredis": {
+      "optional": true
+    },
+    "socks": {
       "optional": true
     },
     "ssh2-sftp-client": {
@@ -320,6 +324,7 @@
     "picocolors": "^1.1.1",
     "popsicle": "^12.1.2",
     "serve": "^14.2.5",
+    "socks": "^2.8.3",
     "ssh2-sftp-client": "^12.0.1",
     "superagent": "^10.3.0",
     "tsx": "^4.21.0",

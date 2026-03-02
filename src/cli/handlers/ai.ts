@@ -57,12 +57,12 @@ export const aiChatHandler: RekHandler = withHandler(
     }
 
     // Check if preset has AI config
-    if (!presetConfig._aiConfig) {
+    if (!(presetConfig as any)._aiConfig) {
       out.error(`Preset @${presetName} does not support AI features.`)
       return
     }
 
-    const client = createClient(presetConfig)
+    const client = createClient(presetConfig as any)
 
     // Override model if specified
     if (model) {

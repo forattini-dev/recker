@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { Transport, ReckerRequest, ReckerResponse } from '../types/index.js';
+import { Transport, ReckerRequest, ReckerResponse, ProxyOptions } from '../types/index.js';
 import { HttpResponse } from '../core/response.js';
 import { NetworkError } from '../core/errors.js';
 import { getCurlPath, hasImpersonate } from '../utils/binary-manager.js';
@@ -160,6 +160,20 @@ async function getCommand(): Promise<string> {
 }
 
 export class CurlTransport implements Transport {
+  private proxyList: (ProxyOptions | string)[];
+  private proxyIndex = 0;
+
+  constructor(proxy?: ProxyOptions | string | (ProxyOptions | string)[]) {
+    this.proxyList = proxy ? (Array.isArray(proxy) ? proxy : [proxy]) : [];
+  }
+
+  private getNextProxy(): ProxyOptions | string | undefined {
+    if (this.proxyList.length === 0) return undefined;
+    const slot = this.proxyList[this.proxyIndex % this.proxyList.length];
+    this.proxyIndex++;
+    return slot;
+  }
+
   async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
     return new Promise(async (resolve, reject) => {
       const args = [
@@ -173,6 +187,33 @@ export class CurlTransport implements Transport {
         '--write-out',
         `\\n${TIMING_MARKER} dns=%{time_namelookup} tcp=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}`,
       ];
+
+      // Proxy support
+      const proxy = this.getNextProxy();
+      if (proxy) {
+        const proxyUrl = typeof proxy === 'string' ? proxy : proxy.url;
+        const proxyType = typeof proxy === 'object' && proxy.type
+          ? proxy.type
+          : new URL(proxyUrl).protocol.replace(':', '');
+
+        if (proxyType === 'socks5h') {
+          // --socks5-hostname: proxy resolves DNS (remote DNS)
+          args.push('--socks5-hostname', proxyUrl.replace(/^socks5h:\/\//, ''));
+        } else if (proxyType === 'socks5' || proxyType === 'socks') {
+          // --socks5: local DNS resolution
+          args.push('--socks5', proxyUrl.replace(/^socks5?:\/\//, ''));
+        } else if (proxyType === 'socks4a') {
+          args.push('--socks4a', proxyUrl.replace(/^socks4a:\/\//, ''));
+        } else if (proxyType === 'socks4') {
+          args.push('--socks4', proxyUrl.replace(/^socks4:\/\//, ''));
+        } else {
+          // HTTP/HTTPS proxy
+          args.push('--proxy', proxyUrl);
+          if (typeof proxy === 'object' && proxy.auth) {
+            args.push('--proxy-user', `${proxy.auth.username}:${proxy.auth.password}`);
+          }
+        }
+      }
 
       // Headers
       req.headers.forEach((val, key) => {

@@ -1,63 +1,38 @@
-import { Plugin, ReckerRequest } from '../types/index.js';
-import { ProxyAgent } from 'undici';
+/**
+ * Proxy Rotator Plugin
+ *
+ * Convenience wrapper that sets `ClientOptions.proxy` to a list of proxies.
+ * The actual round-robin rotation is handled natively by the transport layer.
+ *
+ * For most use cases, prefer setting `proxy` directly in `ClientOptions`:
+ * ```typescript
+ * const client = createClient({
+ *   proxy: ['http://p1:8080', 'socks5://p2:1080', 'socks5h://p3:1080'],
+ * });
+ * ```
+ */
+import type { Plugin, ProxyOptions } from '../types/index.js';
 
 export interface ProxyRotatorOptions {
-  proxies: string[];
+  proxies: (string | ProxyOptions)[];
   strategy?: 'round-robin' | 'random';
-  /** Remove proxy from rotation on error? */
-  failover?: boolean; 
+  /** @deprecated Failover is not yet implemented. */
+  failover?: boolean;
 }
 
 export function proxyRotatorPlugin(options: ProxyRotatorOptions): Plugin {
-  const proxies = options.proxies.map(url => ({
-    url,
-    agent: new ProxyAgent(url),
-    failures: 0
-  }));
-  
-  let index = 0;
-
-  const getNextProxy = () => {
-    if (proxies.length === 0) return null;
-
-    let selected;
-    if (options.strategy === 'random') {
-      selected = proxies[Math.floor(Math.random() * proxies.length)];
-    } else {
-      // Round-robin
-      selected = proxies[index];
-      index = (index + 1) % proxies.length;
-    }
-    return selected;
-  };
-
   return (client: any) => {
-    // We need to hook into the dispatch phase to override the dispatcher (agent).
-    // But Client currently sets transport once.
-    // Undici request options accepts 'dispatcher'. 
-    // We need a way to inject 'dispatcher' into the request options passed to UndiciTransport.
-    
-    // Currently, UndiciTransport uses `this.proxyAgent` or `this.options.dispatcher`.
-    // It DOES NOT read dispatcher from `req`.
-    
-    // Refactor required: UndiciTransport should check `req.dispatcher` or `req.agent` context.
-    // Let's attach the agent to the request object (simulated via internal property).
-    
-    client.beforeRequest((req: ReckerRequest) => {
-      const proxy = getNextProxy();
-      if (proxy) {
-        // Attach agent to request. We need to cast to any or update types.
-        (req as any)._dispatcher = proxy.agent;
-        // Tag request for later error handling
-        (req as any)._proxyUrl = proxy.url;
-      }
-    });
-
-    client.onError((err: Error, req: ReckerRequest) => {
-        if (options.failover && (req as any)._proxyUrl) {
-            // Mark failure logic here (remove from pool, etc)
-            // For simplicity, we just log or could filter out bad proxies in future calls
-        }
-    });
+    // Set the proxy list on the client options directly.
+    // The transport (UndiciTransport / CurlTransport) performs round-robin rotation.
+    if (options.strategy === 'random') {
+      // For random strategy, shuffle before assigning so the transport uses its own round-robin
+      // on the already-shuffled list.
+      const shuffled = [...options.proxies].sort(() => Math.random() - 0.5);
+      client.defaults = client.defaults ?? {};
+      client.defaults.proxy = shuffled;
+    } else {
+      client.defaults = client.defaults ?? {};
+      client.defaults.proxy = options.proxies;
+    }
   };
 }

@@ -116,20 +116,18 @@ describe('UndiciTransport', () => {
       expect(transport).toBeInstanceOf(UndiciTransport);
     });
 
-    it('should throw on SOCKS proxy', () => {
-      expect(() => {
-        new UndiciTransport(serverUrl, {
-          proxy: 'socks5://proxy.example.com:1080',
-        });
-      }).toThrow(NetworkError);
+    it('should accept SOCKS5 proxy', () => {
+      const transport = new UndiciTransport(serverUrl, {
+        proxy: 'socks5://proxy.example.com:1080',
+      });
+      expect(transport).toBeInstanceOf(UndiciTransport);
     });
 
-    it('should throw on SOCKS4 proxy', () => {
-      expect(() => {
-        new UndiciTransport(serverUrl, {
-          proxy: 'socks4://proxy.example.com:1080',
-        });
-      }).toThrow(NetworkError);
+    it('should accept SOCKS4 proxy', () => {
+      const transport = new UndiciTransport(serverUrl, {
+        proxy: 'socks4://proxy.example.com:1080',
+      });
+      expect(transport).toBeInstanceOf(UndiciTransport);
     });
 
     it('should create with custom agent manager', () => {
@@ -697,12 +695,11 @@ describe('UndiciTransport proxy configurations', () => {
       expect(transport).toBeInstanceOf(UndiciTransport);
     });
 
-    it('should throw for socks4a proxy', () => {
-      expect(() => {
-        new UndiciTransport('http://example.com', {
-          proxy: 'socks4a://proxy.com:1080',
-        });
-      }).toThrow(NetworkError);
+    it('should accept socks4a proxy', () => {
+      const transport = new UndiciTransport('http://example.com', {
+        proxy: 'socks4a://proxy.com:1080',
+      });
+      expect(transport).toBeInstanceOf(UndiciTransport);
     });
   });
 

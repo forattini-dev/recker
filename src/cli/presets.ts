@@ -25,7 +25,7 @@ const ENV_MAPPING: Record<string, string[]> = {
 };
 
 type PresetFactory = (options: Record<string, string>) => unknown;
-const presetFactories = presets as Record<string, PresetFactory | undefined>;
+const presetFactories = presets as unknown as Record<string, PresetFactory | undefined>;
 
 export interface ResolvePresetOptions {
   /** If true, throw errors instead of calling process.exit (for shell mode) */

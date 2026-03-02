@@ -568,10 +568,13 @@ const client = createClient();
 // Rotate user agents
 client.use(userAgent({ rotate: true, type: 'desktop' }));
 
-// Rotate proxies
+// Rotate proxies (or pass the list directly to createClient)
+const client2 = createClient({
+  proxy: ['http://proxy1:8080', 'socks5://proxy2:1080', 'socks5h://proxy3:1080'],
+});
+// Alternative via plugin
 client.use(proxyRotator({
-  proxies: ['http://proxy1:8080', 'http://proxy2:8080'],
-  strategy: 'round-robin',
+  proxies: ['http://proxy1:8080', 'socks5://proxy2:1080'],
 }));
 
 // Respect rate limits

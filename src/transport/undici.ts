@@ -344,7 +344,7 @@ interface UndiciTransportOptions {
   headersTimeout?: number;
   bodyTimeout?: number;
   maxRedirections?: number;
-  proxy?: ProxyOptions | string;
+  proxy?: ProxyOptions | string | (ProxyOptions | string)[];
   http2?: HTTP2Options;
   dns?: DNSOptions;
   agent?: AgentManager;
@@ -437,10 +437,10 @@ function mapTimeoutOptions(
 export class UndiciTransport implements Transport {
   private baseUrl: string;
   private options: UndiciTransportOptions;
-  private proxyAgent?: ProxyAgent;
+  private proxySlots: ProxySlot[] = [];
+  private proxyIndex = 0;
   private dnsAgent?: Agent;
   private agentManager?: AgentManager;
-  private proxyBypassList?: string[];
   private tlsOptions?: TLSOptions;
   private socketClient?: Client;  // Unix domain socket client
   private observability: boolean;  // Enable/disable timing capture
@@ -461,58 +461,21 @@ export class UndiciTransport implements Transport {
     // false or undefined = no caching
 
     if (options.proxy) {
-      const proxyConfig: ProxyOptions = typeof options.proxy === 'string'
-        ? { url: options.proxy }
-        : options.proxy;
+      const proxyList = Array.isArray(options.proxy) ? options.proxy : [options.proxy];
+      for (const proxyItem of proxyList) {
+        const config: ProxyOptions = typeof proxyItem === 'string' ? { url: proxyItem } : proxyItem;
+        const proxyUrl = new URL(config.url);
+        const proxyType = config.type || detectProxyType(proxyUrl.protocol) || 'http';
 
-      // Auto-detect proxy type from URL if not specified
-      const proxyUrl = new URL(proxyConfig.url);
-      const proxyType = proxyConfig.type || detectProxyType(proxyUrl.protocol);
-
-      // SOCKS proxies are not natively supported by undici ProxyAgent
-      if (proxyType?.startsWith('socks')) {
-        throw new NetworkError(
-          `SOCKS proxy (${proxyType}) is not supported. Use an HTTP/HTTPS proxy or a SOCKS-to-HTTP bridge.`,
-          'ERR_UNSUPPORTED_PROXY_TYPE'
-        );
-      }
-
-      const proxyAuth = proxyConfig.auth
-        ? `${proxyConfig.auth.username}:${proxyConfig.auth.password}`
-        : undefined;
-
-      const finalProxyUrl = proxyAuth
-        ? proxyConfig.url.replace('://', `://${proxyAuth}@`)
-        : proxyConfig.url;
-
-      this.proxyBypassList = proxyConfig.bypass;
-
-      // Build ProxyAgent options
-      const proxyAgentOptions: any = {
-        uri: finalProxyUrl,
-        headers: proxyConfig.headers,
-        token: proxyConfig.token,
-        proxyTunnel: proxyConfig.tunnel,
-        requestTls: mapTlsOptions(proxyConfig.requestTls ?? options.tls),
-        proxyTls: mapTlsOptions(proxyConfig.proxyTls),
-      };
-
-      // Add timeout options if specified
-      if (proxyConfig.connectTimeout) {
-        proxyAgentOptions.connectTimeout = proxyConfig.connectTimeout;
-      }
-
-      // HTTP/2 through proxy
-      if (proxyConfig.http2) {
-        // Enable HTTP/2 for the tunneled connection
-        // This allows HTTP/2 multiplexing through HTTP/1.1 CONNECT tunnel
-        if (!proxyAgentOptions.requestTls) {
-          proxyAgentOptions.requestTls = {};
+        if (proxyType.startsWith('socks')) {
+          // SOCKS proxy: agent is created lazily (async import of optional 'socks' package)
+          this.proxySlots.push({ config, proxyType, bypass: config.bypass });
+        } else {
+          // HTTP/HTTPS proxy: create ProxyAgent synchronously
+          const agent = buildHttpProxyAgent(config, options.tls);
+          this.proxySlots.push({ config, proxyType, bypass: config.bypass, agent });
         }
-        proxyAgentOptions.requestTls.ALPNProtocols = ['h2', 'http/1.1'];
       }
-
-      this.proxyAgent = new ProxyAgent(proxyAgentOptions);
     }
 
     // Store AgentManager reference if provided
@@ -594,6 +557,35 @@ export class UndiciTransport implements Transport {
    */
   getProtocolCache(): ProtocolCache | undefined {
     return this.protocolCache;
+  }
+
+  /**
+   * Resolve the dispatcher (proxy agent, agent manager, etc.) for the given URL.
+   * Handles round-robin proxy rotation and lazy SOCKS agent creation.
+   */
+  private async resolveDispatcher(url: string, explicit?: any): Promise<any> {
+    if (explicit) return explicit;
+    if (this.socketClient) return this.socketClient;
+
+    if (this.proxySlots.length > 0) {
+      const slot = this.proxySlots[this.proxyIndex % this.proxySlots.length];
+      this.proxyIndex++;
+
+      if (!shouldBypassProxy(url, slot.bypass)) {
+        if (slot.agent) return slot.agent;
+
+        // Lazy SOCKS agent creation
+        if (!slot.socksAgentPromise) {
+          slot.socksAgentPromise = buildSocksAgent(slot.config);
+        }
+        slot.agent = await slot.socksAgentPromise;
+        return slot.agent;
+      }
+    }
+
+    if (this.agentManager) return this.agentManager.getAgentForUrl(url);
+    if (this.dnsAgent) return this.dnsAgent;
+    return undefined;
   }
 
   async dispatch(req: ReckerRequest): Promise<ReckerResponse> {
@@ -706,14 +698,7 @@ export class UndiciTransport implements Transport {
         }
 
         while (true) {
-            const dispatcher = this.socketClient || determineDispatcher({
-              explicit: (req as any)._dispatcher,
-              proxyAgent: this.proxyAgent,
-              agentManager: this.agentManager,
-              dnsAgent: this.dnsAgent,
-              url: currentUrl,
-              bypass: this.proxyBypassList
-            });
+            const dispatcher = await this.resolveDispatcher(currentUrl, (req as any)._dispatcher);
 
             const bodyWithProgress = redirectCount === 0
               ? wrapUploadBody(currentBody, req.onUploadProgress, uploadTotal)
@@ -1111,14 +1096,7 @@ export class UndiciTransport implements Transport {
       }
 
       while (true) {
-        const dispatcher = this.socketClient || determineDispatcher({
-          explicit: (req as any)._dispatcher,
-          proxyAgent: this.proxyAgent,
-          agentManager: this.agentManager,
-          dnsAgent: this.dnsAgent,
-          url: currentUrl,
-          bypass: this.proxyBypassList
-        });
+        const dispatcher = await this.resolveDispatcher(currentUrl, (req as any)._dispatcher);
 
         const bodyWithProgress = redirectCount === 0
           ? wrapUploadBody(currentBody, req.onUploadProgress, uploadTotal)
@@ -1377,16 +1355,125 @@ function mapTlsOptions(options?: TLSOptions): any | undefined {
   return tls;
 }
 
-interface DispatcherParams {
+/** Pre-created dispatcher entry for a single proxy in the rotation list */
+interface ProxySlot {
+  config: ProxyOptions;
+  proxyType: string;
+  bypass?: string[];
+  /** Set for HTTP/HTTPS proxies (created synchronously at init) */
+  agent?: ProxyAgent;
+  /** Set for SOCKS proxies (resolved lazily on first use) */
+  socksAgentPromise?: Promise<Agent>;
+}
+
+/**
+ * Build an undici ProxyAgent for HTTP/HTTPS proxies.
+ */
+function buildHttpProxyAgent(config: ProxyOptions, globalTls?: TLSOptions): ProxyAgent {
+  const proxyAuth = config.auth
+    ? `${config.auth.username}:${config.auth.password}`
+    : undefined;
+  const finalProxyUrl = proxyAuth
+    ? config.url.replace('://', `://${proxyAuth}@`)
+    : config.url;
+
+  const proxyAgentOptions: any = {
+    uri: finalProxyUrl,
+    headers: config.headers,
+    token: config.token,
+    proxyTunnel: config.tunnel,
+    requestTls: mapTlsOptions(config.requestTls ?? globalTls),
+    proxyTls: mapTlsOptions(config.proxyTls),
+  };
+
+  if (config.connectTimeout) {
+    proxyAgentOptions.connectTimeout = config.connectTimeout;
+  }
+
+  if (config.http2) {
+    if (!proxyAgentOptions.requestTls) proxyAgentOptions.requestTls = {};
+    proxyAgentOptions.requestTls.ALPNProtocols = ['h2', 'http/1.1'];
+  }
+
+  return new ProxyAgent(proxyAgentOptions);
+}
+
+/**
+ * Build an undici Agent with a custom SOCKS5/SOCKS5h/SOCKS4/SOCKS4a connector.
+ * Requires the optional 'socks' peer dependency.
+ */
+async function buildSocksAgent(config: ProxyOptions): Promise<Agent> {
+  let SocksClient: any;
+  try {
+    ({ SocksClient } = await import('socks'));
+  } catch {
+    throw new NetworkError(
+      'SOCKS proxy support requires the "socks" package. Install it with: npm install socks',
+      'ERR_SOCKS_NOT_INSTALLED'
+    );
+  }
+
+  const proxyUrl = new URL(config.url);
+  const proxyHost = proxyUrl.hostname;
+  const proxyPort = parseInt(proxyUrl.port) || 1080;
+  // SOCKS type: 4 for socks4/socks4a, 5 for socks5/socks5h
+  const socksType: 4 | 5 = (config.type === 'socks4' || config.type === 'socks4a') ? 4 : 5;
+
+  // Extract auth (URL takes precedence over config.auth)
+  const username = proxyUrl.username ? decodeURIComponent(proxyUrl.username) : config.auth?.username;
+  const password = proxyUrl.password ? decodeURIComponent(proxyUrl.password) : config.auth?.password;
+
+  return new Agent({
+    connect: async (options: any, callback: Function) => {
+      try {
+        const { connect: tlsConnect } = await import('tls');
+        const destHost = options.hostname;
+        const destPort = Number(options.port) || (options.servername ? 443 : 80);
+
+        const { socket } = await SocksClient.createConnection({
+          proxy: {
+            host: proxyHost,
+            port: proxyPort,
+            type: socksType,
+            ...(username && { userId: username }),
+            ...(password && { password }),
+          },
+          command: 'connect',
+          destination: { host: destHost, port: destPort },
+        });
+
+        // For HTTPS destinations, wrap the raw socket in TLS
+        if (options.protocol === 'https:' || destPort === 443) {
+          const tlsOpts: any = {
+            socket,
+            servername: options.servername || destHost,
+            rejectUnauthorized: options.rejectUnauthorized ?? true,
+          };
+          if (options.ca) tlsOpts.ca = options.ca;
+          if (options.cert) tlsOpts.cert = options.cert;
+          if (options.key) tlsOpts.key = options.key;
+
+          const tlsSocket = tlsConnect(tlsOpts);
+          tlsSocket.once('secureConnect', () => callback(null, tlsSocket));
+          tlsSocket.once('error', (err: Error) => callback(err, null));
+        } else {
+          callback(null, socket);
+        }
+      } catch (err) {
+        callback(err, null);
+      }
+    },
+  });
+}
+
+function determineDispatcher(params: {
   explicit?: any;
-  proxyAgent?: ProxyAgent;
+  proxyAgent?: ProxyAgent | Agent;
   agentManager?: AgentManager;
   dnsAgent?: Agent;
   url: string;
   bypass?: string[];
-}
-
-function determineDispatcher(params: DispatcherParams) {
+}) {
   if (params.explicit) return params.explicit;
 
   const { proxyAgent, agentManager, dnsAgent, url, bypass } = params;
@@ -1403,7 +1490,7 @@ function determineDispatcher(params: DispatcherParams) {
 /**
  * Detect proxy type from URL protocol
  */
-function detectProxyType(protocol: string): 'http' | 'https' | 'socks4' | 'socks4a' | 'socks5' | undefined {
+function detectProxyType(protocol: string): 'http' | 'https' | 'socks4' | 'socks4a' | 'socks5' | 'socks5h' | undefined {
   const p = protocol.toLowerCase().replace(':', '');
   switch (p) {
     case 'http':
@@ -1417,6 +1504,8 @@ function detectProxyType(protocol: string): 'http' | 'https' | 'socks4' | 'socks
     case 'socks5':
     case 'socks':
       return 'socks5';
+    case 'socks5h':
+      return 'socks5h';
     default:
       return undefined;
   }

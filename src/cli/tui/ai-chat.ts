@@ -224,7 +224,7 @@ async function getOrCreateClient(provider: string, context: AIMode): Promise<Cli
       return null;
     }
 
-    if (!presetConfig._aiConfig) {
+    if (!(presetConfig as any)._aiConfig) {
       console.log(colors.red(`Preset ${provider} does not support AI features.`));
       return null;
     }

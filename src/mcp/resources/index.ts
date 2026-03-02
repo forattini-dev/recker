@@ -1,4 +1,5 @@
-import type { MCPResource, MCPResourceContent, ReckerResponse } from '../types.js';
+import type { MCPResource, MCPResourceContent } from '../types.js';
+import type { ReckerResponse } from '../../types/index.js';
 import { listCategories } from '../tools/categories.js';
 import type { PresetInfo } from '../../presets/registry.js';
 import { ConfigurationError, NotFoundError } from '../../core/errors.js';
@@ -884,7 +885,12 @@ import { userAgent, proxyRotator } from 'recker/plugins';
 
 const client = createClient();
 client.use(userAgent({ rotate: true }));
-client.use(proxyRotator({ proxies: ['http://proxy1:8080', 'http://proxy2:8080'] }));
+// Proxy list directly in createClient (recommended):
+const client2 = createClient({
+  proxy: ['http://proxy1:8080', 'socks5://proxy2:1080', 'socks5h://proxy3:1080'],
+});
+// Or via plugin:
+client.use(proxyRotator({ proxies: ['http://proxy1:8080', 'socks5://proxy2:1080'] }));
 
 const doc = await client.scrape('https://protected-site.com');
 \`\`\`

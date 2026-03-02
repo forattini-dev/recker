@@ -138,12 +138,12 @@ export function createMCPContract<T extends MCPContractDefinition>(
   for (const [toolName, toolDef] of Object.entries(contract)) {
     if (toolDef.stream) {
       // Streaming tool - returns AsyncGenerator
-      proxy[toolName] = async function* (args: Record<string, unknown> = {}) {
+      (proxy as Record<string, unknown>)[toolName] = async function* (args: Record<string, unknown> = {}) {
         // Validate input
         let validatedArgs = args;
         if (toolDef.inputSchema) {
           try {
-            validatedArgs = toolDef.inputSchema.parse(args);
+            validatedArgs = toolDef.inputSchema.parse(args) as Record<string, unknown>;
           } catch (err) {
             throw new MCPContractError(toolName, 'input', err as Error);
           }
@@ -161,12 +161,12 @@ export function createMCPContract<T extends MCPContractDefinition>(
       };
     } else {
       // Non-streaming tool - returns Promise
-      proxy[toolName] = async (args: Record<string, unknown> = {}) => {
+      (proxy as Record<string, unknown>)[toolName] = async (args: Record<string, unknown> = {}) => {
         // Validate input
         let validatedArgs = args;
         if (toolDef.inputSchema) {
           try {
-            validatedArgs = toolDef.inputSchema.parse(args);
+            validatedArgs = toolDef.inputSchema.parse(args) as Record<string, unknown>;
           } catch (err) {
             throw new MCPContractError(toolName, 'input', err as Error);
           }
@@ -203,14 +203,14 @@ export function createMCPContract<T extends MCPContractDefinition>(
   }
 
   // Add utility methods
-  proxy.raw = async (name: string, args: Record<string, unknown> = {}) => {
+  (proxy as any).raw = async (name: string, args: Record<string, unknown> = {}) => {
     const toolDef = contract[name];
 
     // Validate input if schema exists
     let validatedArgs = args;
     if (toolDef?.inputSchema) {
       try {
-        validatedArgs = toolDef.inputSchema.parse(args);
+        validatedArgs = toolDef.inputSchema.parse(args) as Record<string, unknown>;
       } catch (err) {
         throw new MCPContractError(name, 'input', err as Error);
       }
@@ -599,7 +599,7 @@ export function createValidatedSSEStream<T extends ZodSchema>(
     }
   }
 
-  const fn = streamText as unknown as SSEStreamFunction;
+  const fn: any = streamText;
 
   fn.text = async (
     args: z.infer<T>,

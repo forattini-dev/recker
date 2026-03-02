@@ -165,7 +165,7 @@ describe('Enhanced Proxy Features', () => {
 // Helper types for testing
 interface ProxyConfig {
   url: string;
-  type?: 'http' | 'https' | 'socks4' | 'socks4a' | 'socks5';
+  type?: 'http' | 'https' | 'socks4' | 'socks4a' | 'socks5' | 'socks5h';
   auth?: { username: string; password: string };
   headers?: Record<string, string>;
   token?: string;

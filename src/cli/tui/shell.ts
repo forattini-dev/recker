@@ -1404,7 +1404,7 @@ export class RekShell {
         }
 
         // Check if preset has AI config
-        if (!presetConfig._aiConfig) {
+        if (!(presetConfig as any)._aiConfig) {
           console.log(colors.red(`Preset @${presetName} does not support AI features.`));
           console.log(colors.gray('Use an AI preset like @openai, @anthropic, @groq, etc.'));
           return;

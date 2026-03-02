@@ -724,9 +724,10 @@ export interface ProxyOptions {
   url: string;
 
   /**
-   * Proxy type (auto-detected from URL if not specified)
+   * Proxy type (auto-detected from URL if not specified).
+   * socks5h: like SOCKS5 but DNS is resolved by the proxy (remote DNS).
    */
-  type?: 'http' | 'https' | 'socks4' | 'socks4a' | 'socks5';
+  type?: 'http' | 'https' | 'socks4' | 'socks4a' | 'socks5' | 'socks5h';
 
   /**
    * Proxy authentication (if required)
@@ -1241,7 +1242,26 @@ export interface ClientOptions {
    * proxy: { url: 'http://proxy.example.com:8080', auth: { username: 'user', password: 'pass' } }
    * ```
    */
-  proxy?: ProxyOptions | string; // String for simple proxy URL
+  /**
+   * Proxy configuration. Accepts a single proxy or a list for round-robin rotation.
+   *
+   * @example
+   * ```typescript
+   * // Single proxy (string shorthand)
+   * proxy: 'http://proxy.example.com:8080'
+   *
+   * // Single proxy with auth
+   * proxy: { url: 'socks5://proxy.example.com:1080', auth: { username: 'u', password: 'p' } }
+   *
+   * // List of proxies — rotated round-robin per request
+   * proxy: [
+   *   'http://proxy1.example.com:8080',
+   *   'socks5://proxy2.example.com:1080',
+   *   'socks5h://proxy3.example.com:1080',
+   * ]
+   * ```
+   */
+  proxy?: ProxyOptions | string | (ProxyOptions | string)[];
 
   /**
    * Advanced TLS configuration (cipher suites, certs, ALPN/SNI).

@@ -136,6 +136,7 @@ async function main() {
     .option('-o, --output <file>', 'Write response body to file')
     .option('-j, --json', 'Force JSON content-type')
     .option('-e, --env [path]', 'Load .env file')
+    .option('-x, --proxy <url>', 'Proxy URL (http://, https://, socks5://, socks5h://). Repeat for rotation.')
     .addHelpText('after', () => `
 ${theme.header('Examples:')}
   ${theme.example('$ rek httpbin.org/json')}
@@ -161,6 +162,14 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
       let argsToParse = remainingArgs;
       let finalClientOptions: any = enhancerOptions;
 
+      // --proxy / -x option: single string or array for rotation
+      if (options.proxy) {
+        const proxyArg = options.proxy;
+        finalClientOptions.proxy = Array.isArray(proxyArg)
+          ? proxyArg
+          : proxyArg;
+      }
+
       if (argsToParse.length > 0 && argsToParse[0].startsWith('@')) {
         let presetArg = argsToParse[0];
         let presetName = presetArg.slice(1);
@@ -175,7 +184,7 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
         const mainPresetOptions = await resolvePreset(presetName);
 
         if (mainPresetOptions) {
-          finalClientOptions = { ...finalClientOptions, ...mainPresetOptions, headers: { ...finalClientOptions.headers, ...mainPresetOptions.headers } };
+          finalClientOptions = { ...finalClientOptions, ...(mainPresetOptions as any), headers: { ...finalClientOptions.headers, ...((mainPresetOptions as any).headers || {}) } };
 
           if (pathFromPreset) {
              if (finalClientOptions.baseUrl) {
@@ -285,7 +294,7 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
         }
 
         await handleRequest({
-          method,
+          method: method as any,
           url,
           body,
           verbose: options.verbose,

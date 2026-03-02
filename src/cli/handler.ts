@@ -2,6 +2,7 @@ import { createClient } from '../core/client.js';
 import { requireOptional } from '../utils/optional-require.js';
 import colors from '../utils/colors.js';
 import type { CliRequestHeaders, CliRequestOptions } from './types.js';
+import type { ClientOptions } from '../types/index.js';
 import { createSpinner } from './tui/spinner.js';
 
 // Lazy-loaded optional dependency

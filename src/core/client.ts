@@ -1,5 +1,5 @@
 import { ClientOptions, Middleware, ReckerRequest, ReckerResponse, RequestOptions, Transport, CacheStorage, CacheEntry, Hooks, PaginationConfig, PageResult, CookieJar, CookieOptions, Logger, consoleLogger } from '../types/index.js';
-import type { Plugin } from '../types/index.js';
+import type { Plugin, PluginClient } from '../types/index.js';
 import type { ClientAI, PresetAIConfig, ClientOptionsWithAI } from '../types/ai-client.js';
 import { ClientAIImpl } from '../ai/client-ai.js';
 import { HttpRequest } from './request.js';
@@ -157,7 +157,7 @@ class LazyTransport implements Transport {
   }
 }
 
-function createLazyCurlTransport(): Transport {
+function createLazyCurlTransport(proxy?: import('../types/index.js').ProxyOptions | string | (import('../types/index.js').ProxyOptions | string)[]): Transport {
   if (!isNodeRuntime()) {
     return {
       async dispatch(req: ReckerRequest) {
@@ -171,7 +171,7 @@ function createLazyCurlTransport(): Transport {
 
   return new LazyTransport(async () => {
     const { CurlTransport } = await import('../transport/curl.js');
-    return new CurlTransport();
+    return new CurlTransport(proxy);
   });
 }
 
@@ -291,7 +291,7 @@ class LazyHlsPromise implements Promise<void> {
     }
   ): Promise<void> {
     const { instance } = await this.instancePromise;
-    return instance.pipe(writable);
+    return instance.pipe(writable as any);
   }
 
   async info(): Promise<{
@@ -342,6 +342,7 @@ export class Client {
   private hooks: Hooks;
   private transport: Transport;
   private curlTransport?: Transport;
+  private proxyConfig?: ClientOptions['proxy'];
   private defaultHeaders: HeadersInit;
   private defaultHeadersObj: Headers; // Pre-computed Headers object for fast path
   private defaultParams: Record<string, string | number>;
@@ -393,6 +394,7 @@ export class Client {
     this.defaultParams = options.defaults?.params || {};
     this.paginationConfig = options.pagination;
     this.maxResponseSize = options.maxResponseSize;
+    this.proxyConfig = options.proxy;
     const runtimeEventBus = options.runtimeEventBus;
     if (runtimeEventBus) {
       this.runtimeEventBus = {
@@ -432,7 +434,7 @@ export class Client {
       this.transportKind = 'custom';
     } else if (options.useCurl) {
       if (this.debugEnabled) console.log('[DEBUG] Using Curl Transport');
-      this.transport = createLazyCurlTransport();
+      this.transport = createLazyCurlTransport(options.proxy);
       this.transportKind = 'curl';
     } else if (isNodeRuntime()) {
       if (this.debugEnabled) console.log('[DEBUG] Using Undici Transport');
@@ -522,7 +524,7 @@ export class Client {
       });
 
       registerPlugin(
-        (client: Plugin) => {
+        (client: PluginClient) => {
           const pluginClient = client as { middlewares?: Middleware[] };
           pluginClient.middlewares?.unshift(this.requestPool!.asMiddleware());
         },
@@ -820,7 +822,7 @@ export class Client {
     try {
       if (req.useCurl && this.transportKind !== 'curl') {
         if (!this.curlTransport) {
-          this.curlTransport = createLazyCurlTransport();
+          this.curlTransport = createLazyCurlTransport(this.proxyConfig);
         }
         const response = await this.curlTransport.dispatch(req);
         if (context) {
@@ -1468,7 +1470,7 @@ export class Client {
     }
     // Priority 5: existing body parameter (already in finalBody)
 
-    const { body: processedBody, contentType } = processBody(finalBody);
+    const { body: processedBody, contentType } = processBody(finalBody as import('../utils/body.js').BodyInput);
     const headers = new Headers(restOptions.headers);
 
     // Use explicit content type from json/form options, or auto-detected from processBody

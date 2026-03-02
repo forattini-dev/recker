@@ -734,17 +734,88 @@ const client = createClient({
 ### SOCKS Proxy
 
 ```typescript
+// SOCKS5: local DNS resolution
 const client = createClient({
   baseUrl: 'https://api.example.com',
   proxy: {
     url: 'socks5://proxy.example.com:1080',
-    auth: {
-      username: 'user',
-      password: 'pass'
-    }
+    auth: { username: 'user', password: 'pass' }
   }
 });
+
+// SOCKS5h: proxy resolves DNS (prevents DNS leaks)
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  proxy: 'socks5h://proxy.example.com:1080'
+});
 ```
+
+> SOCKS proxy support requires the optional `socks` package: `npm install socks`
+
+### Proxy List (Round-Robin Rotation)
+
+Pass an array of proxies for automatic round-robin rotation across requests:
+
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  proxy: [
+    'http://proxy1.example.com:8080',
+    'http://proxy2.example.com:8080',
+    'socks5://proxy3.example.com:1080',
+    'socks5h://proxy4.example.com:1080',
+  ]
+});
+
+// Request 1 → proxy1, Request 2 → proxy2, Request 3 → proxy3 ...
+```
+
+Mixed types are supported:
+
+```typescript
+const client = createClient({
+  proxy: [
+    { url: 'http://proxy1:8080', auth: { username: 'u', password: 'p' } },
+    'socks5://proxy2:1080',
+    { url: 'socks5h://proxy3:1080', type: 'socks5h' },
+  ]
+});
+```
+
+### CLI Proxy Rotation
+
+Use `-x` / `--proxy` (repeatable) in the CLI:
+
+```bash
+# Single proxy
+rek -x http://proxy:8080 https://api.example.com
+
+# SOCKS5
+rek -x socks5://proxy:1080 https://api.example.com
+
+# Multiple proxies (round-robin per request)
+rek -x http://p1:8080 -x socks5://p2:1080 https://api.example.com
+```
+
+### proxyRotatorPlugin
+
+The `proxyRotatorPlugin` (alias `proxyRotator`) is a convenience wrapper:
+
+```typescript
+import { createClient } from 'recker';
+import { proxyRotatorPlugin } from 'recker/plugins';
+
+const client = createClient({ baseUrl: 'https://api.example.com' });
+client.use(proxyRotatorPlugin({
+  proxies: [
+    'http://proxy1:8080',
+    'socks5://proxy2:1080',
+    'socks5h://proxy3:1080',
+  ],
+}));
+```
+
+> For most use cases, prefer setting `proxy` directly in `createClient` options.
 
 ### Proxy Bypass
 
@@ -757,11 +828,22 @@ const client = createClient({
       'localhost',
       '127.0.0.1',
       '*.internal.com',
-      '192.168.0.0/16' // CIDR notation
+      '192.168.0.0/16' // CIDR notation supported
     ]
   }
 });
 ```
+
+### Supported Proxy Types
+
+| Type | Transport | DNS Resolution | Notes |
+|------|-----------|----------------|-------|
+| `http` | HTTP/HTTPS proxy | Local | Default for `http://` URLs |
+| `https` | HTTPS proxy | Local | Encrypted proxy connection |
+| `socks5` | SOCKS5 | Local | Requires `socks` package |
+| `socks5h` | SOCKS5h | **Remote** (proxy) | Prevents DNS leaks |
+| `socks4` | SOCKS4 | Local | Legacy |
+| `socks4a` | SOCKS4a | Remote | SOCKS4 with remote DNS |
 
 ## TLS/SSL Configuration
 
@@ -905,7 +987,7 @@ interface ClientOptions {
   hooks?: Hooks;
 
   // Network
-  proxy?: ProxyOptions | string;
+  proxy?: ProxyOptions | string | (ProxyOptions | string)[];  // single or list for rotation
   tls?: TLSOptions;
   dns?: DNSOptions;
   socketPath?: string;
