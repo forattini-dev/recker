@@ -277,14 +277,18 @@ describe('Unified Recker API', () => {
       expect(promise1).toBeDefined();
       expect(promise2).toBeDefined();
 
+      // Cancel and suppress unhandled rejections from in-flight requests
       promise1.cancel();
       promise2.cancel();
+      promise1.catch(() => {});
+      promise2.catch(() => {});
     });
 
     it('reset should clear singletons', () => {
       // Make a request to initialize singleton
       const promise1 = recker.get('https://example.com/test');
       promise1.cancel();
+      promise1.catch(() => {});
 
       // Reset
       recker.reset();
@@ -293,6 +297,7 @@ describe('Unified Recker API', () => {
       const promise2 = recker.get('https://example.com/test2');
       expect(promise2).toBeDefined();
       promise2.cancel();
+      promise2.catch(() => {});
     });
   });
 });
