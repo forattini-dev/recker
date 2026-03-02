@@ -298,7 +298,7 @@
     }
   },
   "devDependencies": {
-    "raffel": "file:../raffel",
+    "raffel": "^1.0.3",
     "@hapi/wreck": "^18.1.0",
     "@types/he": "^1.2.3",
     "@types/needle": "^3.3.0",
