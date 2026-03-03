@@ -56,7 +56,6 @@
     "examples",
     "docs",
     "**/*.test.ts",
-    "**/*.spec.ts",
-    "src/utils/binary-manager.ts"
+    "**/*.spec.ts"
   ]
 }
