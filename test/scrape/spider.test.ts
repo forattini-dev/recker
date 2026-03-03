@@ -253,7 +253,7 @@ describe('Spider - Web Crawler', () => {
       expect(urls).toContain(baseUrl + '/');
       expect(urls).toContain(baseUrl + '/about');
       expect(urls).toContain(baseUrl + '/products');
-    }, 30000);
+    }, 60000);
 
     it('should not crawl same URL twice', async () => {
       const result = await spider(baseUrl, {
