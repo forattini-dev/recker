@@ -104,7 +104,7 @@ jobs:
 
       - name: Upload Binary
         if: steps.check.outputs.skip != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.binary }}
           path: dist/bin/recker-*
@@ -190,7 +190,7 @@ jobs:
 
       - name: Upload Binaries as Artifacts
         if: steps.check.outputs.skip != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: recker-binaries-next
           path: dist/bin/recker-*
@@ -331,7 +331,7 @@ jobs:
           pnpm run build:binary
 
       - name: Upload Binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.binary }}
           path: dist/bin/recker-*
