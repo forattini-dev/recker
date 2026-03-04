@@ -18,6 +18,9 @@ coverage/
 # IDE
 .vscode/
 .idea/
+
+# MCP config (local dev only)
+.mcp.json
 *.swp
 *.swo
 *~
