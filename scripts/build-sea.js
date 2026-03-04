@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'fs';
 import { resolve, join } from 'path';
 
@@ -68,11 +68,13 @@ try {
   }
 
   // 7. Inject the blob with postject
+  // Use execSync with shell:true — execFileSync('npx', ...) fails on Windows (ENOENT)
   console.log('  Injecting SEA blob...');
-  execFileSync('npx', ['--yes', 'postject', outputPath, 'NODE_SEA_BLOB', blobPath,
-    '--sentinel-fuse', 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
-    ...(platform === 'darwin' ? ['--macho-segment-name', 'NODE_SEA'] : []),
-  ], { stdio: 'inherit' });
+  const machoFlag = platform === 'darwin' ? ' --macho-segment-name NODE_SEA' : '';
+  execSync(
+    `npx --yes postject "${outputPath}" NODE_SEA_BLOB "${blobPath}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2${machoFlag}`,
+    { stdio: 'inherit' },
+  );
 
   // 8. Re-sign on macOS
   if (platform === 'darwin') {
