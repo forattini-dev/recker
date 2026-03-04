@@ -43,6 +43,8 @@ import { getVersion, getVersionSync, getVersionInfo, type VersionInfo } from './
 import { type RequestPromise } from './core/request-promise.js';
 import type { RequestOptions } from './types/index.js';
 import { createWebSocket, type WebSocketOptions, type ReckerWebSocket } from './websocket/client.js';
+import { createRaffelClient, type RaffelClient } from './raffel/client.js';
+import type { RaffelClientOptions } from './raffel/types.js';
 import { whois as whoisLookup, isDomainAvailable, createWhois, type WhoisResult, type WhoisOptions } from './utils/whois.js';
 import { createDNS, type DNSClientOptions, type DNSClient } from './dns/index.js';
 import { createAI, UnifiedAIClient } from './ai/index.js';
@@ -374,6 +376,14 @@ export const recker = {
 
   /** WebSocket connection */
   ws,
+
+  // ========== Raffel ==========
+
+  /**
+   * Create a Raffel envelope protocol client over WebSocket
+   * @example const client = recker.raffel('ws://game:9999', { channels: ['game'] })
+   */
+  raffel: (url: string, options?: RaffelClientOptions): RaffelClient => createRaffelClient(url, options),
 
   // ========== Video ==========
 

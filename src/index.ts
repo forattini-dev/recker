@@ -77,6 +77,9 @@ export * as presets from './presets/index.js';
 export * as testing from './testing/index.js';
 export * as protocols from './protocols/index.js';
 
+// Raffel (envelope protocol client)
+export * from './raffel/index.js';
+
 // MCP (Model Context Protocol)
 export * from './mcp/client.js';
 export * from './mcp/contract.js';

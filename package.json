@@ -211,6 +211,10 @@
       "types": "./dist/presets/*.d.ts",
       "import": "./dist/presets/*.js"
     },
+    "./raffel": {
+      "types": "./dist/raffel/index.d.ts",
+      "import": "./dist/raffel/index.js"
+    },
     "./package.json": "./package.json"
   },
   "browser": "./dist/browser/browser/index.js",
