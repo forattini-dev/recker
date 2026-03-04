@@ -32,12 +32,53 @@ export interface RaffelErrorPayload {
 }
 
 // ============================================================================
+// Transport type
+// ============================================================================
+
+export type RaffelTransportType = 'websocket' | 'http' | 'tcp' | 'udp' | 'jsonrpc';
+
+// ============================================================================
+// Per-transport option bags
+// ============================================================================
+
+export interface RaffelHttpOptions {
+  headers?: Record<string, string>;
+  timeout?: number;
+}
+
+export interface RaffelTcpOptions {
+  keepAlive?: boolean;
+  keepAliveInterval?: number;
+  noDelay?: boolean;
+  reconnect?: boolean;
+  reconnectDelay?: number;
+  maxReconnectAttempts?: number;
+}
+
+export interface RaffelUdpOptions {
+  socketType?: 'udp4' | 'udp6';
+  enableAck?: boolean;
+  ackTimeout?: number;
+}
+
+export interface RaffelJsonRpcOptions {
+  path?: string;
+  headers?: Record<string, string>;
+}
+
+// ============================================================================
 // Client types
 // ============================================================================
 
 export type ChannelEventHandler = (event: string, data: unknown) => void;
 
-export interface RaffelClientOptions extends WebSocketOptions {
+export interface RaffelClientOptions {
+  /** Transport type override. Auto-detected from URL scheme if omitted. */
+  transport?: RaffelTransportType;
+
+  /** Default timeout for call() in ms (default: 30000) */
+  defaultTimeout?: number;
+
   /** Channels to auto-subscribe on connect */
   channels?: string[];
 
@@ -47,8 +88,12 @@ export interface RaffelClientOptions extends WebSocketOptions {
   /** Catch-all handler for events on procedures (type: "event") */
   onEvent?: (procedure: string, payload: unknown) => void;
 
-  /** Default timeout for call() in ms (default: 30000) */
-  defaultTimeout?: number;
+  // Per-transport options
+  ws?: WebSocketOptions;
+  http?: RaffelHttpOptions;
+  tcp?: RaffelTcpOptions;
+  udp?: RaffelUdpOptions;
+  jsonrpc?: RaffelJsonRpcOptions;
 }
 
 export interface RaffelCallOptions {

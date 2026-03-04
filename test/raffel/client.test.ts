@@ -11,7 +11,7 @@ import { RaffelClient, createRaffelClient } from '../../src/raffel/client.js';
 import { RaffelError } from '../../src/raffel/types.js';
 
 function getMockWs(client: RaffelClient): MockWebSocket {
-  return (client.raw as any).ws as MockWebSocket;
+  return (client.rawWs as any).ws as MockWebSocket;
 }
 
 function getSentMessages(client: RaffelClient): any[] {
@@ -62,11 +62,12 @@ describe('RaffelClient', () => {
       await disconnected;
     });
 
-    it('should expose raw WebSocket', async () => {
+    it('should expose raw transport and rawWs', async () => {
       client = createRaffelClient('ws://localhost:9999');
       await client.connect();
       expect(client.raw).toBeDefined();
-      expect(client.raw.isConnected).toBe(true);
+      expect(client.rawWs).toBeDefined();
+      expect(client.rawWs!.isConnected).toBe(true);
     });
   });
 
@@ -358,8 +359,10 @@ describe('RaffelClient', () => {
     it('should re-subscribe all channels after reconnect', async () => {
       client = createRaffelClient('ws://localhost:9999', {
         channels: ['game', 'chat'],
-        reconnect: true,
-        maxReconnectAttempts: 0,
+        ws: {
+          reconnect: true,
+          maxReconnectAttempts: 0,
+        },
       });
 
       await client.connect();
@@ -370,11 +373,8 @@ describe('RaffelClient', () => {
       const initialSubs = initialMsgs.filter((m) => m.type === 'subscribe');
       expect(initialSubs).toHaveLength(2);
 
-      // Simulate reconnect: close + reopen triggers `open` event on the ws
-      // The MockWebSocket fires open on construction, so simulate via the raw ws
+      // Simulate reconnect: the MockWebSocket fires open on the underlying ws
       const mockWs = getMockWs(client);
-
-      // Directly emit open to simulate reconnect (the real WS would do this)
       mockWs.emit('open');
 
       await new Promise((r) => setTimeout(r, 20));

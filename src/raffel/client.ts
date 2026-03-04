@@ -1,4 +1,5 @@
-import { ReckerWebSocket, type WebSocketMessage } from '../websocket/client.js';
+import { ReckerWebSocket } from '../websocket/client.js';
+import { UnsupportedError } from '../core/errors.js';
 import { RaffelError } from './types.js';
 import type {
   RaffelEnvelope,
@@ -8,6 +9,10 @@ import type {
   RaffelCallOptions,
   ChannelEventHandler,
 } from './types.js';
+import type { RaffelTransport, RaffelExecutableTransport } from './transport.js';
+import { TransportCapability, hasExecute, hasCapability } from './transport.js';
+import { WsTransport } from './transport-ws.js';
+import { createTransport, detectTransportType } from './transport-factory.js';
 
 type Listener = (...args: any[]) => void;
 
@@ -55,64 +60,81 @@ interface PendingCall {
 }
 
 /**
- * High-level client for Raffel envelope protocol over WebSocket.
+ * High-level client for Raffel envelope protocol.
  *
- * Wraps ReckerWebSocket with RPC call correlation, channel management,
- * and auto-resubscribe on reconnect.
+ * Supports multiple transports: WebSocket, HTTP, TCP, UDP, JSON-RPC.
+ * Transport is auto-detected from the URL scheme or can be set explicitly.
  *
  * @example
  * ```typescript
- * const client = createRaffelClient('ws://localhost:9999', {
+ * // WebSocket (full capabilities)
+ * const client = await createRaffelClient('ws://localhost:9999', {
  *   channels: ['game'],
  *   channelHandlers: { game: (event, data) => console.log(event, data) },
  * });
- * await client.connect();
- * const result = await client.call('game.status');
- * client.notify('game.ping', { ts: Date.now() });
- * await client.close();
+ *
+ * // HTTP (stateless, call + notify + streaming)
+ * const client = await createRaffelClient('http://localhost:3000');
+ *
+ * // TCP (full capabilities)
+ * const client = await createRaffelClient('tcp://localhost:9000');
  * ```
  */
 export class RaffelClient extends SimpleEmitter {
-  private ws: ReckerWebSocket;
+  private transport!: RaffelTransport;
   private pendingCalls = new Map<string, PendingCall>();
   private subscribedChannels = new Map<string, ChannelEventHandler | null>();
   private idCounter = 0;
   private defaultTimeout: number;
   private onEvent?: (procedure: string, payload: unknown) => void;
+  private url: string;
+  private options: RaffelClientOptions;
 
   constructor(url: string, options: RaffelClientOptions = {}) {
     super();
-
-    const {
-      channels,
-      channelHandlers,
-      onEvent,
-      defaultTimeout,
-      ...wsOptions
-    } = options;
-
-    this.defaultTimeout = defaultTimeout ?? 30_000;
-    this.onEvent = onEvent;
-    this.ws = new ReckerWebSocket(url, wsOptions);
+    this.url = url;
+    this.options = options;
+    this.defaultTimeout = options.defaultTimeout ?? 30_000;
+    this.onEvent = options.onEvent;
 
     // Pre-register channel handlers
-    if (channels) {
-      for (const ch of channels) {
-        this.subscribedChannels.set(ch, channelHandlers?.[ch] ?? null);
+    if (options.channels) {
+      for (const ch of options.channels) {
+        this.subscribedChannels.set(ch, options.channelHandlers?.[ch] ?? null);
       }
     }
-    if (channelHandlers) {
-      for (const [ch, handler] of Object.entries(channelHandlers)) {
+    if (options.channelHandlers) {
+      for (const [ch, handler] of Object.entries(options.channelHandlers)) {
         if (!this.subscribedChannels.has(ch)) {
           this.subscribedChannels.set(ch, handler);
         }
       }
     }
+  }
 
-    // Wire up WS events
-    this.ws.on('message', (msg: WebSocketMessage) => this.handleMessage(msg));
+  /**
+   * Initialize the transport (async to support lazy imports for non-WS transports).
+   * Called automatically by connect() if not already initialized.
+   */
+  private async ensureTransport(): Promise<void> {
+    if (this.transport) return;
+    this.transport = await createTransport(this.url, this.options);
+    this.wireTransportEvents();
+  }
 
-    this.ws.on('open', () => {
+  /**
+   * Initialize with a pre-created transport (sync, for testing or direct use).
+   * @internal
+   */
+  _setTransport(transport: RaffelTransport): void {
+    this.transport = transport;
+    this.wireTransportEvents();
+  }
+
+  private wireTransportEvents(): void {
+    this.transport.on('message', (data: any) => this.handleIncoming(data));
+
+    this.transport.on('connected', () => {
       this.emit('raffel:connected');
       // Auto-resubscribe to all tracked channels
       for (const [channel] of this.subscribedChannels) {
@@ -120,9 +142,9 @@ export class RaffelClient extends SimpleEmitter {
       }
     });
 
-    this.ws.on('close', (_code: number, _reason: string) => {
+    this.transport.on('disconnected', () => {
       this.emit('raffel:disconnected');
-      // Reject all pending calls — server won't respond after close
+      // Reject all pending calls
       for (const [id, pending] of this.pendingCalls) {
         if (pending.timer) clearTimeout(pending.timer);
         pending.reject(new Error(`Connection closed while waiting for response to ${id}`));
@@ -130,12 +152,11 @@ export class RaffelClient extends SimpleEmitter {
       this.pendingCalls.clear();
     });
 
-    // Forward useful WS events
-    this.ws.on('reconnecting', (attempt: number, delay: number) => {
+    this.transport.on('reconnecting', (attempt: number, delay: number) => {
       this.emit('ws:reconnecting', attempt, delay);
     });
 
-    this.ws.on('error', (err: Error) => {
+    this.transport.on('error', (err: Error) => {
       this.emit('ws:error', err);
     });
   }
@@ -146,35 +167,43 @@ export class RaffelClient extends SimpleEmitter {
 
   /** Connect to the Raffel server */
   async connect(): Promise<void> {
-    return this.ws.connect();
+    await this.ensureTransport();
+    return this.transport.connect();
   }
 
   /** Close the connection. Rejects all pending calls. */
   close(code?: number, reason?: string): void {
-    // Reject pending calls before closing (close event may not fire synchronously)
+    // Reject pending calls before closing
     for (const [id, pending] of this.pendingCalls) {
       if (pending.timer) clearTimeout(pending.timer);
       pending.reject(new Error(`Connection closed while waiting for response to ${id}`));
     }
     this.pendingCalls.clear();
-    this.ws.close(code, reason);
+    if (this.transport) {
+      this.transport.close(code, reason);
+    }
   }
 
-  /** Whether the underlying WebSocket is connected */
+  /** Whether the underlying transport is connected */
   get isConnected(): boolean {
-    return this.ws.isConnected;
+    return this.transport?.isConnected ?? false;
   }
 
-  /** Escape hatch to the underlying ReckerWebSocket */
-  get raw(): ReckerWebSocket {
-    return this.ws;
+  /** Escape hatch to the underlying transport */
+  get raw(): RaffelTransport {
+    return this.transport;
+  }
+
+  /** Escape hatch to the underlying ReckerWebSocket (null if not using WS transport) */
+  get rawWs(): ReckerWebSocket | null {
+    return this.transport instanceof WsTransport ? this.transport.socket : null;
   }
 
   /**
    * Call a remote procedure and wait for its response.
    *
-   * Returns the response payload. Rejects with RaffelError on error envelopes,
-   * or a generic Error on timeout / abort / connection loss.
+   * For executable transports (HTTP, JSON-RPC): uses direct request-response.
+   * For message transports (WS, TCP, UDP): uses send + pending-map correlation.
    */
   async call<T = unknown>(
     procedure: string,
@@ -192,6 +221,12 @@ export class RaffelClient extends SimpleEmitter {
       metadata: {},
     };
 
+    // Executable transports (HTTP, JSON-RPC): direct request-response
+    if (hasExecute(this.transport)) {
+      return this.executeWithTimeout<T>(this.transport, envelope, timeout, procedure, options?.signal);
+    }
+
+    // Message transports (WS, TCP, UDP): send + pending-map
     return new Promise<T>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -205,8 +240,7 @@ export class RaffelClient extends SimpleEmitter {
 
       const onAbort = () => {
         cleanup();
-        // Send cancel envelope
-        this.sendRaw({ id, type: 'cancel' });
+        this.transport.send({ id, type: 'cancel' });
         reject(new Error(`Call to ${procedure} was aborted`));
       };
 
@@ -226,8 +260,92 @@ export class RaffelClient extends SimpleEmitter {
       }
 
       this.pendingCalls.set(id, { resolve, reject, timer });
-      this.ws.sendJSON(envelope);
+      this.transport.send(envelope);
     });
+  }
+
+  /**
+   * Stream results from a remote procedure.
+   *
+   * For executable transports with streaming (HTTP): uses SSE.
+   * For message transports (WS, TCP): yields stream:data envelopes until stream:end.
+   */
+  async *callStream<T = unknown>(
+    procedure: string,
+    payload?: unknown,
+  ): AsyncIterable<T> {
+    if (!hasCapability(this.transport, TransportCapability.STREAM)) {
+      throw new UnsupportedError(
+        `callStream() not supported over ${detectTransportType(this.url, this.options)}. Use WebSocket, HTTP, or TCP.`
+      );
+    }
+
+    // Executable transports with executeStream (HTTP SSE)
+    if (hasExecute(this.transport) && this.transport.executeStream) {
+      const envelope: RaffelEnvelope = {
+        id: this.nextId(),
+        procedure,
+        type: 'stream:start',
+        payload: payload ?? {},
+        metadata: {},
+      };
+      yield* this.transport.executeStream(envelope) as AsyncIterable<T>;
+      return;
+    }
+
+    // Message transports (WS, TCP): stream via envelope protocol
+    const id = this.nextId();
+    const envelope: RaffelEnvelope = {
+      id,
+      procedure,
+      type: 'stream:start',
+      payload: payload ?? {},
+      metadata: {},
+    };
+
+    // Create a queue-based async iterable
+    const queue: { value?: T; error?: Error; done?: boolean }[] = [];
+    let resolve: (() => void) | null = null;
+
+    const push = (item: { value?: T; error?: Error; done?: boolean }) => {
+      queue.push(item);
+      if (resolve) {
+        resolve();
+        resolve = null;
+      }
+    };
+
+    const streamHandler = (data: any) => {
+      // Stream messages have IDs prefixed with the request ID (e.g., "req-1:1", "req-1:end")
+      if (!data.id || !data.id.startsWith(id)) return;
+
+      if (data.type === 'stream:data') {
+        push({ value: data.payload as T });
+      } else if (data.type === 'stream:end') {
+        push({ done: true });
+        this.transport.off('message', streamHandler);
+      } else if (data.type === 'error') {
+        push({ error: new RaffelError(data.payload as RaffelErrorPayload, procedure) });
+        this.transport.off('message', streamHandler);
+      }
+    };
+
+    this.transport.on('message', streamHandler);
+    this.transport.send(envelope);
+
+    try {
+      while (true) {
+        if (queue.length === 0) {
+          await new Promise<void>((r) => { resolve = r; });
+        }
+        const item = queue.shift()!;
+        if (item.done) return;
+        if (item.error) throw item.error;
+        yield item.value!;
+      }
+    } finally {
+      this.transport.off('message', streamHandler);
+    }
   }
 
   /**
@@ -241,15 +359,29 @@ export class RaffelClient extends SimpleEmitter {
       payload: payload ?? {},
       metadata: {},
     };
-    this.ws.sendJSON(envelope);
+
+    if (hasExecute(this.transport)) {
+      (this.transport as RaffelExecutableTransport).execute({
+        ...envelope,
+        type: 'notify',
+      }).catch(() => {}); // fire-and-forget
+    } else {
+      this.transport.send(envelope);
+    }
   }
 
   /**
    * Subscribe to a channel. Optionally provide a handler for channel events.
    */
   subscribe(channel: string, handler?: ChannelEventHandler): void {
+    if (!hasCapability(this.transport, TransportCapability.SUBSCRIBE)) {
+      throw new UnsupportedError(
+        `subscribe() not supported over ${detectTransportType(this.url, this.options)}. Use WebSocket or TCP.`
+      );
+    }
+
     this.subscribedChannels.set(channel, handler ?? null);
-    if (this.ws.isConnected) {
+    if (this.transport.isConnected) {
       this.sendChannelSubscribe(channel);
     }
   }
@@ -258,14 +390,20 @@ export class RaffelClient extends SimpleEmitter {
    * Unsubscribe from a channel.
    */
   unsubscribe(channel: string): void {
+    if (!hasCapability(this.transport, TransportCapability.SUBSCRIBE)) {
+      throw new UnsupportedError(
+        `unsubscribe() not supported over ${detectTransportType(this.url, this.options)}. Use WebSocket or TCP.`
+      );
+    }
+
     this.subscribedChannels.delete(channel);
-    if (this.ws.isConnected) {
+    if (this.transport.isConnected) {
       const msg: RaffelChannelMessage = {
         id: this.nextId(),
         type: 'unsubscribe',
         channel,
       };
-      this.ws.sendJSON(msg);
+      this.transport.send(msg);
     }
   }
 
@@ -273,6 +411,12 @@ export class RaffelClient extends SimpleEmitter {
    * Publish an event to a channel.
    */
   publish(channel: string, event: string, data?: unknown): void {
+    if (!hasCapability(this.transport, TransportCapability.PUBLISH)) {
+      throw new UnsupportedError(
+        `publish() not supported over ${detectTransportType(this.url, this.options)}. Use WebSocket or TCP.`
+      );
+    }
+
     const msg: RaffelChannelMessage = {
       id: this.nextId(),
       type: 'publish',
@@ -280,42 +424,73 @@ export class RaffelClient extends SimpleEmitter {
       event,
       data,
     };
-    this.ws.sendJSON(msg);
+    this.transport.send(msg);
   }
 
   /**
    * Cancel an in-flight RPC call by its request ID.
    */
   cancel(id: string): void {
+    if (!hasCapability(this.transport, TransportCapability.CANCEL)) {
+      throw new UnsupportedError(
+        `cancel() not supported over ${detectTransportType(this.url, this.options)}. Use WebSocket or TCP.`
+      );
+    }
+
     const pending = this.pendingCalls.get(id);
     if (pending) {
       if (pending.timer) clearTimeout(pending.timer);
       pending.reject(new Error(`Call ${id} was cancelled`));
       this.pendingCalls.delete(id);
     }
-    this.sendRaw({ id, type: 'cancel' });
+    this.transport.send({ id, type: 'cancel' });
   }
 
   // ==========================================================================
-  // Internal message routing
+  // Internal
   // ==========================================================================
 
-  private handleMessage(msg: WebSocketMessage): void {
-    if (typeof msg.data !== 'string') return;
-
-    let parsed: any;
-    try {
-      parsed = JSON.parse(msg.data);
-    } catch {
-      return; // Not JSON, ignore
+  private async executeWithTimeout<T>(
+    transport: RaffelExecutableTransport,
+    envelope: RaffelEnvelope,
+    timeout: number,
+    procedure: string,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (signal?.aborted) {
+      throw new Error(`Call to ${procedure} was aborted`);
     }
 
-    if (parsed.channel) {
-      this.handleChannelMessage(parsed);
-    } else if (parsed.procedure || parsed.type === 'cancel') {
-      this.handleEnvelope(parsed);
+    const promises: Promise<T>[] = [
+      transport.execute(envelope) as Promise<T>,
+    ];
+
+    if (timeout > 0) {
+      promises.push(
+        new Promise<T>((_, reject) => {
+          setTimeout(() => reject(new Error(`Call to ${procedure} timed out after ${timeout}ms`)), timeout);
+        })
+      );
+    }
+
+    if (signal) {
+      promises.push(
+        new Promise<T>((_, reject) => {
+          signal.addEventListener('abort', () => reject(new Error(`Call to ${procedure} was aborted`)), { once: true });
+        })
+      );
+    }
+
+    return Promise.race(promises);
+  }
+
+  private handleIncoming(data: any): void {
+    if (data.channel) {
+      this.handleChannelMessage(data);
+    } else if (data.procedure || data.type === 'cancel') {
+      this.handleEnvelope(data);
     } else {
-      this.emit('raffel:unknown', parsed);
+      this.emit('raffel:unknown', data);
     }
   }
 
@@ -363,11 +538,9 @@ export class RaffelClient extends SimpleEmitter {
         const event = msg.event ?? '';
         const data = msg.data;
 
-        // Per-channel handler
         const handler = this.subscribedChannels.get(channel);
         if (handler) handler(event, data);
 
-        // Catch-all
         this.emit('raffel:channel:event', channel, event, data);
         break;
       }
@@ -382,10 +555,6 @@ export class RaffelClient extends SimpleEmitter {
     return `req-${++this.idCounter}`;
   }
 
-  /**
-   * Extract the base request ID from a response/error ID.
-   * `"req-5:response"` → `"req-5"`, `"req-5:error"` → `"req-5"`
-   */
   private extractBaseId(id: string): string {
     const suffixes = [':response', ':error'];
     for (const suffix of suffixes) {
@@ -402,27 +571,26 @@ export class RaffelClient extends SimpleEmitter {
       type: 'subscribe',
       channel,
     };
-    this.ws.sendJSON(msg);
-  }
-
-  private sendRaw(data: unknown): void {
-    this.ws.sendJSON(data);
+    this.transport.send(msg);
   }
 }
 
 /**
  * Create a RaffelClient instance.
  *
+ * The transport is auto-detected from the URL scheme:
+ * - `ws://` / `wss://` → WebSocket (full capabilities)
+ * - `http://` / `https://` → HTTP (call, notify, stream)
+ * - `tcp://` → TCP (full capabilities)
+ * - `udp://` → UDP (call, notify only)
+ * - `http://host/rpc` → JSON-RPC 2.0 (call, notify only)
+ *
  * @example
  * ```typescript
- * import { createRaffelClient } from 'recker';
- *
  * const client = createRaffelClient('ws://game:9999', {
- *   reconnect: true,
  *   channels: ['game'],
  *   channelHandlers: { game: (event, data) => console.log(event, data) },
  * });
- *
  * await client.connect();
  * const status = await client.call('game.status');
  * ```

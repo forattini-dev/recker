@@ -285,6 +285,22 @@ export class ResourceRegistry {
       }]
     );
 
+    // 6b. Raffel Protocol Client
+    this.registerResource(
+      {
+        uri: 'recker://docs/raffel',
+        name: 'Raffel Protocol Client',
+        description: 'Connect to Raffel servers: RPC calls, channels, events, error handling',
+        mimeType: 'text/markdown',
+      },
+      () => [{
+        type: 'resource',
+        uri: 'recker://docs/raffel',
+        mimeType: 'text/markdown',
+        text: RAFFEL_DOCS,
+      }]
+    );
+
     // ─────────────────────────────────────────────────────────────────
     // SEO Resources
     // ─────────────────────────────────────────────────────────────────
@@ -1362,3 +1378,127 @@ function getErrorMessage(error: unknown): string {
     return String(error);
   }
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Static content for MCP resources
+// ─────────────────────────────────────────────────────────────────
+
+const RAFFEL_DOCS = `# Raffel Protocol Client
+
+Connect to Raffel servers with type-safe RPC, channels, and events over WebSocket.
+
+## Setup
+
+\`\`\`typescript
+import { createRaffelClient, RaffelError } from 'recker';
+// or: import { RaffelClient } from 'recker';
+// or: recker.raffel(url, options)
+\`\`\`
+
+## Connect & Close
+
+\`\`\`typescript
+// Transport auto-detected from URL: ws://, http://, tcp://, udp://, http://host/rpc
+const client = createRaffelClient('ws://localhost:3000', {
+  defaultTimeout: 10000,
+  channels: ['lobby'],
+  ws: {                               // WebSocket-specific options
+    reconnect: true,
+    reconnectDelay: 1000,
+    maxReconnectAttempts: 5,
+    heartbeatInterval: 30000,
+    headers: { Authorization: 'Bearer token' },
+  },
+});
+// HTTP: createRaffelClient('http://api:3000', { http: { timeout: 10000 } })
+// TCP:  createRaffelClient('tcp://svc:9000', { tcp: { reconnect: true } })
+// UDP:  createRaffelClient('udp://svc:9000')
+// JSON-RPC: createRaffelClient('http://api:3000/rpc')
+await client.connect();
+client.close();
+\`\`\`
+
+## RPC Calls
+
+\`\`\`typescript
+const user = await client.call<User>('users.get', { id: 42 });
+const data = await client.call('slow.op', payload, { timeout: 60000 });
+const res  = await client.call('search', query, { signal: abortController.signal });
+client.cancel('req-3');  // Cancel in-flight call
+\`\`\`
+
+## Fire-and-Forget
+
+\`\`\`typescript
+client.notify('analytics.track', { event: 'click' });
+\`\`\`
+
+## Channels
+
+\`\`\`typescript
+client.subscribe('chat', (event, data) => console.log(event, data));
+client.publish('chat', 'message', { text: 'Hello' });
+client.unsubscribe('chat');
+\`\`\`
+
+## Events
+
+| Event | Args | Description |
+|---|---|---|
+| raffel:connected | — | Connected |
+| raffel:disconnected | — | Disconnected |
+| raffel:event | (procedure, payload) | Server event |
+| raffel:channel:subscribed | (channel, members?) | Joined channel |
+| raffel:channel:unsubscribed | (channel) | Left channel |
+| raffel:channel:event | (channel, event, data) | Channel event |
+| ws:reconnecting | (attempt, delay) | Reconnecting |
+| ws:error | (error) | WebSocket error |
+
+## Error Handling
+
+\`\`\`typescript
+try {
+  await client.call('users.get', { id: 999 });
+} catch (err) {
+  if (err instanceof RaffelError) {
+    err.code;       // "NOT_FOUND"
+    err.status;     // 404
+    err.procedure;  // "users.get"
+    err.details;    // optional server details
+  }
+}
+\`\`\`
+
+## Properties
+
+- \`client.isConnected\` — boolean
+- \`client.raw\` — underlying RaffelTransport
+- \`client.rawWs\` — underlying ReckerWebSocket (null for non-WS transports)
+
+## Capability Matrix
+
+| Method | WS | HTTP | TCP | UDP | JSON-RPC |
+|---|:---:|:---:|:---:|:---:|:---:|
+| call() | ✅ | ✅ | ✅ | ✅ | ✅ |
+| callStream() | ✅ | ✅ (SSE) | ✅ | ❌ | ❌ |
+| notify() | ✅ | ✅ | ✅ | ✅ | ✅ |
+| subscribe() | ✅ | ❌ | ✅ | ❌ | ❌ |
+| publish() | ✅ | ❌ | ✅ | ❌ | ❌ |
+| cancel() | ✅ | ❌ | ✅ | ❌ | ❌ |
+
+## Example
+
+\`\`\`typescript
+const api = createRaffelClient('ws://api:3000', {
+  channels: ['notifications'],
+  channelHandlers: {
+    notifications: (event, data) => showToast(data),
+  },
+  ws: { reconnect: true },
+});
+await api.connect();
+
+const user = await api.call('auth.verify', { token });
+api.notify('presence.online', { userId: user.id });
+\`\`\`
+`;

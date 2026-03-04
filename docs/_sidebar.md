@@ -70,6 +70,7 @@
   - [Enterprise](/protocols/07-enterprise.md)
   - [HLS](/protocols/08-hls.md)
   - [UDP SDK](/protocols/09-udp.md)
+  - [Raffel Protocol](/protocols/10-raffel.md)
 
 - **Scraping**
   - [Overview](/scraping/01-overview.md)

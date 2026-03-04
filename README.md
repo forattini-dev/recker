@@ -4,7 +4,7 @@
 
 ### Multi-Protocol SDK for the AI Era
 
-Nine protocols unified: HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS.
+Ten protocols unified: HTTP, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS, Raffel.
 <br>
 AI-native: OpenAI, Anthropic, Google, Ollama + MCP server with 70 tools.
 <br>
@@ -108,13 +108,14 @@ await recker.whois('github.com');      // WHOIS
 await recker.dns('google.com');        // DNS
 await recker.ai.chat('Hello!');        // AI
 recker.ws('wss://example.com/socket'); // WebSocket
+recker.raffel('ws://game:9999');       // Raffel
 ```
 
 ## What's Inside
 
 | Category | Features |
 |:---------|:---------|
-| **Protocols** | HTTP/2, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS |
+| **Protocols** | HTTP/2, WebSocket, DNS, WHOIS, RDAP, FTP, SFTP, Telnet, HLS, Raffel |
 | **AI** | OpenAI, Anthropic, Google, Ollama, Groq, Mistral + streaming |
 | **Resilience** | Retry, circuit breaker, rate limiting, request deduplication |
 | **Auth** | Basic, Bearer, OAuth2, AWS SigV4, Digest, API Key + 15 providers |
@@ -196,6 +197,23 @@ await spider.crawl('https://protected-site.com');
 ```
 
 [📖 Anti-blocking docs](https://forattini-dev.github.io/recker/#/scraping/06-anti-blocking)
+
+### Raffel Protocol
+
+```typescript
+import { createRaffelClient } from 'recker';
+
+const client = createRaffelClient('ws://api:3000', { reconnect: true });
+await client.connect();
+
+const user = await client.call<User>('users.get', { id: 42 });
+client.subscribe('notifications', (event, data) => console.log(event, data));
+client.notify('analytics.track', { event: 'page_view' });
+```
+
+Recker connects. Raffel serves. One protocol, zero glue.
+
+[→ Raffel Documentation](https://forattini-dev.github.io/recker/#/protocols/10-raffel)
 
 ### 48 API Presets
 
