@@ -45,7 +45,7 @@ We support safe harbor for security researchers who:
 
 When using Recker in your applications:
 
-1. **Keep dependencies updated**: Run `npm audit` regularly
+1. **Keep dependencies updated**: Run `pnpm audit` regularly
 2. **Use environment variables**: Never hardcode API keys or credentials
 3. **Validate inputs**: Always validate URLs and user inputs before passing to Recker
 4. **Use HTTPS**: Prefer HTTPS over HTTP for sensitive data
@@ -69,7 +69,6 @@ We regularly audit our dependencies for vulnerabilities. Our direct dependencies
 - `undici` - HTTP transport (actively maintained by Node.js team)
 - `zod` - Schema validation
 - `css-select` - HTML parsing
-- `fuse.js` - Fuzzy search
 - `he` - HTML entities
 
 All dependencies are pinned to specific versions and updated regularly.

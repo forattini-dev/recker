@@ -35,11 +35,10 @@ case "${ARCH}" in
     *)         echo -e "${RED}Unsupported architecture: ${ARCH}${NC}"; exit 1;;
 esac
 
-# Construct Binary Name (matching our build output)
-# Currently we build for node18-linux-x64, node18-macos-x64, etc.
-# Note: If we expand to arm64 later, we'll need to update build script & this logic.
-# For now, we only have x64 builds confirmed in pkg config. 
-# If user is on arm64 (M1/M2 mac), Rosetta usually handles x64, but let's warn or try x64.
+# Construct Binary Name (matching our SEA build output)
+# Binaries are Node.js Single Executable Applications (~130MB, includes Node.js runtime).
+# Built for linux-x64, macos-x64, win-x64 via CI matrix.
+# ARM64 not yet built — falls back to x64 (Rosetta on macOS, compatibility layer on Linux).
 
 if [ "$ARCH_TYPE" == "arm64" ]; then
   echo -e "${BLUE}Info: Native ARM64 build not found, attempting to install x64 version (requires Rosetta on Mac/compatibility layer).${NC}"
@@ -71,7 +70,7 @@ DOWNLOAD_URL="https://github.com/$REPO/releases/download/$TAG_NAME/$TARGET_BINAR
 
 # Download
 TMP_FILE=$(mktemp)
-echo -e "${BLUE}Downloading from: $DOWNLOAD_URL${NC}"
+echo -e "${BLUE}Downloading from: $DOWNLOAD_URL (~130MB, includes Node.js runtime)${NC}"
 HTTP_CODE=$(curl -sL -w "%{http_code}" -o "$TMP_FILE" "$DOWNLOAD_URL")
 
 if [ "$HTTP_CODE" != "200" ]; then
