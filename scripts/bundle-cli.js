@@ -6,7 +6,7 @@ console.log('📦 Bundling CLI for binary distribution...');
 
 const outfile = 'dist/bin/rek.cjs';
 
-// Plugin to stub node:sqlite which causes issues with pkg + older node targets
+// Plugin to stub node:sqlite which causes issues with esbuild bundling
 const nodeSqliteStubPlugin = {
   name: 'node-sqlite-stub',
   setup(build) {

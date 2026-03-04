@@ -230,7 +230,7 @@
     "build:browser": "tsc -p tsconfig.browser.json",
     "build:browser:bundle": "pnpm build:browser && node scripts/bundle-browser.js",
     "build:cli": "node scripts/bundle-cli.js",
-    "build:binary": "npx pkg ./dist/bin/rek.cjs --output dist/bin/recker --targets node18-linux-x64,node18-macos-x64,node18-win-x64",
+    "build:binary": "node scripts/build-sea.js",
     "prepare": "husky",
     "prepublishOnly": "pnpm build && pnpm build:browser:bundle && node scripts/inject-version.js",
     "test": "NODE_OPTIONS='--max-old-space-size=512' vitest run",
