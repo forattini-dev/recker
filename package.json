@@ -302,7 +302,6 @@
     }
   },
   "devDependencies": {
-    "raffel": "^1.0.14",
     "@hapi/wreck": "^18.1.0",
     "@types/he": "^1.2.3",
     "@types/needle": "^3.3.0",
@@ -327,6 +326,7 @@
     "node-fetch": "^3.3.2",
     "picocolors": "^1.1.1",
     "popsicle": "^12.1.2",
+    "raffel": "^1.0.18",
     "serve": "^14.2.6",
     "socks": "^2.8.7",
     "ssh2-sftp-client": "^12.1.0",
