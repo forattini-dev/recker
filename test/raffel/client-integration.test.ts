@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { RaffelClient, createRaffelClient } from '../../src/raffel/client.js';
-import { createMockWebSocketServer, type MockWebSocketServer } from '../../../raffel/src/testing/index.js';
+import { createMockWebSocketServer, type MockWebSocketServer } from 'raffel/testing';
 
 describe('RaffelClient integration with MockWebSocketServer', () => {
   let server: MockWebSocketServer | null = null;
