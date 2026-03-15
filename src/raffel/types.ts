@@ -76,6 +76,16 @@ export interface RaffelClientOptions {
   /** Transport type override. Auto-detected from URL scheme if omitted. */
   transport?: RaffelTransportType;
 
+  /**
+   * Client mode:
+   * - `'full'` (default): Envelope protocol with RPC correlation + channel pub/sub.
+   *   Use call(), subscribe(), publish(), callStream().
+   * - `'raw'`: Pure WebSocket JSON messaging. No envelope wrapping, no RPC correlation.
+   *   Use sendRaw(), on('message'), waitFor(). Ideal for servers using
+   *   onMessage/onConnection raw handlers without raffel's envelope protocol.
+   */
+  mode?: 'raw' | 'full';
+
   /** Default timeout for call() in ms (default: 30000) */
   defaultTimeout?: number;
 
@@ -87,6 +97,9 @@ export interface RaffelClientOptions {
 
   /** Catch-all handler for events on procedures (type: "event") */
   onEvent?: (procedure: string, payload: unknown) => void;
+
+  /** Handler for all incoming messages in raw mode */
+  onMessage?: (data: unknown) => void;
 
   // Per-transport options
   ws?: WebSocketOptions;

@@ -87,17 +87,24 @@ export class RaffelClient extends SimpleEmitter {
   private idCounter = 0;
   private defaultTimeout: number;
   private onEvent?: (procedure: string, payload: unknown) => void;
+  private _onMessage?: (data: unknown) => void;
   private url: string;
   private options: RaffelClientOptions;
+  private _mode: 'raw' | 'full';
+  private _waiters: Array<{ predicate: (msg: any) => boolean; resolve: (msg: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }> = [];
+  private _messageBuffer: any[] = [];
+  private static readonly MAX_BUFFER_SIZE = 100;
 
   constructor(url: string, options: RaffelClientOptions = {}) {
     super();
     this.url = url;
     this.options = options;
+    this._mode = options.mode ?? 'full';
     this.defaultTimeout = options.defaultTimeout ?? 30_000;
     this.onEvent = options.onEvent;
+    this._onMessage = options.onMessage;
 
-    // Pre-register channel handlers
+    // Pre-register channel handlers (full mode only)
     if (options.channels) {
       for (const ch of options.channels) {
         this.subscribedChannels.set(ch, options.channelHandlers?.[ch] ?? null);
@@ -136,9 +143,11 @@ export class RaffelClient extends SimpleEmitter {
 
     this.transport.on('connected', () => {
       this.emit('raffel:connected');
-      // Auto-resubscribe to all tracked channels
-      for (const [channel] of this.subscribedChannels) {
-        this.sendChannelSubscribe(channel);
+      // Auto-resubscribe to all tracked channels (full mode only)
+      if (this._mode === 'full') {
+        for (const [channel] of this.subscribedChannels) {
+          this.sendChannelSubscribe(channel);
+        }
       }
     });
 
@@ -171,7 +180,7 @@ export class RaffelClient extends SimpleEmitter {
     return this.transport.connect();
   }
 
-  /** Close the connection. Rejects all pending calls. */
+  /** Close the connection. Rejects all pending calls and waiters. */
   close(code?: number, reason?: string): void {
     // Reject pending calls before closing
     for (const [id, pending] of this.pendingCalls) {
@@ -179,6 +188,14 @@ export class RaffelClient extends SimpleEmitter {
       pending.reject(new Error(`Connection closed while waiting for response to ${id}`));
     }
     this.pendingCalls.clear();
+
+    // Reject pending waitFor() promises
+    for (const waiter of this._waiters) {
+      clearTimeout(waiter.timer);
+      waiter.reject(new Error('Connection closed'));
+    }
+    this._waiters = [];
+
     if (this.transport) {
       this.transport.close(code, reason);
     }
@@ -428,6 +445,46 @@ export class RaffelClient extends SimpleEmitter {
   }
 
   /**
+   * Send a raw JSON message without envelope wrapping.
+   * Works in both raw and full modes.
+   */
+  sendRaw(data: unknown): void {
+    this.transport.send(data);
+  }
+
+  /**
+   * Wait for a message matching a predicate.
+   * Resolves with the first message where predicate returns true.
+   * Works in both raw and full modes.
+   *
+   * @example
+   * ```typescript
+   * const welcome = await client.waitFor(msg => msg.type === 'welcome');
+   * ```
+   */
+  waitFor<T = any>(predicate: (msg: any) => boolean, timeoutMs?: number): Promise<T> {
+    // Check already buffered messages first
+    const existing = this._messageBuffer.find(predicate);
+    if (existing) return Promise.resolve(existing as T);
+
+    const timeout = timeoutMs ?? this.defaultTimeout;
+
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this._waiters = this._waiters.filter(w => w.timer !== timer);
+        reject(new Error('waitFor() timed out'));
+      }, timeout);
+
+      this._waiters.push({ predicate, resolve, reject, timer });
+    });
+  }
+
+  /** Whether the client is running in raw mode */
+  get mode(): 'raw' | 'full' {
+    return this._mode;
+  }
+
+  /**
    * Cancel an in-flight RPC call by its request ID.
    */
   cancel(id: string): void {
@@ -485,9 +542,33 @@ export class RaffelClient extends SimpleEmitter {
   }
 
   private handleIncoming(data: any): void {
+    // Buffer the message for retroactive waitFor() lookups
+    this._messageBuffer.push(data);
+    if (this._messageBuffer.length > RaffelClient.MAX_BUFFER_SIZE) {
+      this._messageBuffer.shift();
+    }
+
+    // Resolve any waitFor() promises (works in both modes)
+    for (let i = this._waiters.length - 1; i >= 0; i--) {
+      const waiter = this._waiters[i];
+      if (waiter.predicate(data)) {
+        clearTimeout(waiter.timer);
+        this._waiters.splice(i, 1);
+        waiter.resolve(data);
+      }
+    }
+
+    // Raw mode: emit message event and call handler, no envelope parsing
+    if (this._mode === 'raw') {
+      this._onMessage?.(data);
+      this.emit('message', data);
+      return;
+    }
+
+    // Full mode: route to envelope/channel handlers
     if (data.channel) {
       this.handleChannelMessage(data);
-    } else if (data.procedure || data.type === 'cancel') {
+    } else if (data.procedure || data.type === 'cancel' || data.type === 'response' || data.type === 'error') {
       this.handleEnvelope(data);
     } else {
       this.emit('raffel:unknown', data);
