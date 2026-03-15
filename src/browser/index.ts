@@ -104,6 +104,19 @@ export * from './cache.js';
 export * from './compression.js';
 
 // ============================================================================
+// Raffel Protocol Client (browser-compatible)
+// ============================================================================
+export { createRaffelClient } from 'raffel/client/browser';
+export type {
+  RaffelClientOptions,
+  RaffelClient,
+  ClientStream as RaffelClientStream,
+  CallOptions as RaffelCallOptions,
+  ClientChannel as RaffelClientChannel,
+  ClientChannelMember as RaffelClientChannelMember,
+} from 'raffel/client/browser';
+
+// ============================================================================
 // Unified API - Browser version
 // ============================================================================
 export * from './recker.js';

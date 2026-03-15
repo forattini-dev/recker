@@ -39,6 +39,8 @@ import { analyzeSeo } from '../seo/analyzer.js';
 import { createAI } from '../ai/index.js';
 import { harRecorder } from '../plugins/har-recorder.js';
 import { simulateNetwork } from '../plugins/network-simulation.js';
+import { createRaffelClient } from 'raffel/client/browser';
+import type { RaffelClientOptions, RaffelClient } from 'raffel/client/browser';
 
 // NOTE: WebSocket uses native browser API
 // Users can use native WebSocket API directly in the browser
@@ -208,6 +210,7 @@ export function ws(url: string, protocols?: string | string[]): WebSocket {
  * Available features:
  * - HTTP: recker.get(), recker.post(), etc.
  * - WebSocket: recker.ws() (native browser WebSocket)
+ * - Raffel: recker.raffel() - full Raffel protocol client (RPC, streams, channels)
  * - AI: recker.ai() - full AI layer support
  * - SEO: recker.seo() - SEO analysis
  * - HAR: recker.har - record/export HAR files
@@ -226,6 +229,12 @@ export function ws(url: string, protocols?: string | string[]): WebSocket {
  * // WebSocket (native browser API)
  * const socket = recker.ws('wss://api.example.com/ws');
  * socket.onmessage = (event) => console.log(event.data);
+ *
+ * // Raffel (RPC + channels + streams over WebSocket)
+ * const client = recker.raffel('wss://api.example.com/ws', { token: 'xxx' });
+ * const user = await client.call('users.get', { id: '123' });
+ * const channel = client.subscribe('orders');
+ * channel.on('created', (data) => console.log(data));
  *
  * // AI
  * const ai = recker.ai({ defaultProvider: 'openai', providers: { openai: { apiKey: '...' } } });
@@ -257,6 +266,27 @@ export const recker = {
 
   /** WebSocket connection (native browser API) */
   ws,
+
+  // ========== Raffel Protocol ==========
+
+  /**
+   * Create a Raffel protocol client (RPC, streams, channels over WebSocket)
+   *
+   * @example
+   * ```typescript
+   * const client = recker.raffel('wss://api.example.com/ws', { token: 'xxx' })
+   * const user = await client.call('users.get', { id: '123' })
+   *
+   * const channel = client.subscribe('orders')
+   * channel.on('created', (data) => console.log(data))
+   *
+   * for await (const chunk of client.stream('logs.tail')) {
+   *   console.log(chunk)
+   * }
+   * ```
+   */
+  raffel: (url: string, options?: Omit<RaffelClientOptions, 'url'>): RaffelClient =>
+    createRaffelClient({ ...options, url }),
 
   // ========== SEO ==========
 
