@@ -35,6 +35,7 @@ Response ← Plugin 1  ←  Plugin 2  ←  Plugin 3  ←  Transport  ← Network
 | [Circuit Breaker](./03-circuit-breaker.md) | `circuitBreakerPlugin` | Protection against cascading failures |
 | [Dedup](./05-dedup.md) | `dedupPlugin` | Deduplication of simultaneous requests |
 | [Rate Limit](./09-rate-limit.md) | `rateLimitPlugin` | Token bucket rate limiting |
+| Queue | `queuePlugin` | Fire-and-forget request queuing with pluggable backends (SQS, Redis, etc.) |
 
 ### Performance
 

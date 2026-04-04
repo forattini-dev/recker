@@ -488,6 +488,15 @@ interface SpiderOptions {
   /** Custom sitemap URL */
   sitemapUrl?: string;
 
+  /** Proxy: string, string[] (round-robin), or ProxyAdapter (dynamic) */
+  proxy?: string | string[] | ProxyAdapter;
+
+  /** Pluggable URL frontier (default: in-memory) */
+  crawlQueue?: CrawlQueueAdapter;
+
+  /** Pluggable result storage (default: in-memory) */
+  crawlStorage?: CrawlStorageAdapter;
+
   /** Callback for each page crawled */
   onPage?: (result: SpiderPageResult) => void;
 
@@ -850,6 +859,189 @@ https://Example.com/Page/?utm_source=twitter&b=2&a=1#section
 → https://example.com/Page?a=1&b=2
 ```
 
+## Proxy Support
+
+The Spider supports HTTP, HTTPS, SOCKS5, and SOCKS5h proxies. Pass a single proxy, a list for round-robin, or a custom adapter for dynamic selection.
+
+### Static Proxy
+
+```typescript
+const spider = new Spider({
+  proxy: 'socks5h://proxy.example.com:1080',
+});
+```
+
+### Round-Robin List
+
+```typescript
+const spider = new Spider({
+  proxy: [
+    'http://proxy1.example.com:8080',
+    'socks5h://proxy2.example.com:1080',
+    'http://proxy3.example.com:8080',
+  ],
+  concurrency: 20,
+});
+```
+
+### Dynamic Proxy Adapter
+
+Implement `ProxyAdapter` for full control: health-based rotation, geo-routing, API-based pools, etc.
+
+```typescript
+import { Spider, type ProxyAdapter } from 'recker/scrape';
+
+const proxyAdapter: ProxyAdapter = {
+  async getProxy() {
+    // Fetch from your proxy pool, API, database, etc.
+    return await myProxyPool.getHealthiest();
+  },
+  async reportResult(proxy, success) {
+    // Feedback for health tracking
+    if (!success) await myProxyPool.penalize(proxy, 60_000);
+  }
+};
+
+const spider = new Spider({
+  proxy: proxyAdapter,
+  concurrency: 50,
+  maxPages: 100000,
+});
+```
+
+The `ProxyAdapter` interface:
+
+```typescript
+interface ProxyAdapter {
+  getProxy(): Promise<string | null>;
+  reportResult?(proxy: string, success: boolean): Promise<void>;
+  close?(): Promise<void>;
+}
+```
+
+> [!TIP]
+> The built-in `ListProxyAdapter` handles round-robin automatically when you pass a `string[]`. Implement `ProxyAdapter` directly when you need health tracking, geo-routing, or dynamic proxy pools.
+
+## Pluggable Queue (URL Frontier)
+
+By default, the Spider uses an in-memory queue to track URLs to crawl and URLs already visited. For large crawls, distributed crawling, or crash recovery, plug in your own backend.
+
+```typescript
+import { Spider, type CrawlQueueAdapter } from 'recker/scrape';
+
+// Example: Redis-backed queue
+const redisQueue: CrawlQueueAdapter = {
+  async push(item) { await redis.lpush('crawl:queue', JSON.stringify(item)); },
+  async pop() {
+    const raw = await redis.rpop('crawl:queue');
+    return raw ? JSON.parse(raw) : null;
+  },
+  async hasVisited(url) { return await redis.sismember('crawl:visited', url) === 1; },
+  async markVisited(url) { await redis.sadd('crawl:visited', url); },
+  async size() { return await redis.llen('crawl:queue'); },
+  async clear() { await redis.del('crawl:queue', 'crawl:visited'); },
+};
+
+const spider = new Spider({
+  crawlQueue: redisQueue,
+  concurrency: 20,
+  maxPages: 100000,
+});
+```
+
+The `CrawlQueueAdapter` interface:
+
+```typescript
+interface CrawlQueueAdapter {
+  push(item: CrawlQueueItem): Promise<void>;
+  pushBatch?(items: CrawlQueueItem[]): Promise<void>;     // batch optimization
+  pop(): Promise<CrawlQueueItem | null>;
+  hasVisited(url: string): Promise<boolean>;
+  hasVisitedBatch?(urls: string[]): Promise<Set<string>>;  // batch optimization
+  markVisited(url: string): Promise<void>;
+  size(): Promise<number>;
+  clear(): Promise<void>;
+  close?(): Promise<void>;
+}
+```
+
+> [!NOTE]
+> When `pushBatch` and `hasVisitedBatch` are implemented, the Spider uses them automatically to reduce round-trips. This makes a significant difference for remote backends like Redis or SQS.
+
+## Pluggable Storage (Results)
+
+By default, crawl results accumulate in memory. For large crawls (100k+ pages) this can consume gigabytes. Plug in a storage adapter to stream results to disk, database, or cloud.
+
+```typescript
+import { Spider, type CrawlStorageAdapter } from 'recker/scrape';
+
+// Example: SQLite-backed storage
+const sqliteStorage: CrawlStorageAdapter = {
+  async saveResult(result) {
+    await db.run('INSERT INTO pages (url, status, title) VALUES (?, ?, ?)',
+      result.url, result.status, result.title);
+  },
+  async saveError(error) {
+    await db.run('INSERT INTO errors (url, error) VALUES (?, ?)', error.url, error.error);
+  },
+  async getResultCount() {
+    return (await db.get('SELECT COUNT(*) as c FROM pages')).c;
+  },
+  async getResults() {
+    return await db.all('SELECT * FROM pages');
+  },
+  async getErrors() {
+    return await db.all('SELECT * FROM errors');
+  },
+  async clear() {
+    await db.run('DELETE FROM pages');
+    await db.run('DELETE FROM errors');
+  },
+};
+
+const spider = new Spider({
+  crawlStorage: sqliteStorage,
+  maxPages: 100000,
+});
+```
+
+The `CrawlStorageAdapter` interface:
+
+```typescript
+interface CrawlStorageAdapter {
+  saveResult(result: SpiderPageResult): Promise<void>;
+  saveError(error: { url: string; error: string }): Promise<void>;
+  getResultCount(): Promise<number>;
+  getResults(): Promise<SpiderPageResult[]>;
+  getErrors(): Promise<Array<{ url: string; error: string }>>;
+  clear(): Promise<void>;
+  close?(): Promise<void>;
+}
+```
+
+### Combining All Adapters
+
+For production-grade crawling:
+
+```typescript
+const spider = new Spider({
+  // Dynamic proxy with health tracking
+  proxy: myProxyAdapter,
+
+  // Redis queue for distributed crawling
+  crawlQueue: new RedisCrawlQueue({ url: 'redis://localhost:6379' }),
+
+  // SQLite storage to avoid memory bloat
+  crawlStorage: new SQLiteCrawlStorage({ path: './crawl.db' }),
+
+  concurrency: 50,
+  maxPages: 100000,
+  onPage: (page) => console.log(`${page.status} ${page.url}`),
+});
+
+const result = await spider.crawl('https://example.com');
+```
+
 ## Performance Tips
 
 ### 1. Adjust Concurrency Based on Target
@@ -930,7 +1122,19 @@ import type {
   SpiderProgress,
   SitemapAnalysis,
   RobotsAnalysis,
-  ExtractionSchema
+  ExtractionSchema,
+  // Adapters
+  CrawlQueueAdapter,
+  CrawlQueueItem,
+  CrawlStorageAdapter,
+  ProxyAdapter,
+} from 'recker/scrape';
+
+// Built-in implementations
+import {
+  InMemoryCrawlQueue,
+  InMemoryCrawlStorage,
+  ListProxyAdapter,
 } from 'recker/scrape';
 ```
 
