@@ -135,6 +135,11 @@ When using Pino or similar structured loggers:
 
 ## Request Timings
 
+Recker reports timings in two categories:
+
+- **Per-stage** — duration of each individual stage (how long *that step* took)
+- **Smart/cumulative** — cumulative from request start (milestones like TTFB)
+
 ### Access Timings
 
 ```typescript
@@ -142,27 +147,109 @@ const response = await client.get('/api/data');
 
 console.log(response.timings);
 // {
-//   queuing: 2,      // Time in queue
-//   dns: 15,         // DNS lookup
-//   tcp: 20,         // TCP connection
-//   tls: 30,         // TLS handshake
-//   firstByte: 100,  // Time to first byte (TTFB)
-//   content: 50,     // Content download
-//   total: 217       // Total request time
+//   dns: 15,            // DNS resolution took 15ms
+//   tcp: 20,            // TCP connect took 20ms
+//   tls: 30,            // TLS handshake took 30ms
+//   content: 50,        // Body download took 50ms
+//
+//   firstByte: 100,     // 100ms from start to first byte (TTFB)
+//   total: 150,         // 150ms total
+//   connectionTime: 65, // 65ms total connection setup (dns+tcp+tls)
+//   serverTime: 35,     // 35ms server processing (firstByte - connectionTime)
+//   transferTime: 50,   // 50ms transfer (same as content)
 // }
 ```
 
 ### Timing Breakdown
 
-| Timing | Description |
-|--------|-------------|
-| `queuing` | Time waiting in request queue |
-| `dns` | DNS resolution time |
-| `tcp` | TCP connection establishment |
-| `tls` | TLS/SSL handshake |
-| `firstByte` | Time To First Byte (TTFB) |
-| `content` | Response body download time |
-| `total` | Total request duration |
+#### Per-Stage Durations
+
+Each field measures **only that stage's duration** in milliseconds.
+
+| Field | What it measures | Example |
+|-------|-----------------|---------|
+| `queuing` | Time waiting in internal queue before dispatch | 2ms |
+| `dns` | DNS resolution | 15ms |
+| `tcp` | TCP connection establishment | 20ms |
+| `tls` | TLS/SSL handshake | 30ms |
+| `content` | Response body download | 50ms |
+
+#### Smart / Cumulative
+
+These are **cumulative from request start** or derived from per-stage values.
+
+| Field | What it measures | How it's calculated | Useful for |
+|-------|-----------------|---------------------|------------|
+| `firstByte` | Time To First Byte (TTFB) | Cumulative from start | Core Web Vitals, SEO |
+| `total` | Total request duration | Cumulative from start | Performance monitoring |
+| `connectionTime` | Total connection overhead | `dns + tcp + tls` | Network diagnostics |
+| `serverTime` | Server processing time | `firstByte - connectionTime` | Backend performance |
+| `transferTime` | Transfer time | Same as `content` | Bandwidth analysis |
+
+> [!TIP]
+> `serverTime` tells you how long the server took to process your request, separate from network overhead. A high `serverTime` with low `connectionTime` means the server is slow. A high `connectionTime` with low `serverTime` means network is the bottleneck.
+
+### Proxy Timings
+
+When a request goes through a proxy (HTTP, HTTPS, SOCKS5, SOCKS5h), Recker separates proxy connection timings from target timings.
+
+```typescript
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  proxy: 'socks5h://proxy.example.com:1080',
+});
+
+const response = await client.get('/data');
+
+console.log(response.timings);
+// {
+//   // Per-stage: proxy connection
+//   proxyDns: 8,       // DNS resolution for the proxy host
+//   proxyTcp: 17,      // TCP connect to the proxy
+//   proxyTls: 35,      // TLS handshake with the proxy
+//   proxyTotal: 60,    // Total proxy overhead (8+17+35)
+//
+//   // Per-stage: target (through the proxy tunnel)
+//   tls: 55,           // TLS handshake with the target (via tunnel)
+//   content: 80,       // Body download
+//
+//   // Smart / cumulative
+//   connectionTime: 115, // Total connection (proxy + target TLS)
+//   serverTime: 135,     // Server processing time
+//   firstByte: 250,      // TTFB from request start (includes everything)
+//   total: 400,          // Total duration
+//   transferTime: 80,    // Transfer time
+// }
+```
+
+#### Proxy Timing Fields
+
+| Field | What it measures |
+|-------|-----------------|
+| `proxyDns` | DNS resolution for the proxy host |
+| `proxyTcp` | TCP connection to the proxy |
+| `proxyTls` | TLS handshake with the proxy (HTTPS proxies) |
+| `proxyTotal` | Total proxy overhead (`proxyDns + proxyTcp + proxyTls`) |
+
+> [!NOTE]
+> Proxy timings are currently available with the **curl transport** only. The undici transport establishes the proxy tunnel internally and does not expose per-stage proxy timings.
+
+#### How to Read Proxy Timings
+
+```
+Request timeline (with proxy):
+
+|-- proxyDns --|-- proxyTcp --|-- proxyTls --|-- tls (target) --|-- serverTime --|-- content --|
+|                                                                                              |
+0ms                                                                              firstByte   total
+|              |                              |                                                |
+|-- proxyTotal (60ms) ---|                    |                                                |
+|                        |-- connectionTime (115ms) --|                                        |
+|                                                     |-- serverTime (135ms) --|               |
+|                                                                              |-- content ----|
+|--------------------------------------- firstByte (250ms) --------------------|               |
+|----------------------------------------------- total (400ms) -------------------------------|
+```
 
 ### Timing Hooks
 
@@ -175,9 +262,21 @@ client.afterResponse((req, res) => {
     console.warn(`Slow request: ${req.url} took ${timings.total}ms`);
   }
 
-  // Track TTFB
+  // Track TTFB (key SEO metric)
   if (timings?.firstByte && timings.firstByte > 500) {
     console.warn(`High TTFB: ${timings.firstByte}ms for ${req.url}`);
+  }
+
+  // Detect slow server vs slow network
+  if (timings?.serverTime && timings?.connectionTime) {
+    if (timings.serverTime > timings.connectionTime * 2) {
+      console.warn(`Server bottleneck: ${timings.serverTime}ms server vs ${timings.connectionTime}ms connection`);
+    }
+  }
+
+  // Monitor proxy overhead
+  if (timings?.proxyTotal && timings.proxyTotal > 200) {
+    console.warn(`High proxy overhead: ${timings.proxyTotal}ms`);
   }
 });
 ```
