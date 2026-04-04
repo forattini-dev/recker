@@ -60,6 +60,8 @@ export * from './plugins/odata.js';
 export * from './plugins/http2-push.js';
 export * from './plugins/http3.js';
 export * from './cache/redis-storage.js';
+export * from './plugins/queue.js';
+export * from './queue/consumer.js';
 
 // Video extractors
 export * from './extractors/index.js';

@@ -34,6 +34,9 @@ import { hasImpersonate } from '../utils/binary-manager.js';
 import { CurlTransport } from '../transport/curl.js';
 import { HttpRequest } from '../core/request.js';
 import { getRandomUserAgent } from '../utils/user-agent.js';
+import { InMemoryCrawlQueue, type CrawlQueueAdapter, type CrawlQueueItem } from './crawl-queue.js';
+import { InMemoryCrawlStorage, type CrawlStorageAdapter } from './crawl-storage.js';
+import { ListProxyAdapter, type ProxyAdapter } from './proxy-adapter.js';
 
 /** Transport type for HTTP requests */
 export type SpiderTransport = 'auto' | 'undici' | 'curl';
@@ -81,6 +84,21 @@ export interface SpiderOptions {
   /** Custom sitemap URL (if not at /sitemap.xml) */
   sitemapUrl?: string;
   /**
+   * Proxy configuration. Supports HTTP, HTTPS, SOCKS5, SOCKS5h.
+   *
+   * - String: single static proxy
+   * - String[]: round-robin rotation
+   * - ProxyAdapter: pluggable dynamic selection (health-based, geo-routing, API pools, etc.)
+   *
+   * @example
+   * ```typescript
+   * proxy: 'socks5h://proxy.example.com:1080'
+   * proxy: ['http://p1:8080', 'socks5h://p2:1080']
+   * proxy: myProxyAdapter  // implements ProxyAdapter interface
+   * ```
+   */
+  proxy?: string | string[] | ProxyAdapter;
+  /**
    * Transport mode for HTTP requests (default: 'auto')
    * - 'auto': Prefer curl-impersonate, fallback to undici only when curl is unavailable
    * - 'undici': Always use undici (fast, but may be blocked by WAFs)
@@ -117,6 +135,29 @@ export interface SpiderOptions {
    * Useful for custom normalization and parser behavior.
    */
   parserOptions?: Partial<ParserOptions>;
+
+  /**
+   * Pluggable queue adapter for URL frontier management.
+   * Enables persistent, distributed, or priority-based crawling.
+   *
+   * If not provided, uses an in-memory queue (same behavior as before).
+   *
+   * @example
+   * ```typescript
+   * const spider = new Spider({
+   *   crawlQueue: new RedisCrawlQueue({ url: 'redis://localhost:6379' }),
+   * });
+   * ```
+   */
+  crawlQueue?: CrawlQueueAdapter;
+
+  /**
+   * Pluggable storage adapter for crawl results.
+   * Enables persistent results, crash recovery, and memory-efficient large crawls.
+   *
+   * If not provided, uses in-memory storage (same behavior as before).
+   */
+  crawlStorage?: CrawlStorageAdapter;
 }
 
 export interface SpiderPageResult {
@@ -355,6 +396,11 @@ function normalizeUrl(urlStr: string): string {
     // Remove fragment
     url.hash = '';
 
+    // Strip www prefix for dedup (www.example.com → example.com)
+    if (url.hostname.startsWith('www.')) {
+      url.hostname = url.hostname.slice(4);
+    }
+
     // Remove tracking parameters
     const paramsToDelete: string[] = [];
     url.searchParams.forEach((_, key) => {
@@ -519,7 +565,7 @@ export class Spider {
   private options: Required<
     Omit<
       SpiderOptions,
-      'onPage' | 'onPageWithHtml' | 'onProgress' | 'onCaptchaDetected' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions'
+      'onPage' | 'onPageWithHtml' | 'onProgress' | 'onCaptchaDetected' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy'
     >
   > & {
     exclude?: RegExp[];
@@ -541,10 +587,13 @@ export class Spider {
   };
   private client: ReturnType<typeof createClient>;
   private pool: RequestPool;
-  private visited: Set<string> = new Set();
-  private queue: QueueItem[] = [];
-  private results: SpiderPageResult[] = [];
-  private errors: Array<{ url: string; error: string }> = [];
+  private crawlQueue: CrawlQueueAdapter;
+  private crawlStorage: CrawlStorageAdapter;
+  private proxyAdapter: ProxyAdapter | null = null;
+  private proxyClients = new Map<string, ReturnType<typeof createClient>>();
+  private _visitedCount: number = 0;
+  private _queueSize: number = 0;
+  private _resultCount: number = 0;
   private baseHost: string = '';
   private running: boolean = false;
   private aborted: boolean = false;
@@ -613,6 +662,20 @@ export class Spider {
       parserOptions: options.parserOptions,
     };
 
+    // Resolve proxy: string → static client proxy, string[] → ListProxyAdapter, ProxyAdapter → dynamic
+    if (options.proxy) {
+      if (typeof options.proxy === 'string') {
+        // Single static proxy — pass to client
+        this.proxyAdapter = new ListProxyAdapter([options.proxy]);
+      } else if (Array.isArray(options.proxy)) {
+        // List — round-robin adapter
+        this.proxyAdapter = new ListProxyAdapter(options.proxy);
+      } else {
+        // User-provided adapter
+        this.proxyAdapter = options.proxy;
+      }
+    }
+
     this.client = createClient({
       baseUrl: 'http://localhost',
       timeout: this.options.timeout,
@@ -636,6 +699,10 @@ export class Spider {
         interval: this.options.delay,
       } : {}),
     });
+
+    // Initialize crawl queue (pluggable or default in-memory)
+    this.crawlQueue = options.crawlQueue ?? new InMemoryCrawlQueue();
+    this.crawlStorage = options.crawlStorage ?? new InMemoryCrawlStorage();
   }
 
   /**
@@ -656,10 +723,11 @@ export class Spider {
       this.baseHost = new URL(normalizedStart).hostname;
 
     // Reset state
-    this.visited.clear();
-    this.queue = [];
-    this.results = [];
-    this.errors = [];
+    await this.crawlQueue.clear();
+    await this.crawlStorage.clear();
+    this._visitedCount = 0;
+    this._queueSize = 0;
+    this._resultCount = 0;
     this.running = true;
     this.aborted = false;
     this.pendingCount = 0;
@@ -694,18 +762,18 @@ export class Spider {
     const pending = new Map<string, Promise<void>>();
 
     // Helper to schedule a URL for crawling
-    const scheduleUrl = (item: QueueItem): void => {
+    const scheduleUrl = async (item: QueueItem): Promise<void> => {
       const normalized = normalizeUrl(item.url);
 
       // Skip if already visited or pending
-      if (this.visited.has(normalized)) return;
+      if (await this.crawlQueue.hasVisited(normalized)) return;
       if (pending.has(normalized)) return;
 
       // Skip if exceeds max depth (sitemap URLs get depth 1)
       if (item.depth > this.options.maxDepth) return;
 
       // Skip if we've reached max pages (count completed + pending)
-      if (this.results.length + pending.size >= this.options.maxPages) return;
+      if (this._resultCount + pending.size >= this.options.maxPages) return;
 
       // Check robots.txt if enabled
       if (this.options.respectRobotsTxt && this.robotsData) {
@@ -721,7 +789,8 @@ export class Spider {
       }
 
       // Mark as visited to prevent duplicate scheduling
-      this.visited.add(normalized);
+      await this.crawlQueue.markVisited(normalized);
+      this._visitedCount++;
       this.pendingCount++;
 
       // Schedule via pool - returns immediately, pool handles concurrency
@@ -735,7 +804,7 @@ export class Spider {
     };
 
     // Schedule the start URL
-    scheduleUrl({ url: normalizedStart, depth: 0 });
+    await scheduleUrl({ url: normalizedStart, depth: 0 });
 
     // Schedule sitemap URLs (with depth 1 so they can discover more links)
     if (this.options.useSitemap && this.sitemapUrls.length > 0) {
@@ -744,7 +813,7 @@ export class Spider {
         try {
           const urlHost = new URL(sitemapUrl.loc).hostname;
           if (urlHost === this.baseHost) {
-            scheduleUrl({ url: sitemapUrl.loc, depth: 1 });
+            await scheduleUrl({ url: sitemapUrl.loc, depth: 1 });
           }
         } catch {
           // Invalid URL, skip
@@ -754,18 +823,20 @@ export class Spider {
 
     // Process until no more pending crawls or aborted
     while (
-      (pending.size > 0 || this.queue.length > 0)
+      (pending.size > 0 || this._queueSize > 0)
       && !this.aborted
-      && this.results.length < this.options.maxPages
+      && this._resultCount < this.options.maxPages
     ) {
       // Schedule any URLs discovered from completed crawls
-      while (this.queue.length > 0 && !this.aborted) {
-        const item = this.queue.shift()!;
+      let nextItem = await this.crawlQueue.pop();
+      while (nextItem && !this.aborted) {
+        this._queueSize = Math.max(0, this._queueSize - 1);
 
         // Check if we should continue scheduling
-        if (this.results.length + pending.size >= this.options.maxPages) break;
+        if (this._resultCount + pending.size >= this.options.maxPages) break;
 
-        scheduleUrl(item);
+        await scheduleUrl(nextItem);
+        nextItem = await this.crawlQueue.pop();
       }
 
       // If there are pending crawls, wait for at least one to complete
@@ -781,18 +852,27 @@ export class Spider {
 
     this.running = false;
 
+    // Collect results from storage
+    const pages = await this.crawlStorage.getResults();
+    const errors = await this.crawlStorage.getErrors();
+
     // Build sitemap analysis
-    const sitemapAnalysis = this.buildSitemapAnalysis();
+    const sitemapAnalysis = this.buildSitemapAnalysis(pages);
     const robotsAnalysis = this.buildRobotsAnalysis();
+
+    // Build visited set from crawl queue adapter (or from results as fallback)
+    const visited = this.crawlQueue instanceof InMemoryCrawlQueue
+      ? this.crawlQueue.getVisited()
+      : new Set(pages.map(r => r.url));
 
     return {
       startUrl: normalizedStart,
-      pages: this.results,
-      visited: this.visited,
+      pages,
+      visited,
       duration: Math.round(performance.now() - perfStart),
       startTime: startTimestamp,
       endTime: Date.now(),
-      errors: this.errors,
+      errors,
       sitemap: this.options.useSitemap ? sitemapAnalysis : undefined,
       robots: robotsAnalysis,
     };
@@ -903,8 +983,8 @@ export class Spider {
   /**
    * Build sitemap analysis comparing discovered URLs vs sitemap
    */
-  private buildSitemapAnalysis(): SitemapAnalysis {
-    const crawledUrls = new Set(this.results.map(r => normalizeUrl(r.url)));
+  private buildSitemapAnalysis(results: SpiderPageResult[]): SitemapAnalysis {
+    const crawledUrls = new Set(results.map(r => normalizeUrl(r.url)));
     const sitemapUrlSet = this.sitemapUrlSet.size > 0
       ? this.sitemapUrlSet
       : new Set(this.sitemapUrls.map((u) => normalizeUrl(u.loc)));
@@ -932,7 +1012,7 @@ export class Spider {
       }
     }
 
-    for (const page of this.results) {
+    for (const page of results) {
       for (const link of page.links) {
         if (link.href) {
           linkedUrls.add(normalizeUrl(link.href));
@@ -985,6 +1065,22 @@ export class Spider {
     };
   }
 
+  /** Get or create a client configured with the given proxy */
+  private getClientForProxy(proxyUrl: string | null): ReturnType<typeof createClient> {
+    if (!proxyUrl) return this.client;
+    let proxied = this.proxyClients.get(proxyUrl);
+    if (!proxied) {
+      proxied = createClient({
+        baseUrl: 'http://localhost',
+        timeout: this.options.timeout,
+        headers: { 'User-Agent': this.options.userAgent },
+        proxy: proxyUrl,
+      } as any);
+      this.proxyClients.set(proxyUrl, proxied);
+    }
+    return proxied;
+  }
+
   /**
    * Fetch a page using the appropriate transport (undici or curl-impersonate)
    * Implements auto-detection and fallback for blocked requests.
@@ -1005,14 +1101,21 @@ export class Spider {
     let attemptLog: FetchPageResult['attemptLog'] = [];
     let lastRetryAfterMs = 0;
 
+    // Get proxy URL for this request (if adapter configured)
+    const proxyUrl = this.proxyAdapter ? await this.proxyAdapter.getProxy() : null;
+
     const executeRequest = async (useCurl: boolean): Promise<{ response: Response; body: string; usedCurl: boolean; timings: SpiderPageResult['timings'] }> => {
       if (useCurl && this.curlTransport) {
+        // Use proxy-configured curl transport when adapter provides a proxy
+        const curlForRequest = proxyUrl
+          ? new CurlTransport(proxyUrl)
+          : this.curlTransport!;
         const req = new HttpRequest(url, {
           method: 'GET',
           headers: this.buildRequestHeaders(url, true),
         });
         const requestStart = performance.now();
-        const response = await this.curlTransport.dispatch(req);
+        const response = await curlForRequest.dispatch(req);
         const contentType = response.headers.get('content-type') || '';
         const shouldReadCurlResponseBody = shouldReadResponseBody(response.status, contentType);
         let body = '';
@@ -1043,7 +1146,8 @@ export class Spider {
       };
     }
 
-      const response = await this.client.get(url, {
+      const clientForRequest = this.getClientForProxy(proxyUrl);
+      const response = await clientForRequest.get(url, {
         headers: this.buildRequestHeaders(url, false),
       });
 
@@ -1152,6 +1256,10 @@ export class Spider {
         }
 
         if (!shouldRetry || attempt === maxAttempts - 1) {
+          // Report proxy result for health tracking
+          if (proxyUrl && this.proxyAdapter?.reportResult) {
+            await this.proxyAdapter.reportResult(proxyUrl, isHighQualitySuccess);
+          }
           return {
             response,
             body,
@@ -1293,6 +1401,10 @@ export class Spider {
           lastStatus: (lastResponse as Response).status,
         };
       }
+      // Report proxy failure
+      if (proxyUrl && this.proxyAdapter?.reportResult) {
+        await this.proxyAdapter.reportResult(proxyUrl, false);
+      }
       throw wrapped;
     }
 
@@ -1308,10 +1420,10 @@ export class Spider {
 
     // Report progress
     this.options.onProgress?.({
-      crawled: this.results.length,
-      queued: this.queue.length,
+      crawled: this._resultCount,
+      queued: this._queueSize,
       pending: this.pendingCount,
-      total: this.visited.size,
+      total: this._visitedCount,
       currentUrl: item.url,
       depth: item.depth,
     });
@@ -1368,7 +1480,8 @@ export class Spider {
           security,
           fetchedAt,
         };
-        this.results.push(nonHtmlResult);
+        await this.crawlStorage.saveResult(nonHtmlResult);
+        this._resultCount++;
         this.options.onPage?.(nonHtmlResult);
         return;
       }
@@ -1444,7 +1557,8 @@ export class Spider {
         extracted,
       };
 
-      this.results.push(result);
+      await this.crawlStorage.saveResult(result);
+      this._resultCount++;
       this.options.onPage?.(result);
 
       // Call onPageWithHtml for SEO analysis during crawl (await if async)
@@ -1452,23 +1566,34 @@ export class Spider {
         await this.options.onPageWithHtml(result, html);
       }
 
-      // Add new links to queue (only internal, unvisited)
+      // Add new links to queue (only internal, unvisited) — batch optimized
+      const candidates: CrawlQueueItem[] = [];
+      const candidateUrls: string[] = [];
+
       for (const link of links) {
         if (!link.href) continue;
-
         const normalized = normalizeUrl(link.href);
-
-        // Skip if already visited or queued
-        if (this.visited.has(normalized)) continue;
-
-        // Check if should crawl
         if (!shouldCrawl(normalized, this.baseHost, this.options)) continue;
+        candidateUrls.push(normalized);
+        candidates.push({ url: normalized, depth: item.depth + 1 });
+      }
 
-        // Add to queue
-        this.queue.push({
-          url: normalized,
-          depth: item.depth + 1,
-        });
+      if (candidates.length > 0) {
+        // Batch check visited URLs (reduces round-trips for remote backends)
+        const visitedSet = this.crawlQueue.hasVisitedBatch
+          ? await this.crawlQueue.hasVisitedBatch(candidateUrls)
+          : new Set(await Promise.all(candidateUrls.map(async (u) => (await this.crawlQueue.hasVisited(u)) ? u : null)).then(r => r.filter(Boolean) as string[]));
+
+        const newItems = candidates.filter((_, i) => !visitedSet.has(candidateUrls[i]));
+
+        if (newItems.length > 0) {
+          if (this.crawlQueue.pushBatch) {
+            await this.crawlQueue.pushBatch(newItems);
+          } else {
+            for (const newItem of newItems) await this.crawlQueue.push(newItem);
+          }
+          this._queueSize += newItems.length;
+        }
       }
     } catch (error: any) {
       const errAttempts = typeof error?.attempts === 'number' ? error.attempts : 1;
@@ -1538,8 +1663,9 @@ export class Spider {
         fetchedAt,
       };
 
-      this.results.push(errorResult);
-      this.errors.push({ url: item.url, error: message });
+      await this.crawlStorage.saveResult(errorResult);
+      this._resultCount++;
+      await this.crawlStorage.saveError({ url: item.url, error: message });
       this.options.onPage?.(errorResult);
     }
   }
@@ -1783,10 +1909,10 @@ export class Spider {
    */
   getProgress(): SpiderProgress {
     return {
-      crawled: this.results.length,
-      queued: this.queue.length,
+      crawled: this._resultCount,
+      queued: this._queueSize,
       pending: this.pendingCount,
-      total: this.visited.size,
+      total: this._visitedCount,
       currentUrl: '',
       depth: 0,
     };

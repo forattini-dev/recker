@@ -29,6 +29,18 @@ export type {
   SpiderResult,
 } from './spider.js';
 
+// Crawl Queue (pluggable URL frontier)
+export { InMemoryCrawlQueue } from './crawl-queue.js';
+export type { CrawlQueueAdapter, CrawlQueueItem } from './crawl-queue.js';
+
+// Crawl Storage (pluggable result storage)
+export { InMemoryCrawlStorage } from './crawl-storage.js';
+export type { CrawlStorageAdapter } from './crawl-storage.js';
+
+// Proxy Adapter (pluggable proxy selection)
+export { ListProxyAdapter } from './proxy-adapter.js';
+export type { ProxyAdapter } from './proxy-adapter.js';
+
 // Extractors
 export {
   extractLinks,

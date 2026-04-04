@@ -7,6 +7,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import { channel } from 'node:diagnostics_channel';
 import { createLookupFunction } from '../utils/dns.js';
 import { AgentManager } from '../utils/agent-manager.js';
+import { getProxyForUrl } from '../utils/env-proxy.js';
 import { createProgressStream } from '../utils/progress.js';
 import { nodeToWebStream } from '../utils/streaming.js';
 import { ProtocolCache, getGlobalProtocolCache, normalizeProtocol } from '../utils/protocol-cache.js';
@@ -582,6 +583,10 @@ export class UndiciTransport implements Transport {
         return slot.agent;
       }
     }
+
+    // Auto-apply HTTP_PROXY / HTTPS_PROXY env vars when no explicit proxy is configured
+    const envProxy = getProxyForUrl(url);
+    if (envProxy) return new ProxyAgent(envProxy);
 
     if (this.agentManager) return this.agentManager.getAgentForUrl(url);
     if (this.dnsAgent) return this.dnsAgent;

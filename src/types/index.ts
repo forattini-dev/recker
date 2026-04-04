@@ -286,6 +286,14 @@ export interface RequestOptions {
    * ```
    */
   useCurl?: boolean;
+
+  /**
+   * Per-request queue override
+   * - `true`: force this request through the queue (even if filter would exclude it)
+   * - `false`: bypass the queue (even if filter would include it)
+   * - Object: force queue with custom metadata
+   */
+  queue?: boolean | { metadata?: Record<string, unknown> };
 }
 
 export interface ReckerRequest {
@@ -313,6 +321,8 @@ export interface ReckerRequest {
   useCurl?: boolean;
   /** Per-request User-Agent string for fingerprinting */
   userAgent?: string;
+  /** Per-request queue override */
+  queue?: boolean | { metadata?: Record<string, unknown> };
 
   // Helpers for immutability
   withHeader(name: string, value: string): ReckerRequest;
@@ -345,13 +355,42 @@ export interface ReckerRequest {
 }
 
 export interface Timings {
+  // --- Per-stage durations (ms) — each measures only that stage ---
+
+  /** Time waiting in internal queue before dispatch */
   queuing?: number;
+  /** DNS resolution duration */
   dns?: number;
-  tls?: number;
+  /** TCP connection duration */
   tcp?: number;
-  firstByte?: number; // TTFB
+  /** TLS handshake duration */
+  tls?: number;
+  /** Response body download duration */
   content?: number;
+
+  // --- Smart / derived (cumulative from request start) ---
+
+  /** Time to first byte (TTFB) — from request start to first response byte. Key SEO metric. */
+  firstByte?: number;
+  /** Total request duration — from request start to complete */
   total?: number;
+  /** Total connection setup time (dns + tcp + tls). For proxy requests, includes proxy + tunnel. */
+  connectionTime?: number;
+  /** Server processing time (firstByte - connectionTime). How long the server took to respond. */
+  serverTime?: number;
+  /** Transfer time (content download). Same as `content`, semantic alias for clarity. */
+  transferTime?: number;
+
+  // --- Proxy per-stage durations (populated when using a proxy) ---
+
+  /** Proxy DNS resolution duration */
+  proxyDns?: number;
+  /** Proxy TCP connection duration */
+  proxyTcp?: number;
+  /** Proxy TLS handshake duration */
+  proxyTls?: number;
+  /** Total proxy overhead (proxyDns + proxyTcp + proxyTls) */
+  proxyTotal?: number;
 }
 
 /**
@@ -536,6 +575,82 @@ export interface CacheStorage {
   get(key: string): Promise<CacheEntry | undefined | null>;
   set(key: string, value: CacheEntry, ttl: number): Promise<void>;
   delete(key: string): Promise<void>;
+}
+
+// ============================================================================
+// Queue Adapter (fire-and-forget request queuing)
+// ============================================================================
+
+/**
+ * Serializable representation of a queued HTTP request.
+ * All fields are JSON-safe — no Headers objects, no AbortSignal, no callbacks.
+ */
+export interface QueueJob {
+  /** Unique job identifier */
+  jobId: string;
+  /** Fully-resolved URL */
+  url: string;
+  /** HTTP method */
+  method: Method;
+  /** Headers as plain Record (serializable) */
+  headers: Record<string, string>;
+  /** Request body as string or null */
+  body: string | null;
+  /** Content-Type of the original body */
+  bodyContentType?: string;
+  /** Correlation ID for tracing */
+  correlationId?: string;
+  /** Trace ID for distributed tracing */
+  traceId?: string;
+  /** Tenant scope */
+  tenant?: string;
+  /** Policy tags */
+  policyTags?: string[];
+  /** Timestamp when the job was created (ms since epoch) */
+  createdAt: number;
+  /** User-defined metadata */
+  metadata?: Record<string, unknown>;
+}
+
+export type QueueJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'unknown';
+
+export interface QueueJobStatusResult {
+  jobId: string;
+  status: QueueJobStatus;
+  result?: unknown;
+  error?: string;
+}
+
+/**
+ * The adapter contract that users implement for their queue backend.
+ * Only `enqueue` is required.
+ */
+export interface QueueAdapter {
+  enqueue(job: QueueJob): Promise<string>;
+  getStatus?(jobId: string): Promise<QueueJobStatusResult>;
+  close?(): Promise<void>;
+}
+
+export type QueueFilter = (req: ReckerRequest) => boolean;
+
+export interface QueueFilterConfig {
+  /** Only queue requests with these methods */
+  methods?: Method[];
+  /** Only queue requests matching these URL patterns */
+  urlPatterns?: (string | RegExp)[];
+  /** Only queue requests that have this header */
+  headerPresent?: string;
+}
+
+export interface QueueOptions {
+  /** The queue adapter implementation (required) */
+  adapter: QueueAdapter;
+  /** Filter which requests should be queued */
+  filter?: QueueFilter | QueueFilterConfig;
+  /** Custom job ID generator */
+  jobIdGenerator?: (req: ReckerRequest) => string;
+  /** Default metadata attached to every queued job */
+  defaultMetadata?: Record<string, unknown>;
 }
 
 /**

@@ -20,6 +20,7 @@ function parseCurlTimings(payload?: string): {
   ttfb?: number;
   download?: number;
   total?: number;
+  pretransfer?: number;
 } {
   if (!payload) return {};
 
@@ -51,6 +52,9 @@ function parseCurlTimings(payload?: string): {
       case 'total':
         values.total = parseCurlTimingValue(value);
         break;
+      case 'pretransfer':
+        values.pretransfer = parseCurlTimingValue(value);
+        break;
       default:
         break;
     }
@@ -75,6 +79,7 @@ function parseCurlOutput(responseText: string): {
     ttfb?: number;
     download?: number;
     total?: number;
+    pretransfer?: number;
   };
 } {
   // Extract and remove timing footer if present.
@@ -185,7 +190,7 @@ export class CurlTransport implements Transport {
         '--compressed', // Handle gzip/deflate/br automatically
         '--no-keepalive', // Avoid hanging connection, treat as one-shot
         '--write-out',
-        `\\n${TIMING_MARKER} dns=%{time_namelookup} tcp=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}`,
+        `\\n${TIMING_MARKER} dns=%{time_namelookup} tcp=%{time_connect} tls=%{time_appconnect} pretransfer=%{time_pretransfer} ttfb=%{time_starttransfer} total=%{time_total}`,
       ];
 
       // Proxy support
@@ -304,14 +309,79 @@ export class CurlTransport implements Transport {
           headers,
         });
 
-        const responseTimings = timings && Object.keys(timings).length > 0 ? {
-          dns: timings.dns,
-          tcp: timings.tcp,
-          tls: timings.tls ? (timings.ttfb !== undefined ? timings.tls : timings.tls) : undefined,
-          firstByte: timings.ttfb,
-          content: timings.download,
-          total: timings.total,
-        } : {};
+        // Timings strategy:
+        //   Per-stage fields (dns, tcp, tls, content, proxy*) = duration of that stage only
+        //   Smart fields (firstByte, total) = cumulative from request start
+        //
+        // Curl reports cumulative ms from request start:
+        //   time_namelookup    = end of DNS
+        //   time_connect       = end of TCP
+        //   time_appconnect    = end of TLS (0 if no TLS)
+        //   time_pretransfer   = ready to transfer (after proxy tunnel + target TLS)
+        //   time_starttransfer = first response byte (TTFB)
+        //   time_total         = complete
+        const usedProxy = this.proxyList.length > 0;
+        let responseTimings: Record<string, number | undefined> = {};
+
+        if (timings && Object.keys(timings).length > 0) {
+          // Per-stage deltas from curl's cumulative values
+          const dns = timings.dns;
+          const tcp = timings.tcp !== undefined && timings.dns !== undefined
+            ? timings.tcp - timings.dns : undefined;
+          const hasTls = timings.tls !== undefined && timings.tls > 0;
+          const tls = hasTls && timings.tcp !== undefined
+            ? timings.tls! - timings.tcp : undefined;
+          const content = timings.download;
+
+          if (usedProxy && timings.pretransfer !== undefined) {
+            // With proxy: dns/tcp/tls measure the PROXY, pretransfer-appconnect = target TLS
+            const afterProxy = hasTls ? timings.tls! : timings.tcp;
+            const targetTls = afterProxy !== undefined
+              ? timings.pretransfer - afterProxy : undefined;
+
+            // Derived
+            const proxyTotal = (dns ?? 0) + (tcp ?? 0) + (tls ?? 0);
+            const connectionTime = proxyTotal + (targetTls ?? 0);
+            const serverTime = timings.ttfb !== undefined
+              ? timings.ttfb - connectionTime : undefined;
+
+            responseTimings = {
+              // Per-stage: target
+              tls: targetTls,
+              content,
+              transferTime: content,
+              // Per-stage: proxy
+              proxyDns: dns,
+              proxyTcp: tcp,
+              proxyTls: tls,
+              proxyTotal,
+              // Smart (cumulative)
+              firstByte: timings.ttfb,
+              total: timings.total,
+              connectionTime,
+              serverTime,
+            };
+          } else {
+            // No proxy — dns/tcp/tls measure the target directly
+            const connectionTime = (dns ?? 0) + (tcp ?? 0) + (tls ?? 0);
+            const serverTime = timings.ttfb !== undefined
+              ? timings.ttfb - connectionTime : undefined;
+
+            responseTimings = {
+              // Per-stage
+              dns,
+              tcp,
+              tls,
+              content,
+              transferTime: content,
+              // Smart (cumulative)
+              firstByte: timings.ttfb,
+              total: timings.total,
+              connectionTime,
+              serverTime,
+            };
+          }
+        }
 
         resolve(new HttpResponse(nativeResponse, {
           timings: responseTimings, // Curl timings require format conversion

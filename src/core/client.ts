@@ -1,5 +1,5 @@
 import { ClientOptions, Middleware, ReckerRequest, ReckerResponse, RequestOptions, Transport, CacheStorage, CacheEntry, Hooks, PaginationConfig, PageResult, CookieJar, CookieOptions, Logger, consoleLogger } from '../types/index.js';
-import type { Plugin, PluginClient } from '../types/index.js';
+import type { Plugin, PluginClient, QueueOptions } from '../types/index.js';
 import type { ClientAI, PresetAIConfig, ClientOptionsWithAI } from '../types/ai-client.js';
 import { ClientAIImpl } from '../ai/client-ai.js';
 import { HttpRequest } from './request.js';
@@ -22,6 +22,7 @@ import { paginate, PaginationOptions, streamPages } from '../plugins/pagination.
 import { retryPlugin, RetryOptions } from '../plugins/retry.js';
 import { cachePlugin, CacheOptions } from '../plugins/cache.js';
 import { dedupPlugin, DedupOptions } from '../plugins/dedup.js';
+import { queuePlugin } from '../plugins/queue.js';
 import { createXSRFMiddleware } from '../plugins/xsrf.js';
 import { createCompressionMiddleware } from '../plugins/compression.js';
 import { serializeXML } from '../plugins/xml.js';
@@ -98,6 +99,7 @@ export interface ExtendedClientOptions extends ClientOptions {
   retry?: RetryOptions;
   cache?: ClientCacheConfig;
   dedup?: DedupOptions;
+  queue?: QueueOptions;
 }
 
 type NodeGlobal = { process?: { versions?: { node?: string } } };
@@ -574,6 +576,17 @@ export class Client {
         {
           name: 'recker:cache',
           priority: 100,
+          scope: 'request'
+        }
+      );
+    }
+
+    if (options.queue) {
+      registerPlugin(
+        queuePlugin(options.queue),
+        {
+          name: 'recker:queue',
+          priority: 135,
           scope: 'request'
         }
       );

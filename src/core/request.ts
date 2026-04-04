@@ -33,6 +33,7 @@ export class HttpRequest implements ReckerRequest {
   public readonly policyTags: string[];
   public readonly policySource?: string;
   public readonly traceId?: string;
+  public readonly queue?: boolean | { metadata?: Record<string, unknown> };
 
   constructor(url: string, options: RequestOptions = {}) {
     this.url = url;
@@ -58,6 +59,7 @@ export class HttpRequest implements ReckerRequest {
     this.policyTags = options.policyTags ?? [];
     this.policySource = options.policySource;
     this.traceId = options.traceId;
+    this.queue = options.queue;
   }
 
   withHeader(name: string, value: string): ReckerRequest {
@@ -83,7 +85,8 @@ export class HttpRequest implements ReckerRequest {
       tenant: this.tenant,
       policyTags: this.policyTags,
       policySource: this.policySource,
-      traceId: this.traceId
+      traceId: this.traceId,
+      queue: this.queue,
     });
 
     if (context) {
@@ -114,7 +117,8 @@ export class HttpRequest implements ReckerRequest {
       tenant: this.tenant,
       policyTags: this.policyTags,
       policySource: this.policySource,
-      traceId: this.traceId
+      traceId: this.traceId,
+      queue: this.queue,
     });
 
     if (context) {
