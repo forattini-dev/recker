@@ -48,8 +48,13 @@ export interface SpiderOptions {
   maxDepth?: number;
   /** Maximum pages to crawl (default: 100) */
   maxPages?: number;
-  /** Only crawl same domain (default: true) */
-  sameDomain?: boolean;
+  /**
+   * Domain scope for crawling. Default: true (same domain)
+   * - true or 'exact': only same hostname (www. stripped)
+   * - 'subdomain': same root domain including all subdomains
+   * - false: no domain restriction
+   */
+  sameDomain?: boolean | 'exact' | 'subdomain';
   /** Concurrency level (default: 5) */
   concurrency?: number;
   /** Request timeout in ms (default: 10000) */
@@ -160,6 +165,21 @@ export interface SpiderOptions {
   domainRateLimit?: {
     /** Maximum requests per second per domain (default: unlimited) */
     maxPerSecond?: number;
+  };
+
+  /**
+   * Automatically adjust crawl delay per domain based on response times.
+   * When enabled, the Spider increases delay when servers are slow and
+   * decreases it when servers respond quickly.
+   * Default: false
+   */
+  autoThrottle?: boolean | {
+    /** Target response time in ms. Delay adjusts to keep around this target. Default: 500 */
+    targetMs?: number;
+    /** Minimum delay in ms (never go below this). Default: 50 */
+    minDelay?: number;
+    /** Maximum delay in ms (never go above this). Default: 30000 */
+    maxDelay?: number;
   };
 
   /** Enable content deduplication via MD5 hash of page text (default: false) */
@@ -380,6 +400,7 @@ interface DomainState {
   lastTransport: SpiderTransport;
   lastCaptchaProvider?: CaptchaProvider;
   lastCaptchaConfidence: number;
+  autoThrottleDelay: number;
 }
 
 function getHostname(url: string): string {
@@ -486,12 +507,26 @@ function normalizeUrl(urlStr: string): string {
 }
 
 /**
+ * Extract root domain from hostname (e.g., blog.example.com -> example.com)
+ * Handles compound TLDs like co.uk, com.br
+ */
+function getRootDomain(hostname: string): string {
+  const parts = hostname.replace(/^www\./, '').split('.');
+  // Handle TLDs like co.uk, com.br, com.au, co.jp
+  if (parts.length >= 3 && parts[parts.length - 2].length <= 3) {
+    return parts.slice(-3).join('.');
+  }
+  return parts.slice(-2).join('.');
+}
+
+/**
  * Check if URL should be crawled based on filters
  */
 function shouldCrawl(
   url: string,
   baseHost: string,
-  options: SpiderOptions
+  options: SpiderOptions,
+  baseRootDomain?: string,
 ): boolean {
   try {
     const parsed = new URL(url);
@@ -501,10 +536,16 @@ function shouldCrawl(
       return false;
     }
 
-    // Same domain check (strip www. to match normalizeUrl behavior)
+    // Domain scope check (strip www. to match normalizeUrl behavior)
     const hostname = parsed.hostname.replace(/^www\./, '');
-    if (options.sameDomain !== false && hostname !== baseHost) {
-      return false;
+    const sameDomain = options.sameDomain;
+    if (sameDomain === 'subdomain') {
+      const pageRoot = getRootDomain(hostname);
+      const rootDomain = baseRootDomain ?? getRootDomain(baseHost);
+      if (pageRoot !== rootDomain) return false;
+    } else if (sameDomain !== false) {
+      // true, 'exact', or undefined — existing exact-match behavior
+      if (hostname !== baseHost) return false;
     }
 
     // Skip common non-page extensions
@@ -628,7 +669,7 @@ export class Spider {
   private options: Required<
     Omit<
       SpiderOptions,
-      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy' | 'domainRateLimit' | 'resume' | 'strategy'
+      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy' | 'domainRateLimit' | 'resume' | 'strategy' | 'autoThrottle'
     >
   > & {
     exclude?: RegExp[];
@@ -645,6 +686,7 @@ export class Spider {
     extract?: ExtractionSchema;
     parserOptions?: Partial<ParserOptions>;
     domainRateLimit?: SpiderOptions['domainRateLimit'];
+    autoThrottle?: SpiderOptions['autoThrottle'];
     resume?: boolean;
     strategy: 'bfs' | 'dfs';
   };
@@ -658,6 +700,7 @@ export class Spider {
   private _queueSize: number = 0;
   private _resultCount: number = 0;
   private baseHost: string = '';
+  private baseRootDomain: string = '';
   private running: boolean = false;
   private aborted: boolean = false;
   private abortController: AbortController = new AbortController();
@@ -668,6 +711,9 @@ export class Spider {
 
   // Content deduplication state
   private contentHashes = new Map<string, string>();
+
+  // Auto-throttle state
+  private domainAvgResponseTime = new Map<string, number>();
 
   // Transport fallback state
   private blockedDomains: Set<string> = new Set();
@@ -765,6 +811,7 @@ export class Spider {
       extract: extractSchema,
       parserOptions: options.parserOptions,
       domainRateLimit: options.domainRateLimit,
+      autoThrottle: options.autoThrottle ?? false,
       deduplicateContent: options.deduplicateContent ?? false,
       resume: options.resume ?? false,
       strategy: options.strategy ?? 'bfs',
@@ -832,6 +879,7 @@ export class Spider {
     const baseUrl = new URL(normalizedStart).origin;
     // Strip www. from baseHost to match normalizeUrl behavior (which also strips www.)
     this.baseHost = new URL(normalizedStart).hostname.replace(/^www\./, '');
+    this.baseRootDomain = getRootDomain(this.baseHost);
 
     // Reset state (or restore from checkpoint when resuming)
     if (!this.options.resume) {
@@ -842,6 +890,7 @@ export class Spider {
       this._resultCount = 0;
       this.domainRequestTimestamps.clear();
       this.contentHashes.clear();
+      this.domainAvgResponseTime.clear();
     } else {
       this._queueSize = await this.crawlQueue.size();
       this._resultCount = await this.crawlStorage.getResultCount();
@@ -1030,6 +1079,20 @@ export class Spider {
     // Close adapters if they support it (flushes buffers, releases connections)
     await this.crawlQueue.close?.();
     await this.crawlStorage.close?.();
+
+    // Close proxy clients
+    for (const client of this.proxyClients.values()) {
+      if (typeof (client as any).destroy === 'function') {
+        (client as any).destroy();
+      }
+    }
+    this.proxyClients.clear();
+
+    // Close proxy adapter
+    await this.proxyAdapter?.close?.();
+
+    // Clear auto-throttle state
+    this.domainAvgResponseTime.clear();
 
     return {
       startUrl: normalizedStart,
@@ -1425,6 +1488,10 @@ export class Spider {
         const isHighQualitySuccess = response.status < 400 && !detection.blocked && !hasCaptchaSignal;
         if (isHighQualitySuccess) {
           this.registerDomainSuccess(hostname);
+          // Update auto-throttle with response time from successful requests
+          if (timings?.total) {
+            this.updateAutoThrottle(hostname, timings.total);
+          }
         }
 
         if (!shouldRetry || attempt === maxAttempts - 1) {
@@ -1795,7 +1862,7 @@ export class Spider {
         for (const link of links) {
           if (!link.href) continue;
           const normalized = normalizeUrl(link.href);
-          if (!shouldCrawl(normalized, this.baseHost, this.options)) continue;
+          if (!shouldCrawl(normalized, this.baseHost, this.options, this.baseRootDomain)) continue;
           candidateUrls.push(normalized);
           candidates.push({ url: normalized, depth: item.depth + 1 });
         }
@@ -1913,6 +1980,7 @@ export class Spider {
       consecutiveUndiciFailures: 0,
       lastTransport: 'undici',
       lastCaptchaConfidence: 0,
+      autoThrottleDelay: 0,
     };
     this.domainStates.set(hostname, next);
     return next;
@@ -2034,7 +2102,9 @@ export class Spider {
   private async waitForDomainPenalty(hostname: string): Promise<void> {
     const state = this.getOrCreateDomainState(hostname);
     const now = Date.now();
-    const delay = Math.max(state.penaltyUntil, state.challengeCooldownUntil) - now;
+    const penaltyDelay = Math.max(state.penaltyUntil, state.challengeCooldownUntil) - now;
+    const throttleDelay = state.autoThrottleDelay ?? 0;
+    const delay = Math.max(penaltyDelay, throttleDelay);
     if (delay > 0) {
       await sleep(delay, this.abortController.signal);
     }
@@ -2067,6 +2137,25 @@ export class Spider {
       state.lastCaptchaConfidence = 0;
       state.lastCaptchaProvider = undefined;
     }
+  }
+
+  private updateAutoThrottle(hostname: string, responseTimeMs: number): void {
+    const config = this.options.autoThrottle;
+    if (!config) return;
+
+    const target = (typeof config === 'object' ? config.targetMs : undefined) ?? 500;
+    const minDelay = (typeof config === 'object' ? config.minDelay : undefined) ?? 50;
+    const maxDelay = (typeof config === 'object' ? config.maxDelay : undefined) ?? 30000;
+
+    // Exponential moving average
+    const prev = this.domainAvgResponseTime.get(hostname) ?? responseTimeMs;
+    const avg = prev * 0.7 + responseTimeMs * 0.3;
+    this.domainAvgResponseTime.set(hostname, avg);
+
+    // Adjust delay: if avg > target, increase delay proportionally
+    const ratio = avg / target;
+    const state = this.getOrCreateDomainState(hostname);
+    state.autoThrottleDelay = Math.max(minDelay, Math.min(maxDelay, Math.round(this.options.delay * ratio)));
   }
 
   private getCaptchaRetryMultiplier(provider?: CaptchaProvider): number {

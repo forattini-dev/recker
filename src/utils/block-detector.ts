@@ -703,20 +703,49 @@ export function detectBlock(response: ResponseLike, body?: string): BlockDetecti
   if (body) {
     const isLongBody = body.length > 100_000;
     const checkBody = isLongBody ? body.slice(0, 30_000) : body;
-    const challengeHint = /just a moment|attention required|access denied|checking your browser|security check|human verification|suspicious activity|captcha|recaptcha|hcaptcha|turnstile|datadome|cloudflare/i.test(checkBody.slice(0, 8000));
 
-    for (const { pattern, reason, confidence, description } of BLOCK_PATTERNS) {
-      if (isLongBody && response.status === 200 && confidence < 0.85 && !challengeHint) {
-        continue;
-      }
+    // Fast pre-check: skip body regex if no challenge keywords present.
+    // indexOf is orders of magnitude faster than regex for clean pages.
+    const lowerBody = checkBody.slice(0, 8000).toLowerCase();
+    const hasAnyChallengeKeyword =
+      lowerBody.includes('captcha') ||
+      lowerBody.includes('cloudflare') ||
+      lowerBody.includes('datadome') ||
+      lowerBody.includes('blocked') ||
+      lowerBody.includes('denied') ||
+      lowerBody.includes('forbidden') ||
+      lowerBody.includes('too many') ||
+      lowerBody.includes('rate limit') ||
+      lowerBody.includes('checking your browser') ||
+      lowerBody.includes('just a moment') ||
+      lowerBody.includes('security check') ||
+      lowerBody.includes('human verification') ||
+      lowerBody.includes('perimeterx') ||
+      lowerBody.includes('incapsula') ||
+      lowerBody.includes('imperva') ||
+      lowerBody.includes('akamai') ||
+      lowerBody.includes('httpservice') ||
+      lowerBody.includes('enablejs') ||
+      lowerBody.includes('verify') ||
+      lowerBody.includes('suspicious') ||
+      lowerBody.includes('bot') ||
+      lowerBody.includes('access denied');
 
-      if (pattern.test(checkBody)) {
-        results.push({
-          blocked: true,
-          reason,
-          confidence,
-          description,
-        });
+    if (hasAnyChallengeKeyword || response.status !== 200) {
+      // Run the full BLOCK_PATTERNS regex loop only when keywords suggest blocking
+      for (const { pattern, reason, confidence, description } of BLOCK_PATTERNS) {
+        if (isLongBody && response.status === 200 && confidence < 0.85 && !hasAnyChallengeKeyword) {
+          continue;
+        }
+
+        if (pattern.test(checkBody)) {
+          results.push({
+            blocked: true,
+            reason,
+            confidence,
+            description,
+          });
+        }
       }
     }
 
@@ -806,13 +835,36 @@ export function detectCaptcha(response: ResponseLike, body?: string): CaptchaDet
   if (body) {
     const checkBody = body.length < 120_000 ? body : body.slice(0, 120_000);
     const isTinyBody = checkBody.length > 0 && checkBody.length < 12000;
+
+    // Fast pre-check for captcha-related content using indexOf (much faster than regex).
+    // Only run expensive body regex scanning when keywords suggest a challenge page.
+    const lowerSnippet = checkBody.slice(0, 8000).toLowerCase();
+    const hasAnyCaptchaKeyword =
+      lowerSnippet.includes('captcha') ||
+      lowerSnippet.includes('recaptcha') ||
+      lowerSnippet.includes('hcaptcha') ||
+      lowerSnippet.includes('turnstile') ||
+      lowerSnippet.includes('challenge') ||
+      lowerSnippet.includes('cloudflare') ||
+      lowerSnippet.includes('datadome') ||
+      lowerSnippet.includes('perimeterx') ||
+      lowerSnippet.includes('funcaptcha') ||
+      lowerSnippet.includes('arkose') ||
+      lowerSnippet.includes('sitekey') ||
+      lowerSnippet.includes('just a moment') ||
+      lowerSnippet.includes('human verification');
+
     const hasHtmlTags = /<html|<head|<body|<script|<meta/i.test(checkBody);
-    const challengeTitleOrText = /just a moment|attention required|human verification|verify you are human|security check/i.test(checkBody);
+    const challengeTitleOrText = hasAnyCaptchaKeyword ||
+      lowerSnippet.includes('attention required') ||
+      lowerSnippet.includes('verify you are human') ||
+      lowerSnippet.includes('security check');
 
     if (isTinyBody && challengeTitleOrText && hasHtmlTags) {
       addMatch(matches, 'generic', 0.6, 'Tiny HTML response with challenge-like text');
     }
 
+    // Cookie checks are cheap (short strings) — always run
     const setCookieHeader = response.headers.get('set-cookie') || '';
     const setCookieHeaders = response.headers.getAll?.('set-cookie') ?? [];
     const combinedCookieHeader = [setCookieHeader, ...setCookieHeaders].filter(Boolean).join('\n');
@@ -823,30 +875,52 @@ export function detectCaptcha(response: ResponseLike, body?: string): CaptchaDet
       }
     }
 
-    for (const { pattern, provider, confidence, description } of CAPTCHA_SCRIPT_PATTERNS) {
-      if (pattern.test(checkBody)) {
-        addMatch(matches, provider, confidence, description);
+    // Only run expensive body regex scanning when keywords suggest a challenge page
+    // or the status code indicates a potential block
+    if (hasAnyCaptchaKeyword || !(response.status >= 200 && response.status < 300)) {
+      for (const { pattern, provider, confidence, description } of CAPTCHA_SCRIPT_PATTERNS) {
+        if (pattern.test(checkBody)) {
+          addMatch(matches, provider, confidence, description);
+        }
+      }
+
+      for (const { pattern, provider, confidence, description } of CAPTCHA_FORM_PATTERNS) {
+        if (pattern.test(checkBody)) {
+          addMatch(matches, provider, confidence, description);
+        }
+      }
+
+      for (const { pattern, provider, confidence, description } of CAPTCHA_DOM_MARKERS) {
+        if (pattern.test(checkBody)) {
+          addMatch(matches, provider, confidence, description);
+        }
+      }
+
+      for (const { pattern, provider, confidence, description } of CAPTCHA_NOSCRIPT_PATTERNS) {
+        if (pattern.test(checkBody)) {
+          addMatch(matches, provider, confidence, description);
+        }
+      }
+
+      for (const { pattern, provider, confidence, description } of CAPTCHA_PATTERNS) {
+        if (pattern.test(checkBody)) {
+          addMatch(matches, provider, confidence, description);
+        }
+      }
+
+      if (/<script[^>]*src=["'][^"']*(?:challenges\.cloudflare\.com|recaptcha\/api\.js|hcaptcha\.com\/1\/api\.js|challenges\.perimeterx\.)[^"']*["'][^>]*>/i.test(checkBody.slice(0, 120_000))) {
+        addMatch(matches, 'cloudflare', 0.6, 'Known challenge script reference found in HTML');
+      }
+
+      if (
+        (response.status >= 500 && response.status < 600) &&
+        /cloudflare|challenge|verification|blocked|security/i.test(checkBody.slice(0, 3000))
+      ) {
+        addMatch(matches, 'generic', 0.2, 'Server challenge-like text on error response');
       }
     }
 
-    for (const { pattern, provider, confidence, description } of CAPTCHA_FORM_PATTERNS) {
-      if (pattern.test(checkBody)) {
-        addMatch(matches, provider, confidence, description);
-      }
-    }
-
-    for (const { pattern, provider, confidence, description } of CAPTCHA_DOM_MARKERS) {
-      if (pattern.test(checkBody)) {
-        addMatch(matches, provider, confidence, description);
-      }
-    }
-
-    for (const { pattern, provider, confidence, description } of CAPTCHA_NOSCRIPT_PATTERNS) {
-      if (pattern.test(checkBody)) {
-        addMatch(matches, provider, confidence, description);
-      }
-    }
-
+    // Status-based and redirect-based checks are cheap — always run
     if (response.status === 403 || response.status === 503) {
       addMatch(matches, 'generic', 0.35, 'Bot protection status with captcha-like response body');
     }
@@ -869,23 +943,6 @@ export function detectCaptcha(response: ResponseLike, body?: string): CaptchaDet
       /refresh|challenge|verify|captcha|javascript challenge|cloudflare|bot/i.test((location || ''))
     ) {
       addMatch(matches, 'generic', 0.67, 'Redirect location indicates bot challenge flow');
-    }
-
-    if (/<script[^>]*src=["'][^"']*(?:challenges\.cloudflare\.com|recaptcha\/api\.js|hcaptcha\.com\/1\/api\.js|challenges\.perimeterx\.)[^"']*["'][^>]*>/i.test(checkBody.slice(0, 120_000))) {
-      addMatch(matches, 'cloudflare', 0.6, 'Known challenge script reference found in HTML');
-    }
-
-    if (
-      (response.status >= 500 && response.status < 600) &&
-      /cloudflare|challenge|verification|blocked|security/i.test(checkBody.slice(0, 3000))
-    ) {
-      addMatch(matches, 'generic', 0.2, 'Server challenge-like text on error response');
-    }
-
-    for (const { pattern, provider, confidence, description } of CAPTCHA_PATTERNS) {
-      if (pattern.test(checkBody)) {
-        addMatch(matches, provider, confidence, description);
-      }
     }
   }
 
