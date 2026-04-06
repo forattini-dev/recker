@@ -46,6 +46,11 @@ export class InMemoryCrawlQueue implements CrawlQueueAdapter {
   private head = 0;
   private tail = 0;
   private visited = new Set<string>();
+  private mode: 'fifo' | 'lifo';
+
+  constructor(mode: 'fifo' | 'lifo' = 'fifo') {
+    this.mode = mode;
+  }
 
   async push(item: CrawlQueueItem): Promise<void> {
     this.queue[this.tail++] = item;
@@ -58,6 +63,18 @@ export class InMemoryCrawlQueue implements CrawlQueueAdapter {
   }
 
   async pop(): Promise<CrawlQueueItem | null> {
+    if (this.mode === 'lifo') {
+      // DFS: pop from tail (stack behavior)
+      while (this.tail > this.head) {
+        this.tail--;
+        const item = this.queue[this.tail];
+        this.queue[this.tail] = undefined;
+        if (item) return item;
+      }
+      return null;
+    }
+
+    // BFS: existing ring buffer pop from head (FIFO)
     while (this.head < this.tail) {
       const item = this.queue[this.head];
       this.queue[this.head] = undefined;

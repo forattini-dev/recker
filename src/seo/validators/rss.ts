@@ -46,7 +46,9 @@ export async function discoverFeeds(baseUrl: string, html?: string): Promise<Rss
           // Resolve relative URLs
           href = new URL(href, baseUrl).toString();
           candidateUrls.add(href);
-        } catch {}
+        } catch {
+          // Invalid URL, skip
+        }
       }
     }
   }
@@ -59,7 +61,9 @@ export async function discoverFeeds(baseUrl: string, html?: string): Promise<Rss
       try {
         const url = new URL(path, baseUrl).toString();
         candidateUrls.add(url);
-      } catch {}
+      } catch {
+        // Invalid URL, skip
+      }
     }
   }
 

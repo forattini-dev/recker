@@ -168,6 +168,9 @@ export interface SpiderOptions {
   /** Resume a previously paused crawl (don't clear queue/storage on start). Default: false */
   resume?: boolean;
 
+  /** Crawl strategy: 'bfs' (breadth-first, default) or 'dfs' (depth-first) */
+  strategy?: 'bfs' | 'dfs';
+
   /**
    * Pluggable queue adapter for URL frontier management.
    * Enables persistent, distributed, or priority-based crawling.
@@ -625,7 +628,7 @@ export class Spider {
   private options: Required<
     Omit<
       SpiderOptions,
-      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy' | 'domainRateLimit' | 'resume'
+      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy' | 'domainRateLimit' | 'resume' | 'strategy'
     >
   > & {
     exclude?: RegExp[];
@@ -643,6 +646,7 @@ export class Spider {
     parserOptions?: Partial<ParserOptions>;
     domainRateLimit?: SpiderOptions['domainRateLimit'];
     resume?: boolean;
+    strategy: 'bfs' | 'dfs';
   };
   private client: ReturnType<typeof createClient>;
   private pool: RequestPool;
@@ -763,6 +767,7 @@ export class Spider {
       domainRateLimit: options.domainRateLimit,
       deduplicateContent: options.deduplicateContent ?? false,
       resume: options.resume ?? false,
+      strategy: options.strategy ?? 'bfs',
     };
 
     // Resolve proxy: string → static client proxy, string[] → ListProxyAdapter, ProxyAdapter → dynamic
@@ -804,7 +809,9 @@ export class Spider {
     });
 
     // Initialize crawl queue (pluggable or default in-memory)
-    this.crawlQueue = options.crawlQueue ?? new InMemoryCrawlQueue();
+    this.crawlQueue = options.crawlQueue ?? new InMemoryCrawlQueue(
+      this.options.strategy === 'dfs' ? 'lifo' : 'fifo'
+    );
     this.crawlStorage = options.crawlStorage ?? new InMemoryCrawlStorage();
   }
 

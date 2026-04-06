@@ -185,6 +185,7 @@ export class SeoSpider {
       // Call callback if provided
       this.options.onSeoAnalysis?.(seoPage);
     } catch {
+      // SEO analysis failed for this page — record it without a report and continue crawl
       const seoPage: SeoPageResult = { ...pageResult, seoReport: undefined };
       this.seoPages.push(seoPage);
     }
@@ -277,7 +278,9 @@ export class SeoSpider {
           results.humans.found = true;
           results.humans.content = await res.text();
         }
-      } catch {}
+      } catch {
+        // Best effort — continue without it
+      }
 
       // Check llms.txt
       try {
@@ -286,7 +289,9 @@ export class SeoSpider {
           results.llms.found = true;
           results.llms.content = await res.text();
         }
-      } catch {}
+      } catch {
+        // Best effort — continue without it
+      }
 
       // Check sitemap.xml
       try {
@@ -298,7 +303,9 @@ export class SeoSpider {
           const urlMatches = content.match(/<loc>/g);
           results.sitemap.urlCount = urlMatches ? urlMatches.length : 0;
         }
-      } catch {}
+      } catch {
+        // Best effort — continue without it
+      }
 
       // Check manifest.json (also try /site.webmanifest)
       try {
@@ -321,10 +328,13 @@ export class SeoSpider {
             results.manifest.issues = ['Invalid JSON format'];
           }
         }
-      } catch {}
+      } catch {
+        // Best effort — continue without it
+      }
 
       return results;
     } catch {
+      // Best effort — return undefined if base URL parsing fails
       return undefined;
     }
   }
@@ -414,6 +424,7 @@ export class SeoSpider {
       const result = await fetchAndValidateSitemap(sitemapUrl, fetcher);
       return result;
     } catch {
+      // Best effort — sitemap validation is optional
       return undefined;
     }
   }

@@ -910,24 +910,35 @@ export function detectCaptcha(response: ResponseLike, body?: string): CaptchaDet
  * (Can be used to preemptively use curl-impersonate)
  */
 export function isProtectedDomain(hostname: string): boolean {
-  const protectedPatterns = [
-    /cloudflare/i,
-    /\.gov$/i,
-    /\.mil$/i,
-    /linkedin\.com$/i,
-    /twitter\.com$/i,
-    /x\.com$/i,
-    /instagram\.com$/i,
-    /facebook\.com$/i,
-    /amazon\./i,
-    /google\./i,
-    /microsoft\.com$/i,
-    /apple\.com$/i,
-    /netflix\.com$/i,
-    /spotify\.com$/i,
+  const h = hostname.toLowerCase();
+  const protectedDomains = [
+    'linkedin.com',
+    'twitter.com',
+    'x.com',
+    'instagram.com',
+    'facebook.com',
+    'amazon.com',
+    'amazon.co.uk',
+    'amazon.de',
+    'amazon.co.jp',
+    'google.com',
+    'microsoft.com',
+    'apple.com',
+    'netflix.com',
+    'spotify.com',
   ];
 
-  return protectedPatterns.some(p => p.test(hostname));
+  const protectedTlds = ['.gov', '.mil'];
+
+  for (const domain of protectedDomains) {
+    if (h === domain || h.endsWith('.' + domain)) return true;
+  }
+
+  for (const tld of protectedTlds) {
+    if (h.endsWith(tld)) return true;
+  }
+
+  return false;
 }
 
 /**
