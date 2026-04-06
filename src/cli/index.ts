@@ -59,6 +59,11 @@ async function main() {
   const { resolvePreset } = await import('./presets.js');
   const presets = await import('../presets/index.js');
 
+  // Ensure curl-impersonate is available (covers npx, failed postinstall, etc.)
+  import('../utils/binary-manager.js')
+    .then(({ ensureCurlImpersonate }) => ensureCurlImpersonate(console))
+    .catch(() => {});
+
   const version = await getVersion();
 
   function parseMixedArgs(args: string[], initialClientOptions: any = {}) {
@@ -315,7 +320,23 @@ ${formatColumns(PRESET_NAMES, { prefix: '@', indent: 2, minWidth: 16, transform:
 
   // Note: completion command is now registered via registerCompletionCommand
 
-  program.command('version').alias('info').action(async () => {
+  program.command('version').alias('info').action(async (args: string[]) => {
+      const { getVersionInfo } = await import('../version.js');
+      const info = await getVersionInfo();
+
+      // recker version short → just the version number
+      if (args.includes('short')) {
+        console.log(info.version);
+        return;
+      }
+
+      // recker version format=json → JSON output
+      const formatArg = args.find(a => a.startsWith('format='));
+      if (formatArg?.split('=')[1] === 'json') {
+        console.log(JSON.stringify(info, null, 2));
+        return;
+      }
+
       const versionInfo = await formatVersionInfo(true);
       console.log(theme.brand('recker') + ' ' + theme.version(version));
       console.log(theme.muted(versionInfo));

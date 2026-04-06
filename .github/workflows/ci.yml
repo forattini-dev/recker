@@ -217,18 +217,28 @@ jobs:
       - name: Verify Published Package
         if: steps.check.outputs.skip != 'true'
         run: |
-          echo "Waiting for npm registry to update..."
-          sleep 30
+          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
+          echo "Waiting for npm registry to publish ${EXPECTED_VERSION}..."
 
-          echo "Testing npx recker@next version..."
-          PUBLISHED_VERSION=$(npx -y recker@next version short 2>/dev/null || echo "FAILED")
+          # Poll npm registry instead of blind sleep
+          for i in $(seq 1 12); do
+            REGISTRY_VERSION=$(npm view recker@${EXPECTED_VERSION} version 2>/dev/null || echo "")
+            if [ "$REGISTRY_VERSION" = "$EXPECTED_VERSION" ]; then
+              echo "✅ ${EXPECTED_VERSION} available on npm registry (attempt ${i})"
+              break
+            fi
+            echo "  Attempt ${i}/12 - not yet available, waiting 10s..."
+            sleep 10
+          done
+
+          echo "Testing npx recker@${EXPECTED_VERSION} version..."
+          PUBLISHED_VERSION=$(npx -y recker@${EXPECTED_VERSION} version short 2>/dev/null || echo "FAILED")
 
           if [ "$PUBLISHED_VERSION" = "FAILED" ]; then
-            echo "❌ Failed to run 'npx recker@next version'"
+            echo "❌ Failed to run 'npx recker@${EXPECTED_VERSION} version'"
             exit 1
           fi
 
-          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
           if [ "$PUBLISHED_VERSION" != "$EXPECTED_VERSION" ]; then
             echo "⚠️ Version mismatch!"
             echo "Expected: $EXPECTED_VERSION"
@@ -240,7 +250,7 @@ jobs:
 
           echo ""
           echo "Full version info:"
-          npx -y recker@next version format=json || true
+          npx -y recker@${EXPECTED_VERSION} version format=json || true
 
       - name: Job Summary
         if: steps.check.outputs.skip != 'true'
@@ -392,14 +402,24 @@ jobs:
       - name: Verify Published Package
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          echo "Waiting for npm registry to update..."
-          sleep 30
+          echo "Waiting for npm registry to publish v${VERSION}..."
 
-          echo "Testing npx recker@latest version..."
-          PUBLISHED_VERSION=$(npx -y recker@latest version short 2>/dev/null || echo "FAILED")
+          # Poll npm registry instead of blind sleep
+          for i in $(seq 1 12); do
+            REGISTRY_VERSION=$(npm view recker@${VERSION} version 2>/dev/null || echo "")
+            if [ "$REGISTRY_VERSION" = "$VERSION" ]; then
+              echo "✅ v${VERSION} available on npm registry (attempt ${i})"
+              break
+            fi
+            echo "  Attempt ${i}/12 - not yet available, waiting 10s..."
+            sleep 10
+          done
+
+          echo "Testing npx recker@${VERSION} version..."
+          PUBLISHED_VERSION=$(npx -y recker@${VERSION} version short 2>/dev/null || echo "FAILED")
 
           if [ "$PUBLISHED_VERSION" = "FAILED" ]; then
-            echo "❌ Failed to run 'npx recker@latest version'"
+            echo "❌ Failed to run 'npx recker@${VERSION} version'"
             echo "This might be a CLI issue in the published package!"
             exit 1
           fi
@@ -408,14 +428,13 @@ jobs:
             echo "⚠️ Version mismatch!"
             echo "Expected: $VERSION"
             echo "Got: $PUBLISHED_VERSION"
-            echo "Note: Registry might still be updating..."
           else
             echo "✅ Version verified: $PUBLISHED_VERSION"
           fi
 
           echo ""
           echo "Full version info:"
-          npx -y recker@latest version format=json || true
+          npx -y recker@${VERSION} version format=json || true
 
       - name: Generate Changelog
         id: changelog

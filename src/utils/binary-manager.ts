@@ -118,6 +118,23 @@ function getDownloadUrl(): string {
     throw new Error(`Unsupported platform: ${p} ${a}`);
 }
 
+/**
+ * Ensures curl-impersonate is available, installing if needed.
+ * Designed to be called at CLI startup — fast no-op when binary exists.
+ */
+export async function ensureCurlImpersonate(logger?: { log: (...args: any[]) => void }): Promise<boolean> {
+    if (await resolveCurlPath()) return true;
+
+    const log = logger ?? { log: () => {} };
+    try {
+        log.log('recker: curl-impersonate not found, installing...');
+        await installCurlImpersonate(log as any);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export async function installCurlImpersonate(logger = console): Promise<void> {
     const url = getDownloadUrl();
     const tarPath = join(PACKAGE_BIN_DIR, 'curl-impersonate.tar.gz');

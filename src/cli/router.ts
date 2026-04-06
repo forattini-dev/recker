@@ -13,7 +13,6 @@ const KEYWORD_MAP: Record<string, string> = {
   quiet: '--quiet',
   json: '--json',
   help: '--help',
-  version: '--version',
   secure: '--secure',
   implicit: '--implicit',
 };
