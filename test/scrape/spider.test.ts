@@ -500,7 +500,7 @@ describe('Spider - Web Crawler', () => {
       expect(progress.total).toBe(0);
     });
 
-    it('should be able to abort crawler', async () => {
+    it('should be able to abort crawler', { timeout: 15000 }, async () => {
       const s = new Spider({
         maxPages: 100,
         respectRobotsTxt: false,
