@@ -119,23 +119,12 @@ export interface SpiderOptions {
     provider?: CaptchaProvider;
     usedCurl: boolean;
   }) => void | Promise<void>;
-  /** Callback when bot protection / WAF blocks a request */
-  onBlocked?: (result: {
-    url: string;
-    status: number;
-    reason?: BlockDetectionResult['reason'];
-    confidence: number;
-    transport: SpiderTransport;
-  }) => void | Promise<void>;
-  /** Callback when a fetch fails with an error */
-  onError?: (result: {
-    url: string;
-    error: string;
-    status: number;
-    transport: SpiderTransport;
-  }) => void | Promise<void>;
+  /** Callback when bot protection / WAF blocks a request (full page result with timings/security) */
+  onBlocked?: (result: SpiderPageResult) => void | Promise<void>;
+  /** Callback when a fetch fails with an error (full page result with timings/security) */
+  onError?: (result: SpiderPageResult) => void | Promise<void>;
   /** Callback before a retry attempt */
-  onRetry?: (result: {
+  onRetry?: (info: {
     url: string;
     attempt: number;
     maxAttempts: number;
@@ -143,9 +132,10 @@ export interface SpiderOptions {
     delay: number;
     transport: SpiderTransport;
     previousStatus: number;
+    timings?: SpiderPageResult['timings'];
   }) => void | Promise<void>;
   /** Callback when a redirect is followed */
-  onRedirect?: (result: {
+  onRedirect?: (info: {
     from: string;
     to: string;
     status: number;
@@ -603,14 +593,14 @@ export class Spider {
     include?: RegExp[];
     sitemapUrl?: string;
     transport: SpiderTransport;
-    onPage?: (result: SpiderPageResult) => void;
-    onPageWithHtml?: (result: SpiderPageResult, html: string) => void | Promise<void>;
+    onPage?: SpiderOptions['onPage'];
+    onPageWithHtml?: SpiderOptions['onPageWithHtml'];
     onCaptchaDetected?: SpiderOptions['onCaptchaDetected'];
     onBlocked?: SpiderOptions['onBlocked'];
     onError?: SpiderOptions['onError'];
     onRetry?: SpiderOptions['onRetry'];
     onRedirect?: SpiderOptions['onRedirect'];
-    onProgress?: (progress: SpiderProgress) => void;
+    onProgress?: SpiderOptions['onProgress'];
     extract?: ExtractionSchema;
     parserOptions?: Partial<ParserOptions>;
   };
@@ -1349,6 +1339,7 @@ export class Spider {
             delay: waitMs,
             transport: forcedTransport ?? transportForAttempt,
             previousStatus: response.status,
+            timings,
           });
         }
 
@@ -1535,13 +1526,7 @@ export class Spider {
           await this.options.onPageWithHtml(nonHtmlResult, html);
         }
         if (this.options.onBlocked && (detection.blocked || hasCaptcha)) {
-          await this.options.onBlocked({
-            url: item.url,
-            status,
-            reason: detection.reason,
-            confidence: detection.confidence,
-            transport: transportUsed,
-          });
+          await this.options.onBlocked(nonHtmlResult);
         }
         return;
       }
@@ -1728,12 +1713,7 @@ export class Spider {
       await this.crawlStorage.saveError({ url: item.url, error: message });
       this.options.onPage?.(errorResult);
       if (this.options.onError) {
-        await this.options.onError({
-          url: item.url,
-          error: message,
-          status,
-          transport: errTransport,
-        });
+        await this.options.onError(errorResult);
       }
     }
   }

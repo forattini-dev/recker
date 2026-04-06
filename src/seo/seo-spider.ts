@@ -23,8 +23,12 @@ export interface SeoSpiderOptions extends SpiderOptions {
   seo?: boolean;
   /** Output file path for JSON report */
   output?: string;
-  /** Callback for each page's SEO analysis */
+  /** Callback for each page's SEO analysis (includes full SEO report + timings) */
   onSeoAnalysis?: (result: SeoPageResult) => void;
+  /** Callback when a page is blocked (includes SEO report if analysis was possible) */
+  onBlocked?: (result: SeoPageResult) => void | Promise<void>;
+  /** Callback when a fetch fails (includes page result with timings) */
+  onError?: (result: SeoPageResult) => void | Promise<void>;
   /** Focus on specific rule categories (empty array = all categories) */
   focusCategories?: string[];
   /** Focus mode name for display purposes */
@@ -116,12 +120,22 @@ export class SeoSpider {
   constructor(options: SeoSpiderOptions = {}) {
     this.options = options;
 
-    // Create spider with onPageWithHtml callback for SEO analysis during crawl
+    // Create spider with hooks wired to SeoSpider callbacks
     this.spider = new Spider({
       ...options,
       onPageWithHtml: this.options.seo
         ? async (pageResult, html) => {
             await this.analyzePageDuringCrawl(pageResult, html);
+          }
+        : undefined,
+      onBlocked: this.options.onBlocked
+        ? async (pageResult) => {
+            await this.options.onBlocked!({ ...pageResult } as SeoPageResult);
+          }
+        : undefined,
+      onError: this.options.onError
+        ? async (pageResult) => {
+            await this.options.onError!({ ...pageResult } as SeoPageResult);
           }
         : undefined,
     });
