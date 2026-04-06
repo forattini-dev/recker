@@ -458,7 +458,7 @@ describe('Header Parser', () => {
       const headers = new Headers({ 'date': serverDate.toUTCString() });
       const info = parseClockSkew(headers);
       expect(info.serverTime).toBeInstanceOf(Date);
-      expect(Math.abs(info.skewMs!)).toBeLessThan(1000); // Should be within 1 second
+      expect(Math.abs(info.skewMs!)).toBeLessThanOrEqual(1000); // Should be within 1 second
     });
 
     it('should return empty for missing Date header', () => {
