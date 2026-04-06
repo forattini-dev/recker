@@ -155,6 +155,12 @@ const nodeStubPlugin = {
         export const homedir = () => '/';
         export const tmpdir = () => '/tmp';
 
+        // url module
+        export const fileURLToPath = (url) => url;
+        export const pathToFileURL = (path) => new URL('file://' + path);
+        export const URL = globalThis.URL;
+        export const URLSearchParams = globalThis.URLSearchParams;
+
         // net module
         export const createConnection = noop;
         export const connect = noop;
