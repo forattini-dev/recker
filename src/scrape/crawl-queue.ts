@@ -37,22 +37,42 @@ export interface CrawlQueueAdapter {
 
 /**
  * Default in-memory implementation.
- * Same behavior as the Spider's original array + Set, but behind the adapter interface.
+ * Uses a ring buffer (circular buffer) for O(1) push and pop instead of
+ * Array.shift() which is O(n) due to re-indexing. For large crawls (100K+ URLs)
+ * this eliminates a significant bottleneck.
  */
 export class InMemoryCrawlQueue implements CrawlQueueAdapter {
-  private queue: CrawlQueueItem[] = [];
+  private queue: (CrawlQueueItem | undefined)[] = [];
+  private head = 0;
+  private tail = 0;
   private visited = new Set<string>();
 
   async push(item: CrawlQueueItem): Promise<void> {
-    this.queue.push(item);
+    this.queue[this.tail++] = item;
   }
 
   async pushBatch(items: CrawlQueueItem[]): Promise<void> {
-    this.queue.push(...items);
+    for (const item of items) {
+      this.queue[this.tail++] = item;
+    }
   }
 
   async pop(): Promise<CrawlQueueItem | null> {
-    return this.queue.shift() ?? null;
+    while (this.head < this.tail) {
+      const item = this.queue[this.head];
+      this.queue[this.head] = undefined;
+      this.head++;
+      if (item) {
+        // Compact when more than half is empty and gap exceeds threshold
+        if (this.head > 1024 && this.head > this.tail / 2) {
+          this.queue = this.queue.slice(this.head);
+          this.tail -= this.head;
+          this.head = 0;
+        }
+        return item;
+      }
+    }
+    return null;
   }
 
   async hasVisited(url: string): Promise<boolean> {
@@ -72,11 +92,13 @@ export class InMemoryCrawlQueue implements CrawlQueueAdapter {
   }
 
   async size(): Promise<number> {
-    return this.queue.length;
+    return this.tail - this.head;
   }
 
   async clear(): Promise<void> {
     this.queue = [];
+    this.head = 0;
+    this.tail = 0;
     this.visited.clear();
   }
 

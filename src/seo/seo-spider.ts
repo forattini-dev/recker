@@ -154,8 +154,8 @@ export class SeoSpider {
     pageResult: SpiderPageResult,
     html: string
   ): Promise<void> {
-    // Skip error pages
-    if (pageResult.error || pageResult.status >= 400) {
+    // Skip only hard failures (no HTML to analyze)
+    if (pageResult.status >= 400 || !html) {
       const seoPage: SeoPageResult = { ...pageResult, seoReport: undefined };
       this.seoPages.push(seoPage);
       return;

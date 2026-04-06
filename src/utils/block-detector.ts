@@ -686,6 +686,19 @@ export function detectBlock(response: ResponseLike, body?: string): BlockDetecti
     });
   }
 
+  // Early exit for clean 200 responses with no suspicious headers and no body.
+  // If status is 200, no block signals matched, no redirect, and no body to scan
+  // — skip all expensive body regex scanning. This is the common case when
+  // detectBlock is called for a quick header-only check.
+  if (
+    response.status === 200 &&
+    results.length === 0 &&
+    !location &&
+    !body
+  ) {
+    return { blocked: false, confidence: 0 };
+  }
+
   // Check body patterns
   if (body) {
     const isLongBody = body.length > 100_000;
@@ -776,6 +789,18 @@ export function detectCaptcha(response: ResponseLike, body?: string): CaptchaDet
     if (cfRay || cfRequestId) {
       addMatch(matches, 'cloudflare', 0.7, 'Cloudflare challenge headers detected');
     }
+  }
+
+  // Early exit: no header signals, clean status, and no body to scan.
+  // When no CAPTCHA headers, no header pattern matches, a clean 2xx status,
+  // no redirect, and no body provided — skip expensive body regex scanning.
+  if (
+    matches.length === 0 &&
+    response.status >= 200 && response.status < 300 &&
+    !location &&
+    !body
+  ) {
+    return { detected: false, confidence: 0 };
   }
 
   if (body) {
