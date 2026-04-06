@@ -494,8 +494,9 @@ function shouldCrawl(
       return false;
     }
 
-    // Same domain check
-    if (options.sameDomain !== false && parsed.hostname !== baseHost) {
+    // Same domain check (strip www. to match normalizeUrl behavior)
+    const hostname = parsed.hostname.replace(/^www\./, '');
+    if (options.sameDomain !== false && hostname !== baseHost) {
       return false;
     }
 
@@ -816,7 +817,8 @@ export class Spider {
     // Normalize and validate start URL
     const normalizedStart = normalizeUrl(startUrl);
     const baseUrl = new URL(normalizedStart).origin;
-      this.baseHost = new URL(normalizedStart).hostname;
+    // Strip www. from baseHost to match normalizeUrl behavior (which also strips www.)
+    this.baseHost = new URL(normalizedStart).hostname.replace(/^www\./, '');
 
     // Reset state (or restore from checkpoint when resuming)
     if (!this.options.resume) {
@@ -839,8 +841,23 @@ export class Spider {
     this.robotsData = null;
     this.sitemapValidation = null;
     this.robotsValidation = null;
-    this.blockedDomains.clear();
-    this.domainStates.clear();
+
+    // Only clear domain/transport state when NOT resuming — resume needs
+    // to preserve knowledge of blocked domains, penalties, and content hashes
+    if (!this.options.resume) {
+      this.blockedDomains.clear();
+      this.domainStates.clear();
+    }
+
+    // Rebuild content hashes from stored results when resuming with deduplication
+    if (this.options.resume && this.options.deduplicateContent) {
+      const existingResults = await this.crawlStorage.getResults();
+      for (const r of existingResults) {
+        if (r.contentHash) {
+          this.contentHashes.set(r.contentHash, r.url);
+        }
+      }
+    }
 
     // Check if curl-impersonate is available (for auto/curl modes)
     if (this.options.transport !== 'undici') {
@@ -868,9 +885,17 @@ export class Spider {
     const scheduleUrl = async (item: QueueItem): Promise<void> => {
       const normalized = normalizeUrl(item.url);
 
-      // Skip if already visited or pending
-      if (await this.crawlQueue.hasVisited(normalized)) return;
+      // Use pending as a synchronous lock — claim immediately to close race window
       if (pending.has(normalized)) return;
+
+      // Check if already visited (async — another worker could interleave here)
+      if (await this.crawlQueue.hasVisited(normalized)) return;
+
+      // Claim the URL atomically: mark visited BEFORE pushing to queue
+      // This ensures a second concurrent scheduleUrl for the same URL will
+      // see it as visited even if the first hasn't started crawling yet.
+      await this.crawlQueue.markVisited(normalized);
+      this._visitedCount++;
 
       // Skip if exceeds max depth (sitemap URLs get depth 1)
       if (item.depth > this.options.maxDepth) return;
@@ -891,9 +916,6 @@ export class Spider {
         }
       }
 
-      // Mark as visited to prevent duplicate scheduling
-      await this.crawlQueue.markVisited(normalized);
-      this._visitedCount++;
       this.pendingCount++;
 
       // Schedule via pool - returns immediately, pool handles concurrency
@@ -955,6 +977,26 @@ export class Spider {
       await Promise.all(pending.values());
     }
 
+    // Drain check: workers that just finished may have enqueued new URLs
+    // after the while-loop condition was last evaluated. Re-check and process.
+    while (!this.aborted && this._resultCount < this.options.maxPages) {
+      const remaining = await this.crawlQueue.size();
+      if (remaining === 0 && pending.size === 0) break;
+      this._queueSize = remaining;
+
+      let nextItem = await this.crawlQueue.pop();
+      while (nextItem && !this.aborted) {
+        this._queueSize = Math.max(0, this._queueSize - 1);
+        if (this._resultCount + pending.size >= this.options.maxPages) break;
+        await scheduleUrl(nextItem);
+        nextItem = await this.crawlQueue.pop();
+      }
+
+      if (pending.size > 0) {
+        await Promise.all(pending.values());
+      }
+    }
+
     this.running = false;
 
     // Collect results from storage
@@ -966,9 +1008,14 @@ export class Spider {
     const robotsAnalysis = this.buildRobotsAnalysis();
 
     // Build visited set from crawl queue adapter (or from results as fallback)
+    // Snapshot into a new Set before closing adapters (close may clear internal state)
     const visited = this.crawlQueue instanceof InMemoryCrawlQueue
-      ? this.crawlQueue.getVisited()
+      ? new Set(this.crawlQueue.getVisited())
       : new Set(pages.map(r => r.url));
+
+    // Close adapters if they support it (flushes buffers, releases connections)
+    await this.crawlQueue.close?.();
+    await this.crawlStorage.close?.();
 
     return {
       startUrl: normalizedStart,
