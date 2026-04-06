@@ -6,6 +6,7 @@
  * Optionally uses sitemap.xml for URL discovery.
  */
 
+import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { createClient } from '../core/client.js';
 import { ScrapeDocument } from './document.js';
@@ -155,6 +156,18 @@ export interface SpiderOptions {
    */
   parserOptions?: Partial<ParserOptions>;
 
+  /** Proactive per-domain rate limit (applied before each request) */
+  domainRateLimit?: {
+    /** Maximum requests per second per domain (default: unlimited) */
+    maxPerSecond?: number;
+  };
+
+  /** Enable content deduplication via MD5 hash of page text (default: false) */
+  deduplicateContent?: boolean;
+
+  /** Resume a previously paused crawl (don't clear queue/storage on start). Default: false */
+  resume?: boolean;
+
   /**
    * Pluggable queue adapter for URL frontier management.
    * Enables persistent, distributed, or priority-based crawling.
@@ -238,6 +251,12 @@ export interface SpiderPageResult {
   };
   /** Custom extracted data from --extract selectors */
   extracted?: Record<string, unknown>;
+  /** MD5 hash of body text content */
+  contentHash?: string;
+  /** Whether this page has duplicate content with another URL */
+  isDuplicate?: boolean;
+  /** URL of the first page seen with this content (if duplicate) */
+  duplicateOf?: string;
 }
 
 /**
@@ -601,7 +620,7 @@ export class Spider {
   private options: Required<
     Omit<
       SpiderOptions,
-      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy'
+      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy' | 'domainRateLimit' | 'resume'
     >
   > & {
     exclude?: RegExp[];
@@ -617,6 +636,8 @@ export class Spider {
     onProgress?: SpiderOptions['onProgress'];
     extract?: ExtractionSchema;
     parserOptions?: Partial<ParserOptions>;
+    domainRateLimit?: SpiderOptions['domainRateLimit'];
+    resume?: boolean;
   };
   private client: ReturnType<typeof createClient>;
   private pool: RequestPool;
@@ -632,6 +653,12 @@ export class Spider {
   private aborted: boolean = false;
   private pendingCount: number = 0;
 
+  // Domain rate limiting state
+  private domainRequestTimestamps = new Map<string, number[]>();
+
+  // Content deduplication state
+  private contentHashes = new Map<string, string>();
+
   // Transport fallback state
   private blockedDomains: Set<string> = new Set();
   private curlTransport: CurlTransport | null = null;
@@ -644,6 +671,36 @@ export class Spider {
   private robotsData: RobotsParseResult | null = null;
   private sitemapValidation: SitemapValidationResult | null = null;
   private robotsValidation: { found: boolean; issues: Array<{ type: string; message: string }> } | null = null;
+
+  private async waitForDomainRateLimit(hostname: string): Promise<void> {
+    const limit = this.options.domainRateLimit?.maxPerSecond;
+    if (!limit || limit <= 0) return;
+
+    const now = Date.now();
+    const window = 1000;
+    let timestamps = this.domainRequestTimestamps.get(hostname);
+    if (!timestamps) {
+      timestamps = [];
+      this.domainRequestTimestamps.set(hostname, timestamps);
+    }
+
+    // Purge expired
+    while (timestamps.length > 0 && timestamps[0] <= now - window) {
+      timestamps.shift();
+    }
+
+    // Wait if at capacity
+    if (timestamps.length >= limit) {
+      const waitMs = timestamps[0] + window - now;
+      if (waitMs > 0) await sleep(waitMs);
+      const afterWait = Date.now();
+      while (timestamps.length > 0 && timestamps[0] <= afterWait - window) {
+        timestamps.shift();
+      }
+    }
+
+    timestamps.push(Date.now());
+  }
 
   private toHeaderRecord(headers: Headers): Record<string, string> {
     const headerRecord: Record<string, string> = {};
@@ -696,6 +753,9 @@ export class Spider {
       onProgress: options.onProgress,
       extract: extractSchema,
       parserOptions: options.parserOptions,
+      domainRateLimit: options.domainRateLimit,
+      deduplicateContent: options.deduplicateContent ?? false,
+      resume: options.resume ?? false,
     };
 
     // Resolve proxy: string → static client proxy, string[] → ListProxyAdapter, ProxyAdapter → dynamic
@@ -758,12 +818,19 @@ export class Spider {
     const baseUrl = new URL(normalizedStart).origin;
       this.baseHost = new URL(normalizedStart).hostname;
 
-    // Reset state
-    await this.crawlQueue.clear();
-    await this.crawlStorage.clear();
-    this._visitedCount = 0;
-    this._queueSize = 0;
-    this._resultCount = 0;
+    // Reset state (or restore from checkpoint when resuming)
+    if (!this.options.resume) {
+      await this.crawlQueue.clear();
+      await this.crawlStorage.clear();
+      this._visitedCount = 0;
+      this._queueSize = 0;
+      this._resultCount = 0;
+      this.domainRequestTimestamps.clear();
+      this.contentHashes.clear();
+    } else {
+      this._queueSize = await this.crawlQueue.size();
+      this._resultCount = await this.crawlStorage.getResultCount();
+    }
     this.running = true;
     this.aborted = false;
     this.pendingCount = 0;
@@ -839,20 +906,22 @@ export class Spider {
       pending.set(normalized, promise);
     };
 
-    // Schedule the start URL
-    await scheduleUrl({ url: normalizedStart, depth: 0 });
+    // Schedule the start URL and sitemap URLs (skip when resuming — queue already has pending items)
+    if (!this.options.resume) {
+      await scheduleUrl({ url: normalizedStart, depth: 0 });
 
-    // Schedule sitemap URLs (with depth 1 so they can discover more links)
-    if (this.options.useSitemap && this.sitemapUrls.length > 0) {
-      for (const sitemapUrl of this.sitemapUrls) {
-        // Only add URLs from same domain
-        try {
-          const urlHost = new URL(sitemapUrl.loc).hostname;
-          if (urlHost === this.baseHost) {
-            await scheduleUrl({ url: sitemapUrl.loc, depth: 1 });
+      // Schedule sitemap URLs (with depth 1 so they can discover more links)
+      if (this.options.useSitemap && this.sitemapUrls.length > 0) {
+        for (const sitemapUrl of this.sitemapUrls) {
+          // Only add URLs from same domain
+          try {
+            const urlHost = new URL(sitemapUrl.loc).hostname;
+            if (urlHost === this.baseHost) {
+              await scheduleUrl({ url: sitemapUrl.loc, depth: 1 });
+            }
+          } catch {
+            // Invalid URL, skip
           }
-        } catch {
-          // Invalid URL, skip
         }
       }
     }
@@ -1226,6 +1295,7 @@ export class Spider {
     };
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await this.waitForDomainRateLimit(hostname);
       await this.waitForDomainPenalty(hostname);
       const useCurl = this.shouldUseCurlForHost(hostname, hasCurl, forcedTransport);
       const transportForAttempt: SpiderTransport = useCurl ? 'curl' : 'undici';
@@ -1591,6 +1661,22 @@ export class Spider {
         }
       }
 
+      // Content deduplication
+      let isDuplicate = false;
+      let duplicateOf: string | undefined;
+      let contentHash: string | undefined;
+      if (this.options.deduplicateContent) {
+        const bodyText = doc.text('body');
+        contentHash = createHash('md5').update(bodyText).digest('hex');
+        const existingUrl = this.contentHashes.get(contentHash);
+        if (existingUrl) {
+          isDuplicate = true;
+          duplicateOf = existingUrl;
+        } else {
+          this.contentHashes.set(contentHash, item.url);
+        }
+      }
+
       // Create result
       const result: SpiderPageResult = {
         url: item.url,
@@ -1620,6 +1706,9 @@ export class Spider {
         timings,
         fetchedAt,
         extracted,
+        contentHash,
+        isDuplicate: isDuplicate || undefined,
+        duplicateOf,
       };
 
       await this.crawlStorage.saveResult(result);
@@ -1632,33 +1721,36 @@ export class Spider {
         });
       }
 
-      // Add new links to queue (only internal, unvisited) — batch optimized
-      const candidates: CrawlQueueItem[] = [];
-      const candidateUrls: string[] = [];
+      // Skip link following for duplicate content pages
+      if (!isDuplicate) {
+        // Add new links to queue (only internal, unvisited) — batch optimized
+        const candidates: CrawlQueueItem[] = [];
+        const candidateUrls: string[] = [];
 
-      for (const link of links) {
-        if (!link.href) continue;
-        const normalized = normalizeUrl(link.href);
-        if (!shouldCrawl(normalized, this.baseHost, this.options)) continue;
-        candidateUrls.push(normalized);
-        candidates.push({ url: normalized, depth: item.depth + 1 });
-      }
+        for (const link of links) {
+          if (!link.href) continue;
+          const normalized = normalizeUrl(link.href);
+          if (!shouldCrawl(normalized, this.baseHost, this.options)) continue;
+          candidateUrls.push(normalized);
+          candidates.push({ url: normalized, depth: item.depth + 1 });
+        }
 
-      if (candidates.length > 0) {
-        // Batch check visited URLs (reduces round-trips for remote backends)
-        const visitedSet = this.crawlQueue.hasVisitedBatch
-          ? await this.crawlQueue.hasVisitedBatch(candidateUrls)
-          : new Set(await Promise.all(candidateUrls.map(async (u) => (await this.crawlQueue.hasVisited(u)) ? u : null)).then(r => r.filter(Boolean) as string[]));
+        if (candidates.length > 0) {
+          // Batch check visited URLs (reduces round-trips for remote backends)
+          const visitedSet = this.crawlQueue.hasVisitedBatch
+            ? await this.crawlQueue.hasVisitedBatch(candidateUrls)
+            : new Set(await Promise.all(candidateUrls.map(async (u) => (await this.crawlQueue.hasVisited(u)) ? u : null)).then(r => r.filter(Boolean) as string[]));
 
-        const newItems = candidates.filter((_, i) => !visitedSet.has(candidateUrls[i]));
+          const newItems = candidates.filter((_, i) => !visitedSet.has(candidateUrls[i]));
 
-        if (newItems.length > 0) {
-          if (this.crawlQueue.pushBatch) {
-            await this.crawlQueue.pushBatch(newItems);
-          } else {
-            for (const newItem of newItems) await this.crawlQueue.push(newItem);
+          if (newItems.length > 0) {
+            if (this.crawlQueue.pushBatch) {
+              await this.crawlQueue.pushBatch(newItems);
+            } else {
+              for (const newItem of newItems) await this.crawlQueue.push(newItem);
+            }
+            this._queueSize += newItems.length;
           }
-          this._queueSize += newItems.length;
         }
       }
     } catch (error: any) {

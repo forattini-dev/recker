@@ -32,10 +32,12 @@ export type {
 
 // Crawl Queue (pluggable URL frontier)
 export { InMemoryCrawlQueue } from './crawl-queue.js';
+export { SqliteCrawlQueue } from './sqlite-crawl-queue.js';
 export type { CrawlQueueAdapter, CrawlQueueItem } from './crawl-queue.js';
 
 // Crawl Storage (pluggable result storage)
 export { InMemoryCrawlStorage } from './crawl-storage.js';
+export { SqliteCrawlStorage } from './sqlite-crawl-storage.js';
 export type { CrawlStorageAdapter } from './crawl-storage.js';
 
 // Proxy Adapter (pluggable proxy selection)
