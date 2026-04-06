@@ -41,6 +41,9 @@ CLAUDE.md
 AGENTS.md
 GEMINI.md
 
+# curl-impersonate binary (downloaded by postinstall)
+.curl/
+
 # Temporary files
 *.tmp
 .cache/

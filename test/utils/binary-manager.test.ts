@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+let mockBaseDir = '';
 let mockHomeDir = '';
 let mockPlatform = 'linux';
 let mockArch = 'x64';
@@ -77,19 +78,36 @@ vi.mock('node:os', async () => {
   };
 });
 
+vi.mock('node:url', async () => {
+  const actual = await vi.importActual<typeof import('node:url')>('node:url');
+  return {
+    ...actual,
+    fileURLToPath: () => join(mockBaseDir, 'src', 'utils', 'binary-manager.ts'),
+  };
+});
+
 type BinaryManagerModule = typeof import('../../src/utils/binary-manager.js');
 
 let moduleInstance: BinaryManagerModule;
 const originalFetch = global.fetch;
 
-function createExecutable(content: string): Promise<string> {
+/** Package-local binary dir: <mockBaseDir>/.curl/bin/ */
+function packageBinDir(): string {
+  return join(mockBaseDir, '.curl', 'bin');
+}
+
+/** Legacy binary dir: <mockHomeDir>/.recker/bin/ */
+function legacyBinDir(): string {
+  return join(mockHomeDir, '.recker', 'bin');
+}
+
+function createExecutableAt(dir: string, content: string): Promise<string> {
+  const binPath = join(dir, 'curl-impersonate-chrome');
   return writeFile(
-    join(mockHomeDir, '.recker', 'bin', 'curl-impersonate-chrome'),
-    `#!/bin/sh
-${content}
-`,
+    binPath,
+    `#!/bin/sh\n${content}\n`,
     { mode: 0o755 },
-  ).then(() => join(mockHomeDir, '.recker', 'bin', 'curl-impersonate-chrome'));
+  ).then(() => binPath);
 }
 
 async function createTarPayload(content: string, mode = 0o755): Promise<Buffer> {
@@ -108,8 +126,10 @@ async function createTarPayload(content: string, mode = 0o755): Promise<Buffer> 
 
 describe('binary-manager', () => {
   beforeEach(async () => {
-    mockHomeDir = await mkdtemp(join(tmpdir(), 'recker-binary-manager-'));
-    await mkdir(join(mockHomeDir, '.recker', 'bin'), { recursive: true });
+    mockBaseDir = await mkdtemp(join(tmpdir(), 'recker-pkg-'));
+    mockHomeDir = await mkdtemp(join(tmpdir(), 'recker-home-'));
+    await mkdir(packageBinDir(), { recursive: true });
+    await mkdir(legacyBinDir(), { recursive: true });
     mockPlatform = 'linux';
     mockArch = 'x64';
     await vi.resetModules();
@@ -121,13 +141,60 @@ describe('binary-manager', () => {
 
   afterEach(async () => {
     global.fetch = originalFetch;
+    await rm(mockBaseDir, { recursive: true, force: true });
     await rm(mockHomeDir, { recursive: true, force: true });
     vi.clearAllMocks();
     clearSpawnBehaviors();
   });
 
+  // =========================================================================
+  // Path resolution
+  // =========================================================================
+
+  it('getCurlPath returns package-local path', () => {
+    expect(moduleInstance.getCurlPath()).toBe(
+      join(packageBinDir(), 'curl-impersonate-chrome'),
+    );
+  });
+
+  it('getLegacyCurlPath returns home-dir path', () => {
+    expect(moduleInstance.getLegacyCurlPath()).toBe(
+      join(legacyBinDir(), 'curl-impersonate-chrome'),
+    );
+  });
+
+  it('resolveCurlPath prefers RECKER_CURL_BIN env var', async () => {
+    process.env.RECKER_CURL_BIN = '/custom/bin/curl';
+    const resolved = await moduleInstance.resolveCurlPath();
+    expect(resolved).toBe('/custom/bin/curl');
+  });
+
+  it('resolveCurlPath finds package-local binary first', async () => {
+    await createExecutableAt(packageBinDir(), 'echo ok');
+    await createExecutableAt(legacyBinDir(), 'echo ok');
+
+    const resolved = await moduleInstance.resolveCurlPath();
+    expect(resolved).toBe(join(packageBinDir(), 'curl-impersonate-chrome'));
+  });
+
+  it('resolveCurlPath falls back to legacy path', async () => {
+    await createExecutableAt(legacyBinDir(), 'echo ok');
+
+    const resolved = await moduleInstance.resolveCurlPath();
+    expect(resolved).toBe(join(legacyBinDir(), 'curl-impersonate-chrome'));
+  });
+
+  it('resolveCurlPath returns null when no binary found', async () => {
+    const resolved = await moduleInstance.resolveCurlPath();
+    expect(resolved).toBeNull();
+  });
+
+  // =========================================================================
+  // hasImpersonate
+  // =========================================================================
+
   it('detects curl-impersonate when binary exists and responds to --version', async () => {
-    const binaryPath = await createExecutable('echo "curl-impersonate-ok"');
+    const binaryPath = await createExecutableAt(packageBinDir(), 'echo "curl-impersonate-ok"');
     process.env.RECKER_CURL_BIN = binaryPath;
 
     const available = await moduleInstance.hasImpersonate();
@@ -142,26 +209,36 @@ describe('binary-manager', () => {
   });
 
   it('returns false when binary exits with non-zero version code', async () => {
-    await createExecutable('exit 1');
-    process.env.RECKER_CURL_BIN = join(mockHomeDir, '.recker', 'bin', 'curl-impersonate-chrome');
+    const binaryPath = await createExecutableAt(packageBinDir(), 'exit 1');
+    process.env.RECKER_CURL_BIN = binaryPath;
 
     const available = await moduleInstance.hasImpersonate();
 
     expect(available).toBe(false);
   });
 
-  it('installs impersonate when download payload contains the binary', async () => {
-    const archiveRoot = join(mockHomeDir, 'payload');
-    await mkdir(archiveRoot, { recursive: true });
+  it('detects binary in package-local dir without env var', async () => {
+    await createExecutableAt(packageBinDir(), 'echo "curl-impersonate-ok"');
 
-    const packedBinary = join(archiveRoot, 'curl-impersonate-chrome');
-    await writeFile(packedBinary, '#!/bin/sh\necho 0.6.1');
-    await execFileSync('chmod', ['+x', packedBinary]);
+    const available = await moduleInstance.hasImpersonate();
 
-    const tarPath = join(archiveRoot, 'curl-impersonate.tar.gz');
-    execFileSync('tar', ['-czf', tarPath, '-C', archiveRoot, 'curl-impersonate-chrome']);
-    const tarPayload = await readFile(tarPath);
+    expect(available).toBe(true);
+  });
 
+  it('detects binary in legacy dir when not in package dir', async () => {
+    await createExecutableAt(legacyBinDir(), 'echo "curl-impersonate-ok"');
+
+    const available = await moduleInstance.hasImpersonate();
+
+    expect(available).toBe(true);
+  });
+
+  // =========================================================================
+  // installCurlImpersonate
+  // =========================================================================
+
+  it('installs binary to package-local directory', async () => {
+    const tarPayload = await createTarPayload('#!/bin/sh\necho 0.6.1\n');
     const fetchSpy = vi.fn(async () => new Response(tarPayload));
     global.fetch = fetchSpy;
 
@@ -172,11 +249,12 @@ describe('binary-manager', () => {
     expect(installed).toBe(true);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('curl-impersonate-v0.6.1'));
-    expect(await readFile(join(mockHomeDir, '.recker', 'bin', 'curl-impersonate-chrome'), 'utf8')).toContain('0.6.1');
+    expect(await readFile(join(packageBinDir(), 'curl-impersonate-chrome'), 'utf8')).toContain('0.6.1');
   });
 
   it('installs curl-impersonate from ARM64 Linux artifact', async () => {
     mockArch = 'arm64';
+    await vi.resetModules();
     moduleInstance = await import('../../src/utils/binary-manager.js');
     const tarPayload = await createTarPayload('#!/bin/sh\necho 0.6.1\n');
 
@@ -232,8 +310,9 @@ describe('binary-manager', () => {
       .toThrow('Installation failed: Binary not found after extraction');
   });
 
-  it('throws unsupported platform error for non-installable environments', async () => {
+  it('throws unsupported platform error for macOS', async () => {
     mockPlatform = 'darwin';
+    await vi.resetModules();
     moduleInstance = await import('../../src/utils/binary-manager.js');
     const fetchSpy = vi.fn();
     global.fetch = fetchSpy;
@@ -247,6 +326,7 @@ describe('binary-manager', () => {
 
   it('throws unsupported architecture error', async () => {
     mockArch = 'armv7l';
+    await vi.resetModules();
     moduleInstance = await import('../../src/utils/binary-manager.js');
     const fetchSpy = vi.fn();
     global.fetch = fetchSpy;
@@ -260,6 +340,7 @@ describe('binary-manager', () => {
 
   it('throws unsupported platform error on Windows', async () => {
     mockPlatform = 'win32';
+    await vi.resetModules();
     moduleInstance = await import('../../src/utils/binary-manager.js');
     const fetchSpy = vi.fn();
     global.fetch = fetchSpy;
@@ -271,8 +352,12 @@ describe('binary-manager', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  // =========================================================================
+  // Timeout and edge cases
+  // =========================================================================
+
   it('returns false when version check times out', async () => {
-    const binaryPath = await createExecutable('sleep 5');
+    const binaryPath = await createExecutableAt(packageBinDir(), 'sleep 5');
     process.env.RECKER_CURL_BIN = binaryPath;
 
     const available = await moduleInstance.hasImpersonate();
@@ -281,7 +366,7 @@ describe('binary-manager', () => {
   });
 
   it('returns false when timeout handler sees completed process code', async () => {
-    const binaryPath = await createExecutable('sleep 5');
+    const binaryPath = await createExecutableAt(packageBinDir(), 'sleep 5');
     process.env.RECKER_CURL_BIN = binaryPath;
     queueSpawnBehavior({ exitCodeAtStart: 0, events: [] });
 
@@ -291,7 +376,7 @@ describe('binary-manager', () => {
   });
 
   it('returns false when spawn emits an error event', async () => {
-    const binaryPath = await createExecutable('echo ok');
+    const binaryPath = await createExecutableAt(packageBinDir(), 'echo ok');
     process.env.RECKER_CURL_BIN = binaryPath;
     queueSpawnBehavior({
       events: [{ type: 'error', value: new Error('spawn failed') }],
@@ -303,7 +388,7 @@ describe('binary-manager', () => {
   });
 
   it('returns false when spawn exits after settling', async () => {
-    const binaryPath = await createExecutable('sleep 5');
+    const binaryPath = await createExecutableAt(packageBinDir(), 'sleep 5');
     process.env.RECKER_CURL_BIN = binaryPath;
     queueSpawnBehavior({
       exitCodeAtStart: 0,

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { Transport, ReckerRequest, ReckerResponse, ProxyOptions } from '../types/index.js';
 import { HttpResponse } from '../core/response.js';
 import { NetworkError } from '../core/errors.js';
-import { getCurlPath, hasImpersonate } from '../utils/binary-manager.js';
+import { resolveCurlPath } from '../utils/binary-manager.js';
 
 const TIMING_MARKER = '__RECKER_TIMING__';
 
@@ -154,13 +154,7 @@ function parseCurlOutput(responseText: string): {
 let resolvedCommand: string | null = null;
 async function getCommand(): Promise<string> {
   if (resolvedCommand !== null) return resolvedCommand;
-  if (process.env.RECKER_CURL_BIN) {
-    resolvedCommand = process.env.RECKER_CURL_BIN;
-  } else if (await hasImpersonate()) {
-    resolvedCommand = getCurlPath();
-  } else {
-    resolvedCommand = 'curl';
-  }
+  resolvedCommand = await resolveCurlPath() || 'curl';
   return resolvedCommand;
 }
 

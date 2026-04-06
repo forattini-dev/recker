@@ -206,17 +206,18 @@ export const setupHandler: RekHandler = async (ctx) => {
   const out = createEnhancedOutput(ctx)
 
   try {
-    const { installCurlImpersonate, hasImpersonate, getCurlPath } = await import('../../utils/binary-manager.js')
+    const { installCurlImpersonate, hasImpersonate, resolveCurlPath } = await import('../../utils/binary-manager.js')
 
     if (await hasImpersonate()) {
+      const resolvedPath = await resolveCurlPath()
       if (ctx.isTui && ctx.tui) {
         out.response({
           installed: true,
-          path: getCurlPath(),
+          path: resolvedPath,
         }, { responseType: 'setup' })
       } else {
         out.success('curl-impersonate is already installed at:')
-        out.log(colors.gray(getCurlPath()))
+        out.log(colors.gray(resolvedPath || ''))
       }
       return
     }

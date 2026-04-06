@@ -231,6 +231,7 @@
     "build:browser:bundle": "pnpm build:browser && node scripts/bundle-browser.js",
     "build:cli": "node scripts/bundle-cli.js",
     "build:binary": "node scripts/build-sea.js",
+    "postinstall": "node scripts/postinstall.js",
     "prepare": "husky",
     "prepublishOnly": "pnpm build && pnpm build:browser:bundle && node scripts/inject-version.js",
     "test": "NODE_OPTIONS='--max-old-space-size=512' vitest run",
