@@ -22,8 +22,8 @@ function getDownloadUrl() {
   const base = `https://github.com/lwthiker/curl-impersonate/releases/download/${version}`;
 
   if (p === 'linux') {
-    if (a === 'x64') return `${base}/curl-impersonate-${VERSION}.x86_64-linux-gnu.tar.gz`;
-    if (a === 'arm64') return `${base}/curl-impersonate-${VERSION}.aarch64-linux-gnu.tar.gz`;
+    if (a === 'x64') return `${base}/curl-impersonate-${version}.x86_64-linux-gnu.tar.gz`;
+    if (a === 'arm64') return `${base}/curl-impersonate-${version}.aarch64-linux-gnu.tar.gz`;
   }
 
   // macOS and Windows: skip silently (not supported for auto-install)
