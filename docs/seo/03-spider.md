@@ -201,7 +201,7 @@ console.log(`Duplicate Titles: ${result.summary.duplicateTitles}`);
 ## Options
 
 ```typescript
-interface SeoSpiderOptions {
+interface SeoSpiderOptions extends SpiderOptions {
   // SEO Options
   /** Enable SEO analysis for each page (default: false) */
   seo?: boolean;
@@ -209,16 +209,22 @@ interface SeoSpiderOptions {
   /** Output file path for JSON report */
   output?: string;
 
-  /** Callback for each page's SEO analysis */
+  /** Callback for each page's SEO analysis (includes full SEO report + timings) */
   onSeoAnalysis?: (result: SeoPageResult) => void;
 
-  /** Focus on specific rule categories */
+  /** Callback when a page is blocked (includes SEO report if analysis was possible) */
+  onBlocked?: (result: SeoPageResult) => void | Promise<void>;
+
+  /** Callback when a fetch fails (includes page result with timings) */
+  onError?: (result: SeoPageResult) => void | Promise<void>;
+
+  /** Focus on specific rule categories (empty array = all categories) */
   focusCategories?: string[];
 
-  /** Focus mode name */
+  /** Focus mode name for display purposes */
   focusMode?: 'all' | 'links' | 'duplicates' | 'security' | 'ai' | 'resources';
 
-  // Spider Options (inherited)
+  // Spider Options (inherited from SpiderOptions)
   /** Maximum pages to crawl */
   maxPages?: number;
 
@@ -239,7 +245,179 @@ interface SeoSpiderOptions {
 
   /** Concurrent requests */
   concurrency?: number;
+
+  // Hooks (inherited from SpiderOptions)
+  /** Callback for each page crawled (success, blocked, or error) */
+  onPage?: (event: SpiderPageEvent) => void | Promise<void>;
+
+  /** Callback before a retry attempt */
+  onRetry?: (info: {
+    url: string;
+    attempt: number;
+    maxAttempts: number;
+    reason?: string;
+    delay: number;
+    transport: SpiderTransport;
+    previousStatus: number;
+  }) => void | Promise<void>;
+
+  /** Callback when a redirect is followed */
+  onRedirect?: (info: {
+    from: string;
+    to: string;
+    status: number;
+  }) => void | Promise<void>;
+
+  /** Callback for progress updates */
+  onProgress?: (progress: SpiderProgress) => void;
 }
+
+interface SpiderPageEvent {
+  /** Full page result with timings, security, metrics, links */
+  result: SpiderPageResult;
+  /** Raw HTML string (undefined when fetch failed or non-HTML content) */
+  html?: string;
+  /**
+   * Lazy HTML parser — only parses on first call, caches the result.
+   * Returns a ScrapeDocument with .selectFirst(), .links(), .meta(), .text(), .openGraph(), etc.
+   * Undefined when no HTML is available.
+   */
+  document?: () => Promise<ScrapeDocument>;
+}
+```
+
+## Hooks and Callbacks
+
+SeoSpider provides several hooks for real-time monitoring and custom processing during crawls. Some are SeoSpider-specific, others are inherited from the base Spider.
+
+### `onSeoAnalysis` (SeoSpider-specific)
+
+Fires after SEO analysis completes for each page. This is the primary hook for tracking SEO scores in real time:
+
+```typescript
+const spider = new SeoSpider({
+  seo: true,
+  maxPages: 50,
+  onSeoAnalysis: (page) => {
+    console.log(`${page.url}: score ${page.seoReport?.score}, grade ${page.seoReport?.grade}`);
+  },
+});
+```
+
+### `onPage` (inherited from Spider)
+
+Fires for every page crawled (success, blocked, or error). SeoSpider wraps the Spider's `onPage` internally to run SEO analysis, then forwards the event to your callback. The event includes a lazy `document` parser:
+
+```typescript
+const spider = new SeoSpider({
+  seo: true,
+  maxPages: 50,
+  onPage: async ({ result, html, document }) => {
+    console.log(`Crawled: ${result.url} (${result.status})`);
+    if (document) {
+      const doc = await document();
+      console.log(`  H1: ${doc.selectFirst('h1')?.text()}`);
+    }
+  },
+});
+```
+
+### `onBlocked` (SeoSpider override)
+
+Fires when bot protection or a WAF blocks a request. In SeoSpider, the result is a `SeoPageResult` (which may include a partial SEO report if analysis was possible):
+
+```typescript
+const spider = new SeoSpider({
+  seo: true,
+  onBlocked: (result) => {
+    console.warn(`Blocked: ${result.url} (status ${result.status})`);
+  },
+});
+```
+
+### `onError` (SeoSpider override)
+
+Fires when a fetch fails with an error. Like `onBlocked`, the result is a `SeoPageResult`:
+
+```typescript
+const spider = new SeoSpider({
+  seo: true,
+  onError: (result) => {
+    console.error(`Error: ${result.url} — ${result.error}`);
+  },
+});
+```
+
+### `onRetry` (inherited from Spider)
+
+Fires before each retry attempt, useful for logging retry behavior:
+
+```typescript
+const spider = new SeoSpider({
+  seo: true,
+  maxRetryAttempts: 5,
+  onRetry: (info) => {
+    console.log(`Retry ${info.attempt}/${info.maxAttempts}: ${info.url} (${info.reason})`);
+  },
+});
+```
+
+### `onRedirect` (inherited from Spider)
+
+Fires when an HTTP redirect is followed:
+
+```typescript
+const spider = new SeoSpider({
+  seo: true,
+  onRedirect: ({ from, to, status }) => {
+    console.log(`${status} redirect: ${from} -> ${to}`);
+  },
+});
+```
+
+### Combined Example
+
+Use multiple hooks together for comprehensive monitoring:
+
+```typescript
+const seoSpider = new SeoSpider({
+  seo: true,
+  maxPages: 50,
+
+  // SEO analysis callback (SeoSpider-specific)
+  onSeoAnalysis: (page) => {
+    console.log(`${page.url}: score ${page.seoReport?.score}`);
+  },
+
+  // Page callback with lazy document parser (inherited from Spider)
+  onPage: async ({ result, html, document }) => {
+    console.log(`Crawled: ${result.url} (${result.status})`);
+    if (document) {
+      const doc = await document();
+      console.log(`  H1: ${doc.selectFirst('h1')?.text()}`);
+    }
+  },
+
+  // Blocked callback with full page result
+  onBlocked: (result) => {
+    console.warn(`Blocked: ${result.url} (${result.status})`);
+  },
+
+  // Error callback
+  onError: (result) => {
+    console.error(`Error: ${result.url} — ${result.error}`);
+  },
+
+  // Retry and redirect hooks (inherited from Spider)
+  onRetry: (info) => {
+    console.log(`Retry ${info.attempt}/${info.maxAttempts}: ${info.url}`);
+  },
+  onRedirect: ({ from, to, status }) => {
+    console.log(`${status} ${from} -> ${to}`);
+  },
+});
+
+const result = await seoSpider.crawl('https://example.com');
 ```
 
 ## SERP Campaign Mode (Post-Crawl Search Checks)
@@ -932,7 +1110,7 @@ console.log('Done!');
 2. **Be Respectful** - Use `delay: 100` or higher to avoid overloading servers
 3. **Limit Depth** - `depth: 3-5` is usually sufficient
 4. **Focus When Possible** - Use `focusCategories` to reduce analysis time
-5. **Monitor Progress** - Use `onSeoAnalysis` callback for real-time feedback
+5. **Monitor Progress** - Use `onSeoAnalysis` for real-time SEO scores, `onBlocked`/`onError` for failures, and `onRetry`/`onRedirect` for network-level visibility
 6. **Use Base Spider First** - Start without `seo: true` to map site structure quickly
 7. **Use JSONL for Large Sites** - For 100+ pages, use `--jsonl` to stream results
 8. **Combine with Extraction** - Get custom data alongside SEO scores

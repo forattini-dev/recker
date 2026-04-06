@@ -434,10 +434,10 @@ const crawler = new Spider({
   extract: ['h1', '.price', 'a:href'],
   include: [/\/products\//],
   exclude: [/\/admin\//],
-  onPage: (page) => {
-    console.log(`Crawled: ${page.url}`);
-    if (page.extracted) {
-      console.log(`  Found ${page.extracted.price?.length || 0} prices`);
+  onPage: async ({ result, html, document }) => {
+    console.log(`Crawled: ${result.url}`);
+    if (result.extracted) {
+      console.log(`  Found ${result.extracted.price?.length || 0} prices`);
     }
   }
 });
@@ -497,8 +497,23 @@ interface SpiderOptions {
   /** Pluggable result storage (default: in-memory) */
   crawlStorage?: CrawlStorageAdapter;
 
-  /** Callback for each page crawled */
-  onPage?: (result: SpiderPageResult) => void;
+  /** Callback for each page crawled (success, blocked, or error) */
+  onPage?: (event: SpiderPageEvent) => void | Promise<void>;
+
+  /** Callback when bot protection / WAF blocks a request */
+  onBlocked?: (result: SpiderPageResult) => void | Promise<void>;
+
+  /** Callback when a fetch fails with an error */
+  onError?: (result: SpiderPageResult) => void | Promise<void>;
+
+  /** Callback before a retry attempt */
+  onRetry?: (info: { url, attempt, maxAttempts, reason?, delay, transport, previousStatus, timings? }) => void | Promise<void>;
+
+  /** Callback when a redirect is followed */
+  onRedirect?: (info: { from, to, status }) => void | Promise<void>;
+
+  /** Callback when a CAPTCHA challenge is detected */
+  onCaptchaDetected?: (result: { url, status, confidence, provider?, usedCurl }) => void | Promise<void>;
 
   /** Callback for progress updates */
   onProgress?: (progress: SpiderProgress) => void;
@@ -560,7 +575,7 @@ Non-HTML responses (PDF/JS/image/assets) are also recorded now. For those pages:
 * `title` is empty
 * `links` stays `[]`
 * `metrics.htmlSize` uses `Content-Length` when available (or fallback to parsed body size)
-* SEO callbacks (`onPageWithHtml`) are not executed because there is no HTML payload.
+* For non-HTML responses, `onPage` fires with `html` and `document` as `undefined`.
 
 ## Crawl Result Structure
 
@@ -646,25 +661,42 @@ console.log(result.sitemap);
 
 ### onPage Callback
 
-Called for each page crawled:
+Called for each page crawled. Receives a `SpiderPageEvent` with the full page result, raw HTML (when available), and a lazy cached document parser:
 
 ```typescript
 const crawler = new Spider({
   extract: ['h1', '.price'],
-  onPage: (page) => {
-    if (page.error) {
-      console.error(`Error: ${page.url} - ${page.error}`);
+  onPage: async ({ result, html, document }) => {
+    if (result.error) {
+      console.error(`Error: ${result.url} - ${result.error}`);
     } else {
-      console.log(`${page.status} ${page.url}`);
-      console.log(`  Title: ${page.title}`);
-      console.log(`  Links: ${page.links.length}`);
-      if (page.extracted) {
-        console.log(`  H1: ${page.extracted.h1?.[0]}`);
-        console.log(`  Prices: ${page.extracted.price?.length || 0}`);
+      console.log(`${result.status} ${result.url}`);
+      console.log(`  Title: ${result.title}`);
+      console.log(`  Links: ${result.links.length}`);
+      if (result.extracted) {
+        console.log(`  H1: ${result.extracted.h1?.[0]}`);
+        console.log(`  Prices: ${result.extracted.price?.length || 0}`);
       }
+    }
+    
+    // Lazy parse HTML only when needed
+    if (document) {
+      const doc = await document();
+      const images = doc.images();
+      console.log(`  Images: ${images.length}`);
     }
   }
 });
+```
+
+The `SpiderPageEvent` interface:
+
+```typescript
+interface SpiderPageEvent {
+  result: SpiderPageResult;           // full page result with timings, security, metrics
+  html?: string;                      // raw HTML (undefined when fetch failed)
+  document?: () => Promise<ScrapeDocument>;  // lazy cached parser
+}
 ```
 
 ### onProgress Callback
@@ -679,6 +711,79 @@ const crawler = new Spider({
     console.log(`  Current: ${progress.currentUrl}`);
     console.log(`  Depth: ${progress.depth}`);
     console.log(`  Queued: ${progress.queued}`);
+  }
+});
+```
+
+### Specialized Hooks
+
+#### onBlocked
+
+Called when bot protection or WAF blocks a request. Receives the full `SpiderPageResult` with security details:
+
+```typescript
+const crawler = new Spider({
+  onBlocked: (result) => {
+    console.warn(`Blocked: ${result.url}`);
+    console.warn(`  Reason: ${result.security?.reason}`);
+    console.warn(`  Confidence: ${result.security?.confidence}`);
+    console.warn(`  Transport: ${result.security?.transport}`);
+  }
+});
+```
+
+#### onError
+
+Called when a fetch fails (timeout, DNS, connection refused). Receives the full `SpiderPageResult`:
+
+```typescript
+const crawler = new Spider({
+  onError: (result) => {
+    console.error(`Failed: ${result.url} — ${result.error}`);
+    console.error(`  Status: ${result.status}`);
+    console.error(`  Duration: ${result.timings?.total}ms`);
+  }
+});
+```
+
+#### onRetry
+
+Called before each retry attempt with timing and reason info:
+
+```typescript
+const crawler = new Spider({
+  onRetry: (info) => {
+    console.log(`Retry ${info.attempt}/${info.maxAttempts} for ${info.url}`);
+    console.log(`  Reason: ${info.reason}`);
+    console.log(`  Waiting: ${info.delay}ms`);
+    console.log(`  Next transport: ${info.transport}`);
+    console.log(`  Previous status: ${info.previousStatus}`);
+  }
+});
+```
+
+#### onRedirect
+
+Called when a redirect is followed:
+
+```typescript
+const crawler = new Spider({
+  onRedirect: ({ from, to, status }) => {
+    console.log(`${status} ${from} → ${to}`);
+  }
+});
+```
+
+#### onCaptchaDetected
+
+Called when a CAPTCHA challenge is detected:
+
+```typescript
+const crawler = new Spider({
+  onCaptchaDetected: ({ url, status, confidence, provider, usedCurl }) => {
+    console.warn(`CAPTCHA detected on ${url}`);
+    console.warn(`  Provider: ${provider}`);
+    console.warn(`  Confidence: ${confidence}`);
   }
 });
 ```
@@ -781,16 +886,16 @@ const crawler = new Spider({
   maxPages: 500,
   useSitemap: true,
   respectRobotsTxt: true,
-  onPage: (page) => {
+  onPage: ({ result }) => {
     // Check for issues
-    if (page.status >= 400) {
-      console.warn(`Broken: ${page.url} (${page.status})`);
+    if (result.status >= 400) {
+      console.warn(`Broken: ${result.url} (${result.status})`);
     }
-    if (!page.meta?.description) {
-      console.warn(`Missing meta description: ${page.url}`);
+    if (!result.meta?.description) {
+      console.warn(`Missing meta description: ${result.url}`);
     }
-    if (!page.title) {
-      console.warn(`Missing title: ${page.url}`);
+    if (!result.title) {
+      console.warn(`Missing title: ${result.url}`);
     }
   }
 });
@@ -1036,7 +1141,7 @@ const spider = new Spider({
 
   concurrency: 50,
   maxPages: 100000,
-  onPage: (page) => console.log(`${page.status} ${page.url}`),
+  onPage: ({ result }) => console.log(`${result.status} ${result.url}`),
 });
 
 const result = await spider.crawl('https://example.com');
@@ -1119,6 +1224,7 @@ import type {
   SpiderOptions,
   SpiderResult,
   SpiderPageResult,
+  SpiderPageEvent,
   SpiderProgress,
   SitemapAnalysis,
   RobotsAnalysis,

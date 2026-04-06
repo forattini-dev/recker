@@ -605,18 +605,27 @@ ${targetType === 'ecommerce' ? `
 \`\`\`typescript
 import { Spider } from 'recker';
 
-const spider = new Spider('https://example.com', {
+const spider = new Spider({
   maxPages: 100,
   maxDepth: 3,
   respectRobotsTxt: true,
   delay: 1000,
+  onPage: async ({ result, html, document }) => {
+    console.log('Scraped:', result.url);
+    if (document) {
+      const doc = await document();
+      console.log('Title:', doc.selectFirst('title').text());
+    }
+  },
+  onBlocked: (result) => {
+    console.warn('Blocked:', result.url, result.security?.reason);
+  },
+  onError: (result) => {
+    console.error('Error:', result.url, result.error);
+  },
 });
 
-spider.on('page', ({ url, doc }) => {
-  console.log('Scraped:', url);
-});
-
-await spider.crawl();
+await spider.crawl('https://example.com');
 \`\`\`
 
 Please provide a complete workflow including:
