@@ -383,9 +383,13 @@ function getHostname(url: string): string {
   return new URL(url).hostname;
 }
 
-function sleep(ms: number): Promise<void> {
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (ms <= 0) return Promise.resolve();
-  return new Promise(resolve => setTimeout(resolve, ms));
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise(resolve => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+  });
 }
 
 function getRetryAfterDelay(response: Response): number {
@@ -652,6 +656,7 @@ export class Spider {
   private baseHost: string = '';
   private running: boolean = false;
   private aborted: boolean = false;
+  private abortController: AbortController = new AbortController();
   private pendingCount: number = 0;
 
   // Domain rate limiting state
@@ -693,7 +698,8 @@ export class Spider {
     // Wait if at capacity
     if (timestamps.length >= limit) {
       const waitMs = timestamps[0] + window - now;
-      if (waitMs > 0) await sleep(waitMs);
+      if (waitMs > 0) await sleep(waitMs, this.abortController.signal);
+      if (this.aborted) return;
       const afterWait = Date.now();
       while (timestamps.length > 0 && timestamps[0] <= afterWait - window) {
         timestamps.shift();
@@ -835,6 +841,7 @@ export class Spider {
     }
     this.running = true;
     this.aborted = false;
+    this.abortController = new AbortController();
     this.pendingCount = 0;
     this.sitemapUrls = [];
     this.sitemapUrlSet.clear();
@@ -1257,6 +1264,7 @@ export class Spider {
     const proxyUrl = this.proxyAdapter ? await this.proxyAdapter.getProxy() : null;
 
     const executeRequest = async (useCurl: boolean): Promise<{ response: Response; body: string; usedCurl: boolean; timings: SpiderPageResult['timings'] }> => {
+      if (this.aborted) throw new Error('Crawl aborted');
       if (useCurl && this.curlTransport) {
         // Use proxy-configured curl transport when adapter provides a proxy
         const curlForRequest = proxyUrl
@@ -1301,6 +1309,7 @@ export class Spider {
       const clientForRequest = this.getClientForProxy(proxyUrl);
       const response = await clientForRequest.get(url, {
         headers: this.buildRequestHeaders(url, false),
+        signal: this.abortController.signal,
         beforeRedirect: this.options.onRedirect
           ? (info) => { this.options.onRedirect!({ from: info.from, to: info.to, status: info.status }); }
           : undefined,
@@ -1473,7 +1482,8 @@ export class Spider {
           });
         }
 
-        await sleep(waitMs);
+        if (this.aborted) break;
+        await sleep(waitMs, this.abortController.signal);
         continue;
       } catch (error) {
         lastError = error;
@@ -1506,8 +1516,9 @@ export class Spider {
           }
         }
 
+        if (this.aborted) break;
         const waitMs = this.getRetryWait(hostname, attempt + 1);
-        await sleep(waitMs);
+        await sleep(waitMs, this.abortController.signal);
       }
     }
 
@@ -1801,6 +1812,8 @@ export class Spider {
         }
       }
     } catch (error: any) {
+      // Don't record aborted requests as errors
+      if (this.aborted) return;
       const errAttempts = typeof error?.attempts === 'number' ? error.attempts : 1;
       const errRetryCount = typeof error?.retryCount === 'number' ? error.retryCount : Math.max(0, errAttempts - 1);
       const errRetryAfterMs = typeof error?.retryAfterMs === 'number' ? error?.retryAfterMs : 0;
@@ -2016,7 +2029,7 @@ export class Spider {
     const now = Date.now();
     const delay = Math.max(state.penaltyUntil, state.challengeCooldownUntil) - now;
     if (delay > 0) {
-      await sleep(delay);
+      await sleep(delay, this.abortController.signal);
     }
   }
 
@@ -2105,6 +2118,7 @@ export class Spider {
    */
   abort(): void {
     this.aborted = true;
+    this.abortController.abort();
   }
 
   /**
