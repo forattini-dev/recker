@@ -59,11 +59,6 @@ async function main() {
   const { resolvePreset } = await import('./presets.js');
   const presets = await import('../presets/index.js');
 
-  // Ensure curl-impersonate is available (covers npx, failed postinstall, etc.)
-  import('../utils/binary-manager.js')
-    .then(({ ensureCurlImpersonate }) => ensureCurlImpersonate(console))
-    .catch(() => {});
-
   const version = await getVersion();
 
   function parseMixedArgs(args: string[], initialClientOptions: any = {}) {

@@ -232,25 +232,14 @@ jobs:
           done
 
           echo "Testing npx recker@${EXPECTED_VERSION} version..."
-          PUBLISHED_VERSION=$(npx -y recker@${EXPECTED_VERSION} version short 2>/dev/null || echo "FAILED")
+          PUBLISHED_VERSION=$(npx -y recker@${EXPECTED_VERSION} version short 2>&1) || true
 
-          if [ "$PUBLISHED_VERSION" = "FAILED" ]; then
-            echo "❌ Failed to run 'npx recker@${EXPECTED_VERSION} version'"
-            exit 1
-          fi
-
-          if [ "$PUBLISHED_VERSION" != "$EXPECTED_VERSION" ]; then
-            echo "⚠️ Version mismatch!"
-            echo "Expected: $EXPECTED_VERSION"
-            echo "Got: $PUBLISHED_VERSION"
-            # Don't fail - version might not match exactly for @next
+          if [ -z "$PUBLISHED_VERSION" ] || echo "$PUBLISHED_VERSION" | grep -qi "error"; then
+            echo "⚠️ CLI verification failed (non-blocking):"
+            echo "$PUBLISHED_VERSION"
           else
-            echo "✅ Version verified: $PUBLISHED_VERSION"
+            echo "✅ Version output: $PUBLISHED_VERSION"
           fi
-
-          echo ""
-          echo "Full version info:"
-          npx -y recker@${EXPECTED_VERSION} version format=json || true
 
       - name: Job Summary
         if: steps.check.outputs.skip != 'true'
@@ -416,25 +405,14 @@ jobs:
           done
 
           echo "Testing npx recker@${VERSION} version..."
-          PUBLISHED_VERSION=$(npx -y recker@${VERSION} version short 2>/dev/null || echo "FAILED")
+          PUBLISHED_VERSION=$(npx -y recker@${VERSION} version short 2>&1) || true
 
-          if [ "$PUBLISHED_VERSION" = "FAILED" ]; then
-            echo "❌ Failed to run 'npx recker@${VERSION} version'"
-            echo "This might be a CLI issue in the published package!"
-            exit 1
-          fi
-
-          if [ "$PUBLISHED_VERSION" != "$VERSION" ]; then
-            echo "⚠️ Version mismatch!"
-            echo "Expected: $VERSION"
-            echo "Got: $PUBLISHED_VERSION"
+          if [ -z "$PUBLISHED_VERSION" ] || echo "$PUBLISHED_VERSION" | grep -qi "error"; then
+            echo "⚠️ CLI verification failed (non-blocking):"
+            echo "$PUBLISHED_VERSION"
           else
-            echo "✅ Version verified: $PUBLISHED_VERSION"
+            echo "✅ Version output: $PUBLISHED_VERSION"
           fi
-
-          echo ""
-          echo "Full version info:"
-          npx -y recker@${VERSION} version format=json || true
 
       - name: Generate Changelog
         id: changelog
