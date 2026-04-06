@@ -1483,6 +1483,9 @@ export class Spider {
         await this.crawlStorage.saveResult(nonHtmlResult);
         this._resultCount++;
         this.options.onPage?.(nonHtmlResult);
+        if (this.options.onPageWithHtml && html) {
+          await this.options.onPageWithHtml(nonHtmlResult, html);
+        }
         return;
       }
 
