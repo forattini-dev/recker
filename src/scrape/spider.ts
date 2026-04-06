@@ -107,10 +107,8 @@ export interface SpiderOptions {
   transport?: SpiderTransport;
   /** Prefer curl-impersonate before undici when transport is 'auto' */
   preferCurlFirst?: boolean;
-  /** Callback for each page crawled */
-  onPage?: (result: SpiderPageResult) => void;
-  /** Callback for each page with HTML content (for SEO analysis during crawl) */
-  onPageWithHtml?: (result: SpiderPageResult, html: string) => void | Promise<void>;
+  /** Callback for each page crawled (success, blocked, or error) */
+  onPage?: (event: SpiderPageEvent) => void | Promise<void>;
   /** Callback when a CAPTCHA challenge is detected */
   onCaptchaDetected?: (result: {
     url: string;
@@ -240,6 +238,23 @@ export interface SpiderPageResult {
   };
   /** Custom extracted data from --extract selectors */
   extracted?: Record<string, unknown>;
+}
+
+/**
+ * Event object passed to the onPage callback.
+ * Provides the full page result, optional raw HTML, and a lazy document parser.
+ */
+export interface SpiderPageEvent {
+  /** Full page result with timings, security, metrics, links */
+  result: SpiderPageResult;
+  /** Raw HTML string (undefined when fetch failed or non-HTML content) */
+  html?: string;
+  /**
+   * Lazy HTML parser — only parses on first call, caches the result.
+   * Returns a ScrapeDocument with .selectFirst(), .links(), .meta(), .text(), .openGraph(), etc.
+   * Undefined when no HTML is available.
+   */
+  document?: () => Promise<ScrapeDocument>;
 }
 
 export interface SpiderProgress {
@@ -586,7 +601,7 @@ export class Spider {
   private options: Required<
     Omit<
       SpiderOptions,
-      'onPage' | 'onPageWithHtml' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy'
+      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy'
     >
   > & {
     exclude?: RegExp[];
@@ -594,7 +609,6 @@ export class Spider {
     sitemapUrl?: string;
     transport: SpiderTransport;
     onPage?: SpiderOptions['onPage'];
-    onPageWithHtml?: SpiderOptions['onPageWithHtml'];
     onCaptchaDetected?: SpiderOptions['onCaptchaDetected'];
     onBlocked?: SpiderOptions['onBlocked'];
     onError?: SpiderOptions['onError'];
@@ -674,7 +688,6 @@ export class Spider {
       exclude: options.exclude,
       include: options.include,
       onPage: options.onPage,
-      onPageWithHtml: options.onPageWithHtml,
       onCaptchaDetected: options.onCaptchaDetected,
       onBlocked: options.onBlocked,
       onError: options.onError,
@@ -1521,9 +1534,16 @@ export class Spider {
         };
         await this.crawlStorage.saveResult(nonHtmlResult);
         this._resultCount++;
-        this.options.onPage?.(nonHtmlResult);
-        if (this.options.onPageWithHtml && html) {
-          await this.options.onPageWithHtml(nonHtmlResult, html);
+        if (this.options.onPage) {
+          let cachedDoc: ScrapeDocument | null = null;
+          await this.options.onPage({
+            result: nonHtmlResult,
+            html: html || undefined,
+            document: html ? () => {
+              if (cachedDoc) return Promise.resolve(cachedDoc);
+              return ScrapeDocument.create(html, { baseUrl: item.url, parserOptions: this.options.parserOptions }).then(d => { cachedDoc = d; return d; });
+            } : undefined,
+          });
         }
         if (this.options.onBlocked && (detection.blocked || hasCaptcha)) {
           await this.options.onBlocked(nonHtmlResult);
@@ -1604,11 +1624,12 @@ export class Spider {
 
       await this.crawlStorage.saveResult(result);
       this._resultCount++;
-      this.options.onPage?.(result);
-
-      // Call onPageWithHtml for SEO analysis during crawl (await if async)
-      if (this.options.onPageWithHtml) {
-        await this.options.onPageWithHtml(result, html);
+      if (this.options.onPage) {
+        await this.options.onPage({
+          result,
+          html,
+          document: () => Promise.resolve(doc),
+        });
       }
 
       // Add new links to queue (only internal, unvisited) — batch optimized
@@ -1711,7 +1732,9 @@ export class Spider {
       await this.crawlStorage.saveResult(errorResult);
       this._resultCount++;
       await this.crawlStorage.saveError({ url: item.url, error: message });
-      this.options.onPage?.(errorResult);
+      if (this.options.onPage) {
+        await this.options.onPage({ result: errorResult });
+      }
       if (this.options.onError) {
         await this.options.onError(errorResult);
       }

@@ -25,6 +25,7 @@ export { Spider, spider } from './spider.js';
 export type {
   SpiderOptions,
   SpiderPageResult,
+  SpiderPageEvent,
   SpiderProgress,
   SpiderResult,
 } from './spider.js';

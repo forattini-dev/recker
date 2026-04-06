@@ -120,14 +120,20 @@ export class SeoSpider {
   constructor(options: SeoSpiderOptions = {}) {
     this.options = options;
 
-    // Create spider with hooks wired to SeoSpider callbacks
+    // Create spider with unified onPage hook for SEO analysis + user callbacks
+    const userOnPage = options.onPage;
     this.spider = new Spider({
       ...options,
-      onPageWithHtml: this.options.seo
-        ? async (pageResult, html) => {
-            await this.analyzePageDuringCrawl(pageResult, html);
-          }
-        : undefined,
+      onPage: async (event) => {
+        // SEO analysis during crawl (uses lazy document parser)
+        if (this.options.seo && event.html) {
+          await this.analyzePageDuringCrawl(event.result, event.html);
+        }
+        // Forward to user's onPage callback
+        if (userOnPage) {
+          await userOnPage(event);
+        }
+      },
       onBlocked: this.options.onBlocked
         ? async (pageResult) => {
             await this.options.onBlocked!({ ...pageResult } as SeoPageResult);
@@ -192,7 +198,7 @@ export class SeoSpider {
     this.seoPages = [];
     this.homeHtml = '';
 
-    // Crawl with SEO analysis happening during crawl (via onPageWithHtml)
+    // Crawl with SEO analysis happening during crawl (via onPage)
     const result = await this.spider.crawl(startUrl);
 
     // If SEO is disabled, return basic result

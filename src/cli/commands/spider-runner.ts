@@ -309,7 +309,8 @@ export class SpiderRunner extends CommandEmitter {
         extract,
         include: include?.map(p => new RegExp(p)),
         exclude: exclude?.map(p => new RegExp(p)),
-        onPage: (page) => {
+        onPage: (event) => {
+          const page = event.result;
           collectPageMetrics(page);
 
           // Track page with extraction data

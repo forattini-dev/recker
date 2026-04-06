@@ -116,7 +116,8 @@ export class SpiderJob {
         },
 
         // Page callback - could be extended for per-page events
-        onPage: (result) => {
+        onPage: (event) => {
+          const result = event.result;
           if (result.error) {
             // Track errors in progress
             const currentProgress = this.job.progress;
