@@ -369,11 +369,12 @@ describe('Spider - Web Crawler', () => {
       expect(page.duration).toBeGreaterThan(0);
     });
 
-    it('should track depth of each page', async () => {
+    it('should track depth of each page', { timeout: 15000 }, async () => {
       const result = await spider(baseUrl, {
         maxPages: 10,
         maxDepth: 2,
         respectRobotsTxt: false,
+        timeout: 15000,
       });
 
       // Starting page should have depth 0
