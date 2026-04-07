@@ -61,6 +61,22 @@ export interface SpiderOptions {
   timeout?: number;
   /** Delay between requests in ms (default: 100) */
   delay?: number;
+  /**
+   * Allowed domains list. When set, only URLs matching these domains are crawled.
+   * Supports exact domains and wildcard subdomains.
+   *
+   * @example
+   * ```typescript
+   * allowedDomains: [
+   *   'example.com',        // exact match (+ www.example.com)
+   *   '*.example.com',      // any subdomain of example.com
+   *   'blog.other.com',     // specific fully-qualified domain
+   * ]
+   * ```
+   *
+   * Note: when set, `sameDomain` is ignored.
+   */
+  allowedDomains?: string[];
   /** URL patterns to exclude (regex) */
   exclude?: RegExp[];
   /** URL patterns to include (regex) - if set, only matching URLs are crawled */
@@ -525,8 +541,9 @@ function getRootDomain(hostname: string): string {
 function shouldCrawl(
   url: string,
   baseHost: string,
-  options: SpiderOptions,
+  options: Pick<SpiderOptions, 'sameDomain' | 'exclude' | 'include'>,
   baseRootDomain?: string,
+  allowedDomains?: { exact: Set<string>; wildcards: string[] },
 ): boolean {
   try {
     const parsed = new URL(url);
@@ -538,14 +555,26 @@ function shouldCrawl(
 
     // Domain scope check (strip www. to match normalizeUrl behavior)
     const hostname = parsed.hostname.replace(/^www\./, '');
-    const sameDomain = options.sameDomain;
-    if (sameDomain === 'subdomain') {
-      const pageRoot = getRootDomain(hostname);
-      const rootDomain = baseRootDomain ?? getRootDomain(baseHost);
-      if (pageRoot !== rootDomain) return false;
-    } else if (sameDomain !== false) {
-      // true, 'exact', or undefined — existing exact-match behavior
-      if (hostname !== baseHost) return false;
+
+    // allowedDomains takes precedence over sameDomain
+    if (allowedDomains) {
+      if (allowedDomains.exact.has(hostname)) {
+        // Exact match — allowed
+      } else if (allowedDomains.wildcards.some(w => hostname === w || hostname.endsWith('.' + w))) {
+        // Wildcard match — allowed
+      } else {
+        return false;
+      }
+    } else {
+      const sameDomain = options.sameDomain;
+      if (sameDomain === 'subdomain') {
+        const pageRoot = getRootDomain(hostname);
+        const rootDomain = baseRootDomain ?? getRootDomain(baseHost);
+        if (pageRoot !== rootDomain) return false;
+      } else if (sameDomain !== false) {
+        // true, 'exact', or undefined — existing exact-match behavior
+        if (hostname !== baseHost) return false;
+      }
     }
 
     // Skip common non-page extensions
@@ -669,7 +698,7 @@ export class Spider {
   private options: Required<
     Omit<
       SpiderOptions,
-      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy' | 'domainRateLimit' | 'resume' | 'strategy' | 'autoThrottle'
+      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'allowedDomains' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy' | 'domainRateLimit' | 'resume' | 'strategy' | 'autoThrottle'
     >
   > & {
     exclude?: RegExp[];
@@ -683,6 +712,7 @@ export class Spider {
     onRetry?: SpiderOptions['onRetry'];
     onRedirect?: SpiderOptions['onRedirect'];
     onProgress?: SpiderOptions['onProgress'];
+    allowedDomains?: { exact: Set<string>; wildcards: string[] };
     extract?: ExtractionSchema;
     parserOptions?: Partial<ParserOptions>;
     domainRateLimit?: SpiderOptions['domainRateLimit'];
@@ -799,6 +829,19 @@ export class Spider {
       useSitemap: options.useSitemap ?? false,
       transport: options.transport ?? 'auto',
       sitemapUrl: options.sitemapUrl,
+      allowedDomains: options.allowedDomains ? (() => {
+        const exact = new Set<string>();
+        const wildcards: string[] = [];
+        for (const d of options.allowedDomains) {
+          const lower = d.toLowerCase().replace(/^www\./, '');
+          if (lower.startsWith('*.')) {
+            wildcards.push(lower.slice(2)); // store 'example.com' for *.example.com
+          } else {
+            exact.add(lower);
+          }
+        }
+        return { exact, wildcards };
+      })() : undefined,
       exclude: options.exclude,
       include: options.include,
       onPage: options.onPage,
@@ -1862,7 +1905,7 @@ export class Spider {
         for (const link of links) {
           if (!link.href) continue;
           const normalized = normalizeUrl(link.href);
-          if (!shouldCrawl(normalized, this.baseHost, this.options, this.baseRootDomain)) continue;
+          if (!shouldCrawl(normalized, this.baseHost, this.options, this.baseRootDomain, this.options.allowedDomains)) continue;
           candidateUrls.push(normalized);
           candidates.push({ url: normalized, depth: item.depth + 1 });
         }
