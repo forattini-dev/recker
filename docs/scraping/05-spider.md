@@ -455,8 +455,20 @@ interface SpiderOptions {
   /** Maximum pages to crawl (default: 100) */
   maxPages?: number;
 
-  /** Only crawl same domain (default: true) */
-  sameDomain?: boolean;
+  /**
+   * Domain scoping mode (default: true).
+   * - true or 'exact': same hostname only (www. stripped)
+   * - 'subdomain': same root domain including all subdomains
+   * - false: no domain restriction
+   */
+  sameDomain?: boolean | 'exact' | 'subdomain';
+
+  /**
+   * Allowed domains list. When set, only URLs matching these domains are crawled.
+   * Supports exact domains and wildcard subdomains.
+   * When set, takes precedence over sameDomain.
+   */
+  allowedDomains?: string[];
 
   /** Concurrent requests (default: 5) */
   concurrency?: number;
@@ -496,6 +508,35 @@ interface SpiderOptions {
 
   /** Pluggable result storage (default: in-memory) */
   crawlStorage?: CrawlStorageAdapter;
+
+  /** Proactive per-domain rate limit (applied before each request) */
+  domainRateLimit?: {
+    /** Maximum requests per second per domain (default: unlimited) */
+    maxPerSecond?: number;
+  };
+
+  /**
+   * Automatically adjust crawl delay per domain based on response times.
+   * Increases delay for slow servers, decreases for fast ones.
+   * Default: false
+   */
+  autoThrottle?: boolean | {
+    /** Target response time in ms (default: 500) */
+    targetMs?: number;
+    /** Minimum delay in ms (default: 50) */
+    minDelay?: number;
+    /** Maximum delay in ms (default: 30000) */
+    maxDelay?: number;
+  };
+
+  /** Enable content deduplication via MD5 hash of page text (default: false) */
+  deduplicateContent?: boolean;
+
+  /** Resume a previously paused crawl — don't clear queue/storage on start (default: false) */
+  resume?: boolean;
+
+  /** Crawl strategy: 'bfs' (breadth-first, default) or 'dfs' (depth-first) */
+  strategy?: 'bfs' | 'dfs';
 
   /** Callback for each page crawled (success, blocked, or error) */
   onPage?: (event: SpiderPageEvent) => void | Promise<void>;
@@ -547,6 +588,11 @@ interface SpiderPageResult {
 
   /** Extracted data (when extract option is used) */
   extracted?: Record<string, unknown>;
+
+  /** True when deduplicateContent is enabled and this page's content matches another */
+  isDuplicate?: boolean;
+  /** URL of the first page with identical content (when isDuplicate is true) */
+  duplicateOf?: string;
 
   meta?: {
     description?: string;
@@ -913,6 +959,143 @@ console.log(`Missing descriptions: ${noDescription.length}`);
 console.log(`Missing titles: ${noTitle.length}`);
 ```
 
+## Domain Control
+
+The Spider offers flexible domain scoping:
+
+### Same Domain (default)
+
+```typescript
+// Only crawl exact same hostname (www. is stripped)
+const spider = new Spider({ sameDomain: true }); // default
+```
+
+### Subdomain Crawling
+
+```typescript
+// Crawl all subdomains of the same root domain
+// blog.example.com → shop.example.com ✓
+const spider = new Spider({ sameDomain: 'subdomain' });
+```
+
+### Allowed Domains List
+
+```typescript
+// Fine-grained control with exact matches and wildcards
+const spider = new Spider({
+  allowedDomains: [
+    'example.com',        // exact match (www. stripped automatically)
+    '*.example.com',      // any subdomain of example.com
+    'blog.other.com',     // specific fully-qualified domain
+  ],
+});
+```
+
+When `allowedDomains` is set, it takes precedence over `sameDomain`.
+
+### No Domain Restriction
+
+```typescript
+// Crawl any domain (use with include/exclude for safety)
+const spider = new Spider({
+  sameDomain: false,
+  include: [/example\.com|partner\.com/],
+});
+```
+
+### Combining with URL Patterns
+
+```typescript
+// Domain restriction + URL patterns
+const spider = new Spider({
+  allowedDomains: ['*.example.com'],
+  exclude: [/\/admin\//, /\/api\//],
+  include: [/\/products\//],
+});
+```
+
+## Crawl Strategy
+
+```typescript
+// Breadth-first (default) — explore wide before going deep
+const spider = new Spider({ strategy: 'bfs' });
+
+// Depth-first — follow links deeply before expanding
+// Useful for deep site exploration or finding specific content
+const spider = new Spider({ strategy: 'dfs', maxDepth: 20 });
+```
+
+## Auto-Throttle
+
+Automatically adjusts crawl speed based on server response times:
+
+```typescript
+// Simple: enable with defaults (target 500ms)
+const spider = new Spider({ autoThrottle: true });
+
+// Custom: tune for your target
+const spider = new Spider({
+  autoThrottle: {
+    targetMs: 300,     // aim for 300ms responses
+    minDelay: 50,      // never go below 50ms
+    maxDelay: 10000,   // never exceed 10s
+  },
+});
+```
+
+The throttle uses an exponential moving average per domain. Slow servers automatically get longer delays, fast servers get shorter delays.
+
+## Content Deduplication
+
+Detect duplicate content across different URLs using MD5 hash of the extracted text:
+
+```typescript
+const spider = new Spider({
+  deduplicateContent: true,
+  onPage: ({ result }) => {
+    if (result.isDuplicate) {
+      console.log(`Duplicate: ${result.url} → same content as ${result.duplicateOf}`);
+    }
+  },
+});
+```
+
+Duplicate pages have their links skipped to avoid redundant crawling.
+
+## Resume / Checkpoint
+
+Resume crawls using SQLite persistent adapters:
+
+```typescript
+import { Spider, SqliteCrawlQueue, SqliteCrawlStorage } from 'recker';
+
+// First crawl
+const queue = await SqliteCrawlQueue.create({ dbPath: './crawl.db' });
+const storage = await SqliteCrawlStorage.create({ dbPath: './crawl.db', db: queue.getDb() });
+
+const spider = new Spider({
+  maxPages: 1000,
+  crawlQueue: queue,
+  crawlStorage: storage,
+});
+
+const result = await spider.crawl('https://example.com');
+// If interrupted, the SQLite DB retains all state
+
+// Resume later
+const queue2 = await SqliteCrawlQueue.create({ dbPath: './crawl.db' });
+const storage2 = await SqliteCrawlStorage.create({ dbPath: './crawl.db', db: queue2.getDb() });
+
+const spider2 = new Spider({
+  maxPages: 1000,
+  crawlQueue: queue2,
+  crawlStorage: storage2,
+  resume: true, // Don't clear existing state
+});
+
+const result2 = await spider2.crawl('https://example.com');
+```
+
 ## Controlling the Crawler
 
 ### Abort Crawling
@@ -1241,6 +1424,8 @@ import {
   InMemoryCrawlQueue,
   InMemoryCrawlStorage,
   ListProxyAdapter,
+  SqliteCrawlQueue,
+  SqliteCrawlStorage,
 } from 'recker/scrape';
 ```
 

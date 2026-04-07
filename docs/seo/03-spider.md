@@ -246,6 +246,47 @@ interface SeoSpiderOptions extends SpiderOptions {
   /** Concurrent requests */
   concurrency?: number;
 
+  /**
+   * Allowed domains list with wildcard support.
+   * When set, only URLs matching these domains are crawled (overrides sameDomain).
+   * Examples: ['example.com', '*.example.com', 'blog.other.com']
+   * See Spider docs for full details.
+   */
+  allowedDomains?: string[];
+
+  /**
+   * Crawl strategy: 'bfs' (breadth-first, default) or 'dfs' (depth-first).
+   * BFS explores level-by-level; DFS follows links deeply before backtracking.
+   */
+  strategy?: 'bfs' | 'dfs';
+
+  /**
+   * Automatically adjust crawl delay based on server response times.
+   * Pass `true` for defaults, or an object with targetMs, minDelay, maxDelay.
+   * See Spider docs for full details.
+   */
+  autoThrottle?: boolean | { targetMs?: number; minDelay?: number; maxDelay?: number };
+
+  /**
+   * Deduplicate pages with identical content via MD5 hash (default: false).
+   * Useful for sites that serve the same content under different URLs.
+   */
+  deduplicateContent?: boolean;
+
+  /**
+   * Proactive per-domain rate limit applied before each request.
+   * Example: { maxPerSecond: 2 }
+   * See Spider docs for full details.
+   */
+  domainRateLimit?: { maxPerSecond?: number };
+
+  /**
+   * Resume a previously interrupted crawl without clearing queue/storage (default: false).
+   * Requires a persistent crawlQueue/crawlStorage adapter (e.g., SQLite).
+   * See Spider docs for full details.
+   */
+  resume?: boolean;
+
   // Hooks (inherited from SpiderOptions)
   /** Callback for each page crawled (success, blocked, or error) */
   onPage?: (event: SpiderPageEvent) => void | Promise<void>;
@@ -837,6 +878,28 @@ spider.abort();
 if (spider.isRunning()) {
   console.log('Crawling in progress...');
 }
+```
+
+### Advanced Spider Features
+
+SeoSpider inherits all Spider capabilities, including domain control, crawl strategy, auto-throttle, content deduplication, and resumable crawls. See the [Spider documentation](../scraping/05-spider.md) for full details on each feature.
+
+```typescript
+import { SeoSpider } from 'recker/seo';
+
+const seoSpider = new SeoSpider({
+  seo: true,
+  maxPages: 200,
+  allowedDomains: ['*.example.com'],
+  autoThrottle: true,
+  deduplicateContent: true,
+  strategy: 'bfs',
+  onSeoAnalysis: (page) => {
+    console.log(`${page.url}: ${page.seoReport?.score}/100`);
+  },
+});
+
+const result = await seoSpider.crawl('https://example.com');
 ```
 
 ## Site-Wide Issues
