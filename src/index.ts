@@ -62,6 +62,7 @@ export * from './plugins/http3.js';
 export * from './cache/redis-storage.js';
 export * from './plugins/queue.js';
 export * from './queue/consumer.js';
+export * from './clients/reddb.js';
 
 // Video extractors
 export * from './extractors/index.js';
@@ -77,6 +78,7 @@ export * from './utils/http2-metrics.js';
 export * from './utils/concurrency.js';
 export * as presets from './presets/index.js';
 export * as testing from './testing/index.js';
+export * as clients from './clients/index.js';
 export * as protocols from './protocols/index.js';
 
 // Raffel (envelope protocol client)
