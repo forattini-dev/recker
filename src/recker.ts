@@ -55,6 +55,7 @@ import { createVideoBuilder, VideoBuilder } from './video/builder.js';
 import { extract, extractors, isSupported, getExtractorName, listExtractors } from './extractors/index.js';
 import type { ExtractorResult } from './extractors/base.js';
 import { searchGoogleAdvanced, type GoogleSearchAdvancedOptions, type GoogleSearchResponse } from './search/index.js';
+import { createRedDbClient, type RedDbClient, type RedDbClientOptions } from './clients/reddb.js';
 
 // ============================================================================
 // Singleton instances (lazy-loaded)
@@ -463,6 +464,11 @@ export const recker = {
    * Create a configured AI client
    */
   aiClient: (options?: AIClientConfig) => createAI(options),
+
+  /**
+   * Create a configured RedDB client
+   */
+  reddb: (options?: RedDbClientOptions): RedDbClient => createRedDbClient(options),
 
   /**
    * Reset default instances (useful for testing)
