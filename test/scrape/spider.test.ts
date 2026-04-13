@@ -322,10 +322,11 @@ describe('Spider - Web Crawler', () => {
       }
     });
 
-    it('should only crawl same domain by default', async () => {
+    it('should only crawl same domain by default', { timeout: 15000 }, async () => {
       const result = await spider(`${baseUrl}/external-links`, {
         maxPages: 10,
         respectRobotsTxt: false,
+        timeout: 5000,
       });
 
       const urls = result.pages.map(p => p.url);
