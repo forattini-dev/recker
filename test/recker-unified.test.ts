@@ -4,6 +4,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
+  clients,
+  protocols,
   recker,
   get,
   post,
@@ -63,6 +65,19 @@ describe('Unified Recker API', () => {
       expect(recker.dnsClient).toBeDefined();
       expect(recker.whoisClient).toBeDefined();
       expect(recker.aiClient).toBeDefined();
+      expect(recker.reddb).toBeDefined();
+    });
+
+    it('should expose the clients namespace', () => {
+      expect(clients).toBeDefined();
+      expect(clients.createRedDbClient).toBeDefined();
+      expect(clients.reddb).toBeDefined();
+    });
+
+    it('should preserve RedDB compatibility through protocols namespace', () => {
+      expect(protocols).toBeDefined();
+      expect(protocols.createRedDbClient).toBeDefined();
+      expect(protocols.reddb).toBeDefined();
     });
 
     it('should have reset method', () => {
@@ -239,6 +254,13 @@ describe('Unified Recker API', () => {
       expect(whoisClient).toBeDefined();
       expect(whoisClient.lookup).toBeDefined();
       expect(whoisClient.isAvailable).toBeDefined();
+    });
+
+    it('reddb() should create a new RedDB client', () => {
+      const reddbClient = recker.reddb({ baseUrl: 'https://reddb.example.com' });
+      expect(reddbClient).toBeDefined();
+      expect(reddbClient.query).toBeDefined();
+      expect(reddbClient.getCapabilities).toBeDefined();
     });
   });
 
