@@ -66,6 +66,10 @@ describe('Unified Recker API', () => {
       expect(recker.whoisClient).toBeDefined();
       expect(recker.aiClient).toBeDefined();
       expect(recker.reddb).toBeDefined();
+      const reddbClient = recker.reddb({ baseUrl: 'http://127.0.0.1:8080' });
+      expect(reddbClient.sql.query).toBeDefined();
+      expect(reddbClient.rows.bulkCreate).toBeDefined();
+      expect(reddbClient.vectors.bulkInsertBinary).toBeDefined();
     });
 
     it('should expose the clients namespace', () => {
@@ -259,7 +263,7 @@ describe('Unified Recker API', () => {
     it('reddb() should create a new RedDB client', () => {
       const reddbClient = recker.reddb({ baseUrl: 'https://reddb.example.com' });
       expect(reddbClient).toBeDefined();
-      expect(reddbClient.query).toBeDefined();
+      expect(reddbClient.sql.query).toBeDefined();
       expect(reddbClient.getCapabilities).toBeDefined();
     });
   });

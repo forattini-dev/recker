@@ -271,10 +271,12 @@
     "provenance": true
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.3",
     "@maxmind/geoip2-node": "^6.3.4",
     "cli-args-parser": "^1.0.6",
     "css-select": "^6.0.0",
     "he": "^1.2.0",
+    "protobufjs": "^8.0.1",
     "tuiuiu.js": "^1.0.57",
     "undici": "^7.24.3",
     "zod": "^4.3.6"
@@ -334,6 +336,7 @@
     "node-fetch": "^3.3.2",
     "picocolors": "^1.1.1",
     "popsicle": "^12.1.2",
+    "protobufjs-cli": "^2.0.1",
     "raffel": "^1.0.18",
     "serve": "^14.2.6",
     "socks": "^2.8.7",
