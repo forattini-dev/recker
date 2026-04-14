@@ -30,6 +30,20 @@ export type {
   SpiderResult,
 } from './spider.js';
 
+// Spider typed errors (for instanceof recovery in user code)
+export {
+  SpiderBlockError,
+  SpiderChallengeError,
+  SpiderRobotsDisallowedError,
+  SpiderDepthLimitError,
+  SpiderDomainOutOfScopeError,
+  SpiderUnsupportedContentError,
+} from './errors.js';
+
+// URL rewrite table (Google Docs / Drive / Sheets → export endpoints)
+export { rewriteUrl } from './rewrite-url.js';
+export type { UrlRewriteResult } from './rewrite-url.js';
+
 // Crawl Queue (pluggable URL frontier)
 export { InMemoryCrawlQueue } from './crawl-queue.js';
 export { SqliteCrawlQueue } from './sqlite-crawl-queue.js';
@@ -39,6 +53,10 @@ export type { CrawlQueueAdapter, CrawlQueueItem } from './crawl-queue.js';
 export { InMemoryCrawlStorage } from './crawl-storage.js';
 export { SqliteCrawlStorage } from './sqlite-crawl-storage.js';
 export type { CrawlStorageAdapter } from './crawl-storage.js';
+
+// Domain Stats (pluggable transport-learning store, separate from result storage)
+export { InMemoryDomainStats } from './domain-stats.js';
+export type { DomainStatsAdapter, DomainTransportStats } from './domain-stats.js';
 
 // Proxy Adapter (pluggable proxy selection)
 export { ListProxyAdapter } from './proxy-adapter.js';

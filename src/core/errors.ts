@@ -11,9 +11,10 @@ export type CanonicalErrorCategory =
   | 'resource'
   | 'policy'
   | 'queue'
+  | 'scrape'
   | 'unknown';
 
-export type ErrorSource = 'client' | 'transport' | 'server' | 'upstream';
+export type ErrorSource = 'client' | 'transport' | 'server' | 'upstream' | 'spider';
 
 export type CanonicalErrorSeverity = 'low' | 'medium' | 'high';
 

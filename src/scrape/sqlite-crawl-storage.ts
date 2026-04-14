@@ -5,7 +5,8 @@ import type { CrawlStorageAdapter } from './crawl-storage.js';
 import type { SpiderPageResult } from './spider.js';
 
 export class SqliteCrawlStorage implements CrawlStorageAdapter {
-  private db: any;
+  /** Underlying better-sqlite3 handle (exposed for sharing with sibling adapters) */
+  public db: any;
   private ownsDb: boolean;
   private stmts!: {
     saveResult: any;

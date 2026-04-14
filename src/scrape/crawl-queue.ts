@@ -12,6 +12,10 @@ export interface CrawlQueueItem {
   priority?: number;
   /** URL that discovered this link (optional, for graph analysis) */
   discoveredFrom?: string;
+  /** Original URL before rewrite (set when Spider rewriteUrl remapped this link) */
+  sourceUrl?: string;
+  /** Reason for the URL rewrite (e.g. 'google-docs-export') */
+  rewriteReason?: string;
 }
 
 export interface CrawlQueueAdapter {

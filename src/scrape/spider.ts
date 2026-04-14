@@ -37,7 +37,15 @@ import { HttpRequest } from '../core/request.js';
 import { getRandomUserAgent } from '../utils/user-agent.js';
 import { InMemoryCrawlQueue, type CrawlQueueAdapter, type CrawlQueueItem } from './crawl-queue.js';
 import { InMemoryCrawlStorage, type CrawlStorageAdapter } from './crawl-storage.js';
+import type { DomainStatsAdapter, DomainTransportStats } from './domain-stats.js';
 import { ListProxyAdapter, type ProxyAdapter } from './proxy-adapter.js';
+import { rewriteUrl } from './rewrite-url.js';
+import {
+  SpiderBlockError,
+  SpiderChallengeError,
+  SpiderRobotsDisallowedError,
+} from './errors.js';
+import type { ReckerError } from '../core/errors.js';
 
 /** Transport type for HTTP requests */
 export type SpiderTransport = 'auto' | 'undici' | 'curl';
@@ -101,10 +109,27 @@ export interface SpiderOptions {
   maxDomainBlockStrikes?: number;
   /** Respect robots.txt (default: true) */
   respectRobotsTxt?: boolean;
+  /**
+   * Enforce the Crawl-Delay directive from robots.txt as a minimum
+   * inter-request delay per host. Default: true.
+   */
+  respectRobotsCrawlDelay?: boolean;
+  /**
+   * Safety cap for Crawl-Delay values (ms). Hostile robots.txt can declare
+   * arbitrarily large delays; this clamps the enforced wait so one bad site
+   * cannot stall the worker. Default: 30000.
+   */
+  maxRobotsCrawlDelayMs?: number;
   /** Use sitemap.xml to discover URLs (default: false) */
   useSitemap?: boolean;
   /** Custom sitemap URL (if not at /sitemap.xml) */
   sitemapUrl?: string;
+  /**
+   * Rewrite known non-scrapable URLs to scrapable equivalents
+   * (e.g. Google Docs editor → /export?format=html). Pure function, no
+   * network calls. Default: true.
+   */
+  rewriteUrls?: boolean;
   /**
    * Proxy configuration. Supports HTTP, HTTPS, SOCKS5, SOCKS5h.
    *
@@ -129,6 +154,20 @@ export interface SpiderOptions {
   transport?: SpiderTransport;
   /** Prefer curl-impersonate before undici when transport is 'auto' */
   preferCurlFirst?: boolean;
+  /**
+   * Pluggable per-host transport-learning store.
+   *
+   * When provided, the Spider records every transport success/failure here
+   * and consults the historical stats in `shouldUseCurlForHost` to pick
+   * the better-scoring transport. Stats persist independently of crawl
+   * results — pair `SqliteCrawlStorage` + `SqliteDomainStats` (sharing a
+   * `db` handle) to keep both in one file.
+   *
+   * Use `InMemoryDomainStats` for per-session learning, `SqliteDomainStats`
+   * for cross-crawl persistence, or implement `DomainStatsAdapter` yourself
+   * (Redis, Postgres, etc.).
+   */
+  domainStats?: DomainStatsAdapter;
   /** Callback for each page crawled (success, blocked, or error) */
   onPage?: (event: SpiderPageEvent) => void | Promise<void>;
   /** Callback when a CAPTCHA challenge is detected */
@@ -296,6 +335,16 @@ export interface SpiderPageResult {
   isDuplicate?: boolean;
   /** URL of the first page seen with this content (if duplicate) */
   duplicateOf?: string;
+  /** Original URL before rewrite (e.g. Google Docs editor → export endpoint) */
+  sourceUrl?: string;
+  /** Reason for the URL rewrite (e.g. 'google-docs-export') */
+  rewriteReason?: string;
+  /**
+   * Typed error carrying recovery hints. Populated when the page failed due
+   * to a block, challenge, or other scrape-specific condition. Use
+   * `instanceof SpiderBlockError` etc. to narrow.
+   */
+  typedError?: ReckerError;
 }
 
 /**
@@ -378,6 +427,8 @@ export interface SpiderResult {
 interface QueueItem {
   url: string;
   depth: number;
+  sourceUrl?: string;
+  rewriteReason?: string;
 }
 
 const FALLBACK_ACCEPT_LANGUAGES = [
@@ -390,6 +441,8 @@ const FALLBACK_ACCEPT_LANGUAGES = [
 
 const FALLBACK_ACCEPT = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
 const RETRIABLE_STATUS_CODES = new Set([403, 429, 500, 502, 503, 504]);
+const MAX_SITEMAPS_PER_CRAWL = 25;
+const DEFAULT_MAX_ROBOTS_CRAWL_DELAY_MS = 30_000;
 const SEC_CH_UA_HINTS = [
   '"Not(A:Brand";v="99", "Chromium";v="120", "Google Chrome";v="120")',
   '"Not(A:Brand";v="99", "Chromium";v="120", "Microsoft Edge";v="120")',
@@ -417,6 +470,12 @@ interface DomainState {
   lastCaptchaProvider?: CaptchaProvider;
   lastCaptchaConfidence: number;
   autoThrottleDelay: number;
+  /** Crawl-Delay from robots.txt (ms, clamped). 0 when not declared or disabled. */
+  robotsCrawlDelayMs: number;
+  /** Timestamp of the last request start for this host (for crawl-delay gating) */
+  lastRequestAt: number;
+  /** Persistent per-host stats loaded from crawl storage (when available) */
+  persistentStats?: DomainTransportStats;
 }
 
 function getHostname(url: string): string {
@@ -430,6 +489,32 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     const timer = setTimeout(resolve, ms);
     signal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
   });
+}
+
+/**
+ * Extract the best-matching Crawl-Delay (seconds) from a parsed robots.txt
+ * for our user-agent. Matches by substring on the UA product token; falls
+ * back to the wildcard (`*`) block. Returns 0 when no delay declared.
+ */
+function pickRobotsCrawlDelay(robots: RobotsParseResult, userAgent: string): number {
+  // Extract the product token from the UA (first word / slash-delimited chunk)
+  // e.g. "Recker Spider/1.0" → "recker"
+  const token = (userAgent.match(/[A-Za-z][\w.-]+/)?.[0] ?? userAgent).toLowerCase();
+
+  let wildcardDelay: number | undefined;
+  for (const block of robots.userAgentBlocks) {
+    for (const ua of block.userAgents) {
+      const uaLower = ua.toLowerCase();
+      if (uaLower === '*') {
+        if (block.crawlDelay !== undefined) wildcardDelay = block.crawlDelay;
+        continue;
+      }
+      if (token && uaLower.includes(token)) {
+        return block.crawlDelay ?? 0;
+      }
+    }
+  }
+  return wildcardDelay ?? 0;
 }
 
 function getRetryAfterDelay(response: Response): number {
@@ -698,7 +783,7 @@ export class Spider {
   private options: Required<
     Omit<
       SpiderOptions,
-      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'allowedDomains' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'proxy' | 'domainRateLimit' | 'resume' | 'strategy' | 'autoThrottle'
+      'onPage' | 'onProgress' | 'onCaptchaDetected' | 'onBlocked' | 'onError' | 'onRetry' | 'onRedirect' | 'allowedDomains' | 'exclude' | 'include' | 'sitemapUrl' | 'transport' | 'extract' | 'parserOptions' | 'crawlQueue' | 'crawlStorage' | 'domainStats' | 'proxy' | 'domainRateLimit' | 'resume' | 'strategy' | 'autoThrottle'
     >
   > & {
     exclude?: RegExp[];
@@ -724,6 +809,7 @@ export class Spider {
   private pool: RequestPool;
   private crawlQueue: CrawlQueueAdapter;
   private crawlStorage: CrawlStorageAdapter;
+  private domainStats: DomainStatsAdapter | null = null;
   private proxyAdapter: ProxyAdapter | null = null;
   private proxyClients = new Map<string, ReturnType<typeof createClient>>();
   private _visitedCount: number = 0;
@@ -751,42 +837,70 @@ export class Spider {
   private curlAvailable: boolean = false;
   private domainStates: Map<string, DomainState> = new Map();
 
+  // Per-host promise chain for serializing fire-and-forget stat writes.
+  // Prevents lost updates when two requests to the same host finish concurrently.
+  private domainStatsWrites: Map<string, Promise<void>> = new Map();
+
   // Sitemap & Robots data
   private sitemapUrls: SitemapUrl[] = [];
   private sitemapUrlSet: Set<string> = new Set();
   private robotsData: RobotsParseResult | null = null;
   private sitemapValidation: SitemapValidationResult | null = null;
   private robotsValidation: { found: boolean; issues: Array<{ type: string; message: string }> } | null = null;
+  /** Crawl-Delay picked from robots.txt for our user-agent (ms, clamped). 0 when disabled/absent. */
+  private baseRobotsCrawlDelayMs: number = 0;
 
   private async waitForDomainRateLimit(hostname: string): Promise<void> {
     const limit = this.options.domainRateLimit?.maxPerSecond;
-    if (!limit || limit <= 0) return;
 
-    const now = Date.now();
-    const window = 1000;
-    let timestamps = this.domainRequestTimestamps.get(hostname);
-    if (!timestamps) {
-      timestamps = [];
-      this.domainRequestTimestamps.set(hostname, timestamps);
-    }
+    // Step 1: token-bucket style maxPerSecond gate
+    if (limit && limit > 0) {
+      const now = Date.now();
+      const window = 1000;
+      let timestamps = this.domainRequestTimestamps.get(hostname);
+      if (!timestamps) {
+        timestamps = [];
+        this.domainRequestTimestamps.set(hostname, timestamps);
+      }
 
-    // Purge expired
-    while (timestamps.length > 0 && timestamps[0] <= now - window) {
-      timestamps.shift();
-    }
-
-    // Wait if at capacity
-    if (timestamps.length >= limit) {
-      const waitMs = timestamps[0] + window - now;
-      if (waitMs > 0) await sleep(waitMs, this.abortController.signal);
-      if (this.aborted) return;
-      const afterWait = Date.now();
-      while (timestamps.length > 0 && timestamps[0] <= afterWait - window) {
+      // Purge expired
+      while (timestamps.length > 0 && timestamps[0] <= now - window) {
         timestamps.shift();
+      }
+
+      // Wait if at capacity
+      if (timestamps.length >= limit) {
+        const waitMs = timestamps[0] + window - now;
+        if (waitMs > 0) await sleep(waitMs, this.abortController.signal);
+        if (this.aborted) return;
+        const afterWait = Date.now();
+        while (timestamps.length > 0 && timestamps[0] <= afterWait - window) {
+          timestamps.shift();
+        }
+      }
+
+      timestamps.push(Date.now());
+    }
+
+    // Step 2: robots.txt Crawl-Delay gate — enforce minimum gap between requests
+    const state = this.domainStates.get(hostname);
+    if (state && state.robotsCrawlDelayMs > 0 && state.lastRequestAt > 0) {
+      const elapsed = Date.now() - state.lastRequestAt;
+      const wait = state.robotsCrawlDelayMs - elapsed;
+      if (wait > 0) {
+        await sleep(wait, this.abortController.signal);
+        if (this.aborted) return;
       }
     }
 
-    timestamps.push(Date.now());
+    // Update lastRequestAt after all gates cleared so subsequent requests
+    // on this host start their crawl-delay window now.
+    if (state) {
+      state.lastRequestAt = Date.now();
+    } else if (this.baseRobotsCrawlDelayMs > 0) {
+      // Ensure state exists so future requests can gate against this start
+      this.getOrCreateDomainState(hostname).lastRequestAt = Date.now();
+    }
   }
 
   private toHeaderRecord(headers: Headers): Record<string, string> {
@@ -826,7 +940,10 @@ export class Spider {
       maxDomainBlockStrikes: options.maxDomainBlockStrikes ?? 2,
       preferCurlFirst: options.preferCurlFirst ?? true,
       respectRobotsTxt: options.respectRobotsTxt ?? true,
+      respectRobotsCrawlDelay: options.respectRobotsCrawlDelay ?? true,
+      maxRobotsCrawlDelayMs: options.maxRobotsCrawlDelayMs ?? DEFAULT_MAX_ROBOTS_CRAWL_DELAY_MS,
       useSitemap: options.useSitemap ?? false,
+      rewriteUrls: options.rewriteUrls ?? true,
       transport: options.transport ?? 'auto',
       sitemapUrl: options.sitemapUrl,
       allowedDomains: options.allowedDomains ? (() => {
@@ -903,6 +1020,7 @@ export class Spider {
       this.options.strategy === 'dfs' ? 'lifo' : 'fifo'
     );
     this.crawlStorage = options.crawlStorage ?? new InMemoryCrawlStorage();
+    this.domainStats = options.domainStats ?? null;
   }
 
   /**
@@ -947,6 +1065,7 @@ export class Spider {
     this.robotsData = null;
     this.sitemapValidation = null;
     this.robotsValidation = null;
+    this.baseRobotsCrawlDelayMs = 0;
 
     // Only clear domain/transport state when NOT resuming — resume needs
     // to preserve knowledge of blocked domains, penalties, and content hashes
@@ -974,6 +1093,19 @@ export class Spider {
       }
     }
 
+    // Load persistent per-host transport stats from the domain-stats adapter
+    if (this.domainStats) {
+      try {
+        const stats = await this.domainStats.loadAll();
+        for (const [hostname, s] of stats) {
+          const state = this.getOrCreateDomainState(hostname);
+          state.persistentStats = s;
+        }
+      } catch {
+        // Stats load is best-effort — never fail a crawl on it
+      }
+    }
+
     // Fetch robots.txt first (for respecting rules and finding sitemaps)
     if (this.options.respectRobotsTxt || this.options.useSitemap) {
       await this.fetchRobotsTxt(baseUrl);
@@ -989,7 +1121,21 @@ export class Spider {
 
     // Helper to schedule a URL for crawling
     const scheduleUrl = async (item: QueueItem): Promise<void> => {
-      const normalized = normalizeUrl(item.url);
+      // Apply URL rewrites before normalization: tracking-param stripping
+      // would corrupt export query strings on sites like Google Docs.
+      // Skip when item already carries a rewrite (applied at link-discovery time).
+      let urlToFetch = item.url;
+      let sourceUrl = item.sourceUrl;
+      let rewriteReason = item.rewriteReason;
+      if (this.options.rewriteUrls && !rewriteReason) {
+        const rewrite = rewriteUrl(urlToFetch);
+        if (rewrite.rewritten) {
+          sourceUrl = urlToFetch;
+          rewriteReason = rewrite.reason;
+          urlToFetch = rewrite.url;
+        }
+      }
+      const normalized = normalizeUrl(urlToFetch);
 
       // Use pending as a synchronous lock — claim immediately to close race window
       if (pending.has(normalized)) return;
@@ -1025,7 +1171,12 @@ export class Spider {
       this.pendingCount++;
 
       // Schedule via pool - returns immediately, pool handles concurrency
-      const promise = this.pool.run(() => this.crawlPage({ ...item, url: normalized }))
+      const promise = this.pool.run(() => this.crawlPage({
+        ...item,
+        url: normalized,
+        sourceUrl,
+        rewriteReason,
+      }))
         .finally(() => {
           pending.delete(normalized);
           this.pendingCount--;
@@ -1171,6 +1322,17 @@ export class Spider {
           found: true,
           issues: result.issues.map(i => ({ type: i.type, message: i.message })),
         };
+        if (this.options.respectRobotsCrawlDelay) {
+          const declared = pickRobotsCrawlDelay(result.parseResult, this.options.userAgent);
+          if (declared > 0) {
+            const ms = Math.min(declared * 1000, this.options.maxRobotsCrawlDelayMs);
+            this.baseRobotsCrawlDelayMs = ms;
+            // Seed any already-known domain states with the new delay
+            for (const state of this.domainStates.values()) {
+              state.robotsCrawlDelayMs = ms;
+            }
+          }
+        }
       } else {
         this.robotsValidation = {
           found: false,
@@ -1198,6 +1360,35 @@ export class Spider {
       };
     };
 
+    const visited = new Set<string>();
+    const counter = { count: 0 };
+
+    const walkIndex = async (children: { loc: string }[]): Promise<void> => {
+      for (const child of children) {
+        if (counter.count >= MAX_SITEMAPS_PER_CRAWL) return;
+        let key: string;
+        try {
+          key = normalizeUrl(child.loc);
+        } catch {
+          continue;
+        }
+        if (visited.has(key)) continue;
+        visited.add(key);
+        counter.count += 1;
+        try {
+          const childResult = await fetchAndValidateSitemap(child.loc, fetcher);
+          if (!childResult.exists || !childResult.parseResult.valid) continue;
+          if (childResult.parseResult.type === 'sitemapindex') {
+            await walkIndex(childResult.parseResult.sitemaps);
+          } else {
+            this.sitemapUrls.push(...childResult.parseResult.urls);
+          }
+        } catch {
+          // Skip failed child sitemaps
+        }
+      }
+    };
+
     try {
       // Get sitemap URLs from robots.txt or discover them
       let sitemapUrls: string[] = [];
@@ -1213,28 +1404,28 @@ export class Spider {
         sitemapUrls = await discoverSitemaps(baseUrl, undefined, fetcher);
       }
 
-      // Fetch and parse each sitemap
+      // Fetch and parse each sitemap (with loop detection + cap)
       for (const sitemapUrl of sitemapUrls) {
+        if (counter.count >= MAX_SITEMAPS_PER_CRAWL) break;
+        let key: string;
+        try {
+          key = normalizeUrl(sitemapUrl);
+        } catch {
+          continue;
+        }
+        if (visited.has(key)) continue;
+        visited.add(key);
+        counter.count += 1;
+
         try {
           const result = await fetchAndValidateSitemap(sitemapUrl, fetcher);
 
           if (result.exists && result.parseResult.valid) {
             this.sitemapValidation = result;
 
-            // Handle sitemap index (recursive fetch)
             if (result.parseResult.type === 'sitemapindex') {
-              for (const childSitemap of result.parseResult.sitemaps) {
-                try {
-                  const childResult = await fetchAndValidateSitemap(childSitemap.loc, fetcher);
-                  if (childResult.exists && childResult.parseResult.urls.length > 0) {
-                    this.sitemapUrls.push(...childResult.parseResult.urls);
-                  }
-                } catch {
-                  // Skip failed child sitemaps
-                }
-              }
+              await walkIndex(result.parseResult.sitemaps);
             } else {
-              // Regular sitemap
               this.sitemapUrls.push(...result.parseResult.urls);
             }
           }
@@ -1884,6 +2075,8 @@ export class Spider {
         contentHash,
         isDuplicate: isDuplicate || undefined,
         duplicateOf,
+        sourceUrl: item.sourceUrl,
+        rewriteReason: item.rewriteReason,
       };
 
       await this.crawlStorage.saveResult(result);
@@ -1904,10 +2097,26 @@ export class Spider {
 
         for (const link of links) {
           if (!link.href) continue;
-          const normalized = normalizeUrl(link.href);
+          let href = link.href;
+          let linkSourceUrl: string | undefined;
+          let linkRewriteReason: string | undefined;
+          if (this.options.rewriteUrls) {
+            const rewrite = rewriteUrl(href);
+            if (rewrite.rewritten) {
+              linkSourceUrl = href;
+              linkRewriteReason = rewrite.reason;
+              href = rewrite.url;
+            }
+          }
+          const normalized = normalizeUrl(href);
           if (!shouldCrawl(normalized, this.baseHost, this.options, this.baseRootDomain, this.options.allowedDomains)) continue;
           candidateUrls.push(normalized);
-          candidates.push({ url: normalized, depth: item.depth + 1 });
+          candidates.push({
+            url: normalized,
+            depth: item.depth + 1,
+            sourceUrl: linkSourceUrl,
+            rewriteReason: linkRewriteReason,
+          });
         }
 
         if (candidates.length > 0) {
@@ -1978,6 +2187,41 @@ export class Spider {
         lastStatus: status,
       };
 
+      // Build a typed error that carries recovery hints. Consumers inspect
+      // `result.typedError` via instanceof to drive their own retry strategy.
+      const hostname = (() => {
+        try { return new URL(item.url).hostname; } catch { return ''; }
+      })();
+      let typedError: ReckerError | undefined;
+      if (hasCaptcha) {
+        typedError = new SpiderChallengeError({
+          url: item.url,
+          domain: hostname,
+          provider: errCaptcha.provider,
+          confidence: errCaptcha.confidence,
+          cooldownMs: errRetryAfterMs || this.options.baseRetryDelayMs * 2,
+          transport: errTransport,
+          statusCode: status || undefined,
+        });
+      } else if (security.blocked) {
+        const preferredTransport: SpiderTransport | undefined = (() => {
+          if (this.options.transport !== 'auto') return undefined;
+          if (errTransport === 'curl') return 'undici';
+          if (errTransport === 'undici') return 'curl';
+          return undefined;
+        })();
+        typedError = new SpiderBlockError({
+          url: item.url,
+          domain: hostname,
+          reason: errDetection.reason,
+          confidence: errDetection.confidence,
+          transport: errTransport,
+          preferredTransport,
+          statusCode: status || undefined,
+          message,
+        });
+      }
+
       const errorResult: SpiderPageResult = {
         url: item.url,
         status: status,
@@ -1996,6 +2240,9 @@ export class Spider {
         timings: errorTimings,
         security,
         fetchedAt,
+        sourceUrl: item.sourceUrl,
+        rewriteReason: item.rewriteReason,
+        typedError,
       };
 
       await this.crawlStorage.saveResult(errorResult);
@@ -2024,6 +2271,8 @@ export class Spider {
       lastTransport: 'undici',
       lastCaptchaConfidence: 0,
       autoThrottleDelay: 0,
+      robotsCrawlDelayMs: this.baseRobotsCrawlDelayMs,
+      lastRequestAt: 0,
     };
     this.domainStates.set(hostname, next);
     return next;
@@ -2039,14 +2288,46 @@ export class Spider {
       } else if (transport === 'undici') {
         state.consecutiveUndiciFailures = 0;
       }
-      return;
+    } else {
+      if (transport === 'curl') {
+        state.consecutiveCurlFailures += 1;
+      } else {
+        state.consecutiveUndiciFailures += 1;
+      }
     }
 
-    if (transport === 'curl') {
-      state.consecutiveCurlFailures += 1;
-    } else {
-      state.consecutiveUndiciFailures += 1;
-    }
+    // Persist to crawl storage (fire-and-forget, serialized per-host)
+    this.persistTransportStat(hostname, transport, success);
+  }
+
+  /**
+   * Mirror a transport success/fail to the domain-stats adapter when one is
+   * configured. Serialized per-host via a promise chain to avoid lost updates
+   * from concurrent writes to the same domain. Errors are swallowed —
+   * stats writes must never break a crawl.
+   */
+  private persistTransportStat(hostname: string, transport: SpiderTransport, success: boolean): void {
+    const adapter = this.domainStats;
+    if (!adapter) return;
+    if (transport !== 'curl' && transport !== 'undici') return;
+
+    const prev = this.domainStatsWrites.get(hostname) ?? Promise.resolve();
+    const next = prev
+      .catch(() => {/* swallow upstream chain failures */})
+      .then(async () => {
+        try {
+          await adapter.record(hostname, transport, success);
+          // Refresh in-memory snapshot so subsequent decisions see the new counts
+          const fresh = await adapter.load(hostname);
+          if (fresh) {
+            const state = this.getOrCreateDomainState(hostname);
+            state.persistentStats = fresh;
+          }
+        } catch {
+          // Stats write failed — never propagate
+        }
+      });
+    this.domainStatsWrites.set(hostname, next);
   }
 
   private isRetryableStatus(status: number): boolean {
@@ -2129,6 +2410,21 @@ export class Spider {
 
     if (state.consecutiveCurlFailures >= 2 && state.lastTransport === 'curl') {
       return false;
+    }
+
+    // Persistent learning: if we have ≥5 historical samples for this host,
+    // pick the transport with the higher Laplace-smoothed success rate.
+    // Tie → fall through to preferCurlFirst.
+    const stats = state.persistentStats;
+    if (stats) {
+      const totalSamples = stats.curlSuccess + stats.curlFail + stats.undiciSuccess + stats.undiciFail;
+      if (totalSamples >= 5) {
+        const curlScore = (stats.curlSuccess + 1) / (stats.curlSuccess + stats.curlFail + 2);
+        const undiciScore = (stats.undiciSuccess + 1) / (stats.undiciSuccess + stats.undiciFail + 2);
+        if (curlScore > undiciScore) return true;
+        if (undiciScore > curlScore) return false;
+        // tie → continue to preferCurlFirst below
+      }
     }
 
     if (this.options.preferCurlFirst) {
