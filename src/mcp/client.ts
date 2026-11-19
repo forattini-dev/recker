@@ -103,7 +103,7 @@ export class MCPClient extends EventEmitter {
       protocolVersion: options.protocolVersion || '2024-11-05',
       headers: options.headers || {},
       timeout: options.timeout || 30000,
-      retries: options.retries || 3,
+      retries: options.retries ?? 3,
       debug: options.debug || false,
     };
 
@@ -115,7 +115,7 @@ export class MCPClient extends EventEmitter {
         ...this.options.headers,
       },
       retry: {
-        maxAttempts: this.options.retries,
+        maxAttempts: this.options.retries + 1,
         backoff: 'exponential',
       },
       transport: options.transport,

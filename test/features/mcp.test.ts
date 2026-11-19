@@ -482,5 +482,30 @@ describe('MCP Client', () => {
       expect(client.options.retries).toBe(3);
       expect(client.options.debug).toBe(false);
     });
+
+    it('should keep retries: 0', () => {
+      const client = new MCPClient({
+        endpoint: 'http://localhost:3000/mcp',
+        retries: 0,
+      });
+
+      expect(client.options.retries).toBe(0);
+    });
+
+    it('should send 1 + retries requests', async () => {
+      for (const [retries, requests] of [[0, 1], [1, 2]]) {
+        const transport = new MockTransport();
+        transport.setMockResponse('POST', '/mcp/', 503, {});
+
+        const client = new MCPClient({
+          endpoint: 'http://localhost:3000/mcp',
+          retries,
+          transport: transport as any,
+        });
+
+        await expect(client.connect()).rejects.toThrow();
+        expect(transport.getCallCount('POST', '/mcp/')).toBe(requests);
+      }
+    }, 10000);
   });
 });
